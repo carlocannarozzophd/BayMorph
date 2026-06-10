@@ -11,7 +11,8 @@ from .core import (
 from .fitting import (
     GridSearchResult, grid_search_1d,
     DynestyFluxFitter, DynestyFluxResult,
-    DynestyFluxReFitter, DynestyFluxReResult, 
+    DynestyFluxReFitter, DynestyFluxReResult,
+    DynestyFluxReNFitter, DynestyFluxReNResult,
 )
 from .likelihood import gaussian_log_likelihood
 from .models import SersicModel
@@ -66,4 +67,6 @@ __all__ = [
     "corner_plot",
     "erf_sigma_to_percentiles",
     "plot_data_model_residual",
+    "DynestyFluxReNFitter",
+    "DynestyFluxReNResult",
 ]
