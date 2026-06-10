@@ -14,6 +14,9 @@ from .psf import (
 )
 from .sersic import SyntheticSersic
 
+from pathlib import Path
+
+from astropy.io import fits
 
 @dataclass
 class SyntheticObservation:
@@ -26,6 +29,23 @@ class SyntheticObservation:
     @property
     def shape(self):
         return self.image.shape
+    
+    def to_fits(
+        self,
+        filename: str | Path,
+        overwrite: bool = True,
+    ) -> None:
+        """Write synthetic observation to a FITS file."""
+        filename = Path(filename)
+
+        hdu = fits.PrimaryHDU(
+            data=self.image,
+        )
+
+        hdu.writeto(
+            filename,
+            overwrite=overwrite,
+        )
 
 
 def make_observation(

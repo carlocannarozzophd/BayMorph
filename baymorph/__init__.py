@@ -1,5 +1,6 @@
 """BayMorph: Bayesian morphological modelling of astronomical images."""
 
+from .core import ImageData
 from .simulation import (
     GaussianPSF,
     SyntheticObservation,
@@ -13,6 +14,7 @@ from .simulation import (
 __version__ = "0.0.1"
 
 __all__ = [
+    "ImageData",
     "SyntheticSersic",
     "SyntheticObservation",
     "GaussianPSF",
