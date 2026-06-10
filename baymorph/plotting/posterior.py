@@ -1,7 +1,8 @@
 """Posterior plotting utilities."""
 
-import matplotlib.pyplot as plt
 import numpy as np
+
+from .style import finalize_figure, make_plot
 
 
 def plot_1d_posterior(
@@ -11,7 +12,10 @@ def plot_1d_posterior(
     bins: int = 30,
 ):
     """Plot a one-dimensional posterior histogram."""
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = make_plot(
+        figsize=(6, 4),
+        fontsize=16,
+    )
 
     ax.hist(
         samples,
@@ -27,6 +31,8 @@ def plot_1d_posterior(
     ax.set_xlabel(parameter_name)
     ax.set_ylabel("Samples")
 
+    finalize_figure(fig)
+
     return fig, ax
 
 
@@ -39,7 +45,10 @@ def plot_2d_samples(
     y_name: str = "y",
 ):
     """Plot two-dimensional posterior samples."""
-    fig, ax = plt.subplots(figsize=(6, 5))
+    fig, ax = make_plot(
+        figsize=(6, 5),
+        fontsize=16,
+    )
 
     ax.scatter(
         samples_x,
@@ -62,5 +71,7 @@ def plot_2d_samples(
 
     ax.set_xlabel(x_name)
     ax.set_ylabel(y_name)
+
+    finalize_figure(fig)
 
     return fig, ax

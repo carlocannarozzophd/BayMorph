@@ -24,7 +24,15 @@ from .simulation import (
     convolve_with_psf,
     make_observation,
 )
-from .plotting import plot_1d_posterior, plot_2d_samples
+from .plotting import (
+    plot_1d_posterior, plot_2d_samples,
+    corner_plot,
+    erf_sigma_to_percentiles,
+    finalize_figure,
+    make_plot,
+    set_plot_style,
+    style_axes,
+)
 
 __version__ = "0.0.1"
 
@@ -50,4 +58,10 @@ __all__ = [
     "DynestyFluxResult",
     "plot_1d_posterior",
     "plot_2d_samples",
+    "set_plot_style",
+    "style_axes",
+    "make_plot",
+    "finalize_figure",
+    "corner_plot",
+    "erf_sigma_to_percentiles",
 ]
