@@ -1,4 +1,5 @@
-def test_import_baymorph():
-    import baymorph
+from baymorph import SyntheticSersic
 
-    assert baymorph.__version__ == "0.0.1"
+
+def test_import_baymorph():
+    assert SyntheticSersic is not None
