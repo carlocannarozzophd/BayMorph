@@ -8,7 +8,7 @@ Early development.
 
 Current target: single Sérsic fitting on FITS images using Bayesian nested sampling.
 
-## Planned features
+## Planned Features
 
 - FITS image input
 - Background and noise estimation
@@ -23,3 +23,33 @@ Current target: single Sérsic fitting on FITS images using Bayesian nested samp
 
 ```bash
 pip install -e .
+```
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
+## Current Development Roadmap
+
+Current MVP:
+
+```text
+Synthetic Sérsic galaxy
+        ↓
+PSF convolution
+        ↓
+Noise generation
+        ↓
+Synthetic FITS creation
+        ↓
+Bayesian fitting
+        ↓
+Parameter recovery
+```
+
+## License
+
+MIT License.
