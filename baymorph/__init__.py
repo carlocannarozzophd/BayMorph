@@ -4,6 +4,8 @@ from .core import (
     BackgroundEstimate,
     ImageData,
     estimate_background_sigma,
+    estimate_noise_map,
+    make_constant_noise_map,
     subtract_background,
 )
 from .simulation import (
@@ -23,6 +25,8 @@ __all__ = [
     "BackgroundEstimate",
     "estimate_background_sigma",
     "subtract_background",
+    "make_constant_noise_map",
+    "estimate_noise_map",
     "SyntheticSersic",
     "SyntheticObservation",
     "GaussianPSF",
