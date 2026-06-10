@@ -8,6 +8,7 @@ from .core import (
     make_constant_noise_map,
     subtract_background,
 )
+from .fitting import GridSearchResult, grid_search_1d
 from .likelihood import gaussian_log_likelihood
 from .models import SersicModel
 from .simulation import (
@@ -29,6 +30,8 @@ __all__ = [
     "subtract_background",
     "make_constant_noise_map",
     "estimate_noise_map",
+    "GridSearchResult",
+    "grid_search_1d",
     "gaussian_log_likelihood",
     "SersicModel",
     "SyntheticSersic",
