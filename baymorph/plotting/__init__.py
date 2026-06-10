@@ -1,5 +1,8 @@
 """Plotting utilities for BayMorph."""
 
+from .residual import (
+    plot_data_model_residual,
+)
 from .corner import (
     corner_plot,
     erf_sigma_to_percentiles,
@@ -24,4 +27,5 @@ __all__ = [
     "erf_sigma_to_percentiles",
     "plot_1d_posterior",
     "plot_2d_samples",
+    "plot_data_model_residual",
 ]

@@ -25,6 +25,7 @@ from .simulation import (
     make_observation,
 )
 from .plotting import (
+    plot_data_model_residual,
     plot_1d_posterior, plot_2d_samples,
     corner_plot,
     erf_sigma_to_percentiles,
@@ -64,4 +65,5 @@ __all__ = [
     "finalize_figure",
     "corner_plot",
     "erf_sigma_to_percentiles",
+    "plot_data_model_residual",
 ]
