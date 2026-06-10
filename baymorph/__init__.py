@@ -8,6 +8,7 @@ from .core import (
     make_constant_noise_map,
     subtract_background,
 )
+from .likelihood import gaussian_log_likelihood
 from .models import SersicModel
 from .simulation import (
     GaussianPSF,
@@ -28,6 +29,7 @@ __all__ = [
     "subtract_background",
     "make_constant_noise_map",
     "estimate_noise_map",
+    "gaussian_log_likelihood",
     "SersicModel",
     "SyntheticSersic",
     "SyntheticObservation",
