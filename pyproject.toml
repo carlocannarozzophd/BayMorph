@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "baymorph"
+version = "0.0.1"
+description = "Bayesian morphological modelling of astronomical images."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    {name = "BayMorph developers"}
+]
+dependencies = [
+    "numpy",
+    "scipy",
+    "astropy",
+    "photutils",
+    "matplotlib",
+    "pyyaml",
+    "dynesty",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "jupyter",
+    "ipykernel",
+    "black",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["baymorph*"]
+
+[tool.ruff]
+line-length = 88
+
+[tool.black]
+line-length = 88
