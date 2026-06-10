@@ -24,6 +24,7 @@ from .simulation import (
     convolve_with_psf,
     make_observation,
 )
+from .plotting import plot_1d_posterior, plot_2d_samples
 
 __version__ = "0.0.1"
 
@@ -47,4 +48,6 @@ __all__ = [
     "add_poisson_noise",
     "DynestyFluxFitter",
     "DynestyFluxResult",
+    "plot_1d_posterior",
+    "plot_2d_samples",
 ]
