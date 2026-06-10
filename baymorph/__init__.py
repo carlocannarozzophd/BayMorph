@@ -8,7 +8,7 @@ from .core import (
     make_constant_noise_map,
     subtract_background,
 )
-from .fitting import GridSearchResult, grid_search_1d
+from .fitting import GridSearchResult, grid_search_1d, DynestyFluxFitter, DynestyFluxResult
 from .likelihood import gaussian_log_likelihood
 from .models import SersicModel
 from .simulation import (
@@ -41,4 +41,6 @@ __all__ = [
     "make_observation",
     "add_gaussian_noise",
     "add_poisson_noise",
+    "DynestyFluxFitter",
+    "DynestyFluxResult",
 ]
