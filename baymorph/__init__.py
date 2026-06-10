@@ -8,7 +8,11 @@ from .core import (
     make_constant_noise_map,
     subtract_background,
 )
-from .fitting import GridSearchResult, grid_search_1d, DynestyFluxFitter, DynestyFluxResult
+from .fitting import (
+    GridSearchResult, grid_search_1d,
+    DynestyFluxFitter, DynestyFluxResult,
+    DynestyFluxReFitter, DynestyFluxReResult, 
+)
 from .likelihood import gaussian_log_likelihood
 from .models import SersicModel
 from .simulation import (
