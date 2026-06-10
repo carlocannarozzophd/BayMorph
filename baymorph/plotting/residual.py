@@ -2,22 +2,37 @@
 
 import numpy as np
 
-from .style import (
-    finalize_figure,
-    make_plot,
-)
+from .style import finalize_figure, make_plot
 
 
 def plot_data_model_residual(
     data: np.ndarray,
     model: np.ndarray,
-    cmap: str = "viridis",
+    image_cmap: str = "viridis",
+    residual_cmap: str = "RdBu_r",
 ):
-    """
-    Plot data, model and residual images.
-    """
+    """Plot data, model and residual images with consistent scaling."""
+    data = np.asarray(data, dtype=float)
+    model = np.asarray(model, dtype=float)
+
+    if data.shape != model.shape:
+        raise ValueError("Data and model must have the same shape.")
 
     residual = data - model
+
+    image_vmin = min(
+        float(np.nanmin(data)),
+        float(np.nanmin(model)),
+    )
+    image_vmax = max(
+        float(np.nanmax(data)),
+        float(np.nanmax(model)),
+    )
+
+    residual_vmax = float(np.nanmax(np.abs(residual)))
+
+    if residual_vmax == 0.0:
+        residual_vmax = 1.0
 
     fig, axes = make_plot(
         nrows=1,
@@ -28,12 +43,30 @@ def plot_data_model_residual(
     )
 
     panels = [
-        (data, "Data"),
-        (model, "Model"),
-        (residual, "Residual"),
+        (
+            data,
+            "Data",
+            image_cmap,
+            image_vmin,
+            image_vmax,
+        ),
+        (
+            model,
+            "Model",
+            image_cmap,
+            image_vmin,
+            image_vmax,
+        ),
+        (
+            residual,
+            "Residual",
+            residual_cmap,
+            -residual_vmax,
+            residual_vmax,
+        ),
     ]
 
-    for ax, (image, title) in zip(
+    for ax, (image, title, cmap, vmin, vmax) in zip(
         axes,
         panels,
     ):
@@ -41,6 +74,8 @@ def plot_data_model_residual(
             image,
             origin="lower",
             cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
         )
 
         ax.set_title(title)
