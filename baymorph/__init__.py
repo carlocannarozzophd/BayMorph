@@ -8,6 +8,7 @@ from .core import (
     make_constant_noise_map,
     subtract_background,
 )
+from .models import SersicModel
 from .simulation import (
     GaussianPSF,
     SyntheticObservation,
@@ -27,6 +28,7 @@ __all__ = [
     "subtract_background",
     "make_constant_noise_map",
     "estimate_noise_map",
+    "SersicModel",
     "SyntheticSersic",
     "SyntheticObservation",
     "GaussianPSF",
