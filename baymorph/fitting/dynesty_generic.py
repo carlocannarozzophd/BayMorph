@@ -1,5 +1,6 @@
 """Generic Dynesty fitter."""
 
+from baymorph.simulation.psf import convolve_with_psf
 import dynesty
 import numpy as np
 
@@ -21,6 +22,7 @@ class DynestyFitter:
         noise,
         parameter_names: list[str],
         prior_bounds: dict[str, tuple[float, float]],
+        psf=None,
         mask=None,
     ):
         self.model_factory = model_factory
@@ -28,6 +30,7 @@ class DynestyFitter:
         self.noise = np.asarray(noise, dtype=float)
         self.parameter_names = list(parameter_names)
         self.prior_bounds = dict(prior_bounds)
+        self.psf = psf
         self.mask = mask
 
         self._validate_inputs()
@@ -79,6 +82,12 @@ class DynestyFitter:
         model_image = model.render(
             shape=self.data.shape,
         )
+
+        if self.psf is not None:
+            model_image = convolve_with_psf(
+                model_image,
+                self.psf,
+            )
 
         return gaussian_log_likelihood(
             data=self.data,
