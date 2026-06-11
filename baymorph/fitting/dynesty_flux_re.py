@@ -103,6 +103,7 @@ class DynestyFluxReFitter:
             samples=results.samples,
             logwt=results.logwt,
             logz=results.logz,
+            logl=results.logl,
             parameter_names=[
                 "flux",
                 "re",
