@@ -19,7 +19,11 @@ from .fitting import (
     Parameter, ParameterSet
 )
 from .likelihood import gaussian_log_likelihood
-from .models import SersicModel, ConvolvedModel
+from .models import (
+    SersicModel,
+    ConvolvedModel,
+    CompositeModel
+)
 from .simulation import (
     GaussianPSF,
     SyntheticObservation,
@@ -56,6 +60,7 @@ __all__ = [
     "gaussian_log_likelihood",
     "SersicModel",
     "ConvolvedModel",
+    "CompositeModel",
     "SyntheticSersic",
     "SyntheticObservation",
     "GaussianPSF",
