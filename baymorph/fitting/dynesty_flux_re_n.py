@@ -1,32 +1,16 @@
 """Minimal Dynesty fitter for flux, effective radius and Sersic index."""
 
-from dataclasses import dataclass
-
 import dynesty
 import numpy as np
 
 from baymorph.likelihood import gaussian_log_likelihood
+from baymorph.results import PosteriorResult
 
 
-@dataclass
-class DynestyFluxReNResult:
-    """Result of a flux + Re + n Dynesty fit."""
-
-    samples: np.ndarray
-    logwt: np.ndarray
-    logz: np.ndarray
-
-    @property
-    def flux_median(self) -> float:
-        return float(np.median(self.samples[:, 0]))
-
-    @property
-    def re_median(self) -> float:
-        return float(np.median(self.samples[:, 1]))
-
-    @property
-    def n_median(self) -> float:
-        return float(np.median(self.samples[:, 2]))
+class DynestyFluxReNResult(
+    PosteriorResult
+):
+    """Flux + Re + n posterior result."""
 
 
 class DynestyFluxReNFitter:
@@ -54,14 +38,49 @@ class DynestyFluxReNFitter:
         self.n_min = n_min
         self.n_max = n_max
 
-    def prior_transform(self, u):
-        flux = self.flux_min + u[0] * (self.flux_max - self.flux_min)
-        re = self.re_min + u[1] * (self.re_max - self.re_min)
-        n = self.n_min + u[2] * (self.n_max - self.n_min)
+    def prior_transform(
+        self,
+        u,
+    ):
+        flux = (
+            self.flux_min
+            + u[0]
+            * (
+                self.flux_max
+                - self.flux_min
+            )
+        )
 
-        return np.array([flux, re, n])
+        re = (
+            self.re_min
+            + u[1]
+            * (
+                self.re_max
+                - self.re_min
+            )
+        )
 
-    def loglikelihood(self, theta):
+        n = (
+            self.n_min
+            + u[2]
+            * (
+                self.n_max
+                - self.n_min
+            )
+        )
+
+        return np.array(
+            [
+                flux,
+                re,
+                n,
+            ]
+        )
+
+    def loglikelihood(
+        self,
+        theta,
+    ):
         flux, re, n = theta
 
         model = self.model_factory(
@@ -71,7 +90,7 @@ class DynestyFluxReNFitter:
         )
 
         image = model.render(
-            shape=self.data.shape,
+            shape=self.data.shape
         )
 
         return gaussian_log_likelihood(
@@ -99,4 +118,9 @@ class DynestyFluxReNFitter:
             samples=results.samples,
             logwt=results.logwt,
             logz=results.logz,
+            parameter_names=[
+                "flux",
+                "re",
+                "n",
+            ],
         )

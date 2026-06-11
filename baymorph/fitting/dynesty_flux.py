@@ -1,24 +1,16 @@
 """Minimal Dynesty flux fitter."""
 
-from dataclasses import dataclass
-
 import dynesty
 import numpy as np
 
 from baymorph.likelihood import gaussian_log_likelihood
+from baymorph.results import PosteriorResult
 
 
-@dataclass
-class DynestyFluxResult:
-    """Result of a flux-only Dynesty fit."""
-
-    samples: np.ndarray
-    logwt: np.ndarray
-    logz: np.ndarray
-
-    @property
-    def flux_median(self) -> float:
-        return float(np.median(self.samples[:, 0]))
+class DynestyFluxResult(
+    PosteriorResult
+):
+    """Flux-only posterior result."""
 
 
 class DynestyFluxFitter:
@@ -42,17 +34,32 @@ class DynestyFluxFitter:
         self.flux_min = flux_min
         self.flux_max = flux_max
 
-    def prior_transform(self, u):
+    def prior_transform(
+        self,
+        u,
+    ):
         flux = (
             self.flux_min
-            + u[0] * (self.flux_max - self.flux_min)
+            + u[0]
+            * (
+                self.flux_max
+                - self.flux_min
+            )
         )
-        return np.array([flux])
 
-    def loglikelihood(self, theta):
+        return np.array(
+            [flux]
+        )
+
+    def loglikelihood(
+        self,
+        theta,
+    ):
         flux = theta[0]
 
-        model = self.model_factory(flux)
+        model = self.model_factory(
+            flux
+        )
 
         image = model.render(
             shape=self.data.shape
@@ -83,4 +90,7 @@ class DynestyFluxFitter:
             samples=results.samples,
             logwt=results.logwt,
             logz=results.logz,
+            parameter_names=[
+                "flux",
+            ],
         )

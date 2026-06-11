@@ -36,6 +36,8 @@ from .plotting import (
     style_axes,
 )
 
+from .results import PosteriorResult
+
 __version__ = "0.0.1"
 
 __all__ = [
@@ -69,4 +71,5 @@ __all__ = [
     "plot_data_model_residual",
     "DynestyFluxReNFitter",
     "DynestyFluxReNResult",
+    "PosteriorResult",
 ]

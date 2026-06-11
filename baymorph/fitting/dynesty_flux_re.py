@@ -1,28 +1,16 @@
 """Minimal Dynesty fitter for flux and effective radius."""
 
-from dataclasses import dataclass
-
 import dynesty
 import numpy as np
 
 from baymorph.likelihood import gaussian_log_likelihood
+from baymorph.results import PosteriorResult
 
 
-@dataclass
-class DynestyFluxReResult:
-    """Result of a flux + effective-radius Dynesty fit."""
-
-    samples: np.ndarray
-    logwt: np.ndarray
-    logz: np.ndarray
-
-    @property
-    def flux_median(self) -> float:
-        return float(np.median(self.samples[:, 0]))
-
-    @property
-    def re_median(self) -> float:
-        return float(np.median(self.samples[:, 1]))
+class DynestyFluxReResult(
+    PosteriorResult
+):
+    """Flux + Re posterior result."""
 
 
 class DynestyFluxReFitter:
@@ -46,13 +34,39 @@ class DynestyFluxReFitter:
         self.re_min = re_min
         self.re_max = re_max
 
-    def prior_transform(self, u):
-        flux = self.flux_min + u[0] * (self.flux_max - self.flux_min)
-        re = self.re_min + u[1] * (self.re_max - self.re_min)
+    def prior_transform(
+        self,
+        u,
+    ):
+        flux = (
+            self.flux_min
+            + u[0]
+            * (
+                self.flux_max
+                - self.flux_min
+            )
+        )
 
-        return np.array([flux, re])
+        re = (
+            self.re_min
+            + u[1]
+            * (
+                self.re_max
+                - self.re_min
+            )
+        )
 
-    def loglikelihood(self, theta):
+        return np.array(
+            [
+                flux,
+                re,
+            ]
+        )
+
+    def loglikelihood(
+        self,
+        theta,
+    ):
         flux, re = theta
 
         model = self.model_factory(
@@ -61,7 +75,7 @@ class DynestyFluxReFitter:
         )
 
         image = model.render(
-            shape=self.data.shape,
+            shape=self.data.shape
         )
 
         return gaussian_log_likelihood(
@@ -89,4 +103,8 @@ class DynestyFluxReFitter:
             samples=results.samples,
             logwt=results.logwt,
             logz=results.logz,
+            parameter_names=[
+                "flux",
+                "re",
+            ],
         )
