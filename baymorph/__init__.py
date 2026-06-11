@@ -18,7 +18,7 @@ from .fitting import (
     DynestyFitter,DynestyResult,
 )
 from .likelihood import gaussian_log_likelihood
-from .models import SersicModel
+from .models import SersicModel, ConvolvedModel
 from .simulation import (
     GaussianPSF,
     SyntheticObservation,
@@ -54,6 +54,7 @@ __all__ = [
     "grid_search_1d",
     "gaussian_log_likelihood",
     "SersicModel",
+    "ConvolvedModel",
     "SyntheticSersic",
     "SyntheticObservation",
     "GaussianPSF",
