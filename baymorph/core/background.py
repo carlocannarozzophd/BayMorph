@@ -3,12 +3,8 @@
 from dataclasses import dataclass
 
 import numpy as np
+from photutils.background import Background2D, MedianBackground
 
-from photutils.background import (
-    Background2D,
-    MedianBackground,
-
-)
 
 @dataclass
 class BackgroundEstimate:
@@ -16,7 +12,6 @@ class BackgroundEstimate:
 
     background: float
     sigma: float
-
     background_map: np.ndarray | None = None
     rms_map: np.ndarray | None = None
 
@@ -53,23 +48,14 @@ def estimate_background_sigma(
     )
 
 
-def subtract_background(
-    data: np.ndarray,
-    background: float,
-) -> np.ndarray:
-    """Subtract scalar background from image data."""
-    return np.asarray(data, dtype=float) - background
-
-
 def estimate_background_photutils(
     data: np.ndarray,
     box_size: int = 20,
     filter_size: int = 3,
+    mask: np.ndarray | None = None,
+    exclude_percentile: float = 10.0,
 ) -> BackgroundEstimate:
-    """
-    Estimate background using Photutils Background2D.
-    """
-
+    """Estimate background using Photutils Background2D."""
     bkg = Background2D(
         data,
         box_size=box_size,
@@ -77,20 +63,22 @@ def estimate_background_photutils(
             filter_size,
             filter_size,
         ),
+        mask=mask,
+        exclude_percentile=exclude_percentile,
         bkg_estimator=MedianBackground(),
     )
 
     return BackgroundEstimate(
-        background=float(
-            np.median(
-                bkg.background
-            )
-        ),
-        sigma=float(
-            np.median(
-                bkg.background_rms
-            )
-        ),
+        background=float(np.median(bkg.background)),
+        sigma=float(np.median(bkg.background_rms)),
         background_map=bkg.background.copy(),
         rms_map=bkg.background_rms.copy(),
     )
+
+
+def subtract_background(
+    data: np.ndarray,
+    background: float,
+) -> np.ndarray:
+    """Subtract scalar background from image data."""
+    return np.asarray(data, dtype=float) - background
