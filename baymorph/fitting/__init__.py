@@ -12,6 +12,10 @@ from .dynesty_flux_re_n import (
     DynestyFluxReNFitter,
     DynestyFluxReNResult,
 )
+from .dynesty_generic import (
+    DynestyFitter,
+    DynestyResult,
+)
 from .grid import (
     GridSearchResult,
     grid_search_1d,
@@ -26,4 +30,6 @@ __all__ = [
     "DynestyFluxReResult",
     "DynestyFluxReNFitter",
     "DynestyFluxReNResult",
+    "DynestyFitter",
+    "DynestyResult",
 ]

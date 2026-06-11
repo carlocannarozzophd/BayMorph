@@ -13,6 +13,7 @@ from .fitting import (
     DynestyFluxFitter, DynestyFluxResult,
     DynestyFluxReFitter, DynestyFluxReResult,
     DynestyFluxReNFitter, DynestyFluxReNResult,
+    DynestyFitter,DynestyResult,
 )
 from .likelihood import gaussian_log_likelihood
 from .models import SersicModel
@@ -72,4 +73,6 @@ __all__ = [
     "DynestyFluxReNFitter",
     "DynestyFluxReNResult",
     "PosteriorResult",
+    "DynestyFitter",
+    "DynestyResult",
 ]
