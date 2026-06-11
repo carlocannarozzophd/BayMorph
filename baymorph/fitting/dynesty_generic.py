@@ -90,16 +90,39 @@ class DynestyFitter:
     def run(
         self,
         nlive: int = 100,
+        sample: str = "auto",
+        bound: str = "multi",
+        dlogz: float | None = None,
+        bootstrap: int | None = None,
+        print_progress: bool = True,
     ) -> DynestyResult:
         """Run nested sampling."""
+        sampler_kwargs = {
+            "nlive": nlive,
+            "sample": sample,
+            "bound": bound,
+        }
+
+        if bootstrap is not None:
+            sampler_kwargs["bootstrap"] = bootstrap
+
         sampler = dynesty.NestedSampler(
             self.loglikelihood,
             self.prior_transform,
             ndim=self.ndim,
-            nlive=nlive,
+            **sampler_kwargs,
         )
 
-        sampler.run_nested()
+        run_kwargs = {
+            "print_progress": print_progress,
+        }
+
+        if dlogz is not None:
+            run_kwargs["dlogz"] = dlogz
+
+        sampler.run_nested(
+            **run_kwargs,
+        )
 
         results = sampler.results
 
