@@ -4,9 +4,11 @@ from .core import (
     BackgroundEstimate,
     ImageData,
     estimate_background_sigma,
+    estimate_background_photutils,  
     estimate_noise_map,
     make_constant_noise_map,
     subtract_background,
+    detect_sources_mask,
 )
 from .fitting import (
     GridSearchResult, grid_search_1d,
@@ -75,4 +77,6 @@ __all__ = [
     "PosteriorResult",
     "DynestyFitter",
     "DynestyResult",
+    "estimate_background_photutils",
+    "detect_sources_mask",
 ]
