@@ -1,11 +1,11 @@
 """Generic Dynesty fitter."""
 
-from baymorph.simulation.psf import convolve_with_psf
 import dynesty
 import numpy as np
 
 from baymorph.likelihood import gaussian_log_likelihood
 from baymorph.results import PosteriorResult
+from baymorph.simulation.psf import convolve_with_psf
 
 
 class DynestyResult(PosteriorResult):
@@ -20,16 +20,32 @@ class DynestyFitter:
         model_factory,
         data,
         noise,
-        parameter_names: list[str],
-        prior_bounds: dict[str, tuple[float, float]],
+        parameter_names: list[str] | None = None,
+        prior_bounds: dict[str, tuple[float, float]] | None = None,
+        parameters=None,
         psf=None,
         mask=None,
     ):
+        if parameters is not None:
+            parameter_names = parameters.names
+            prior_bounds = parameters.bounds
+
+        if parameter_names is None:
+            raise ValueError(
+                "parameter_names must be provided when parameters is None."
+            )
+
+        if prior_bounds is None:
+            raise ValueError(
+                "prior_bounds must be provided when parameters is None."
+            )
+
         self.model_factory = model_factory
         self.data = np.asarray(data, dtype=float)
         self.noise = np.asarray(noise, dtype=float)
         self.parameter_names = list(parameter_names)
         self.prior_bounds = dict(prior_bounds)
+        self.parameters = parameters
         self.psf = psf
         self.mask = mask
 
@@ -58,26 +74,50 @@ class DynestyFitter:
 
     def prior_transform(self, u):
         """Transform unit-cube samples to physical parameters."""
+        if self.parameters is not None:
+            return self.parameters.transform(u)
+
         theta = []
 
         for value, name in zip(u, self.parameter_names):
             lower, upper = self.prior_bounds[name]
-            theta.append(lower + value * (upper - lower))
+
+            theta.append(
+                lower
+                + value
+                * (
+                    upper
+                    - lower
+                )
+            )
 
         return np.asarray(theta)
 
-    def theta_to_parameters(self, theta) -> dict[str, float]:
+    def theta_to_parameters(
+        self,
+        theta,
+    ) -> dict[str, float]:
         """Convert parameter vector to dictionary."""
         return {
             name: float(value)
-            for name, value in zip(self.parameter_names, theta)
+            for name, value in zip(
+                self.parameter_names,
+                theta,
+            )
         }
 
-    def loglikelihood(self, theta):
+    def loglikelihood(
+        self,
+        theta,
+    ):
         """Evaluate log-likelihood."""
-        parameters = self.theta_to_parameters(theta)
+        parameters = self.theta_to_parameters(
+            theta,
+        )
 
-        model = self.model_factory(**parameters)
+        model = self.model_factory(
+            **parameters,
+        )
 
         model_image = model.render(
             shape=self.data.shape,
