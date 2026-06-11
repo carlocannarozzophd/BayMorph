@@ -21,6 +21,11 @@ from .grid import (
     grid_search_1d,
 )
 
+from .parameters import (
+    Parameter,
+    ParameterSet
+)
+
 __all__ = [
     "GridSearchResult",
     "grid_search_1d",
@@ -32,4 +37,6 @@ __all__ = [
     "DynestyFluxReNResult",
     "DynestyFitter",
     "DynestyResult",
+    "Parameter",
+    "ParameterSet",
 ]

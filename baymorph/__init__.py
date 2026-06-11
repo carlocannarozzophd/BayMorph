@@ -16,6 +16,7 @@ from .fitting import (
     DynestyFluxReFitter, DynestyFluxReResult,
     DynestyFluxReNFitter, DynestyFluxReNResult,
     DynestyFitter,DynestyResult,
+    Parameter, ParameterSet
 )
 from .likelihood import gaussian_log_likelihood
 from .models import SersicModel, ConvolvedModel
@@ -80,4 +81,6 @@ __all__ = [
     "DynestyResult",
     "estimate_background_photutils",
     "detect_sources_mask",
+    "Parameter",
+    "ParameterSet",
 ]
