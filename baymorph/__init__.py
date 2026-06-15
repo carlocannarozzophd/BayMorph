@@ -42,6 +42,8 @@ from .plotting import (
     make_plot,
     set_plot_style,
     style_axes,
+    show_log_image,
+    plot_log_data_model_residual,
 )
 
 from .results import PosteriorResult
@@ -82,6 +84,8 @@ __all__ = [
     "DynestyFluxReNFitter",
     "DynestyFluxReNResult",
     "PosteriorResult",
+    "show_log_image",
+    "plot_log_data_model_residual",
     "DynestyFitter",
     "DynestyResult",
     "estimate_background_photutils",

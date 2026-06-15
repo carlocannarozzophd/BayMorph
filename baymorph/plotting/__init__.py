@@ -17,7 +17,10 @@ from .style import (
     set_plot_style,
     style_axes,
 )
-
+from .images import (
+    show_log_image,
+    plot_log_data_model_residual,
+)
 __all__ = [
     "set_plot_style",
     "style_axes",
@@ -28,4 +31,6 @@ __all__ = [
     "plot_1d_posterior",
     "plot_2d_samples",
     "plot_data_model_residual",
+    "show_log_image",
+    "plot_log_data_model_residual",
 ]
