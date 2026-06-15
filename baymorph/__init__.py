@@ -49,6 +49,11 @@ from .plotting import (
 
 from .results import PosteriorResult
 
+from .pipeline import (
+    RealFITSPreparation,
+    prepare_real_fits_image,
+)
+
 __version__ = "0.0.1"
 
 __all__ = [
@@ -94,4 +99,6 @@ __all__ = [
     "detect_sources_mask",
     "Parameter",
     "ParameterSet",
+    "RealFITSPreparation",
+    "prepare_real_fits_image",
 ]
