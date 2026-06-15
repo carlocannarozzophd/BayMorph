@@ -22,7 +22,8 @@ from .likelihood import gaussian_log_likelihood
 from .models import (
     SersicModel,
     ConvolvedModel,
-    CompositeModel
+    CompositeModel,
+    DoubleSersicModel,
 )
 from .simulation import (
     GaussianPSF,
@@ -63,6 +64,7 @@ __all__ = [
     "SersicModel",
     "ConvolvedModel",
     "CompositeModel",
+    "DoubleSersicModel",
     "SyntheticSersic",
     "SyntheticObservation",
     "GaussianPSF",
