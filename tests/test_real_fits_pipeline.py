@@ -33,3 +33,9 @@ def test_prepare_real_fits_image():
     assert np.isfinite(
         result.background
     )
+
+    assert result.detection is not None
+
+    assert result.detection.mask.shape == image.shape
+
+    assert result.mask.shape == image.shape

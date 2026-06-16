@@ -9,7 +9,10 @@ from baymorph.core.background import (
     estimate_background_sigma,
     subtract_background,
 )
-from baymorph.core.masking import detect_sources_mask
+from baymorph.core.detection import (
+    DetectionResult,
+    detect_sources_segmentation,
+)
 from baymorph.core.noise import estimate_noise_map
 
 
@@ -21,6 +24,7 @@ class RealFITSPreparation:
     background: float
     mask: np.ndarray
     noise: np.ndarray
+    detection: DetectionResult
 
 
 def prepare_real_fits_image(
@@ -35,10 +39,12 @@ def prepare_real_fits_image(
         dtype=float,
     )
 
-    mask = detect_sources_mask(
+    detection = detect_sources_segmentation(
         data,
         n_sigma=detection_sigma,
     )
+
+    mask = detection.mask
 
     try:
         background_result = estimate_background_photutils(
@@ -67,4 +73,5 @@ def prepare_real_fits_image(
         background=background_result.background,
         mask=mask,
         noise=noise,
+        detection=detection,
     )
