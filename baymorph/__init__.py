@@ -46,13 +46,12 @@ from .plotting import (
     show_log_image,
     plot_log_data_model_residual,
 )
-
 from .results import PosteriorResult
-
 from .pipeline import (
     RealFITSPreparation,
     prepare_real_fits_image,
     estimate_target_position,
+    select_segment_near_position,
 )
 
 __version__ = "0.0.1"
@@ -103,4 +102,5 @@ __all__ = [
     "RealFITSPreparation",
     "prepare_real_fits_image",
     "estimate_target_position",
+    "select_segment_near_position",
 ]

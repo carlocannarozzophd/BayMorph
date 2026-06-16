@@ -3,8 +3,13 @@
 from dataclasses import dataclass
 
 import numpy as np
-from photutils.segmentation import SourceCatalog, detect_sources
+from scipy.ndimage import gaussian_filter
 
+from photutils.segmentation import (
+    SourceCatalog,
+    detect_sources,
+    detect_threshold,
+)
 
 @dataclass
 class DetectionResult:
@@ -27,13 +32,18 @@ def detect_sources_segmentation(
         dtype=float,
     )
 
-    threshold = (
-        np.nanmedian(data)
-        + n_sigma * np.nanstd(data)
+    detection_image = gaussian_filter(
+        data,
+        sigma=2.0,
+    )
+
+    threshold = detect_threshold(
+        detection_image,
+        n_sigma=n_sigma,
     )
 
     segmentation = detect_sources(
-        data,
+        detection_image,
         threshold,
         n_pixels=n_pixels,
     )
