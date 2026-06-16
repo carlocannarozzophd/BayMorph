@@ -2,13 +2,15 @@
 
 from .core import (
     BackgroundEstimate,
+    DetectionResult,
     ImageData,
+    detect_sources_mask,
+    detect_sources_segmentation,
     estimate_background_sigma,
-    estimate_background_photutils,  
+    estimate_background_photutils,
     estimate_noise_map,
     make_constant_noise_map,
     subtract_background,
-    detect_sources_mask,
 )
 from .fitting import (
     GridSearchResult, grid_search_1d,
@@ -63,6 +65,7 @@ __all__ = [
     "subtract_background",
     "make_constant_noise_map",
     "estimate_noise_map",
+    "DetectionResult",
     "GridSearchResult",
     "grid_search_1d",
     "gaussian_log_likelihood",
@@ -103,4 +106,5 @@ __all__ = [
     "prepare_real_fits_image",
     "estimate_target_position",
     "select_segment_near_position",
+    "detect_sources_segmentation",
 ]
