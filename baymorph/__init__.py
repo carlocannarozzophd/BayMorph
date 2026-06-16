@@ -52,6 +52,7 @@ from .results import PosteriorResult
 from .pipeline import (
     RealFITSPreparation,
     prepare_real_fits_image,
+    estimate_target_position,
 )
 
 __version__ = "0.0.1"
@@ -101,4 +102,5 @@ __all__ = [
     "ParameterSet",
     "RealFITSPreparation",
     "prepare_real_fits_image",
+    "estimate_target_position",
 ]
