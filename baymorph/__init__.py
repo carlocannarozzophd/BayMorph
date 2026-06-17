@@ -58,6 +58,7 @@ from .pipeline import (
     select_segment_near_position,
     refine_mask,
 )
+from .interactive import MaskActionEditor
 
 __version__ = "0.0.1"
 
@@ -113,4 +114,5 @@ __all__ = [
     "connected_source_mask",
     "star_halo_mask",
     "refine_mask",
+    "MaskActionEditor",
 ]
