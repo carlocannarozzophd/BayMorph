@@ -99,3 +99,80 @@ def connected_source_mask(
     ] = local_mask
 
     return mask
+
+
+def star_halo_mask(
+    image,
+    x,
+    y,
+    radius=50,
+    threshold_sigma=2.0,
+    n_pixels=5,
+    dilation_iterations=10,
+):
+    """
+    Create an aggressive mask around a bright star.
+
+    The mask combines:
+
+    - the connected source containing the click position
+    - a circular halo mask
+    - optional dilation
+
+    Parameters
+    ----------
+    image : ndarray
+        Input image.
+
+    x, y : float
+        Star position.
+
+    radius : float
+        Radius of the circular halo mask.
+
+    threshold_sigma : float
+        Detection threshold.
+
+    n_pixels : int
+        Minimum connected pixels.
+
+    dilation_iterations : int
+        Additional dilation.
+
+    Returns
+    -------
+    mask : ndarray of bool
+        Boolean mask.
+    """
+
+    source_mask = connected_source_mask(
+        image=image,
+        x=x,
+        y=y,
+        threshold_sigma=threshold_sigma,
+        n_pixels=n_pixels,
+        dilation_iterations=0,
+    )
+
+    yy, xx = np.indices(
+        image.shape,
+    )
+
+    circular_mask = (
+        (xx - x) ** 2 +
+        (yy - y) ** 2
+    ) <= radius**2
+
+    mask = (
+        source_mask |
+        circular_mask
+    )
+
+    if dilation_iterations > 0:
+
+        mask = binary_dilation(
+            mask,
+            iterations=dilation_iterations,
+        )
+
+    return mask

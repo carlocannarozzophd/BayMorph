@@ -11,6 +11,8 @@ from .core import (
     estimate_noise_map,
     make_constant_noise_map,
     subtract_background,
+    connected_source_mask,
+    star_halo_mask,
 )
 from .fitting import (
     GridSearchResult, grid_search_1d,
@@ -55,7 +57,6 @@ from .pipeline import (
     estimate_target_position,
     select_segment_near_position,
 )
-from .core import connected_source_mask
 
 __version__ = "0.0.1"
 
@@ -109,4 +110,5 @@ __all__ = [
     "select_segment_near_position",
     "detect_sources_segmentation",
     "connected_source_mask",
+    "star_halo_mask",
 ]

@@ -1,7 +1,9 @@
 import numpy as np
 
-from baymorph.core.mask import connected_source_mask
-
+from baymorph import (
+    connected_source_mask,
+    star_halo_mask,
+)
 
 def test_connected_source_mask_detects_source():
 
@@ -96,3 +98,66 @@ def test_connected_source_mask_near_border():
     )
 
     assert mask.sum() > 0
+
+
+def test_star_halo_mask_contains_click():
+
+    yy, xx = np.indices((101, 101))
+
+    image = np.exp(
+        -(
+            (xx - 50) ** 2 +
+            (yy - 50) ** 2
+        ) / (2 * 5**2)
+    )
+
+    mask = star_halo_mask(
+        image,
+        x=50,
+        y=50,
+        radius=20,
+    )
+
+    assert mask[50, 50]
+
+
+def test_star_halo_mask_larger_than_source_mask():
+
+    yy, xx = np.indices((101, 101))
+
+    image = np.exp(
+        -(
+            (xx - 50) ** 2 +
+            (yy - 50) ** 2
+        ) / (2 * 5**2)
+    )
+
+    source_mask = connected_source_mask(
+        image,
+        x=50,
+        y=50,
+    )
+
+    star_mask = star_halo_mask(
+        image,
+        x=50,
+        y=50,
+        radius=20,
+    )
+
+    assert star_mask.sum() > source_mask.sum()
+
+
+def test_star_halo_mask_preserves_shape():
+
+    image = np.random.random(
+        (87, 113),
+    )
+
+    mask = star_halo_mask(
+        image,
+        x=40,
+        y=40,
+    )
+
+    assert mask.shape == image.shape

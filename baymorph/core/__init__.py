@@ -20,7 +20,11 @@ from .noise import (
     make_constant_noise_map,
 )
 
-from .mask import connected_source_mask
+
+from .mask import (
+    connected_source_mask,
+    star_halo_mask,
+)
 
 __all__ = [
     "ImageData",
@@ -34,4 +38,5 @@ __all__ = [
     "detect_sources_mask",
     "detect_sources_segmentation",
     "connected_source_mask",
+    "star_halo_mask",
 ]
