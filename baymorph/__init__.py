@@ -56,6 +56,7 @@ from .pipeline import (
     prepare_real_fits_image,
     estimate_target_position,
     select_segment_near_position,
+    refine_mask,
 )
 
 __version__ = "0.0.1"
@@ -111,4 +112,5 @@ __all__ = [
     "detect_sources_segmentation",
     "connected_source_mask",
     "star_halo_mask",
+    "refine_mask",
 ]

@@ -8,10 +8,12 @@ from .real_fits import (
 from .segmentation import (
     select_segment_near_position,
 )
+from .mask_refinement import refine_mask
 
 __all__ = [
     "RealFITSPreparation",
     "prepare_real_fits_image",
     "estimate_target_position",
     "select_segment_near_position",
+    "refine_mask",
 ]
