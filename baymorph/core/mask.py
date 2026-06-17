@@ -1,0 +1,101 @@
+from scipy.ndimage import binary_dilation
+from photutils.segmentation import detect_sources
+from photutils.segmentation import detect_threshold
+
+import numpy as np
+
+
+def connected_source_mask(
+    image,
+    x,
+    y,
+    threshold_sigma=2.0,
+    n_pixels=5,
+    dilation_iterations=0,
+    box_size=101,
+):
+    """
+    Extract the connected source containing the clicked position.
+
+    Parameters
+    ----------
+    image : ndarray
+        Input image.
+
+    x, y : float
+        Seed position.
+
+    threshold_sigma : float
+        Detection threshold in units of local noise.
+
+    n_pixels : int
+        Minimum connected pixels.
+
+    dilation_iterations : int
+        Optional binary dilation.
+
+    box_size : int
+        Local analysis window size.
+
+    Returns
+    -------
+    mask : ndarray of bool
+        Boolean mask following the detected structure.
+    """
+
+    ny, nx = image.shape
+
+    half = box_size // 2
+
+    x0 = max(0, int(round(x)) - half)
+    x1 = min(nx, int(round(x)) + half + 1)
+
+    y0 = max(0, int(round(y)) - half)
+    y1 = min(ny, int(round(y)) + half + 1)
+
+    local = image[y0:y1, x0:x1]
+
+    threshold = detect_threshold(
+        local,
+        n_sigma=threshold_sigma,
+    )
+
+    segmentation = detect_sources(
+        local,
+        threshold,
+        n_pixels=n_pixels,
+    )
+
+    if segmentation is None:
+        return np.zeros_like(image, dtype=bool)
+
+    x_local = int(round(x)) - x0
+    y_local = int(round(y)) - y0
+
+    label = segmentation.data[
+        y_local,
+        x_local,
+    ]
+
+    if label == 0:
+        return np.zeros_like(image, dtype=bool)
+
+    local_mask = segmentation.data == label
+
+    if dilation_iterations > 0:
+        local_mask = binary_dilation(
+            local_mask,
+            iterations=dilation_iterations,
+        )
+
+    mask = np.zeros_like(
+        image,
+        dtype=bool,
+    )
+
+    mask[
+        y0:y1,
+        x0:x1,
+    ] = local_mask
+
+    return mask

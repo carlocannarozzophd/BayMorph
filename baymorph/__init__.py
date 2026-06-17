@@ -55,6 +55,7 @@ from .pipeline import (
     estimate_target_position,
     select_segment_near_position,
 )
+from .core import connected_source_mask
 
 __version__ = "0.0.1"
 
@@ -107,4 +108,5 @@ __all__ = [
     "estimate_target_position",
     "select_segment_near_position",
     "detect_sources_segmentation",
+    "connected_source_mask",
 ]

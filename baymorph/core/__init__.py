@@ -20,6 +20,8 @@ from .noise import (
     make_constant_noise_map,
 )
 
+from .mask import connected_source_mask
+
 __all__ = [
     "ImageData",
     "BackgroundEstimate",
@@ -31,4 +33,5 @@ __all__ = [
     "estimate_noise_map",
     "detect_sources_mask",
     "detect_sources_segmentation",
+    "connected_source_mask",
 ]
