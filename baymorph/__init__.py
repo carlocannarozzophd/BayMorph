@@ -37,6 +37,7 @@ from .simulation import (
     add_poisson_noise,
     convolve_with_psf,
     make_observation,
+    EmpiricalPSF,
 )
 from .plotting import (
     plot_data_model_residual,
@@ -115,4 +116,5 @@ __all__ = [
     "star_halo_mask",
     "refine_mask",
     "MaskActionEditor",
+    "EmpiricalPSF",
 ]

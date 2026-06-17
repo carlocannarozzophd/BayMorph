@@ -54,18 +54,75 @@ class GaussianPSF:
         return kernel
 
 
+@dataclass
+class EmpiricalPSF:
+    """
+    Empirical PSF represented by a 2D kernel.
+
+    Parameters
+    ----------
+    kernel_array : ndarray
+        Empirical PSF kernel.
+    """
+
+    kernel_array: np.ndarray
+
+    def kernel(
+        self,
+        size: int | None = None,
+    ) -> np.ndarray:
+        """
+        Return a normalized empirical PSF kernel.
+        """
+
+        kernel = np.asarray(
+            self.kernel_array,
+            dtype=float,
+        )
+
+        if kernel.ndim != 2:
+            raise ValueError(
+                "Empirical PSF kernel must be 2D."
+            )
+
+        kernel = np.nan_to_num(
+            kernel,
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+
+        kernel[kernel < 0] = 0.0
+
+        total = kernel.sum()
+
+        if total <= 0:
+            raise ValueError(
+                "Empirical PSF kernel must have positive flux."
+            )
+
+        return kernel / total
+
+
 def convolve_with_psf(
     image: np.ndarray,
-    psf: GaussianPSF,
+    psf,
     kernel_size: int = 25,
 ) -> np.ndarray:
     """
     Convolve image with PSF.
     """
 
-    kernel = psf.kernel(
-        size=kernel_size
-    )
+    if isinstance(
+        psf,
+        GaussianPSF,
+    ):
+        kernel = psf.kernel(
+            size=kernel_size,
+        )
+
+    else:
+        kernel = psf.kernel()
 
     return fftconvolve(
         image,
