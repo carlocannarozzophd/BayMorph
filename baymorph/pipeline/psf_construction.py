@@ -43,3 +43,69 @@ def run_psf_construction_from_config(
     raise NotImplementedError(
         "Empirical PSF construction orchestration is not implemented yet."
     )
+
+
+def normalize_psf(psf: np.ndarray) -> np.ndarray:
+    total = np.sum(psf)
+
+    if not np.isfinite(total) or total <= 0:
+        raise ValueError("PSF sum must be positive and finite.")
+
+    return psf / total
+
+
+def extract_centered_cutout(
+    image: np.ndarray,
+    x: float,
+    y: float,
+    half_size: int,
+) -> np.ndarray:
+    x0 = int(round(x))
+    y0 = int(round(y))
+
+    y_min = y0 - half_size
+    y_max = y0 + half_size + 1
+    x_min = x0 - half_size
+    x_max = x0 + half_size + 1
+
+    if x_min < 0 or y_min < 0 or x_max > image.shape[1] or y_max > image.shape[0]:
+        raise ValueError("Requested PSF cutout extends outside the image boundaries.")
+
+    return image[y_min:y_max, x_min:x_max]
+
+
+def subtract_outer_background(
+    cutout: np.ndarray,
+    border_width: int = 3,
+) -> np.ndarray:
+    if border_width <= 0:
+        raise ValueError("border_width must be positive.")
+
+    if 2 * border_width >= min(cutout.shape):
+        raise ValueError("border_width is too large for this cutout.")
+
+    border_pixels = np.concatenate(
+        [
+            cutout[:border_width, :].ravel(),
+            cutout[-border_width:, :].ravel(),
+            cutout[:, :border_width].ravel(),
+            cutout[:, -border_width:].ravel(),
+        ]
+    )
+
+    background = np.nanmedian(border_pixels)
+
+    return cutout - background
+
+
+def stack_psf_cutouts(cutouts: list[np.ndarray]) -> np.ndarray:
+    if len(cutouts) == 0:
+        raise ValueError("At least one PSF cutout is required.")
+
+    shapes = {cutout.shape for cutout in cutouts}
+    if len(shapes) != 1:
+        raise ValueError("All PSF cutouts must have the same shape.")
+
+    stack = np.nanmedian(np.stack(cutouts, axis=0), axis=0)
+
+    return normalize_psf(stack)

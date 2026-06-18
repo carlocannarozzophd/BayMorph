@@ -52,6 +52,10 @@ from .psf_construction import (
     load_empirical_psf,
     run_psf_construction_from_config,
     save_empirical_psf,
+    extract_centered_cutout,
+    normalize_psf,
+    stack_psf_cutouts,
+    subtract_outer_background,
 )
 
 __all__ = [
@@ -92,5 +96,9 @@ __all__ = [
     "load_empirical_psf",
     "run_psf_construction_from_config",
     "save_empirical_psf",
+    "extract_centered_cutout",
+    "normalize_psf",
+    "stack_psf_cutouts",
+    "subtract_outer_background",
 
 ]
