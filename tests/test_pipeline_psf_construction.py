@@ -11,6 +11,8 @@ from baymorph import (
     normalize_psf,
     stack_psf_cutouts,
     subtract_outer_background,
+    centroid_from_flux,
+    recenter_cutout,
 )
 
 
@@ -86,3 +88,30 @@ def test_stack_psf_cutouts_returns_normalized_stack():
 
     assert psf.shape == (5, 5)
     assert np.isclose(psf.sum(), 1.0)
+
+
+def test_centroid_from_flux_recovers_peak_position():
+    cutout = np.zeros((7, 7))
+    cutout[2, 4] = 10.0
+
+    x, y = centroid_from_flux(cutout)
+
+    assert np.isclose(x, 4.0)
+    assert np.isclose(y, 2.0)
+
+
+def test_centroid_from_flux_rejects_empty_cutout():
+    with pytest.raises(ValueError, match="non-positive flux"):
+        centroid_from_flux(np.zeros((5, 5)))
+
+
+def test_recenter_cutout_moves_peak_toward_center():
+    cutout = np.zeros((9, 9))
+    cutout[2, 6] = 10.0
+
+    recentered = recenter_cutout(cutout)
+
+    x, y = centroid_from_flux(recentered)
+
+    assert np.isclose(x, 4.0, atol=0.5)
+    assert np.isclose(y, 4.0, atol=0.5)

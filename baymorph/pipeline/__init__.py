@@ -56,6 +56,8 @@ from .psf_construction import (
     normalize_psf,
     stack_psf_cutouts,
     subtract_outer_background,
+    centroid_from_flux,
+    recenter_cutout,
 )
 
 __all__ = [
@@ -100,5 +102,6 @@ __all__ = [
     "normalize_psf",
     "stack_psf_cutouts",
     "subtract_outer_background",
-
+    "centroid_from_flux",
+    "recenter_cutout",
 ]

@@ -94,6 +94,8 @@ from .pipeline import (
     normalize_psf,
     stack_psf_cutouts,
     subtract_outer_background,
+    centroid_from_flux,
+    recenter_cutout,
 )
 from .interactive import MaskActionEditor
 
@@ -188,4 +190,6 @@ __all__ = [
     "normalize_psf",
     "stack_psf_cutouts",
     "subtract_outer_background",
+    "centroid_from_flux",
+    "recenter_cutout",
 ]

@@ -109,3 +109,50 @@ def stack_psf_cutouts(cutouts: list[np.ndarray]) -> np.ndarray:
     stack = np.nanmedian(np.stack(cutouts, axis=0), axis=0)
 
     return normalize_psf(stack)
+
+
+def centroid_from_flux(cutout: np.ndarray) -> tuple[float, float]:
+    data = np.asarray(cutout, dtype=float)
+    data = np.where(np.isfinite(data), data, 0.0)
+    data = data - np.min(data)
+
+    total = np.sum(data)
+    if total <= 0:
+        raise ValueError("Cannot compute centroid for non-positive flux cutout.")
+
+    yy, xx = np.indices(data.shape)
+
+    x_centroid = float(np.sum(xx * data) / total)
+    y_centroid = float(np.sum(yy * data) / total)
+
+    return x_centroid, y_centroid
+
+
+def recenter_cutout(
+    cutout: np.ndarray,
+    *,
+    target_x: float | None = None,
+    target_y: float | None = None,
+) -> np.ndarray:
+    from scipy.ndimage import shift
+
+    y_size, x_size = cutout.shape
+
+    if target_x is None:
+        target_x = (x_size - 1) / 2
+
+    if target_y is None:
+        target_y = (y_size - 1) / 2
+
+    x_centroid, y_centroid = centroid_from_flux(cutout)
+
+    dx = target_x - x_centroid
+    dy = target_y - y_centroid
+
+    return shift(
+        cutout,
+        shift=(dy, dx),
+        order=3,
+        mode="nearest",
+        prefilter=True,
+    )
