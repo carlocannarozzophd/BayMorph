@@ -27,6 +27,27 @@ class RealFITSPreparation:
     detection: DetectionResult
 
 
+def robust_rms(values):
+    values = np.asarray(values, dtype=float)
+    values = values[np.isfinite(values)]
+
+    if values.size == 0:
+        raise ValueError("Cannot compute robust RMS for empty values.")
+
+    return float(np.sqrt(np.mean(values**2)))
+
+
+def robust_mad(values):
+    values = np.asarray(values, dtype=float)
+    values = values[np.isfinite(values)]
+
+    if values.size == 0:
+        raise ValueError("Cannot compute robust MAD for empty values.")
+
+    median = np.nanmedian(values)
+    return float(np.nanmedian(np.abs(values - median)))
+
+
 def prepare_real_fits_image(
     data,
     background_box_size: int = 20,

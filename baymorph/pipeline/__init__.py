@@ -4,6 +4,8 @@ from .target import (
 from .real_fits import (
     RealFITSPreparation,
     prepare_real_fits_image,
+    robust_rms,
+    robust_mad,
 )
 from .segmentation import (
     select_segment_near_position,
@@ -110,4 +112,6 @@ __all__ = [
     "save_empirical_psf_metadata",
     "estimate_psf_half_size",
     "crop_center",
+    "robust_rms",
+    "robust_mad",
 ]

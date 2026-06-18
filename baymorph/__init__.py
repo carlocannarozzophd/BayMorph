@@ -99,6 +99,8 @@ from .pipeline import (
     save_empirical_psf_metadata,
     estimate_psf_half_size,
     crop_center,
+    robust_rms,
+    robust_mad,
 )
 from .interactive import MaskActionEditor
 
@@ -198,4 +200,6 @@ __all__ = [
     "save_empirical_psf_metadata",
     "estimate_psf_half_size",
     "crop_center",
+    "robust_rms",
+    "robust_mad",
 ]
