@@ -40,6 +40,8 @@ from .psf_candidates import (
     load_psf_candidates,
     run_psf_candidate_selection_from_config,
     save_psf_candidates,
+    estimate_candidate_half_size,
+    is_isolated_candidate,
 )
 
 __all__ = [
@@ -70,4 +72,6 @@ __all__ = [
     "load_psf_candidates",
     "run_psf_candidate_selection_from_config",
     "save_psf_candidates",
+    "estimate_candidate_half_size",
+    "is_isolated_candidate",
 ]

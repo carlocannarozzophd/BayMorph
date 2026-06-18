@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any
 import json
 
+import numpy as np
+
 from .config import load_resolved_config
 from .outputs import make_output_tree, pipeline_paths
 
@@ -13,10 +15,12 @@ from .outputs import make_output_tree, pipeline_paths
 class PSFCandidate:
     x: float
     y: float
+    label: int | None = None
     flux: float | None = None
     fwhm: float | None = None
     sharpness: float | None = None
     roundness: float | None = None
+    half_size: int | None = None
 
 
 def save_psf_candidates(
@@ -59,3 +63,45 @@ def run_psf_candidate_selection_from_config(
     raise NotImplementedError(
         "PSF candidate selection orchestration is not implemented yet."
     )
+
+
+def estimate_candidate_half_size(
+    fwhm: float,
+    *,
+    scale_factor: float = 4.0,
+    min_half_size: int = 12,
+    max_half_size: int = 40,
+) -> int:
+    if fwhm <= 0:
+        raise ValueError("fwhm must be positive.")
+
+    half_size = int(np.ceil(scale_factor * fwhm))
+    return int(np.clip(half_size, min_half_size, max_half_size))
+
+
+def is_isolated_candidate(
+    segmentation: np.ndarray,
+    *,
+    label: int,
+    x: float,
+    y: float,
+    half_size: int,
+) -> bool:
+    if half_size <= 0:
+        raise ValueError("half_size must be positive.")
+
+    x0 = int(round(x))
+    y0 = int(round(y))
+
+    y_min = max(0, y0 - half_size)
+    y_max = min(segmentation.shape[0], y0 + half_size + 1)
+    x_min = max(0, x0 - half_size)
+    x_max = min(segmentation.shape[1], x0 + half_size + 1)
+
+    local = segmentation[y_min:y_max, x_min:x_max]
+
+    labels = set(np.unique(local))
+    labels.discard(0)
+    labels.discard(label)
+
+    return len(labels) == 0
