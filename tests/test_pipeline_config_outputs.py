@@ -114,3 +114,50 @@ def test_pipeline_paths_are_canonical(tmp_path):
     assert paths["fits"]["single_sersic"]["fit_results"] == base / "fits" / "single_sersic" / "fit_results.json"
     assert paths["fits"]["double_sersic"]["radial_profile"] == base / "fits" / "double_sersic" / "radial_profile.png"
     assert paths["model_comparison"]["bayes_factor"] == base / "model_comparison" / "bayes_factor.json"
+
+
+def test_resolve_config_applies_nested_defaults():
+    config = {
+        "object": {"name": "NGC1234"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": "outputs"},
+    }
+
+    resolved = resolve_config(config)
+
+    assert resolved["data"]["mask_path"] is None
+    assert resolved["outputs"]["overwrite"] is False
+    assert resolved["preparation"]["detection"]["n_sigma"] == 3.0
+    assert resolved["preparation"]["detection"]["n_levels"] == 32
+    assert resolved["psf"]["type"] == "empirical"
+    assert resolved["psf"]["empirical"]["construction"]["auto_size"] is True
+    assert resolved["fit"]["models"] == ["single_sersic"]
+    assert resolved["fit"]["sampler"]["name"] == "dynesty"
+    assert resolved["diagnostics"]["radial_profile"] is True
+
+
+def test_resolve_config_preserves_user_nested_overrides():
+    config = {
+        "object": {"name": "NGC1234"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": "outputs"},
+        "preparation": {
+            "detection": {
+                "n_sigma": 5.0,
+            },
+        },
+        "fit": {
+            "models": ["single_sersic", "double_sersic"],
+            "sampler": {
+                "nlive": 1000,
+            },
+        },
+    }
+
+    resolved = resolve_config(config)
+
+    assert resolved["preparation"]["detection"]["n_sigma"] == 5.0
+    assert resolved["preparation"]["detection"]["n_levels"] == 32
+    assert resolved["fit"]["models"] == ["single_sersic", "double_sersic"]
+    assert resolved["fit"]["sampler"]["name"] == "dynesty"
+    assert resolved["fit"]["sampler"]["nlive"] == 1000

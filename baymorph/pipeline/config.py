@@ -8,6 +8,70 @@ import yaml
 
 REQUIRED_TOP_LEVEL_KEYS = ("object", "data", "outputs")
 
+DEFAULT_CONFIG = {
+    "data": {
+        "mask_path": None,
+        "noise_map_path": None,
+        "psf_path": None,
+        "pixel_scale": None,
+    },
+    "outputs": {
+        "overwrite": False,
+    },
+    "preparation": {
+        "background": {
+            "method": "empirical",
+        },
+        "noise": {
+            "method": "empirical",
+        },
+        "detection": {
+            "n_sigma": 3.0,
+            "n_levels": 32,
+            "npixels": 20,
+        },
+    },
+    "masking": {
+        "connected_source": {
+            "enabled": True,
+        },
+        "star_halo": {
+            "enabled": True,
+        },
+        "interactive_refinement": {
+            "enabled": True,
+        },
+    },
+    "psf": {
+        "type": "empirical",
+        "empirical": {
+            "candidate_selection": {
+                "auto": True,
+            },
+            "construction": {
+                "auto_size": True,
+                "normalize": True,
+            },
+        },
+    },
+    "fit": {
+        "models": ["single_sersic"],
+        "sampler": {
+            "name": "dynesty",
+            "nlive": 500,
+        },
+        "comparison": {
+            "enabled": False,
+            "metric": "bayes_factor",
+        },
+    },
+    "diagnostics": {
+        "corner": True,
+        "residual": True,
+        "radial_profile": True,
+        "posterior_profile_bands": True,
+    },
+}
 
 def load_config(path: str | Path) -> dict[str, Any]:
     path = Path(path)
@@ -45,12 +109,7 @@ def validate_config(config: dict[str, Any]) -> None:
 def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
     validate_config(config)
 
-    resolved = dict(config)
-    resolved.setdefault("preparation", {})
-    resolved.setdefault("masking", {})
-    resolved.setdefault("psf", {})
-    resolved.setdefault("fit", {})
-    resolved.setdefault("diagnostics", {})
+    resolved = deep_update(DEFAULT_CONFIG, config)
 
     resolved["object"] = dict(resolved["object"])
     resolved["data"] = dict(resolved["data"])
@@ -65,3 +124,19 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
 
 def load_resolved_config(path: str | Path) -> dict[str, Any]:
     return resolve_config(load_config(path))
+
+
+def deep_update(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
+    result = dict(base)
+
+    for key, value in updates.items():
+        if (
+            key in result
+            and isinstance(result[key], dict)
+            and isinstance(value, dict)
+        ):
+            result[key] = deep_update(result[key], value)
+        else:
+            result[key] = value
+
+    return result
