@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import json
 
 import numpy as np
 from astropy.io import fits
@@ -58,6 +59,7 @@ def run_psf_construction_from_config(
         raise ValueError("No PSF candidates available.")
 
     cutouts = []
+    used_candidates = []
 
     for candidate in candidates:
         if candidate.half_size is None:
@@ -78,11 +80,31 @@ def run_psf_construction_from_config(
 
         cutouts.append(cutout)
 
+        used_candidates.append(
+            {
+                "label": candidate.label,
+                "x": candidate.x,
+                "y": candidate.y,
+                "half_size": candidate.half_size,
+            }
+        )
+
     psf = stack_psf_cutouts(cutouts)
 
     save_empirical_psf(
         resolved,
         psf,
+    )
+
+    save_empirical_psf_metadata(
+        resolved,
+        {
+            "n_candidates_input": len(candidates),
+            "n_candidates_used": len(cutouts),
+            "psf_shape": list(psf.shape),
+            "psf_sum": float(np.sum(psf)),
+            "used_candidates": used_candidates,
+        },
     )
 
     return psf
@@ -199,3 +221,16 @@ def recenter_cutout(
         mode="nearest",
         prefilter=True,
     )
+
+
+def save_empirical_psf_metadata(
+    config: dict[str, Any],
+    metadata: dict[str, Any],
+) -> Path:
+    make_output_tree(config)
+    path = pipeline_paths(config)["psf"]["metadata"]
+
+    with path.open("w") as f:
+        json.dump(metadata, f, indent=2)
+
+    return path

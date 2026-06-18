@@ -58,6 +58,7 @@ from .psf_construction import (
     subtract_outer_background,
     centroid_from_flux,
     recenter_cutout,
+    save_empirical_psf_metadata,
 )
 
 __all__ = [
@@ -104,4 +105,5 @@ __all__ = [
     "subtract_outer_background",
     "centroid_from_flux",
     "recenter_cutout",
+    "save_empirical_psf_metadata",
 ]

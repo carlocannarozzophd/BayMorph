@@ -56,6 +56,7 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
         "psf": {
             "dir": base / "psf",
             "psf_fits": base / "psf" / "psf.fits",
+            "metadata": base / "psf" / "psf_metadata.json",
             "candidates": base / "psf" / "psf_candidates.json",
             "candidates_plot": base / "psf" / "psf_candidates.png",
             "diagnostics_plot": base / "psf" / "psf_diagnostics.png",

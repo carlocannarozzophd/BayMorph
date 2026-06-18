@@ -2,6 +2,8 @@ import numpy as np
 
 import pytest
 
+import json
+
 from baymorph import (
     load_empirical_psf,
     pipeline_paths,
@@ -13,6 +15,7 @@ from baymorph import (
     subtract_outer_background,
     centroid_from_flux,
     recenter_cutout,
+    save_empirical_psf_metadata,
 )
 
 
@@ -115,3 +118,35 @@ def test_recenter_cutout_moves_peak_toward_center():
 
     assert np.isclose(x, 4.0, atol=0.5)
     assert np.isclose(y, 4.0, atol=0.5)
+
+
+def test_save_empirical_psf_metadata(tmp_path):
+    config = {
+        "object": {"name": "NGC1234"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {
+            "root": str(tmp_path / "outputs"),
+        },
+    }
+
+    resolved = resolve_config(config)
+
+    metadata = {
+        "n_candidates_input": 2,
+        "n_candidates_used": 2,
+        "psf_shape": [9, 9],
+        "psf_sum": 1.0,
+    }
+
+    path = save_empirical_psf_metadata(
+        resolved,
+        metadata,
+    )
+
+    assert path == pipeline_paths(resolved)["psf"]["metadata"]
+    assert path.exists()
+
+    with path.open("r") as f:
+        loaded = json.load(f)
+
+    assert loaded == metadata

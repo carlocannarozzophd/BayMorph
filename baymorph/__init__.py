@@ -96,6 +96,7 @@ from .pipeline import (
     subtract_outer_background,
     centroid_from_flux,
     recenter_cutout,
+    save_empirical_psf_metadata,
 )
 from .interactive import MaskActionEditor
 
@@ -192,4 +193,5 @@ __all__ = [
     "subtract_outer_background",
     "centroid_from_flux",
     "recenter_cutout",
+    "save_empirical_psf_metadata",
 ]

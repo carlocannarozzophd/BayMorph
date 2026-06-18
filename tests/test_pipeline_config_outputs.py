@@ -111,6 +111,7 @@ def test_pipeline_paths_are_canonical(tmp_path):
     assert paths["base"] == base
     assert paths["config_resolved"] == base / "config_resolved.yaml"
     assert paths["psf"]["psf_fits"] == base / "psf" / "psf.fits"
+    assert paths["psf"]["metadata"] == base / "psf" / "psf_metadata.json"
     assert paths["fits"]["single_sersic"]["fit_results"] == base / "fits" / "single_sersic" / "fit_results.json"
     assert paths["fits"]["double_sersic"]["radial_profile"] == base / "fits" / "double_sersic" / "radial_profile.png"
     assert paths["model_comparison"]["bayes_factor"] == base / "model_comparison" / "bayes_factor.json"
