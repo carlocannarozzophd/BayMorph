@@ -135,6 +135,13 @@ def test_resolve_config_applies_nested_defaults():
     assert resolved["fit"]["sampler"]["name"] == "dynesty"
     assert resolved["diagnostics"]["radial_profile"] is True
 
+    candidate_cfg = resolved["psf"]["empirical"]["candidate_selection"]
+
+    assert candidate_cfg["target_n_candidates"] == 15
+    assert candidate_cfg["isolation_scale_factor"] == 4.0
+    assert candidate_cfg["min_half_size"] == 12
+    assert candidate_cfg["max_half_size"] == 40
+
 
 def test_resolve_config_preserves_user_nested_overrides():
     config = {
@@ -161,3 +168,30 @@ def test_resolve_config_preserves_user_nested_overrides():
     assert resolved["fit"]["models"] == ["single_sersic", "double_sersic"]
     assert resolved["fit"]["sampler"]["name"] == "dynesty"
     assert resolved["fit"]["sampler"]["nlive"] == 1000
+
+
+def test_resolve_config_preserves_psf_candidate_selection_overrides():
+    config = {
+        "object": {"name": "NGC1234"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": "outputs"},
+        "psf": {
+            "empirical": {
+                "candidate_selection": {
+                    "target_n_candidates": 8,
+                    "isolation_scale_factor": 5.0,
+                    "min_half_size": 10,
+                    "max_half_size": 50,
+                },
+            },
+        },
+    }
+
+    resolved = resolve_config(config)
+    candidate_cfg = resolved["psf"]["empirical"]["candidate_selection"]
+
+    assert candidate_cfg["auto"] is True
+    assert candidate_cfg["target_n_candidates"] == 8
+    assert candidate_cfg["isolation_scale_factor"] == 5.0
+    assert candidate_cfg["min_half_size"] == 10
+    assert candidate_cfg["max_half_size"] == 50
