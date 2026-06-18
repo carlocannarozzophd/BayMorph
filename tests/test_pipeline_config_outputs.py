@@ -138,9 +138,9 @@ def test_resolve_config_applies_nested_defaults():
     candidate_cfg = resolved["psf"]["empirical"]["candidate_selection"]
 
     assert candidate_cfg["target_n_candidates"] == 15
-    assert candidate_cfg["isolation_scale_factor"] == 4.0
+    assert candidate_cfg["sigma_factor"] == 4.0
     assert candidate_cfg["min_half_size"] == 12
-    assert candidate_cfg["max_half_size"] == 40
+    assert candidate_cfg["max_half_size"] == 25
 
 
 def test_resolve_config_preserves_user_nested_overrides():
@@ -179,7 +179,7 @@ def test_resolve_config_preserves_psf_candidate_selection_overrides():
             "empirical": {
                 "candidate_selection": {
                     "target_n_candidates": 8,
-                    "isolation_scale_factor": 5.0,
+                    "sigma_factor": 5.0,
                     "min_half_size": 10,
                     "max_half_size": 50,
                 },
@@ -192,6 +192,6 @@ def test_resolve_config_preserves_psf_candidate_selection_overrides():
 
     assert candidate_cfg["auto"] is True
     assert candidate_cfg["target_n_candidates"] == 8
-    assert candidate_cfg["isolation_scale_factor"] == 5.0
+    assert candidate_cfg["sigma_factor"] == 5.0
     assert candidate_cfg["min_half_size"] == 10
     assert candidate_cfg["max_half_size"] == 50

@@ -43,6 +43,9 @@ from .psf_candidates import (
     estimate_candidate_half_size,
     is_isolated_candidate,
     select_psf_candidates_from_rows,
+    candidate_row_passes_quality_cuts,
+    estimate_candidate_half_size_from_sigmas,
+    is_inside_exclusion_box,
 )
 
 __all__ = [
@@ -76,4 +79,7 @@ __all__ = [
     "estimate_candidate_half_size",
     "is_isolated_candidate",
     "select_psf_candidates_from_rows"
+    "candidate_row_passes_quality_cuts",
+    "estimate_candidate_half_size_from_sigmas",
+    "is_inside_exclusion_box",
 ]

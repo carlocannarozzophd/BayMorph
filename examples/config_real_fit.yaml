@@ -46,12 +46,19 @@ psf:
     candidate_selection:
       auto: true
       target_n_candidates: 15
-      isolation_scale_factor: 4.0
+      min_area: 20
+      max_area: 300
+      min_peak: 50
+      max_peak: 50000
+      max_eccentricity: 0.50
+      max_elongation: 1.50
+      edge_margin: 80
+      galaxy_exclusion_box: null
+      sigma_factor: 4.0
+      size_margin: 3
       min_half_size: 12
-      max_half_size: 40
-    construction:
-      auto_size: true
-      normalize: true
+      max_half_size: 25
+      isolation_margin: 5
 
 fit:
   models:

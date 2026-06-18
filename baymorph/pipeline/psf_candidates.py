@@ -16,7 +16,13 @@ class PSFCandidate:
     x: float
     y: float
     label: int | None = None
+    area: float | None = None
+    max_value: float | None = None
     flux: float | None = None
+    eccentricity: float | None = None
+    elongation: float | None = None
+    semimajor_sigma: float | None = None
+    semiminor_sigma: float | None = None
     fwhm: float | None = None
     sharpness: float | None = None
     roundness: float | None = None
@@ -112,56 +118,155 @@ def select_psf_candidates_from_rows(
     segmentation: np.ndarray,
     *,
     target_n_candidates: int,
-    isolation_scale_factor: float,
+    min_area: float,
+    max_area: float,
+    min_peak: float,
+    max_peak: float,
+    max_eccentricity: float,
+    max_elongation: float,
+    edge_margin: int,
+    galaxy_exclusion_box: dict[str, float] | None,
+    sigma_factor: float,
+    size_margin: int,
     min_half_size: int,
     max_half_size: int,
+    isolation_margin: int,
 ) -> list[PSFCandidate]:
     if target_n_candidates <= 0:
         raise ValueError("target_n_candidates must be positive.")
 
-    candidates: list[PSFCandidate] = []
+    selected: list[PSFCandidate] = []
 
     for row in rows:
-        label = int(row["label"])
-        x = float(row["x"])
-        y = float(row["y"])
-        fwhm = float(row["fwhm"])
+        if not candidate_row_passes_quality_cuts(
+            row,
+            segmentation.shape,
+            min_area=min_area,
+            max_area=max_area,
+            min_peak=min_peak,
+            max_peak=max_peak,
+            max_eccentricity=max_eccentricity,
+            max_elongation=max_elongation,
+            edge_margin=edge_margin,
+            galaxy_exclusion_box=galaxy_exclusion_box,
+        ):
+            continue
 
-        half_size = estimate_candidate_half_size(
-            fwhm,
-            scale_factor=isolation_scale_factor,
+        half_size = estimate_candidate_half_size_from_sigmas(
+            float(row["semimajor_sigma"]),
+            float(row["semiminor_sigma"]),
+            sigma_factor=sigma_factor,
+            size_margin=size_margin,
             min_half_size=min_half_size,
             max_half_size=max_half_size,
         )
 
+        isolation_half_size = half_size + int(isolation_margin)
+
         if not is_isolated_candidate(
             segmentation,
-            label=label,
-            x=x,
-            y=y,
-            half_size=half_size,
+            label=int(row["label"]),
+            x=float(row["x"]),
+            y=float(row["y"]),
+            half_size=isolation_half_size,
         ):
             continue
 
-        candidates.append(
+        selected.append(
             PSFCandidate(
-                x=x,
-                y=y,
-                label=label,
+                x=float(row["x"]),
+                y=float(row["y"]),
+                label=int(row["label"]),
+                area=float(row["area"]),
+                max_value=float(row["max_value"]),
                 flux=row.get("flux"),
-                fwhm=fwhm,
-                sharpness=row.get("sharpness"),
-                roundness=row.get("roundness"),
+                eccentricity=float(row["eccentricity"]),
+                elongation=float(row["elongation"]),
+                semimajor_sigma=float(row["semimajor_sigma"]),
+                semiminor_sigma=float(row["semiminor_sigma"]),
                 half_size=half_size,
             )
         )
 
-    candidates = sorted(
-        candidates,
+    selected = sorted(
+        selected,
         key=lambda candidate: (
-            -np.inf if candidate.flux is None else -candidate.flux,
-            candidate.fwhm if candidate.fwhm is not None else np.inf,
+            candidate.eccentricity,
+            candidate.elongation,
+            -candidate.max_value,
         ),
     )
 
-    return candidates[:target_n_candidates]
+    return selected[:target_n_candidates]
+
+
+def is_inside_exclusion_box(
+    x: float,
+    y: float,
+    box: dict[str, float] | None,
+) -> bool:
+    if box is None:
+        return False
+
+    return (
+        box["xmin"] <= x <= box["xmax"]
+        and box["ymin"] <= y <= box["ymax"]
+    )
+
+
+def estimate_candidate_half_size_from_sigmas(
+    semimajor_sigma: float,
+    semiminor_sigma: float,
+    *,
+    sigma_factor: float,
+    size_margin: int,
+    min_half_size: int,
+    max_half_size: int,
+) -> int:
+    if semimajor_sigma <= 0 or semiminor_sigma <= 0:
+        raise ValueError("semimajor_sigma and semiminor_sigma must be positive.")
+
+    sigma = max(semimajor_sigma, semiminor_sigma)
+    half_size = int(np.ceil(sigma_factor * sigma)) + int(size_margin)
+
+    return int(np.clip(half_size, min_half_size, max_half_size))
+
+
+def candidate_row_passes_quality_cuts(
+    row: dict[str, Any],
+    image_shape: tuple[int, int],
+    *,
+    min_area: float,
+    max_area: float,
+    min_peak: float,
+    max_peak: float,
+    max_eccentricity: float,
+    max_elongation: float,
+    edge_margin: int,
+    galaxy_exclusion_box: dict[str, float] | None,
+) -> bool:
+    x = float(row["x"])
+    y = float(row["y"])
+
+    ny, nx = image_shape
+
+    if x <= edge_margin or x >= nx - edge_margin:
+        return False
+
+    if y <= edge_margin or y >= ny - edge_margin:
+        return False
+
+    if is_inside_exclusion_box(x, y, galaxy_exclusion_box):
+        return False
+
+    area = float(row["area"])
+    max_value = float(row["max_value"])
+    eccentricity = float(row["eccentricity"])
+    elongation = float(row["elongation"])
+
+    return (
+        min_area <= area <= max_area
+        and min_peak <= max_value <= max_peak
+        and eccentricity < max_eccentricity
+        and elongation < max_elongation
+    )
