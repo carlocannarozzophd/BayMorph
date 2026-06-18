@@ -70,6 +70,7 @@ from .pipeline import (
     run_psf_candidate_selection,
     run_psf_construction,
     run_real_fit,
+    pipeline_paths,
 )
 from .interactive import MaskActionEditor
 
@@ -140,4 +141,5 @@ __all__ = [
     "run_psf_candidate_selection",
     "run_psf_construction",
     "run_real_fit",
+    "pipeline_paths"
 ]

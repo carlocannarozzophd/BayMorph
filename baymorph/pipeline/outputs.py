@@ -32,10 +32,54 @@ def make_output_tree(config: dict[str, Any]) -> Path:
 
 
 def save_resolved_config(config: dict[str, Any]) -> Path:
-    base = make_output_tree(config)
-    path = base / "config_resolved.yaml"
+    make_output_tree(config)
+    path = pipeline_paths(config)["config_resolved"]
 
     with path.open("w") as f:
         yaml.safe_dump(config, f, sort_keys=False)
 
     return path
+
+
+def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
+    base = object_output_dir(config)
+
+    return {
+        "base": base,
+        "config_resolved": base / "config_resolved.yaml",
+        "image_preparation": {
+            "dir": base / "image_preparation",
+            "prepared_image": base / "image_preparation" / "prepared_image.fits",
+            "noise_map": base / "image_preparation" / "noise_map.fits",
+            "mask": base / "image_preparation" / "mask.fits",
+        },
+        "psf": {
+            "dir": base / "psf",
+            "psf_fits": base / "psf" / "psf.fits",
+            "candidates": base / "psf" / "psf_candidates.json",
+            "candidates_plot": base / "psf" / "psf_candidates.png",
+            "diagnostics_plot": base / "psf" / "psf_diagnostics.png",
+        },
+        "fits": {
+            "dir": base / "fits",
+            "single_sersic": {
+                "dir": base / "fits" / "single_sersic",
+                "fit_results": base / "fits" / "single_sersic" / "fit_results.json",
+                "corner": base / "fits" / "single_sersic" / "corner.png",
+                "residual": base / "fits" / "single_sersic" / "residual.png",
+                "radial_profile": base / "fits" / "single_sersic" / "radial_profile.png",
+            },
+            "double_sersic": {
+                "dir": base / "fits" / "double_sersic",
+                "fit_results": base / "fits" / "double_sersic" / "fit_results.json",
+                "corner": base / "fits" / "double_sersic" / "corner.png",
+                "residual": base / "fits" / "double_sersic" / "residual.png",
+                "radial_profile": base / "fits" / "double_sersic" / "radial_profile.png",
+            },
+        },
+        "model_comparison": {
+            "dir": base / "model_comparison",
+            "bayes_factor": base / "model_comparison" / "bayes_factor.json",
+            "summary": base / "model_comparison" / "summary.txt",
+        },
+    }

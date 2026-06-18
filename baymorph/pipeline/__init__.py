@@ -18,7 +18,8 @@ from .config import (
 from .outputs import (
     make_output_tree,
     object_output_dir,
-    save_resolved_config
+    save_resolved_config,
+    pipeline_paths
 )
 from .workflows import (
     initialize_pipeline_run,
@@ -46,4 +47,5 @@ __all__ = [
     "run_psf_candidate_selection",
     "run_psf_construction",
     "run_real_fit",
+    "pipeline_paths",
 ]
