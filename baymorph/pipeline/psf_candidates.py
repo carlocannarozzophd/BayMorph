@@ -105,3 +105,63 @@ def is_isolated_candidate(
     labels.discard(label)
 
     return len(labels) == 0
+
+
+def select_psf_candidates_from_rows(
+    rows: list[dict[str, Any]],
+    segmentation: np.ndarray,
+    *,
+    target_n_candidates: int,
+    isolation_scale_factor: float,
+    min_half_size: int,
+    max_half_size: int,
+) -> list[PSFCandidate]:
+    if target_n_candidates <= 0:
+        raise ValueError("target_n_candidates must be positive.")
+
+    candidates: list[PSFCandidate] = []
+
+    for row in rows:
+        label = int(row["label"])
+        x = float(row["x"])
+        y = float(row["y"])
+        fwhm = float(row["fwhm"])
+
+        half_size = estimate_candidate_half_size(
+            fwhm,
+            scale_factor=isolation_scale_factor,
+            min_half_size=min_half_size,
+            max_half_size=max_half_size,
+        )
+
+        if not is_isolated_candidate(
+            segmentation,
+            label=label,
+            x=x,
+            y=y,
+            half_size=half_size,
+        ):
+            continue
+
+        candidates.append(
+            PSFCandidate(
+                x=x,
+                y=y,
+                label=label,
+                flux=row.get("flux"),
+                fwhm=fwhm,
+                sharpness=row.get("sharpness"),
+                roundness=row.get("roundness"),
+                half_size=half_size,
+            )
+        )
+
+    candidates = sorted(
+        candidates,
+        key=lambda candidate: (
+            -np.inf if candidate.flux is None else -candidate.flux,
+            candidate.fwhm if candidate.fwhm is not None else np.inf,
+        ),
+    )
+
+    return candidates[:target_n_candidates]

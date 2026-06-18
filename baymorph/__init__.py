@@ -82,6 +82,7 @@ from .pipeline import (
     save_psf_candidates,
     estimate_candidate_half_size,
     is_isolated_candidate,
+    select_psf_candidates_from_rows
 )
 from .interactive import MaskActionEditor
 
@@ -164,4 +165,5 @@ __all__ = [
     "save_psf_candidates",
     "estimate_candidate_half_size",
     "is_isolated_candidate",
+    "select_psf_candidates_from_rows",
 ]

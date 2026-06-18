@@ -9,6 +9,7 @@ from baymorph import (
     pipeline_paths,
     resolve_config,
     save_psf_candidates,
+    select_psf_candidates_from_rows
 )
 
 
@@ -72,3 +73,71 @@ def test_isolated_candidate_returns_false_with_neighbor_label():
         y=10,
         half_size=3,
     )
+
+
+def test_select_psf_candidates_from_rows_keeps_isolated_bright_sources():
+    segmentation = np.zeros((50, 50), dtype=int)
+    segmentation[10, 10] = 1
+    segmentation[30, 30] = 2
+    segmentation[32, 32] = 3
+
+    rows = [
+        {"label": 1, "x": 10, "y": 10, "flux": 100.0, "fwhm": 2.0},
+        {"label": 2, "x": 30, "y": 30, "flux": 200.0, "fwhm": 2.0},
+    ]
+
+    candidates = select_psf_candidates_from_rows(
+        rows,
+        segmentation,
+        target_n_candidates=5,
+        isolation_scale_factor=1.0,
+        min_half_size=2,
+        max_half_size=10,
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0].label == 1
+
+
+def test_select_psf_candidates_from_rows_limits_number_of_candidates():
+    segmentation = np.zeros((100, 100), dtype=int)
+    rows = []
+
+    for label, flux, x in [
+        (1, 100.0, 10),
+        (2, 300.0, 30),
+        (3, 200.0, 50),
+    ]:
+        segmentation[10, x] = label
+        rows.append(
+            {
+                "label": label,
+                "x": x,
+                "y": 10,
+                "flux": flux,
+                "fwhm": 2.0,
+            }
+        )
+
+    candidates = select_psf_candidates_from_rows(
+        rows,
+        segmentation,
+        target_n_candidates=2,
+        isolation_scale_factor=1.0,
+        min_half_size=1,
+        max_half_size=10,
+    )
+
+    assert [candidate.label for candidate in candidates] == [2, 3]
+
+
+def test_select_psf_candidates_from_rows_rejects_nonpositive_target_count():
+    with pytest.raises(ValueError, match="target_n_candidates must be positive"):
+        select_psf_candidates_from_rows(
+            [],
+            np.zeros((10, 10), dtype=int),
+            target_n_candidates=0,
+            isolation_scale_factor=1.0,
+            min_half_size=1,
+            max_half_size=10,
+        )
