@@ -103,6 +103,9 @@ from .pipeline import (
     robust_mad,
 )
 from .interactive import MaskActionEditor
+from .analysis import (
+    radial_profile_from_image,
+)
 
 __version__ = "0.0.1"
 
@@ -202,4 +205,5 @@ __all__ = [
     "crop_center",
     "robust_rms",
     "robust_mad",
+    "radial_profile_from_image",
 ]
