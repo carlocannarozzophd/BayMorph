@@ -9,7 +9,8 @@ import numpy as np
 
 from .config import load_resolved_config
 from .outputs import make_output_tree, pipeline_paths
-
+from baymorph.core.image import ImageData
+from baymorph.pipeline.real_fits import prepare_real_fits_image
 
 @dataclass
 class PSFCandidate:
@@ -66,9 +67,55 @@ def run_psf_candidate_selection_from_config(
     else:
         resolved = config
 
-    raise NotImplementedError(
-        "PSF candidate selection orchestration is not implemented yet."
+    make_output_tree(resolved)
+
+    image = ImageData.from_fits(resolved["data"]["image_path"])
+
+    detection_cfg = resolved["preparation"]["detection"]
+    background_cfg = resolved["preparation"]["background"]
+
+    prepared = prepare_real_fits_image(
+        image.data,
+        background_box_size=background_cfg["box_size"],
+        background_filter_size=background_cfg["filter_size"],
+        detection_sigma=detection_cfg["n_sigma"],
     )
+
+    segmentation = prepared.detection.segmentation
+    source_catalog = prepared.detection.source_catalog
+
+    if segmentation is None:
+        raise RuntimeError("No segmentation map was produced.")
+
+    if source_catalog is None:
+        raise RuntimeError("No source catalog was produced.")
+
+    rows = source_catalog_to_candidate_rows(source_catalog)
+
+    candidate_cfg = resolved["psf"]["empirical"]["candidate_selection"]
+
+    candidates = select_psf_candidates_from_rows(
+        rows,
+        segmentation.data,
+        target_n_candidates=candidate_cfg["target_n_candidates"],
+        min_area=candidate_cfg["min_area"],
+        max_area=candidate_cfg["max_area"],
+        min_peak=candidate_cfg["min_peak"],
+        max_peak=candidate_cfg["max_peak"],
+        max_eccentricity=candidate_cfg["max_eccentricity"],
+        max_elongation=candidate_cfg["max_elongation"],
+        edge_margin=candidate_cfg["edge_margin"],
+        galaxy_exclusion_box=candidate_cfg["galaxy_exclusion_box"],
+        sigma_factor=candidate_cfg["sigma_factor"],
+        size_margin=candidate_cfg["size_margin"],
+        min_half_size=candidate_cfg["min_half_size"],
+        max_half_size=candidate_cfg["max_half_size"],
+        isolation_margin=candidate_cfg["isolation_margin"],
+    )
+
+    save_psf_candidates(resolved, candidates)
+
+    return candidates
 
 
 def estimate_candidate_half_size(
@@ -270,3 +317,25 @@ def candidate_row_passes_quality_cuts(
         and eccentricity < max_eccentricity
         and elongation < max_elongation
     )
+
+
+def source_catalog_to_candidate_rows(source_catalog) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+
+    for source in source_catalog:
+        rows.append(
+            {
+                "label": int(source.label),
+                "x": float(source.xcentroid.value),
+                "y": float(source.ycentroid.value),
+                "area": float(source.area.value),
+                "max_value": float(source.max_value),
+                "eccentricity": float(source.eccentricity.value),
+                "elongation": float(source.elongation.value),
+                "semimajor_sigma": float(source.semimajor_sigma.value),
+                "semiminor_sigma": float(source.semiminor_sigma.value),
+                "flux": float(source.segment_flux.value),
+            }
+        )
+
+    return rows

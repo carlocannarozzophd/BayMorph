@@ -46,6 +46,7 @@ from .psf_candidates import (
     candidate_row_passes_quality_cuts,
     estimate_candidate_half_size_from_sigmas,
     is_inside_exclusion_box,
+    source_catalog_to_candidate_rows,
 )
 
 __all__ = [
@@ -82,4 +83,5 @@ __all__ = [
     "candidate_row_passes_quality_cuts",
     "estimate_candidate_half_size_from_sigmas",
     "is_inside_exclusion_box",
+    "source_catalog_to_candidate_rows",
 ]

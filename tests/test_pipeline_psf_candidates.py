@@ -9,7 +9,8 @@ from baymorph import (
     pipeline_paths,
     resolve_config,
     save_psf_candidates,
-    select_psf_candidates_from_rows
+    select_psf_candidates_from_rows,
+    source_catalog_to_candidate_rows
 )
 
 
@@ -184,3 +185,7 @@ def test_select_psf_candidates_from_rows_rejects_nonpositive_target_count():
             max_half_size=10,
             isolation_margin=0,
         )
+
+
+def test_source_catalog_to_candidate_rows_is_callable():
+    assert callable(source_catalog_to_candidate_rows)

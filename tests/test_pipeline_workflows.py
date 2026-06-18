@@ -59,8 +59,8 @@ def test_run_image_preparation_requires_existing_fits_file(tmp_path):
         run_image_preparation(config)
 
 
-def test_run_psf_candidate_selection_not_implemented_yet(tmp_path):
+def test_run_psf_candidate_selection_requires_existing_fits_file(tmp_path):
     config = minimal_config(tmp_path)
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(FileNotFoundError):
         run_psf_candidate_selection(config)
