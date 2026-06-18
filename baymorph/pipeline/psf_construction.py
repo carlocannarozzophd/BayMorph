@@ -9,6 +9,9 @@ from astropy.io import fits
 from .config import load_resolved_config
 from .outputs import make_output_tree, pipeline_paths
 
+from baymorph.core.image import ImageData
+
+from .psf_candidates import load_psf_candidates
 
 def save_empirical_psf(
     config: dict[str, Any],
@@ -40,9 +43,49 @@ def load_empirical_psf(
 def run_psf_construction_from_config(
     config: str | Path | dict[str, Any],
 ) -> np.ndarray:
-    raise NotImplementedError(
-        "Empirical PSF construction orchestration is not implemented yet."
+    if isinstance(config, (str, Path)):
+        resolved = load_resolved_config(config)
+    else:
+        resolved = config
+
+    image = ImageData.from_fits(
+        resolved["data"]["image_path"]
     )
+
+    candidates = load_psf_candidates(resolved)
+
+    if len(candidates) == 0:
+        raise ValueError("No PSF candidates available.")
+
+    cutouts = []
+
+    for candidate in candidates:
+        if candidate.half_size is None:
+            raise ValueError(
+                "PSF candidate is missing half_size."
+            )
+
+        cutout = extract_centered_cutout(
+            image.data,
+            x=candidate.x,
+            y=candidate.y,
+            half_size=candidate.half_size,
+        )
+
+        cutout = subtract_outer_background(cutout)
+
+        cutout = recenter_cutout(cutout)
+
+        cutouts.append(cutout)
+
+    psf = stack_psf_cutouts(cutouts)
+
+    save_empirical_psf(
+        resolved,
+        psf,
+    )
+
+    return psf
 
 
 def normalize_psf(psf: np.ndarray) -> np.ndarray:

@@ -8,6 +8,8 @@ from baymorph import (
     run_psf_candidate_selection,
     run_psf_construction,
     run_real_fit,
+    resolve_config,
+    load_empirical_psf,
 )
 
 
@@ -63,8 +65,21 @@ def test_run_psf_candidate_selection_requires_existing_fits_file(tmp_path):
         run_psf_candidate_selection(config)
 
 
-def test_run_psf_construction_not_implemented_yet(tmp_path):
+def test_run_psf_construction_requires_psf_candidates(tmp_path):
     config = minimal_config(tmp_path)
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(FileNotFoundError):
         run_psf_construction(config)
+
+
+def test_run_psf_construction_requires_candidate_file(tmp_path):
+    config = {
+        "object": {"name": "NGC1234"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": str(tmp_path / "outputs")},
+    }
+
+    resolved = resolve_config(config)
+
+    with pytest.raises(FileNotFoundError):
+        load_empirical_psf(resolved)
