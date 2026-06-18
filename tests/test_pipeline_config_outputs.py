@@ -1,0 +1,87 @@
+from pathlib import Path
+
+import pytest
+import yaml
+
+from baymorph import load_resolved_config, resolve_config
+from baymorph import make_output_tree, object_output_dir, save_resolved_config
+
+
+def test_resolve_minimal_config():
+    config = {
+        "object": {"name": "NGC1234"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": "outputs"},
+    }
+
+    resolved = resolve_config(config)
+
+    assert resolved["object"]["name"] == "NGC1234"
+    assert resolved["data"]["image_path"] == "data/image.fits"
+    assert resolved["outputs"]["root"] == "outputs"
+    assert "psf" in resolved
+    assert "fit" in resolved
+
+
+def test_missing_required_section_raises():
+    config = {
+        "object": {"name": "NGC1234"},
+        "outputs": {"root": "outputs"},
+    }
+
+    with pytest.raises(ValueError, match="Missing required config sections"):
+        resolve_config(config)
+
+
+def test_output_tree_creation(tmp_path):
+    config = {
+        "object": {"name": "NGC1234"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": str(tmp_path / "outputs")},
+    }
+
+    resolved = resolve_config(config)
+    base = make_output_tree(resolved)
+
+    assert base == tmp_path / "outputs" / "NGC1234"
+    assert (base / "psf").is_dir()
+    assert (base / "fits" / "single_sersic").is_dir()
+    assert (base / "fits" / "double_sersic").is_dir()
+    assert (base / "model_comparison").is_dir()
+
+
+def test_save_resolved_config(tmp_path):
+    config = {
+        "object": {"name": "NGC1234"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": str(tmp_path / "outputs")},
+    }
+
+    resolved = resolve_config(config)
+    path = save_resolved_config(resolved)
+
+    assert path.exists()
+
+    with path.open("r") as f:
+        loaded = yaml.safe_load(f)
+
+    assert loaded["object"]["name"] == "NGC1234"
+
+
+def test_load_resolved_config(tmp_path):
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        """
+object:
+  name: NGC1234
+data:
+  image_path: data/image.fits
+outputs:
+  root: outputs
+"""
+    )
+
+    config = load_resolved_config(path)
+
+    assert config["object"]["name"] == "NGC1234"
+    assert "diagnostics" in config
