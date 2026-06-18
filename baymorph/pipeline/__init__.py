@@ -30,6 +30,7 @@ from .workflows import (
 )
 from .image_preparation import (
     ImagePreparationProducts,
+    load_image_preparation_products,
     make_target_cutout,
     prepare_real_image_from_config,
     save_image_preparation_products,
@@ -58,4 +59,5 @@ __all__ = [
     "make_target_cutout",
     "prepare_real_image_from_config",
     "save_image_preparation_products",
+    "load_image_preparation_products",
 ]

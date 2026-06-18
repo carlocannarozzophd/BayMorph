@@ -178,3 +178,41 @@ def save_image_preparation_products(
 
     with open(paths["dir"] / "image_preparation_metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
+
+
+def load_image_preparation_products(
+    config: str | Path | dict[str, Any],
+) -> ImagePreparationProducts:
+    if isinstance(config, (str, Path)):
+        resolved = load_resolved_config(config)
+    else:
+        resolved = config
+
+    paths = pipeline_paths(resolved)["image_preparation"]
+
+    prepared_data = fits.getdata(paths["prepared_image"])
+    noise = fits.getdata(paths["noise_map"])
+    contaminant_mask = fits.getdata(paths["mask"]).astype(bool)
+
+    cutout = np.load(paths["dir"] / "large_cutout.npy")
+    target_segment = np.load(paths["dir"] / "target_segment.npy")
+    segmentation = np.load(paths["dir"] / "segmentation.npy")
+
+    import json
+
+    with open(paths["dir"] / "image_preparation_metadata.json", "r") as f:
+        metadata = json.load(f)
+
+    return ImagePreparationProducts(
+        cutout=cutout,
+        prepared_data=prepared_data,
+        noise=noise,
+        automatic_mask=contaminant_mask,
+        target_segment=target_segment,
+        contaminant_mask=contaminant_mask,
+        segmentation=segmentation,
+        background=float(metadata["background"]),
+        target_x=int(metadata["target_x"]),
+        target_y=int(metadata["target_y"]),
+        target_label=int(metadata["target_label"]),
+    )

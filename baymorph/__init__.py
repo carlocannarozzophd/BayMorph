@@ -75,6 +75,7 @@ from .pipeline import (
     make_target_cutout,
     prepare_real_image_from_config,
     save_image_preparation_products,
+    load_image_preparation_products,
 )
 from .interactive import MaskActionEditor
 
@@ -150,4 +151,5 @@ __all__ = [
     "make_target_cutout",
     "prepare_real_image_from_config",
     "save_image_preparation_products",
+    "load_image_preparation_products",
 ]
