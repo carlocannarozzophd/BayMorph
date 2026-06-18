@@ -16,6 +16,8 @@ from baymorph import (
     centroid_from_flux,
     recenter_cutout,
     save_empirical_psf_metadata,
+    crop_center,
+    estimate_psf_half_size,
 )
 
 
@@ -150,3 +152,41 @@ def test_save_empirical_psf_metadata(tmp_path):
         loaded = json.load(f)
 
     assert loaded == metadata
+
+
+def test_estimate_psf_half_size_uses_candidate_maximum():
+    from baymorph import PSFCandidate
+
+    candidates = [
+        PSFCandidate(x=1, y=1, half_size=8),
+        PSFCandidate(x=2, y=2, half_size=12),
+    ]
+
+    assert estimate_psf_half_size(candidates) == 12
+
+
+def test_estimate_psf_half_size_uses_fallback_without_sizes():
+    from baymorph import PSFCandidate
+
+    candidates = [
+        PSFCandidate(x=1, y=1),
+        PSFCandidate(x=2, y=2),
+    ]
+
+    assert estimate_psf_half_size(candidates, fallback_half_size=25) == 25
+
+
+def test_crop_center_returns_expected_shape_and_center():
+    image = np.arange(100).reshape(10, 10)
+
+    cropped = crop_center(image, half_size=2)
+
+    assert cropped.shape == (5, 5)
+    assert cropped[2, 2] == image[5, 5]
+
+
+def test_crop_center_raises_if_too_large():
+    image = np.zeros((5, 5))
+
+    with pytest.raises(ValueError, match="outside the image boundaries"):
+        crop_center(image, half_size=4)

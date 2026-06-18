@@ -234,3 +234,42 @@ def save_empirical_psf_metadata(
         json.dump(metadata, f, indent=2)
 
     return path
+
+
+def estimate_psf_half_size(
+    candidates,
+    *,
+    fallback_half_size: int = 25,
+) -> int:
+    half_sizes = [
+        candidate.half_size
+        for candidate in candidates
+        if candidate.half_size is not None
+    ]
+
+    if len(half_sizes) == 0:
+        return fallback_half_size
+
+    return int(np.max(half_sizes))
+
+
+def crop_center(
+    image: np.ndarray,
+    half_size: int,
+) -> np.ndarray:
+    if half_size <= 0:
+        raise ValueError("half_size must be positive.")
+
+    y_size, x_size = image.shape
+    x0 = x_size // 2
+    y0 = y_size // 2
+
+    y_min = y0 - half_size
+    y_max = y0 + half_size + 1
+    x_min = x0 - half_size
+    x_max = x0 + half_size + 1
+
+    if x_min < 0 or y_min < 0 or x_max > x_size or y_max > y_size:
+        raise ValueError("Requested center crop extends outside the image boundaries.")
+
+    return image[y_min:y_max, x_min:x_max]

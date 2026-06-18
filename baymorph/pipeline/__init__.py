@@ -59,6 +59,8 @@ from .psf_construction import (
     centroid_from_flux,
     recenter_cutout,
     save_empirical_psf_metadata,
+    estimate_psf_half_size,
+    crop_center,
 )
 
 __all__ = [
@@ -106,4 +108,6 @@ __all__ = [
     "centroid_from_flux",
     "recenter_cutout",
     "save_empirical_psf_metadata",
+    "estimate_psf_half_size",
+    "crop_center",
 ]
