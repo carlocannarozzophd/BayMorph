@@ -44,12 +44,9 @@ def test_initialize_pipeline_run_creates_output_tree(tmp_path):
 def test_workflow_entrypoints_accept_dict_config(tmp_path):
     config = minimal_config(tmp_path)
 
-    for runner in (
-        run_psf_construction,
-        run_real_fit,
-    ):
-        resolved = runner(config)
-        assert resolved["object"]["name"] == "NGC1234"
+    resolved = run_real_fit(config)
+
+    assert resolved["object"]["name"] == "NGC1234"
 
 
 def test_run_image_preparation_requires_existing_fits_file(tmp_path):
@@ -64,3 +61,10 @@ def test_run_psf_candidate_selection_requires_existing_fits_file(tmp_path):
 
     with pytest.raises(FileNotFoundError):
         run_psf_candidate_selection(config)
+
+
+def test_run_psf_construction_not_implemented_yet(tmp_path):
+    config = minimal_config(tmp_path)
+
+    with pytest.raises(NotImplementedError):
+        run_psf_construction(config)
