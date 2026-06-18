@@ -35,6 +35,12 @@ from .image_preparation import (
     prepare_real_image_from_config,
     save_image_preparation_products,
 )
+from .psf_candidates import (
+    PSFCandidate,
+    load_psf_candidates,
+    run_psf_candidate_selection_from_config,
+    save_psf_candidates,
+)
 
 __all__ = [
     "RealFITSPreparation",
@@ -60,4 +66,8 @@ __all__ = [
     "prepare_real_image_from_config",
     "save_image_preparation_products",
     "load_image_preparation_products",
+    "PSFCandidate",
+    "load_psf_candidates",
+    "run_psf_candidate_selection_from_config",
+    "save_psf_candidates",
 ]

@@ -76,6 +76,10 @@ from .pipeline import (
     prepare_real_image_from_config,
     save_image_preparation_products,
     load_image_preparation_products,
+    PSFCandidate,
+    load_psf_candidates,
+    run_psf_candidate_selection_from_config,
+    save_psf_candidates,
 )
 from .interactive import MaskActionEditor
 
@@ -152,4 +156,8 @@ __all__ = [
     "prepare_real_image_from_config",
     "save_image_preparation_products",
     "load_image_preparation_products",
+    "PSFCandidate",
+    "load_psf_candidates",
+    "run_psf_candidate_selection_from_config",
+    "save_psf_candidates",
 ]
