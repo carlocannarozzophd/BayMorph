@@ -105,6 +105,7 @@ from .pipeline import (
 from .interactive import MaskActionEditor
 from .analysis import (
     radial_profile_from_image,
+    render_components_from_values
 )
 
 __version__ = "0.0.1"
@@ -206,4 +207,5 @@ __all__ = [
     "robust_rms",
     "robust_mad",
     "radial_profile_from_image",
+    "render_components_from_values"
 ]
