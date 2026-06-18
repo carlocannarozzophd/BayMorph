@@ -1,0 +1,57 @@
+object:
+  name: NGC1234
+
+data:
+  image_path: data/NGC1234/image.fits
+  mask_path: null
+  noise_map_path: null
+  psf_path: null
+  pixel_scale: null
+
+outputs:
+  root: outputs
+  overwrite: false
+
+preparation:
+  background:
+    method: empirical
+  noise:
+    method: empirical
+  detection:
+    n_sigma: 3.0
+    n_levels: 32
+    npixels: 20
+
+masking:
+  connected_source:
+    enabled: true
+  star_halo:
+    enabled: true
+  interactive_refinement:
+    enabled: true
+
+psf:
+  type: empirical
+  empirical:
+    candidate_selection:
+      auto: true
+    construction:
+      auto_size: true
+      normalize: true
+
+fit:
+  models:
+    - single_sersic
+    - double_sersic
+  sampler:
+    name: dynesty
+    nlive: 500
+  comparison:
+    enabled: true
+    metric: bayes_factor
+
+diagnostics:
+  corner: true
+  residual: true
+  radial_profile: true
+  posterior_profile_bands: true

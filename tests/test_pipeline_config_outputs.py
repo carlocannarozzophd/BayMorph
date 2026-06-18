@@ -85,3 +85,12 @@ outputs:
 
     assert config["object"]["name"] == "NGC1234"
     assert "diagnostics" in config
+
+
+def test_example_config_loads():
+    config = load_resolved_config("examples/config_real_fit.yaml")
+
+    assert config["object"]["name"] == "NGC1234"
+    assert config["psf"]["type"] == "empirical"
+    assert "single_sersic" in config["fit"]["models"]
+    assert "double_sersic" in config["fit"]["models"]
