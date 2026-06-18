@@ -97,6 +97,8 @@ from .pipeline import (
     centroid_from_flux,
     recenter_cutout,
     save_empirical_psf_metadata,
+    estimate_psf_half_size,
+    crop_center,
 )
 from .interactive import MaskActionEditor
 
@@ -194,4 +196,6 @@ __all__ = [
     "centroid_from_flux",
     "recenter_cutout",
     "save_empirical_psf_metadata",
+    "estimate_psf_half_size",
+    "crop_center",
 ]
