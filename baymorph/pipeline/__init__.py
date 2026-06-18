@@ -20,6 +20,13 @@ from .outputs import (
     object_output_dir,
     save_resolved_config
 )
+from .workflows import (
+    initialize_pipeline_run,
+    run_image_preparation,
+    run_psf_candidate_selection,
+    run_psf_construction,
+    run_real_fit,
+)
 
 __all__ = [
     "RealFITSPreparation",
@@ -34,4 +41,9 @@ __all__ = [
     "make_output_tree",
     "object_output_dir",
     "save_resolved_config",
+    "initialize_pipeline_run",
+    "run_image_preparation",
+    "run_psf_candidate_selection",
+    "run_psf_construction",
+    "run_real_fit",
 ]

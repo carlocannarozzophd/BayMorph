@@ -65,6 +65,11 @@ from .pipeline import (
     make_output_tree,
     object_output_dir,
     save_resolved_config,
+    initialize_pipeline_run,
+    run_image_preparation,
+    run_psf_candidate_selection,
+    run_psf_construction,
+    run_real_fit,
 )
 from .interactive import MaskActionEditor
 
@@ -131,4 +136,8 @@ __all__ = [
     "make_output_tree",
     "object_output_dir",
     "save_resolved_config",
+    "run_image_preparation",
+    "run_psf_candidate_selection",
+    "run_psf_construction",
+    "run_real_fit",
 ]
