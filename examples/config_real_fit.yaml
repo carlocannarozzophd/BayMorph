@@ -8,6 +8,11 @@ data:
   psf_path: null
   pixel_scale: null
 
+  target_position:
+    x: 730
+    y: 720
+  cutout_size: 600
+
 outputs:
   root: outputs
   overwrite: false
@@ -22,6 +27,11 @@ preparation:
     n_levels: 32
     npixels: 20
 
+  background:
+    method: empirical
+    box_size: 30
+    filter_size: 3
+    
 masking:
   connected_source:
     enabled: true

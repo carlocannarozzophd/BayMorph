@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from baymorph import (
     initialize_pipeline_run,
     run_image_preparation,
@@ -43,10 +45,16 @@ def test_workflow_entrypoints_accept_dict_config(tmp_path):
     config = minimal_config(tmp_path)
 
     for runner in (
-        run_image_preparation,
         run_psf_candidate_selection,
         run_psf_construction,
         run_real_fit,
     ):
         resolved = runner(config)
         assert resolved["object"]["name"] == "NGC1234"
+
+
+def test_run_image_preparation_requires_existing_fits_file(tmp_path):
+    config = minimal_config(tmp_path)
+
+    with pytest.raises(FileNotFoundError):
+        run_image_preparation(config)

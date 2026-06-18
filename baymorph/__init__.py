@@ -71,6 +71,10 @@ from .pipeline import (
     run_psf_construction,
     run_real_fit,
     pipeline_paths,
+    ImagePreparationProducts,
+    make_target_cutout,
+    prepare_real_image_from_config,
+    save_image_preparation_products,
 )
 from .interactive import MaskActionEditor
 
@@ -142,4 +146,8 @@ __all__ = [
     "run_psf_construction",
     "run_real_fit",
     "pipeline_paths"
+    "ImagePreparationProducts",
+    "make_target_cutout",
+    "prepare_real_image_from_config",
+    "save_image_preparation_products",
 ]

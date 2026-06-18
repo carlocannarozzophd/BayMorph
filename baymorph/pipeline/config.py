@@ -14,6 +14,8 @@ DEFAULT_CONFIG = {
         "noise_map_path": None,
         "psf_path": None,
         "pixel_scale": None,
+        "target_position": None,
+        "cutout_size": None,
     },
     "outputs": {
         "overwrite": False,
@@ -21,6 +23,8 @@ DEFAULT_CONFIG = {
     "preparation": {
         "background": {
             "method": "empirical",
+            "box_size": 30,
+            "filter_size": 3,
         },
         "noise": {
             "method": "empirical",
