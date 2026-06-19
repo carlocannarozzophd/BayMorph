@@ -4,8 +4,6 @@ from .target import (
 from .real_fits import (
     RealFITSPreparation,
     prepare_real_fits_image,
-    robust_rms,
-    robust_mad,
 )
 from .segmentation import (
     select_segment_near_position,

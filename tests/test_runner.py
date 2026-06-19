@@ -36,6 +36,8 @@ def test_runner_step_methods_are_not_implemented_yet():
         }
     )
 
+    runner.fit_result = object()
+
     with pytest.raises(NotImplementedError):
         runner.posterior_profiles()
 
@@ -214,3 +216,14 @@ def test_runner_run_all_runs_available_steps(monkeypatch):
         "build_psf",
         "fit",
     ]
+
+
+def test_runner_posterior_profiles_requires_fit_result():
+    runner = BayMorphRunner.from_config(
+        {
+            "object_name": "test_galaxy",
+        }
+    )
+
+    with pytest.raises(RuntimeError):
+        runner.posterior_profiles()

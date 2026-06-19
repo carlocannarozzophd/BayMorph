@@ -76,7 +76,14 @@ class BayMorphRunner:
         return self
 
     def posterior_profiles(self):
-        raise NotImplementedError
+        if self.fit_result is None:
+            raise RuntimeError(
+                "Run fit() before posterior_profiles()."
+            )
+
+        raise NotImplementedError(
+            "Posterior profile diagnostics require a full fit result."
+        )
 
     def run_all(
         self,
