@@ -333,13 +333,8 @@ def _compute_best_model(
     model_factory,
     image_shape,
 ):
-    best_parameters = {
-        name: result.best_parameters[name]
-        for name in parameter_names
-    }
-
     best_values = [
-        best_parameters[name]
+        result.best_parameters[name]
         for name in parameter_names
     ]
 
@@ -347,13 +342,8 @@ def _compute_best_model(
         *best_values,
     )
 
-    best_model_image = best_model.render(
+    return best_model.render(
         image_shape,
-    )
-
-    return (
-        best_parameters,
-        best_model_image,
     )
 
 
@@ -362,7 +352,7 @@ def _compute_fit_statistics(
     model_image,
     noise,
     mask,
-    n_parameters,
+    n_parameters: int,
 ):
     residual = data - model_image
 
@@ -374,18 +364,6 @@ def _compute_fit_statistics(
         & (noise > 0)
     )
 
-    chi2 = np.sum(
-        (residual[valid] / noise[valid]) ** 2
-    )
-
-    ndof = int(np.sum(valid) - n_parameters)
-
-    reduced_chi2 = (
-        chi2 / ndof
-        if ndof > 0
-        else np.nan
-    )
-
     norm_residual = np.full_like(
         residual,
         np.nan,
@@ -393,14 +371,31 @@ def _compute_fit_statistics(
     )
 
     norm_residual[valid] = (
-        residual[valid] / noise[valid]
+        residual[valid]
+        / noise[valid]
+    )
+
+    chi2 = float(
+        np.sum(
+            norm_residual[valid] ** 2
+        )
+    )
+
+    ndof = int(
+        np.sum(valid)
+        - n_parameters
+    )
+
+    reduced_chi2 = (
+        float(chi2 / ndof)
+        if ndof > 0
+        else np.nan
     )
 
     return {
         "residual": residual,
         "norm_residual": norm_residual,
-        "valid": valid,
-        "chi2": float(chi2),
+        "chi2": chi2,
         "ndof": ndof,
-        "reduced_chi2": float(reduced_chi2),
+        "reduced_chi2": reduced_chi2,
     }
