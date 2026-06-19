@@ -123,6 +123,7 @@ from .stats import (
     robust_rms,
     weighted_quantile,
 )
+from .runner import BayMorphRunner
 
 __version__ = "0.0.1"
 
@@ -234,4 +235,5 @@ __all__ = [
     "weighted_quantile",
     "SkyModelWrapper",
     "make_double_sersic_psf_sky_model",
+    "BayMorphRunner",
 ]
