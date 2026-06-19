@@ -108,6 +108,10 @@ from .pipeline import (
     stack_psf_cutouts,
     subtract_outer_background,
     validate_config,
+    RealFitProducts,
+    load_real_fit_products,
+    run_real_fit_from_config,
+    save_real_fit_products,
 )
 from .interactive import MaskActionEditor
 from .analysis import (
@@ -232,4 +236,8 @@ __all__ = [
     "SkyModelWrapper",
     "make_double_sersic_psf_sky_model",
     "BayMorphRunner",
+    "RealFitProducts",
+    "run_real_fit_from_config",
+    "save_real_fit_products",
+    "load_real_fit_products",
 ]

@@ -60,6 +60,12 @@ from .psf_construction import (
     estimate_psf_half_size,
     crop_center,
 )
+from .real_fit import (
+    RealFitProducts,
+    load_real_fit_products,
+    run_real_fit_from_config,
+    save_real_fit_products,
+)
 
 __all__ = [
     "RealFITSPreparation",
@@ -110,4 +116,8 @@ __all__ = [
     "crop_center",
     "robust_rms",
     "robust_mad",
+    "RealFitProducts",
+    "run_real_fit_from_config",
+    "save_real_fit_products",
+    "load_real_fit_products",
 ]
