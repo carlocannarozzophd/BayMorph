@@ -27,7 +27,7 @@ def test_compute_best_model_uses_best_parameters():
     def model_factory(a, b):
         return DummyModel(a, b)
 
-    image = _compute_best_model(
+    image, best_parameters = _compute_best_model(
         result=DummyResult(),
         parameter_names=["a", "b"],
         model_factory=model_factory,
@@ -35,6 +35,10 @@ def test_compute_best_model_uses_best_parameters():
     )
 
     assert image.shape == (4, 5)
+    assert best_parameters == {
+        "a": 2.0,
+        "b": 3.0,
+    }
     assert np.all(image == 5.0)
 
 

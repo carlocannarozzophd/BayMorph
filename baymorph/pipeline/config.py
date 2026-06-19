@@ -73,10 +73,11 @@ DEFAULT_CONFIG = {
         },
     },
     "fit": {
-        "models": ["single_sersic"],
+        "models": ["double_sersic"],
         "sampler": {
             "name": "dynesty",
             "nlive": 500,
+            "sample": "auto",
         },
         "comparison": {
             "enabled": False,

@@ -68,7 +68,7 @@ def run_real_fit_from_config(
     except FileNotFoundError:
         return resolved
 
-    parameter_names, parameters, flux_total, sky_guess = (
+    parameter_names, parameters, _, _ = (
         _build_parameter_set(
             data_fit=image_products.prepared_data,
             noise_fit=image_products.noise,
@@ -82,24 +82,55 @@ def run_real_fit_from_config(
         psf,
     )
 
-    #
-    # future:
-    #
-    # fitter = DynestyFitter(...)
-    # result = fitter.run(...)
-    # best_model = ...
-    # statistics = ...
-    #
+    fit_cfg = resolved["fit"]
 
-    _ = (
-        parameter_names,
-        parameters,
-        flux_total,
-        sky_guess,
-        model_factory,
+    sampler_cfg = fit_cfg["sampler"]
+
+    result = _run_dynesty(
+        data_fit=image_products.prepared_data,
+        noise_fit=image_products.noise,
+        mask_fit=image_products.contaminant_mask,
+        parameters=parameters,
+        model_factory=model_factory,
+        nlive=sampler_cfg["nlive"],
+        sample=sampler_cfg.get(
+            "sample",
+            "auto",
+        ),
     )
 
-    return resolved
+    best_model_image, best_parameters = _compute_best_model(
+        result=result,
+        parameter_names=parameter_names,
+        model_factory=model_factory,
+        image_shape=image_products.prepared_data.shape,
+    )
+
+    stats = _compute_fit_statistics(
+        data=image_products.prepared_data,
+        model_image=best_model_image,
+        noise=image_products.noise,
+        mask=image_products.contaminant_mask,
+        n_parameters=len(parameter_names),
+    )
+
+    products = RealFitProducts(
+        posterior=result,
+        best_parameters=best_parameters,
+        best_model_image=best_model_image,
+        residual=stats["residual"],
+        norm_residual=stats["norm_residual"],
+        chi2=stats["chi2"],
+        ndof=stats["ndof"],
+        reduced_chi2=stats["reduced_chi2"],
+    )
+
+    save_real_fit_products(
+        resolved,
+        products,
+    )
+
+    return products
 
 
 def save_real_fit_products(
@@ -107,10 +138,6 @@ def save_real_fit_products(
     products: RealFitProducts,
 ) -> None:
     paths = pipeline_paths(config)["real_fit"]
-    overwrite = bool(config["outputs"].get("overwrite", False))
-
-    if paths["dir"].exists() and not overwrite:
-        pass
 
     paths["dir"].mkdir(
         parents=True,
@@ -333,18 +360,21 @@ def _compute_best_model(
     model_factory,
     image_shape,
 ):
+    best_parameters = {
+        name: result.best_parameters[name]
+        for name in parameter_names
+    }
+
     best_values = [
-        result.best_parameters[name]
+        best_parameters[name]
         for name in parameter_names
     ]
 
-    best_model = model_factory(
-        *best_values,
-    )
+    best_model = model_factory(*best_values)
 
-    return best_model.render(
-        image_shape,
-    )
+    best_model_image = best_model.render(image_shape)
+
+    return best_model_image, best_parameters
 
 
 def _compute_fit_statistics(
@@ -399,3 +429,28 @@ def _compute_fit_statistics(
         "ndof": ndof,
         "reduced_chi2": reduced_chi2,
     }
+
+
+def _run_dynesty(
+    data_fit,
+    noise_fit,
+    mask_fit,
+    parameters,
+    model_factory,
+    *,
+    nlive: int = 300,
+    sample: str = "auto",
+):
+    fitter = DynestyFitter(
+        model_factory=model_factory,
+        data=data_fit,
+        noise=noise_fit,
+        parameters=parameters,
+        mask=mask_fit,
+    )
+
+    return fitter.run(
+        nlive=nlive,
+        sample=sample,
+        print_progress=True,
+    )
