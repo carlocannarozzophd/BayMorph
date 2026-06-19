@@ -112,7 +112,7 @@ from .pipeline import (
 from .interactive import MaskActionEditor
 from .analysis import (
     radial_profile_from_image,
-    render_components_from_values,
+    compute_posterior_profile_bands,
 )
 
 __version__ = "0.0.1"
@@ -192,7 +192,7 @@ __all__ = [
     "radial_profile_from_image",
     "recenter_cutout",
     "refine_mask",
-    "render_components_from_values",
+    "compute_posterior_profile_bands",
     "resolve_config",
     "robust_mad",
     "robust_rms",
