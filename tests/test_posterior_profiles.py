@@ -288,3 +288,32 @@ def test_compute_posterior_profile_bands_returns_radius_bin_centers():
         result["radius"],
         np.array([0.5, 2.0, 4.5]),
     )
+
+
+def test_compute_posterior_profile_bands_accepts_fixed_profile_center():
+    posterior_samples = np.array(
+        [
+            [
+                1000.0,
+                5.0,
+                4.0,
+                500.0,
+                10.0,
+                1.0,
+                0.8,
+                0.0,
+                20.0,
+                20.0,
+                0.0,
+            ]
+        ]
+    )
+
+    result = compute_posterior_profile_bands(
+        posterior_samples=posterior_samples,
+        shape=(51, 51),
+        radii=np.arange(0, 20),
+        profile_center=(25.0, 25.0),
+    )
+
+    assert "total" in result

@@ -13,6 +13,7 @@ def _render_components_from_values(
     shape,
     *,
     psf=None,
+    include_sky=False,
 ):
     values = np.asarray(values, dtype=float)
 
@@ -64,10 +65,8 @@ def _render_components_from_values(
 
     total = inner + outer
 
-    # ``sky`` is part of the fitted posterior vector, but posterior
-    # morphology profiles are source-light profiles.  We therefore validate
-    # and unpack it, but do not add it to inner/outer/total.
-    _ = sky
+    if include_sky:
+        total = total + sky
 
     return inner, outer, total
 
@@ -80,6 +79,8 @@ def compute_posterior_profile_bands(
     mask=None,
     psf=None,
     percentiles=(16.0, 50.0, 84.0),
+    include_sky=False,
+    profile_center=None,
 ):
     posterior_samples = _validate_posterior_samples(posterior_samples)
     radii = _validate_radii(radii)
@@ -101,10 +102,14 @@ def compute_posterior_profile_bands(
             values=values,
             shape=shape,
             psf=psf,
+            include_sky=include_sky,
         )
 
-        center_x = values[8]
-        center_y = values[9]
+        if profile_center is None:
+            center_x = values[8]
+            center_y = values[9]
+        else:
+            center_x, center_y = profile_center
 
         images = {
             "inner": inner,
