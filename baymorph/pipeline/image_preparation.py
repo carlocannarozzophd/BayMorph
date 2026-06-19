@@ -8,11 +8,79 @@ import numpy as np
 from astropy.io import fits
 
 from baymorph.core.image import ImageData
-from baymorph.pipeline.real_fits import prepare_real_fits_image
+from baymorph.core.background import (
+    estimate_background_photutils,
+    estimate_background_sigma,
+    subtract_background,
+)
+from baymorph.core.detection import (
+    DetectionResult,
+    detect_sources_segmentation,
+)
+from baymorph.core.noise import estimate_noise_map
 from baymorph.pipeline.segmentation import select_segment_near_position
-
 from .config import load_resolved_config
 from .outputs import make_output_tree, pipeline_paths, save_resolved_config
+
+@dataclass
+class RealFITSPreparation:
+    """Prepared real-image products before target-specific masking."""
+
+    data: np.ndarray
+    background: float
+    mask: np.ndarray
+    noise: np.ndarray
+    detection: DetectionResult
+
+
+def prepare_real_fits_image(
+    data,
+    background_box_size: int = 20,
+    background_filter_size: int = 3,
+    detection_sigma: float = 3.0,
+):
+    """Prepare a real image for fitting."""
+    data = np.asarray(
+        data,
+        dtype=float,
+    )
+
+    detection = detect_sources_segmentation(
+        data,
+        n_sigma=detection_sigma,
+    )
+
+    mask = detection.mask
+
+    try:
+        background_result = estimate_background_photutils(
+            data,
+            box_size=background_box_size,
+            filter_size=background_filter_size,
+            mask=mask,
+        )
+
+    except ValueError:
+        background_result = estimate_background_sigma(
+            data,
+        )
+
+    background_subtracted = subtract_background(
+        data,
+        background_result.background,
+    )
+
+    noise = estimate_noise_map(
+        background_subtracted,
+    )
+
+    return RealFITSPreparation(
+        data=background_subtracted,
+        background=background_result.background,
+        mask=mask,
+        noise=noise,
+        detection=detection,
+    )
 
 
 @dataclass

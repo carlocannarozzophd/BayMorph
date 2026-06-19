@@ -1,10 +1,6 @@
 from .target import (
     estimate_target_position,
 )
-from .real_fits import (
-    RealFITSPreparation,
-    prepare_real_fits_image,
-)
 from .segmentation import (
     select_segment_near_position,
 )
@@ -30,8 +26,10 @@ from .workflows import (
 )
 from .image_preparation import (
     ImagePreparationProducts,
+    RealFITSPreparation,
     load_image_preparation_products,
     make_target_cutout,
+    prepare_real_fits_image,
     prepare_real_image_from_config,
     save_image_preparation_products,
 )

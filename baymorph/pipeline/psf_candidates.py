@@ -10,7 +10,7 @@ import numpy as np
 from .config import load_resolved_config
 from .outputs import make_output_tree, pipeline_paths
 from baymorph.core.image import ImageData
-from baymorph.pipeline.real_fits import prepare_real_fits_image
+from baymorph.pipeline.image_preparation import prepare_real_fits_image
 
 @dataclass
 class PSFCandidate:

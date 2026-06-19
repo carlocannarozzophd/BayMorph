@@ -227,3 +227,26 @@ def test_runner_posterior_profiles_requires_fit_result():
 
     with pytest.raises(RuntimeError):
         runner.posterior_profiles()
+
+
+def test_runner_fit_stores_posterior_result(monkeypatch):
+    expected_result = object()
+
+    def fake_run_real_fit(config):
+        return expected_result
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_real_fit",
+        fake_run_real_fit,
+    )
+
+    runner = BayMorphRunner.from_config(
+        {
+            "object_name": "test_galaxy",
+        }
+    )
+
+    result = runner.fit()
+
+    assert result is runner
+    assert runner.fit_result is expected_result
