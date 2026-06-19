@@ -27,6 +27,8 @@ from .fitting import (
     Parameter,
     ParameterSet,
     grid_search_1d,
+    SkyModelWrapper,
+    make_double_sersic_psf_sky_model,
 )
 from .likelihood import gaussian_log_likelihood
 from .models import (
@@ -113,6 +115,13 @@ from .interactive import MaskActionEditor
 from .analysis import (
     radial_profile_from_image,
     compute_posterior_profile_bands,
+)
+from .stats import (
+    dynesty_weights,
+    posterior_summary,
+    robust_mad,
+    robust_rms,
+    weighted_quantile,
 )
 
 __version__ = "0.0.1"
@@ -218,4 +227,11 @@ __all__ = [
     "subtract_background",
     "subtract_outer_background",
     "validate_config",
+    "dynesty_weights",
+    "posterior_summary",
+    "robust_mad",
+    "robust_rms",
+    "weighted_quantile",
+    "SkyModelWrapper",
+    "make_double_sersic_psf_sky_model",
 ]

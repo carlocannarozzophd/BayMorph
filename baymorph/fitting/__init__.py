@@ -20,10 +20,13 @@ from .grid import (
     GridSearchResult,
     grid_search_1d,
 )
-
 from .parameters import (
     Parameter,
     ParameterSet
+)
+from .factories import (
+    SkyModelWrapper,
+    make_double_sersic_psf_sky_model,
 )
 
 __all__ = [
@@ -39,4 +42,6 @@ __all__ = [
     "DynestyResult",
     "Parameter",
     "ParameterSet",
+    "SkyModelWrapper",
+    "make_double_sersic_psf_sky_model",
 ]

@@ -1,3 +1,7 @@
+from .robust import (
+    robust_mad,
+    robust_rms,
+)
 from .weighted import (
     dynesty_weights,
     posterior_summary,
@@ -6,6 +10,8 @@ from .weighted import (
 
 __all__ = [
     "dynesty_weights",
-    "weighted_quantile",
     "posterior_summary",
+    "robust_mad",
+    "robust_rms",
+    "weighted_quantile",
 ]
