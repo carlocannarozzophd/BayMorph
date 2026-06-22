@@ -85,6 +85,7 @@ DEFAULT_CONFIG = {
         },
     },
     "diagnostics": {
+        "format": "pdf",
         "corner": True,
         "residual": True,
         "radial_profile": True,

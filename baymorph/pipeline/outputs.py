@@ -41,8 +41,22 @@ def save_resolved_config(config: dict[str, Any]) -> Path:
     return path
 
 
+def diagnostic_format(config: dict[str, Any]) -> str:
+    return str(
+        config.get(
+            "diagnostics",
+            {},
+        ).get(
+            "format",
+            "pdf",
+        )
+    ).lower()
+
+
 def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
     base = object_output_dir(config)
+
+    plot_format = diagnostic_format(config)
 
     return {
         "base": base,
@@ -58,24 +72,24 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
             "psf_fits": base / "psf" / "psf.fits",
             "metadata": base / "psf" / "psf_metadata.json",
             "candidates": base / "psf" / "psf_candidates.json",
-            "candidates_plot": base / "psf" / "psf_candidates.png",
-            "diagnostics_plot": base / "psf" / "psf_diagnostics.png",
+            "candidates_plot": base / "psf" / f"psf_candidates.{plot_format}",
+            "diagnostics_plot": base / "psf" / f"psf_diagnostics.{plot_format}",
         },
         "fits": {
             "dir": base / "fits",
             "single_sersic": {
                 "dir": base / "fits" / "single_sersic",
                 "fit_results": base / "fits" / "single_sersic" / "fit_results.json",
-                "corner": base / "fits" / "single_sersic" / "corner.png",
-                "residual": base / "fits" / "single_sersic" / "residual.png",
-                "radial_profile": base / "fits" / "single_sersic" / "radial_profile.png",
+                "corner": base / "fits" / "single_sersic" / f"corner.{plot_format}",
+                "residual": base / "fits" / "single_sersic" / f"residual.{plot_format}",
+                "radial_profile": base / "fits" / "single_sersic" / f"radial_profile.{plot_format}",
             },
             "double_sersic": {
                 "dir": base / "fits" / "double_sersic",
                 "fit_results": base / "fits" / "double_sersic" / "fit_results.json",
-                "corner": base / "fits" / "double_sersic" / "corner.png",
-                "residual": base / "fits" / "double_sersic" / "residual.png",
-                "radial_profile": base / "fits" / "double_sersic" / "radial_profile.png",
+                "corner": base / "fits" / "double_sersic" / f"corner.{plot_format}",
+                "residual": base / "fits" / "double_sersic" / f"residual.{plot_format}",
+                "radial_profile": base / "fits" / "double_sersic" / f"radial_profile.{plot_format}",
             },
         },
         "model_comparison": {
