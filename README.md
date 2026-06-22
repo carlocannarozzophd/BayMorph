@@ -1,4 +1,4 @@
-# BayMorph
+# BayMorph (under development)
 
 BayMorph is a Bayesian framework for the morphological analysis of astronomical images.
 
