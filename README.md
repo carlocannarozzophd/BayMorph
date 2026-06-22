@@ -1,77 +1,93 @@
 # BayMorph
 
-Bayesian morphological modelling of astronomical images.
+BayMorph is a Bayesian framework for the morphological analysis of astronomical images.
 
-BayMorph is a lightweight Python framework for forward modelling galaxy images using Bayesian inference. The project is designed around physically motivated image models, realistic observational effects, and posterior-based parameter estimation.
+The project is designed to provide a unified workflow from image preparation to Bayesian model comparison, combining physically motivated galaxy models, realistic observational effects, and posterior-based parameter inference.
 
-The current focus is single-Sérsic galaxy fitting, with support for synthetic observations, FITS-based workflows, PSF convolution, nested sampling, posterior analysis, and real-data validation.
+BayMorph currently supports:
+
+- FITS-based image preparation
+- Background estimation and subtraction
+- Noise-map generation
+- Source detection and segmentation
+- Empirical and Gaussian PSF workflows
+- Single-Sérsic fitting
+- Double-Sérsic fitting
+- Bayesian model comparison using nested sampling and Bayes factors
+
+The software is currently undergoing scientific validation on real astronomical datasets. Core functionality is operational and actively tested, but interfaces, diagnostics, and workflow details may continue to evolve before the first public release.
+
+---
+
+# Current Workflow
+
+```text
+FITS image
+    ↓
+Image preparation
+    ↓
+Source detection and masking
+    ↓
+PSF construction
+    ↓
+Single-Sérsic fit
+Double-Sérsic fit
+    ↓
+Bayesian model comparison
+    ↓
+Diagnostics
+```
 
 ---
 
 # Features
 
-## Simulation
+## Image Preparation
 
-- Synthetic Sérsic galaxy generation
-- Gaussian PSF generation
-- PSF convolution
-- Synthetic observation generation
-- Gaussian noise injection
-- Poisson noise injection
+- FITS image loading and metadata handling
+- Automatic target cutout extraction
+- Background estimation and subtraction
+- Empirical noise-map generation
+- Source detection and segmentation
+- Automatic contaminant masking
+- Configuration-driven workflows
 
-## FITS and Data Handling
+## Point Spread Function (PSF)
 
-- FITS image loading
-- FITS image writing
-- Observation containers
-- Image metadata preservation
+- Gaussian PSF models
+- Empirical PSF construction from field stars
+- PSF candidate selection and quality filtering
+- PSF-convolved galaxy models
 
-## Background and Noise
+## Galaxy Modelling
 
-- Iterative sigma-clipped background estimation
-- Photutils Background2D estimation
-- Source-masked background estimation
-- Constant noise maps
-- Empirical noise-map estimation
-
-## Source Detection and Masking
-
-- Automatic source detection
-- Binary source masks
-- Masked background estimation workflows
-
-## Models
-
-- Sérsic surface-brightness model
-- PSF-convolved models via `ConvolvedModel`
+- Single-Sérsic models
+- Double-Sérsic models
+- Bulge + disk style decompositions
+- PSF-convolved forward modelling
 
 ## Bayesian Inference
 
-- Grid-search fitting
-- Flux-only Dynesty fitting
-- Flux + effective-radius Dynesty fitting
-- Flux + effective-radius + Sérsic-index Dynesty fitting
-- Generic Dynesty fitting
-- Parameter framework (`Parameter`, `ParameterSet`)
-- Optional PSF-aware likelihood evaluation
-- Optional masking support
+- Generic Dynesty nested-sampling framework
+- Flexible parameter definitions through `Parameter` and `ParameterSet`
+- Support for masked likelihood evaluation
+- Bayesian evidence estimation
+- Bayes-factor model comparison
 
 ## Posterior Analysis
 
-- Posterior summaries
-- Weighted posterior statistics
-- Median parameter estimates
-- Best-likelihood parameter estimates
 - Posterior sample storage
+- Weighted posterior statistics
+- Best-fit parameter estimates
+- Median posterior estimates
 - Dynesty posterior reconstruction
 
-## Plotting
+## Diagnostics
 
-- 1D posterior plots
-- 2D posterior plots
-- Corner plots
-- Data-model-residual plots
-- Unified plotting style utilities
+- Model-image generation
+- Residual-image generation
+- Normalized residual maps
+- Fit summaries and metadata products
 
 ---
 
@@ -91,7 +107,7 @@ conda create -n baymorph python=3.11
 conda activate baymorph
 ```
 
-Install:
+Install BayMorph:
 
 ```bash
 pip install -e .
@@ -105,149 +121,80 @@ pip install -e ".[dev]"
 
 ---
 
-# Quick Example
+# Example Configuration
 
-```python
-from baymorph import (
-    DynestyFitter,
-    SersicModel,
-    make_constant_noise_map,
-)
+```yaml
+object:
+  name: TARGET
 
-data = SersicModel(
-    flux=1000,
-    re=8,
-    n=2,
-    q=0.8,
-    theta=0.0,
-    x0=30,
-    y0=30,
-).render(
-    shape=(60, 60),
-)
+data:
+  image_path: path/to/image.fits
 
-noise = make_constant_noise_map(
-    data.shape,
-    sigma=1.0,
-)
+outputs:
+  root: outputs
 
+fit:
+  models:
+    - single_sersic
+    - double_sersic
 
-def model_factory(
-    flux,
-    re,
-    n,
-):
-    return SersicModel(
-        flux=flux,
-        re=re,
-        n=n,
-        q=0.8,
-        theta=0.0,
-        x0=30,
-        y0=30,
-    )
+  sampler:
+    name: dynesty
+    nlive: 300
 
-
-fitter = DynestyFitter(
-    model_factory=model_factory,
-    data=data,
-    noise=noise,
-    parameter_names=[
-        "flux",
-        "re",
-        "n",
-    ],
-    prior_bounds={
-        "flux": (100, 2000),
-        "re": (2, 20),
-        "n": (0.5, 8),
-    },
-)
-
-result = fitter.run(
-    nlive=100,
-)
-
-print(
-    result.best_parameters
-)
+  comparison:
+    enabled: true
+    metric: bayes_factor
 ```
 
 ---
 
 # Current Status
 
-BayMorph is currently a working MVP for Bayesian single-Sérsic fitting.
+BayMorph has successfully completed its first end-to-end real-galaxy tests, including:
 
-Implemented:
+- Image preparation
+- Source detection and segmentation
+- Empirical and Gaussian PSF workflows
+- Single-Sérsic fitting
+- Double-Sérsic fitting
+- Bayesian model comparison
 
-- FITS workflows
-- Background estimation
-- Source masking
-- Noise estimation
-- Sérsic modelling
-- PSF convolution
-- Dynesty-based inference
-- Posterior analysis
-- Real FITS validation
+The software is currently in an active validation phase.
 
-Recent milestones:
+Current development priorities include:
 
-- First real FITS ingestion
-- First real single-Sérsic fit
-- First PSF-convolved real fit
-- Convolved model abstraction
-- Parameter framework
-- ParameterSet-aware Dynesty fitting
+- Improved empirical PSF construction
+- Automatic diagnostic generation
+- Posterior-profile diagnostics
+- Interactive masking workflows
+- Expanded model libraries
 
 ---
 
 # Validation
 
-Current automated test suite:
+The automated test suite currently validates:
 
-```text
-50 passing tests
-```
-
-Coverage includes:
-
-- Background estimation
-- Photutils workflows
-- Source masking
 - FITS I/O
+- Background estimation
 - Noise handling
-- PSF convolution
+- Source detection and masking
+- PSF construction
+- Sérsic models
 - Dynesty fitting
-- Posterior analysis
-- Parameter framework
-- Convolved models
+- Bayesian model comparison
+- Real-image workflow components
 
 ---
 
-# Roadmap
+# Documentation
 
-## Near-term
+Additional documentation is available in:
 
-- Real-data fitting pipeline
-- Automatic target extraction
-- Improved masking workflows
-- Empirical PSF estimation
-- Double-Sérsic model
-- Bulge + disk decomposition
-
-## Mid-term
-
-- Multi-component galaxy models
-- Hierarchical parameter management
-- Real survey pipelines
-- JWST and HST workflows
-
-## Long-term
-
-- Population-scale Bayesian morphology
-- Automated catalogue production
-- Large-survey deployment
+- `docs/README.md`
+- `docs/ARCHITECTURE.md`
+- `ROADMAP.md`
 
 ---
 
