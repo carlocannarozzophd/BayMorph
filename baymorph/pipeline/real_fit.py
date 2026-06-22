@@ -6,6 +6,7 @@ from typing import Any
 
 import json
 import numpy as np
+import matplotlib.pyplot as plt
 
 from .config import load_resolved_config
 from .outputs import make_output_tree, save_resolved_config, pipeline_paths
@@ -31,6 +32,8 @@ from baymorph.fitting.parameters import (
 from baymorph.fitting import DynestyFitter
 
 from baymorph.simulation.psf import GaussianPSF
+
+from baymorph.plotting import plot_log_data_model_residual
 
 @dataclass
 class RealFitProducts:
@@ -173,6 +176,36 @@ def save_real_fit_products(
     np.save(paths["dir"] / "residual.npy", products.residual)
     np.save(paths["dir"] / "norm_residual.npy", products.norm_residual)
 
+    diagnostics_cfg = config.get(
+        "diagnostics",
+        {},
+    )
+
+    if diagnostics_cfg.get(
+        "residual",
+        True,
+    ):
+        image_products = load_image_preparation_products(
+            config,
+        )
+
+        fig, _ = plot_log_data_model_residual(
+            image_products.prepared_data,
+            products.best_model_image,
+            title=_diagnostic_title(
+                config,
+                model_name,
+            ),
+            show=False,
+        )
+
+        fig.savefig(
+            paths["residual"],
+            bbox_inches="tight",
+        )
+
+        plt.close(fig)
+
     with open(paths["dir"] / "best_parameters.json", "w") as f:
         json.dump(
             {
@@ -200,6 +233,49 @@ def save_real_fit_products(
             f,
             indent=2,
         )
+
+    save_fit_summary_text(
+        paths["dir"] / "fit_summary.txt",
+        model_title=_diagnostic_title(
+            config,
+            model_name,
+        ),
+        products=products,
+    )
+
+
+def save_fit_summary_text(
+    path: Path,
+    *,
+    model_title: str,
+    products: RealFitProducts,
+) -> None:
+    logz = (
+        None
+        if products.posterior is None
+        else float(products.posterior.logz[-1])
+    )
+
+    lines = [
+        f"Model: {model_title}",
+        "",
+        "Fit statistics",
+        f"chi2 = {products.chi2:.8g}",
+        f"ndof = {products.ndof:d}",
+        f"reduced_chi2 = {products.reduced_chi2:.8g}",
+        f"logZ = {logz:.8g}" if logz is not None else "logZ = None",
+        "",
+        "Best-fit parameters",
+    ]
+
+    for key, value in products.best_parameters.items():
+        lines.append(
+            f"{key} = {float(value):.8g}"
+        )
+
+    path.write_text(
+        "\n".join(lines) + "\n"
+    )
 
 
 def save_bayesian_model_comparison(
@@ -637,4 +713,31 @@ def _run_dynesty(
         nlive=nlive,
         sample=sample,
         print_progress=True,
+    )
+
+
+def _diagnostic_title(
+    config: dict[str, Any],
+    model_name: str,
+) -> str:
+    diagnostics_cfg = config.get(
+        "diagnostics",
+        {},
+    )
+
+    titles = diagnostics_cfg.get(
+        "titles",
+        {},
+    )
+
+    if model_name in titles:
+        return str(
+            titles[model_name]
+        )
+
+    return (
+        model_name
+        .replace("_", " ")
+        .title()
+        .replace("Sersic", "Sérsic")
     )

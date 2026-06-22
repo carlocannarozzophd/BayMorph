@@ -77,3 +77,6 @@ diagnostics:
   residual: true
   radial_profile: true
   posterior_profile_bands: true
+  titles:
+    single_sersic: Single Sérsic
+    double_sersic: Double Sérsic

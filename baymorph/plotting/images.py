@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LogNorm
 
+from .style import set_plot_style, style_axes
 
 BAYMORPH_IMAGE_CMAP = "turbo"
 
@@ -118,6 +119,8 @@ def plot_log_data_model_residual(
     show: bool = False,
 ):
     """Plot data and model on log scale, with linear residual panel."""
+    set_plot_style()
+
     data = np.asarray(
         data,
         dtype=float,
@@ -163,7 +166,11 @@ def plot_log_data_model_residual(
     fig, axes = plt.subplots(
         1,
         3,
-        figsize=(15, 4),
+        figsize=(45,15),
+    )
+
+    style_axes(
+        axes,
     )
 
     data_image = axes[0].imshow(
@@ -231,3 +238,5 @@ def plot_log_data_model_residual(
 
     if show:
         plt.show()
+    
+    return fig, axes

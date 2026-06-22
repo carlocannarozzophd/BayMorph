@@ -1,10 +1,8 @@
-from pathlib import Path
-
 import pytest
 import yaml
 
 from baymorph import load_resolved_config, resolve_config
-from baymorph import make_output_tree, object_output_dir, save_resolved_config
+from baymorph import make_output_tree, save_resolved_config
 from baymorph import pipeline_paths
 
 def test_resolve_minimal_config():
