@@ -6,6 +6,7 @@ from typing import Any
 
 import numpy as np
 from astropy.io import fits
+# from scipy.ndimage import binary_dilation
 
 from baymorph.core.image import ImageData
 from baymorph.core.background import (
@@ -186,6 +187,27 @@ def prepare_real_image_from_config(
         (segmentation.data > 0)
         & (segmentation.data != target_label)
     )
+
+    # masking_cfg = resolved.get( 
+    #     "masking",
+    #     {},
+    # )
+
+    # dilation_cfg = masking_cfg.get(
+    #     "contaminant_dilation",
+    #     {},
+    # )
+
+    # if dilation_cfg.get("enabled", True):
+    #     contaminant_mask = binary_dilation(
+    #         contaminant_mask,
+    #         iterations=int(
+    #             dilation_cfg.get(
+    #                 "iterations",
+    #                 8,
+    #             )
+    #         ),
+    #     )
 
     products = ImagePreparationProducts(
         cutout=cutout,

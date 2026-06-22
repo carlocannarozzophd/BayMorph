@@ -40,7 +40,10 @@ def test_save_and_load_empirical_psf_roundtrip(tmp_path):
 
     loaded = load_empirical_psf(resolved)
 
-    assert np.allclose(loaded, psf)
+    assert np.allclose(
+        loaded.kernel(),
+        psf,
+    )
 
 
 def test_normalize_psf_returns_unit_sum():

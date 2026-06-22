@@ -82,8 +82,8 @@ def run_psf_candidate_selection_from_config(
     )
 
     segmentation = prepared.detection.segmentation
-    source_catalog = prepared.detection.source_catalog
-
+    source_catalog = prepared.detection.catalog
+    
     if segmentation is None:
         raise RuntimeError("No segmentation map was produced.")
 
@@ -319,6 +319,13 @@ def candidate_row_passes_quality_cuts(
     )
 
 
+def _as_float(value):
+    if hasattr(value, "value"):
+        value = value.value
+
+    return float(value)
+
+
 def source_catalog_to_candidate_rows(source_catalog) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
 
@@ -326,15 +333,15 @@ def source_catalog_to_candidate_rows(source_catalog) -> list[dict[str, Any]]:
         rows.append(
             {
                 "label": int(source.label),
-                "x": float(source.xcentroid.value),
-                "y": float(source.ycentroid.value),
-                "area": float(source.area.value),
-                "max_value": float(source.max_value),
-                "eccentricity": float(source.eccentricity.value),
-                "elongation": float(source.elongation.value),
-                "semimajor_sigma": float(source.semimajor_sigma.value),
-                "semiminor_sigma": float(source.semiminor_sigma.value),
-                "flux": float(source.segment_flux.value),
+                "x": _as_float(source.x_centroid),
+                "y": _as_float(source.y_centroid),
+                "area": _as_float(source.area),
+                "max_value": _as_float(source.max_value),
+                "eccentricity": _as_float(source.eccentricity),
+                "elongation": _as_float(source.elongation),
+                "semimajor_sigma": _as_float(source.semimajor_axis),
+                "semiminor_sigma": _as_float(source.semiminor_axis),
+                "flux": _as_float(source.segment_flux),
             }
         )
 

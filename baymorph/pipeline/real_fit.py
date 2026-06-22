@@ -30,6 +30,8 @@ from baymorph.fitting.parameters import (
 
 from baymorph.fitting import DynestyFitter
 
+from baymorph.simulation.psf import GaussianPSF
+
 @dataclass
 class RealFitProducts:
     posterior: object | None
@@ -65,7 +67,7 @@ def run_real_fit_from_config(
             resolved,
         )
 
-        psf = load_empirical_psf(
+        psf = _load_psf_from_config(
             resolved,
         )
 
@@ -252,6 +254,41 @@ def load_real_fit_products(
         chi2=float(summary["chi2"]),
         ndof=int(summary["ndof"]),
         reduced_chi2=float(summary["reduced_chi2"]),
+    )
+
+
+def _load_psf_from_config(
+    config: dict[str, Any],
+):
+    psf_cfg = config.get(
+        "psf",
+        {},
+    )
+
+    psf_type = psf_cfg.get(
+        "type",
+        "empirical",
+    )
+
+    if psf_type == "empirical":
+        return load_empirical_psf(
+            config,
+        )
+
+    if psf_type == "gaussian":
+        gaussian_cfg = psf_cfg.get(
+            "gaussian",
+            {},
+        )
+
+        return GaussianPSF(
+            fwhm=float(
+                gaussian_cfg["fwhm"]
+            )
+        )
+
+    raise ValueError(
+        f"Unsupported PSF type: {psf_type}"
     )
 
 

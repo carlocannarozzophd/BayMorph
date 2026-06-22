@@ -11,6 +11,7 @@ from .config import load_resolved_config
 from .outputs import make_output_tree, pipeline_paths
 
 from baymorph.core.image import ImageData
+from baymorph.simulation.psf import EmpiricalPSF
 
 from .psf_candidates import load_psf_candidates
 
@@ -30,7 +31,7 @@ def save_empirical_psf(
 
 def load_empirical_psf(
     config: str | Path | dict[str, Any],
-) -> np.ndarray:
+) -> EmpiricalPSF:
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
     else:
@@ -38,7 +39,9 @@ def load_empirical_psf(
 
     path = pipeline_paths(resolved)["psf"]["psf_fits"]
 
-    return fits.getdata(path)
+    return EmpiricalPSF(
+        fits.getdata(path)
+    )
 
 
 def run_psf_construction_from_config(
@@ -167,11 +170,30 @@ def stack_psf_cutouts(cutouts: list[np.ndarray]) -> np.ndarray:
     if len(cutouts) == 0:
         raise ValueError("At least one PSF cutout is required.")
 
-    shapes = {cutout.shape for cutout in cutouts}
-    if len(shapes) != 1:
-        raise ValueError("All PSF cutouts must have the same shape.")
+    half_sizes = [
+        min(cutout.shape) // 2
+        for cutout in cutouts
+    ]
 
-    stack = np.nanmedian(np.stack(cutouts, axis=0), axis=0)
+    common_half_size = int(
+        np.min(half_sizes)
+    )
+
+    cropped_cutouts = [
+        crop_center(
+            cutout,
+            common_half_size,
+        )
+        for cutout in cutouts
+    ]
+
+    stack = np.nanmedian(
+        np.stack(
+            cropped_cutouts,
+            axis=0,
+        ),
+        axis=0,
+    )
 
     return normalize_psf(stack)
 

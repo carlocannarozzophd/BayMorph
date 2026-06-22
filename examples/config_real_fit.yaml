@@ -66,7 +66,7 @@ fit:
     - double_sersic
   sampler:
     name: dynesty
-    nlive: 500
+    nlive: 50
   comparison:
     enabled: true
     metric: bayes_factor
