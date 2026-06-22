@@ -28,6 +28,7 @@ from .fitting import (
     ParameterSet,
     grid_search_1d,
     SkyModelWrapper,
+    make_single_sersic_psf_sky_model,
     make_double_sersic_psf_sky_model,
 )
 from .likelihood import gaussian_log_likelihood
@@ -234,6 +235,7 @@ __all__ = [
     "robust_rms",
     "weighted_quantile",
     "SkyModelWrapper",
+    "make_single_sersic_psf_sky_model",
     "make_double_sersic_psf_sky_model",
     "BayMorphRunner",
     "RealFitProducts",

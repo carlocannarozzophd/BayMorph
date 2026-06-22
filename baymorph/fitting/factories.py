@@ -26,6 +26,38 @@ class SkyModelWrapper:
     ):
         return self.model.render(shape) + self.sky
 
+def make_single_sersic_psf_sky_model(
+    flux,
+    re,
+    n,
+    q,
+    theta,
+    x0,
+    y0,
+    sky,
+    *,
+    psf,
+):
+    """Build a PSF-convolved single-Sérsic model with constant sky."""
+    galaxy = SersicModel(
+        flux=flux,
+        re=re,
+        n=n,
+        q=q,
+        theta=theta,
+        x0=x0,
+        y0=y0,
+    )
+
+    convolved_galaxy = ConvolvedModel(
+        model=galaxy,
+        psf=psf,
+    )
+
+    return SkyModelWrapper(
+        model=convolved_galaxy,
+        sky=sky,
+    )
 
 def make_double_sersic_psf_sky_model(
     flux_bulge,
