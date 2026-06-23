@@ -22,6 +22,8 @@ The project combines image preparation, PSF handling, galaxy modelling, Bayesian
 - PSF candidate selection and filtering
 - PSF-convolved galaxy modelling
 
+The empirical PSF workflow is now validated for TARGET when a sufficiently large candidate sample is used. In practice, BayMorph should aim for at least 10 usable stars, with 20–30 candidates preferred for robust empirical PSF construction.
+
 ### Galaxy Modelling
 
 - Single-Sérsic models

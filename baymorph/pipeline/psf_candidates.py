@@ -79,6 +79,8 @@ def run_psf_candidate_selection_from_config(
         background_box_size=background_cfg["box_size"],
         background_filter_size=background_cfg["filter_size"],
         detection_sigma=detection_cfg["n_sigma"],
+        detection_n_pixels=detection_cfg["npixels"],
+        detection_n_levels=detection_cfg["n_levels"],
     )
 
     segmentation = prepared.detection.segmentation

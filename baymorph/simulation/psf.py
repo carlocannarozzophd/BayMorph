@@ -110,8 +110,12 @@ def convolve_with_psf(
     kernel_size: int = 25,
 ) -> np.ndarray:
     """
-    Convolve image with PSF.
+    Convolve image with PSF using edge padding to avoid zero-boundary artefacts.
     """
+    image = np.asarray(
+        image,
+        dtype=float,
+    )
 
     if isinstance(
         psf,
@@ -120,12 +124,56 @@ def convolve_with_psf(
         kernel = psf.kernel(
             size=kernel_size,
         )
-
     else:
         kernel = psf.kernel()
 
-    return fftconvolve(
+    kernel = np.asarray(
+        kernel,
+        dtype=float,
+    )
+
+    if kernel.ndim != 2:
+        raise ValueError(
+            "PSF kernel must be 2D."
+        )
+
+    if not np.all(
+        np.isfinite(kernel)
+    ):
+        raise ValueError(
+            "PSF kernel must contain only finite values."
+        )
+
+    kernel_sum = np.sum(
+        kernel,
+    )
+
+    if kernel_sum <= 0:
+        raise ValueError(
+            "PSF kernel must have positive sum."
+        )
+
+    kernel = kernel / kernel_sum
+
+    pad_y = kernel.shape[0] // 2
+    pad_x = kernel.shape[1] // 2
+
+    padded = np.pad(
         image,
+        pad_width=(
+            (pad_y, pad_y),
+            (pad_x, pad_x),
+        ),
+        mode="edge",
+    )
+
+    convolved = fftconvolve(
+        padded,
         kernel,
         mode="same",
     )
+
+    return convolved[
+        pad_y : pad_y + image.shape[0],
+        pad_x : pad_x + image.shape[1],
+    ]

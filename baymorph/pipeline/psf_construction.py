@@ -6,6 +6,7 @@ import json
 
 import numpy as np
 from astropy.io import fits
+import matplotlib.pyplot as plt
 
 from .config import load_resolved_config
 from .outputs import make_output_tree, pipeline_paths
@@ -42,6 +43,206 @@ def load_empirical_psf(
     return EmpiricalPSF(
         fits.getdata(path)
     )
+
+
+def estimate_psf_fwhm(
+    psf: np.ndarray,
+) -> float | None:
+    data = np.asarray(psf, dtype=float)
+
+    if data.ndim != 2:
+        return None
+
+    if not np.all(np.isfinite(data)):
+        return None
+
+    peak = np.nanmax(data)
+
+    if not np.isfinite(peak) or peak <= 0:
+        return None
+
+    half_max = 0.5 * peak
+
+    yy, xx = np.indices(data.shape)
+
+    y0, x0 = np.unravel_index(
+        np.nanargmax(data),
+        data.shape,
+    )
+
+    radius = np.sqrt(
+        (xx - x0) ** 2
+        + (yy - y0) ** 2
+    )
+
+    inside = data >= half_max
+
+    if not np.any(inside):
+        return None
+
+    fwhm = 2.0 * np.nanmax(
+        radius[inside]
+    )
+
+    return float(fwhm)
+
+
+def psf_radial_profile(
+    psf: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    data = np.asarray(psf, dtype=float)
+
+    yy, xx = np.indices(data.shape)
+
+    y0, x0 = np.unravel_index(
+        np.nanargmax(data),
+        data.shape,
+    )
+
+    radius = np.sqrt(
+        (xx - x0) ** 2
+        + (yy - y0) ** 2
+    )
+
+    max_radius = 0.5 * min(data.shape)
+
+    radii = np.arange(
+        0.0,
+        max_radius + 1.0,
+        1.0,
+    )
+
+    radius_mid = 0.5 * (
+        radii[:-1]
+        + radii[1:]
+    )
+
+    profile = np.full(
+        radius_mid.shape,
+        np.nan,
+        dtype=float,
+    )
+
+    valid = np.isfinite(data)
+
+    for i in range(radii.size - 1):
+        annulus = (
+            (radius >= radii[i])
+            & (radius < radii[i + 1])
+            & valid
+        )
+
+        if np.any(annulus):
+            profile[i] = np.nanmedian(
+                data[annulus]
+            )
+
+    return radius_mid, profile
+
+
+def save_empirical_psf_diagnostics(
+    config: dict[str, Any],
+    psf: np.ndarray,
+    cutouts: list[np.ndarray],
+) -> None:
+    paths = pipeline_paths(config)["psf"]
+
+    diagnostics_dir = paths["dir"] / "diagnostics"
+
+    diagnostics_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    fig, axes = plt.subplots(
+        1,
+        2,
+        figsize=(30, 15),
+    )
+
+    image = axes[0].imshow(
+        psf,
+        origin="lower",
+        cmap="turbo",
+    )
+
+    axes[0].set_title(
+        "Empirical PSF"
+    )
+
+    fig.colorbar(
+        image,
+        ax=axes[0],
+    )
+
+    radius, profile = psf_radial_profile(
+        psf,
+    )
+
+    axes[1].plot(
+        radius,
+        profile,
+    )
+
+    axes[1].set_xlabel(
+        "Radius [pix]"
+    )
+
+    axes[1].set_ylabel(
+        "Median PSF value"
+    )
+
+    axes[1].set_title(
+        "PSF radial profile"
+    )
+
+    fig.savefig(
+        diagnostics_dir / "empirical_psf_diagnostic.pdf",
+        bbox_inches="tight",
+    )
+
+    plt.close(fig)
+
+    if len(cutouts) == 0:
+        return
+
+    n_show = min(
+        len(cutouts),
+        9,
+    )
+
+    fig, axes = plt.subplots(
+        3,
+        3,
+        figsize=(45, 45),
+    )
+
+    axes = np.ravel(axes)
+
+    for ax in axes:
+        ax.axis("off")
+
+    for i in range(n_show):
+        ax = axes[i]
+
+        ax.imshow(
+            cutouts[i],
+            origin="lower",
+            cmap="turbo",
+        )
+
+        ax.set_title(
+            f"PSF cutout {i + 1}"
+        )
+
+        ax.axis("on")
+
+    fig.savefig(
+        diagnostics_dir / "empirical_psf_cutouts.pdf",
+        bbox_inches="tight",
+    )
+
+    plt.close(fig)
 
 
 def run_psf_construction_from_config(
@@ -94,6 +295,16 @@ def run_psf_construction_from_config(
 
     psf = stack_psf_cutouts(cutouts)
 
+    psf_fwhm = estimate_psf_fwhm(
+        psf,
+    )
+
+    save_empirical_psf_diagnostics(
+        resolved,
+        psf,
+        cutouts,
+    )
+
     save_empirical_psf(
         resolved,
         psf,
@@ -106,7 +317,16 @@ def run_psf_construction_from_config(
             "n_candidates_used": len(cutouts),
             "psf_shape": list(psf.shape),
             "psf_sum": float(np.sum(psf)),
+            "psf_peak": float(np.nanmax(psf)),
+            "psf_min": float(np.nanmin(psf)),
+            "psf_max": float(np.nanmax(psf)),
+            "psf_fwhm_pix": psf_fwhm,
             "used_candidates": used_candidates,
+            "warnings": _empirical_psf_warnings(
+                psf,
+                n_candidates_used=len(cutouts),
+                psf_fwhm_pix=psf_fwhm,
+            ),
         },
     )
 
@@ -166,6 +386,97 @@ def subtract_outer_background(
     return cutout - background
 
 
+def clean_empirical_psf(
+    psf: np.ndarray,
+    *,
+    background_radius_fraction: float = 0.65,
+    taper_start_fraction: float = 0.55,
+) -> np.ndarray:
+    data = np.asarray(
+        psf,
+        dtype=float,
+    ).copy()
+
+    if data.ndim != 2:
+        raise ValueError(
+            "PSF must be 2D."
+        )
+
+    if not np.all(
+        np.isfinite(data)
+    ):
+        data = np.nan_to_num(
+            data,
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+
+    y0, x0 = np.unravel_index(
+        np.nanargmax(data),
+        data.shape,
+    )
+
+    yy, xx = np.indices(
+        data.shape,
+    )
+
+    radius = np.sqrt(
+        (xx - x0) ** 2
+        + (yy - y0) ** 2
+    )
+
+    max_radius = 0.5 * min(
+        data.shape
+    )
+
+    background_mask = (
+        radius >= background_radius_fraction * max_radius
+    )
+
+    if np.any(background_mask):
+        background = np.nanmedian(
+            data[background_mask]
+        )
+    else:
+        background = 0.0
+
+    data = data - background
+
+    data[data < 0.0] = 0.0
+
+    taper_start = (
+        taper_start_fraction
+        * max_radius
+    )
+
+    taper_end = max_radius
+
+    taper = np.ones_like(
+        data,
+        dtype=float,
+    )
+
+    outer = radius > taper_start
+
+    taper[outer] = 0.5 * (
+        1.0
+        + np.cos(
+            np.pi
+            * (radius[outer] - taper_start)
+            / (taper_end - taper_start)
+        )
+    )
+
+    taper[radius >= taper_end] = 0.0
+
+    data = data * taper
+
+    return normalize_psf(
+        data
+    )
+
+
 def stack_psf_cutouts(cutouts: list[np.ndarray]) -> np.ndarray:
     if len(cutouts) == 0:
         raise ValueError("At least one PSF cutout is required.")
@@ -195,7 +506,79 @@ def stack_psf_cutouts(cutouts: list[np.ndarray]) -> np.ndarray:
         axis=0,
     )
 
-    return normalize_psf(stack)
+    psf = normalize_psf(
+        stack
+    )
+
+    psf = clean_empirical_psf(
+        psf,
+    )
+
+    return psf
+
+def _empirical_psf_warnings(
+    psf: np.ndarray,
+    *,
+    n_candidates_used: int,
+    psf_fwhm_pix: float | None,
+) -> list[str]:
+    warnings = []
+
+    data = np.asarray(
+        psf,
+        dtype=float,
+    )
+
+    if n_candidates_used < 5:
+        warnings.append(
+            "Empirical PSF is based on fewer than 5 stars and is likely unstable."
+        )
+
+    elif n_candidates_used < 10:
+        warnings.append(
+            "Empirical PSF is based on fewer than 10 stars; use with caution."
+        )
+
+    elif n_candidates_used < 20:
+        warnings.append(
+            "Empirical PSF is based on fewer than 20 stars; validation is recommended."
+        )
+
+    psf_sum = np.nansum(
+        data,
+    )
+
+    if not np.isfinite(psf_sum) or not np.isclose(psf_sum, 1.0, rtol=1e-3):
+        warnings.append(
+            "PSF is not normalized to unit sum."
+        )
+
+    if not np.all(
+        np.isfinite(data)
+    ):
+        warnings.append(
+            "PSF contains non-finite values."
+        )
+
+    peak = np.nanmax(
+        data,
+    )
+
+    if not np.isfinite(peak) or peak <= 0:
+        warnings.append(
+            "PSF peak is not positive."
+        )
+
+    if psf_fwhm_pix is None:
+        warnings.append(
+            "Could not estimate empirical PSF FWHM."
+        )
+    elif psf_fwhm_pix <= 0:
+        warnings.append(
+            "Empirical PSF FWHM is non-positive."
+        )
+
+    return warnings
 
 
 def centroid_from_flux(cutout: np.ndarray) -> tuple[float, float]:
