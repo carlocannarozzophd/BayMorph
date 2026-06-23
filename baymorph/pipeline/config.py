@@ -78,6 +78,9 @@ DEFAULT_CONFIG = {
             "name": "dynesty",
             "nlive": 500,
             "sample": "auto",
+            "seed": None,
+            "n_processes": 1,
+            "queue_size": None,
         },
         "comparison": {
             "enabled": False,

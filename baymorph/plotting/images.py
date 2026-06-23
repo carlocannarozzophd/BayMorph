@@ -114,11 +114,12 @@ def show_log_image(
 def plot_log_data_model_residual(
     data,
     model,
+    noise=None,
     title: str = "",
     cmap: str = BAYMORPH_IMAGE_CMAP,
     show: bool = False,
 ):
-    """Plot data and model on log scale, with linear residual panel."""
+    """Plot data, model, residual, and optionally residual/noise."""
     set_plot_style()
 
     data = np.asarray(
@@ -132,6 +133,30 @@ def plot_log_data_model_residual(
     )
 
     residual = data - model
+
+    if noise is not None:
+        noise = np.asarray(
+            noise,
+            dtype=float,
+        )
+
+        norm_residual = np.full_like(
+            residual,
+            np.nan,
+            dtype=float,
+        )
+
+        valid_noise = (
+            np.isfinite(noise)
+            & (noise > 0)
+        )
+
+        norm_residual[valid_noise] = (
+            residual[valid_noise]
+            / noise[valid_noise]
+        )
+    else:
+        norm_residual = None
 
     vmin, vmax = _log_limits(
         data,
@@ -163,10 +188,17 @@ def plot_log_data_model_residual(
     ):
         residual_limit = 1.0
 
+    if norm_residual is None:
+        ncols = 3
+        figsize = (45, 15)
+    else:
+        ncols = 4
+        figsize = (60, 15)
+
     fig, axes = plt.subplots(
         1,
-        3,
-        figsize=(45,15),
+        ncols,
+        figsize=figsize,
     )
 
     style_axes(
@@ -228,6 +260,43 @@ def plot_log_data_model_residual(
         ax=axes[2],
     )
 
+    if norm_residual is not None:
+        norm_limit = np.nanpercentile(
+            np.abs(norm_residual),
+            99,
+        )
+
+        if (
+            not np.isfinite(
+                norm_limit
+            )
+            or norm_limit == 0
+        ):
+            norm_limit = 5.0
+
+        norm_limit = min(
+            float(norm_limit),
+            5.0,
+        )
+
+        norm_image = axes[3].imshow(
+            norm_residual,
+            origin="lower",
+            cmap="RdBu_r",
+            vmin=-norm_limit,
+            vmax=norm_limit,
+        )
+
+        axes[3].set_title(
+            "Residual / Noise"
+        )
+
+        fig.colorbar(
+            norm_image,
+            ax=axes[3],
+            label=r"$\sigma$",
+        )
+
     if title:
         fig.suptitle(
             title,
@@ -238,5 +307,5 @@ def plot_log_data_model_residual(
 
     if show:
         plt.show()
-    
+
     return fig, axes

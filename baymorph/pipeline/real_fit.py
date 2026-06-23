@@ -33,7 +33,15 @@ from baymorph.fitting import DynestyFitter
 
 from baymorph.simulation.psf import GaussianPSF
 
-from baymorph.plotting import plot_log_data_model_residual
+from baymorph.plotting import (
+    corner_plot,
+    plot_log_data_model_residual,
+)
+
+from baymorph.analysis import (
+    radial_profile_from_image,
+    compute_posterior_profile_bands,
+)
 
 @dataclass
 class RealFitProducts:
@@ -53,7 +61,7 @@ class RealFitProducts:
 
     reduced_chi2: float
 
-    
+
 def run_real_fit_from_config(
     config: str | Path | dict[str, Any],
 ):
@@ -112,6 +120,22 @@ def run_real_fit_from_config(
                 "sample",
                 "auto",
             ),
+            dlogz=sampler_cfg.get(
+                "dlogz",
+                None,
+            ),
+            n_processes=sampler_cfg.get(
+                "n_processes",
+                1,
+            ),
+            queue_size=sampler_cfg.get(
+                "queue_size",
+                None,
+            ),
+            seed=sampler_cfg.get(
+                "seed",
+                None,
+            ),
         )
 
         best_model_image, best_parameters = _compute_best_model(
@@ -156,9 +180,10 @@ def run_real_fit_from_config(
         save_bayesian_model_comparison(
             resolved,
             comparison,
-    )
+        )
 
     return all_products
+
 
 def save_real_fit_products(
     config: dict[str, Any],
@@ -181,6 +206,8 @@ def save_real_fit_products(
         {},
     )
 
+    image_products = None
+
     if diagnostics_cfg.get(
         "residual",
         True,
@@ -192,6 +219,7 @@ def save_real_fit_products(
         fig, _ = plot_log_data_model_residual(
             image_products.prepared_data,
             products.best_model_image,
+            noise=image_products.noise,
             title=_diagnostic_title(
                 config,
                 model_name,
@@ -201,6 +229,276 @@ def save_real_fit_products(
 
         fig.savefig(
             paths["residual"],
+            bbox_inches="tight",
+        )
+
+        plt.close(fig)
+
+    if diagnostics_cfg.get(
+        "radial_profile",
+        True,
+    ):
+        if image_products is None:
+            image_products = load_image_preparation_products(
+                config,
+            )
+
+        max_radius = 0.5 * min(
+            image_products.prepared_data.shape
+        )
+
+        radii = np.arange(
+            0.0,
+            max_radius + 1.0,
+            1.0,
+        )
+
+        radius = 0.5 * (
+            radii[:-1]
+            + radii[1:]
+        )
+
+        profile_data = radial_profile_from_image(
+            image_products.prepared_data,
+            center_x=products.best_parameters["x0"],
+            center_y=products.best_parameters["y0"],
+            radii=radii,
+            mask=image_products.contaminant_mask,
+        )
+
+        profile_model = radial_profile_from_image(
+            products.best_model_image,
+            center_x=products.best_parameters["x0"],
+            center_y=products.best_parameters["y0"],
+            radii=radii,
+            mask=image_products.contaminant_mask,
+        )
+
+        profile_noise = radial_profile_from_image(
+            image_products.noise,
+            center_x=products.best_parameters["x0"],
+            center_y=products.best_parameters["y0"],
+            radii=radii,
+            mask=image_products.contaminant_mask,
+        )
+
+        residual_sigma_profile = (
+            profile_data
+            - profile_model
+        ) / profile_noise
+
+        valid = (
+            np.isfinite(profile_data)
+            & np.isfinite(profile_model)
+            & (profile_data > 0)
+            & (profile_model > 0)
+        )
+
+        log_data = np.full_like(
+            profile_data,
+            np.nan,
+        )
+
+        log_model = np.full_like(
+            profile_model,
+            np.nan,
+        )
+
+        log_data[valid] = np.log10(
+            profile_data[valid]
+        )
+
+        log_model[valid] = np.log10(
+            profile_model[valid]
+        )
+
+        profile_bands = None
+
+        if (
+            diagnostics_cfg.get(
+                "posterior_profile_bands",
+                True,
+            )
+            and model_name == "double_sersic"
+            and products.posterior is not None
+        ):
+            profile_bands = compute_posterior_profile_bands(
+                products.posterior.posterior_samples,
+                shape=image_products.prepared_data.shape,
+                radii=radii,
+                mask=image_products.contaminant_mask,
+                psf=_load_psf_from_config(
+                    config,
+                ),
+                include_sky=True,
+                profile_center=(
+                    products.best_parameters["x0"],
+                    products.best_parameters["y0"],
+                ),
+            )
+
+        fig = plt.figure(
+            figsize=(15, 15),
+        )
+
+        gs = fig.add_gridspec(
+            5,
+            1,
+            hspace=0.0,
+        )
+
+        ax_main = fig.add_subplot(
+            gs[:4, 0],
+        )
+
+        ax_res = fig.add_subplot(
+            gs[4, 0],
+            sharex=ax_main,
+        )
+
+        ax_main.plot(
+            radius,
+            log_data,
+            "o",
+            ms=4,
+            label="Data",
+        )
+
+        if profile_bands is not None:
+            total_band = profile_bands["total"]
+
+            band_valid = (
+                np.isfinite(total_band["p16"])
+                & np.isfinite(total_band["p50"])
+                & np.isfinite(total_band["p84"])
+                & (total_band["p16"] > 0)
+                & (total_band["p50"] > 0)
+                & (total_band["p84"] > 0)
+            )
+
+            log_p16 = np.full_like(
+                total_band["p16"],
+                np.nan,
+            )
+
+            log_p50 = np.full_like(
+                total_band["p50"],
+                np.nan,
+            )
+
+            log_p84 = np.full_like(
+                total_band["p84"],
+                np.nan,
+            )
+
+            log_p16[band_valid] = np.log10(
+                total_band["p16"][band_valid]
+            )
+
+            log_p50[band_valid] = np.log10(
+                total_band["p50"][band_valid]
+            )
+
+            log_p84[band_valid] = np.log10(
+                total_band["p84"][band_valid]
+            )
+
+            ax_main.fill_between(
+                radius,
+                log_p16,
+                log_p84,
+                alpha=0.25,
+                label="68% posterior band",
+            )
+
+            ax_main.plot(
+                radius,
+                log_p50,
+                lw=2,
+                label="Posterior median",
+            )
+
+        ax_main.plot(
+            radius,
+            log_model,
+            lw=2,
+            label="Best model",
+        )
+
+        ax_main.set_ylabel(
+            r"$\log_{10}(I)$",
+        )
+
+        ax_main.set_title(
+            _diagnostic_title(
+                config,
+                model_name,
+            ),
+        )
+
+        ax_main.legend(
+            frameon=False,
+        )
+
+        ax_res.axhline(
+            0.0,
+            ls="--",
+            lw=1,
+        )
+
+        for sigma in [1.0, 2.0, 3.0]:
+            ax_res.axhline(
+                sigma,
+                ls=":",
+                lw=0.8,
+            )
+
+            ax_res.axhline(
+                -sigma,
+                ls=":",
+                lw=0.8,
+            )
+
+        ax_res.plot(
+            radius,
+            residual_sigma_profile,
+            lw=1.5,
+        )
+
+        ax_res.set_ylim(
+            -5.0,
+            5.0,
+        )
+
+        ax_res.set_xlabel(
+            "Radius [pix]",
+        )
+
+        ax_res.set_ylabel(
+            "Residual [$\\sigma$]",
+        )
+
+        fig.savefig(
+            paths["radial_profile"],
+            bbox_inches="tight",
+        )
+
+        plt.close(fig)
+
+    if (
+        diagnostics_cfg.get(
+            "corner",
+            True,
+        )
+        and products.posterior is not None
+    ):
+        fig, _, _ = corner_plot(
+            products.posterior.posterior_samples.T,
+            parameter_labels=products.posterior.parameter_names,
+        )
+
+        fig.savefig(
+            paths["corner"],
             bbox_inches="tight",
         )
 
@@ -216,6 +514,8 @@ def save_real_fit_products(
             indent=2,
         )
 
+    sampler_cfg = config["fit"]["sampler"]
+
     summary = {
         "chi2": float(products.chi2),
         "ndof": int(products.ndof),
@@ -225,6 +525,41 @@ def save_real_fit_products(
             if products.posterior is None
             else float(products.posterior.logz[-1])
         ),
+        "logzerr": (
+            None
+            if (
+                products.posterior is None
+                or products.posterior.logzerr is None
+            )
+            else float(
+                products.posterior.logzerr[-1]
+            )
+        ),
+        "sampler": {
+            "name": sampler_cfg.get(
+                "name",
+                "dynesty",
+            ),
+            "nlive": sampler_cfg.get(
+                "nlive",
+            ),
+            "sample": sampler_cfg.get(
+                "sample",
+            ),
+            "dlogz": sampler_cfg.get(
+                "dlogz",
+            ),
+            "seed": sampler_cfg.get(
+                "seed",
+            ),
+            "n_processes": sampler_cfg.get(
+                "n_processes",
+                1,
+            ),
+            "queue_size": sampler_cfg.get(
+                "queue_size",
+            ),
+        },
     }
 
     with open(paths["dir"] / "fit_summary.json", "w") as f:
@@ -256,6 +591,15 @@ def save_fit_summary_text(
         else float(products.posterior.logz[-1])
     )
 
+    logzerr = (
+        None
+        if (
+            products.posterior is None
+            or products.posterior.logzerr is None
+        )
+        else float(products.posterior.logzerr[-1])
+    )
+
     lines = [
         f"Model: {model_title}",
         "",
@@ -264,6 +608,7 @@ def save_fit_summary_text(
         f"ndof = {products.ndof:d}",
         f"reduced_chi2 = {products.reduced_chi2:.8g}",
         f"logZ = {logz:.8g}" if logz is not None else "logZ = None",
+        f"logZerr = {logzerr:.8g}" if logzerr is not None else "logZerr = None",
         "",
         "Best-fit parameters",
     ]
@@ -509,13 +854,22 @@ def _build_parameter_set(
     )
 
 
-def _make_model_factory(
-    model_name,
-    psf,
-):
-    if model_name == "single_sersic":
+class SingleSersicModelFactory:
+    def __init__(self, psf):
+        self.psf = psf
 
-        def model_factory(
+    def __call__(
+        self,
+        flux,
+        re,
+        n,
+        q,
+        theta,
+        x0,
+        y0,
+        sky,
+    ):
+        return make_single_sersic_psf_sky_model(
             flux,
             re,
             n,
@@ -524,22 +878,29 @@ def _make_model_factory(
             x0,
             y0,
             sky,
-        ):
-            return make_single_sersic_psf_sky_model(
-                flux,
-                re,
-                n,
-                q,
-                theta,
-                x0,
-                y0,
-                sky,
-                psf=psf,
-            )
+            psf=self.psf,
+        )
 
-    elif model_name == "double_sersic":
 
-        def model_factory(
+class DoubleSersicModelFactory:
+    def __init__(self, psf):
+        self.psf = psf
+
+    def __call__(
+        self,
+        flux_bulge,
+        re_bulge,
+        n_bulge,
+        flux_disk,
+        re_disk,
+        n_disk,
+        q,
+        theta,
+        x0,
+        y0,
+        sky,
+    ):
+        return make_double_sersic_psf_sky_model(
             flux_bulge,
             re_bulge,
             n_bulge,
@@ -551,28 +912,28 @@ def _make_model_factory(
             x0,
             y0,
             sky,
-        ):
-            return make_double_sersic_psf_sky_model(
-                flux_bulge,
-                re_bulge,
-                n_bulge,
-                flux_disk,
-                re_disk,
-                n_disk,
-                q,
-                theta,
-                x0,
-                y0,
-                sky,
-                psf=psf,
-            )
-
-    else:
-        raise ValueError(
-            f"Unsupported model: {model_name}"
+            psf=self.psf,
         )
 
-    return model_factory
+
+def _make_model_factory(
+    model_name,
+    psf,
+):
+    if model_name == "single_sersic":
+        return SingleSersicModelFactory(
+            psf,
+        )
+
+    if model_name == "double_sersic":
+        return DoubleSersicModelFactory(
+            psf,
+        )
+
+    raise ValueError(
+        f"Unsupported model: {model_name}"
+    )
+
 
 def _compute_best_model(
     result,
@@ -668,6 +1029,7 @@ def _compute_bayesian_model_comparison(
         return {
             "logz": logz,
             "delta_logz": {},
+            "log_bayes_factor": {},
             "bayes_factor": {},
         }
 
@@ -676,14 +1038,22 @@ def _compute_bayesian_model_comparison(
         - logz["single_sersic"]
     )
 
-    bayes_factor = float(
-        np.exp(delta_logz)
-    )
+    log_bayes_factor = float(delta_logz)
+
+    if log_bayes_factor < 700:
+        bayes_factor = float(
+            np.exp(log_bayes_factor)
+        )
+    else:
+        bayes_factor = None
 
     return {
         "logz": logz,
         "delta_logz": {
             "double_sersic_minus_single_sersic": delta_logz,
+        },
+        "log_bayes_factor": {
+            "double_sersic_over_single_sersic": log_bayes_factor,
         },
         "bayes_factor": {
             "double_sersic_over_single_sersic": bayes_factor,
@@ -700,6 +1070,10 @@ def _run_dynesty(
     *,
     nlive: int = 300,
     sample: str = "auto",
+    dlogz: float | None = None,
+    n_processes: int = 1,
+    queue_size: int | None = None,
+    seed: int | None = None,
 ):
     fitter = DynestyFitter(
         model_factory=model_factory,
@@ -712,7 +1086,11 @@ def _run_dynesty(
     return fitter.run(
         nlive=nlive,
         sample=sample,
+        dlogz=dlogz,
         print_progress=True,
+        n_processes=n_processes,
+        queue_size=queue_size,
+        seed=seed,
     )
 
 
@@ -739,5 +1117,5 @@ def _diagnostic_title(
         model_name
         .replace("_", " ")
         .title()
-        .replace("Sersic", "Sérsic")
+        .replace("Sersic", "Sersic")
     )

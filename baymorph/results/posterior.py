@@ -17,6 +17,7 @@ class PosteriorResult:
     logz: np.ndarray
     parameter_names: list[str]
     logl: np.ndarray | None = None
+    logzerr: np.ndarray | None = None
 
     @property
     def weights(self) -> np.ndarray:

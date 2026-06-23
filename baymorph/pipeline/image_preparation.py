@@ -39,6 +39,8 @@ def prepare_real_fits_image(
     background_box_size: int = 20,
     background_filter_size: int = 3,
     detection_sigma: float = 3.0,
+    detection_n_pixels: int = 5,
+    detection_n_levels: int = 32,
 ):
     """Prepare a real image for fitting."""
     data = np.asarray(
@@ -49,6 +51,8 @@ def prepare_real_fits_image(
     detection = detect_sources_segmentation(
         data,
         n_sigma=detection_sigma,
+        n_pixels=detection_n_pixels,
+        n_levels=detection_n_levels,
     )
 
     mask = detection.mask
@@ -73,6 +77,7 @@ def prepare_real_fits_image(
 
     noise = estimate_noise_map(
         background_subtracted,
+        mask=mask,
     )
 
     return RealFITSPreparation(
@@ -166,6 +171,8 @@ def prepare_real_image_from_config(
         background_box_size=background_cfg["box_size"],
         background_filter_size=background_cfg["filter_size"],
         detection_sigma=detection_cfg["n_sigma"],
+        detection_n_pixels=detection_cfg["npixels"],
+        detection_n_levels=detection_cfg["n_levels"],
     )
 
     segmentation = prepared.detection.segmentation

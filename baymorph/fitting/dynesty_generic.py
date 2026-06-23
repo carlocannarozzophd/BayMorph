@@ -3,6 +3,8 @@
 import dynesty
 import numpy as np
 
+from multiprocessing import Pool
+
 from baymorph.likelihood import gaussian_log_likelihood
 from baymorph.results import PosteriorResult
 from baymorph.simulation.psf import convolve_with_psf
@@ -144,23 +146,27 @@ class DynestyFitter:
         dlogz: float | None = None,
         bootstrap: int | None = None,
         print_progress: bool = True,
+        n_processes: int = 1,
+        queue_size: int | None = None,
+        seed: int | None = None,
     ) -> DynestyResult:
         """Run nested sampling."""
+        rstate = None
+
+        if seed is not None:
+            rstate = np.random.default_rng(seed)
+        
         sampler_kwargs = {
             "nlive": nlive,
             "sample": sample,
             "bound": bound,
         }
 
+        if rstate is not None:
+            sampler_kwargs["rstate"] = rstate
+
         if bootstrap is not None:
             sampler_kwargs["bootstrap"] = bootstrap
-
-        sampler = dynesty.NestedSampler(
-            self.loglikelihood,
-            self.prior_transform,
-            ndim=self.ndim,
-            **sampler_kwargs,
-        )
 
         run_kwargs = {
             "print_progress": print_progress,
@@ -169,16 +175,45 @@ class DynestyFitter:
         if dlogz is not None:
             run_kwargs["dlogz"] = dlogz
 
-        sampler.run_nested(
-            **run_kwargs,
-        )
+        if n_processes > 1:
+            if queue_size is None:
+                queue_size = n_processes
 
-        results = sampler.results
+            with Pool(processes=n_processes) as pool:
+                sampler = dynesty.NestedSampler(
+                    self.loglikelihood,
+                    self.prior_transform,
+                    ndim=self.ndim,
+                    pool=pool,
+                    queue_size=queue_size,
+                    **sampler_kwargs,
+                )
+
+                sampler.run_nested(
+                    **run_kwargs,
+                )
+
+                results = sampler.results
+
+        else:
+            sampler = dynesty.NestedSampler(
+                self.loglikelihood,
+                self.prior_transform,
+                ndim=self.ndim,
+                **sampler_kwargs,
+            )
+
+            sampler.run_nested(
+                **run_kwargs,
+            )
+
+            results = sampler.results
 
         return DynestyResult(
             samples=results.samples,
             logwt=results.logwt,
             logz=results.logz,
             logl=results.logl,
+            logzerr=results.logzerr,
             parameter_names=self.parameter_names,
         )

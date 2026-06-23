@@ -1,7 +1,7 @@
 """Noise-map utilities."""
 
 import numpy as np
-
+from astropy.stats import sigma_clip
 
 def make_constant_noise_map(
     shape,
@@ -19,64 +19,34 @@ def make_constant_noise_map(
 
 
 def estimate_noise_map(
-    data,
-    sigma=None,
-    mask=None,
+    image: np.ndarray,
+    mask: np.ndarray | None = None,
+    clip_sigma: float = 3.0,
+    maxiters: int = 5,
 ) -> np.ndarray:
-    """Estimate a constant noise map.
+    """Estimate a constant noise map from source-masked, sigma-clipped pixels."""
 
-    If sigma is provided, return a constant map with that value.
-    Otherwise estimate sigma empirically from unmasked pixels using MAD.
-    """
-    data = np.asarray(
-        data,
-        dtype=float,
-    )
+    data = np.asarray(image, dtype=float)
 
-    if sigma is not None:
-        if sigma <= 0:
-            raise ValueError("sigma must be positive.")
+    valid = np.isfinite(data)
 
-        return make_constant_noise_map(
-            data.shape,
-            sigma=sigma,
-        )
+    if mask is not None:
+        valid &= ~np.asarray(mask, dtype=bool)
 
-    if mask is None:
-        values = data[np.isfinite(data)]
-    else:
-        mask = np.asarray(
-            mask,
-            dtype=bool,
-        )
-
-        values = data[
-            (~mask)
-            & np.isfinite(data)
-        ]
+    values = data[valid]
 
     if values.size == 0:
-        raise ValueError(
-            "No valid pixels available to estimate noise."
+        sigma = np.nanstd(data)
+    else:
+        clipped = sigma_clip(
+            values,
+            sigma=clip_sigma,
+            maxiters=maxiters,
+            masked=True,
         )
+        sigma = np.nanstd(clipped.compressed())
 
-    median = np.nanmedian(values)
+    if not np.isfinite(sigma) or sigma <= 0:
+        sigma = np.nanstd(data)
 
-    mad = np.nanmedian(
-        np.abs(values - median)
-    )
-
-    estimated_sigma = 1.4826 * mad
-
-    if (
-        not np.isfinite(estimated_sigma)
-        or estimated_sigma <= 0
-    ):
-        raise ValueError(
-            "Estimated noise sigma must be positive."
-        )
-
-    return make_constant_noise_map(
-        data.shape,
-        sigma=estimated_sigma,
-    )
+    return np.full_like(data, sigma, dtype=float)
