@@ -10,3 +10,6 @@ dist/
 outputs/
 data/
 notebooks/prepared_products/
+notebooks/batch_results/
+notebooks/outputs_batch_validation/
+notebooks/outputs_batch_validation.zip
