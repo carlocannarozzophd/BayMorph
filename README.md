@@ -72,7 +72,12 @@ Diagnostics
 - Flexible parameter definitions through `Parameter` and `ParameterSet`
 - Support for masked likelihood evaluation
 - Bayesian evidence estimation
+- Evidence uncertainty estimation (`logZerr`)
+- Bayesian model comparison
 - Bayes-factor model comparison
+- Reproducible sampling through configurable random seeds
+- Parallel nested sampling (`n_processes`, `queue_size`)
+- Configurable convergence thresholds (`dlogz`)
 
 ## Posterior Analysis
 
@@ -86,8 +91,13 @@ Diagnostics
 
 - Model-image generation
 - Residual-image generation
-- Normalized residual maps
+- Sigma-normalized residual maps
+- Corner plots
+- Radial-profile diagnostics
+- Radial residual diagnostics
+- Posterior profile bands
 - Fit summaries and metadata products
+- Bayesian model-comparison summaries
 
 ---
 
@@ -121,8 +131,6 @@ pip install -e ".[dev]"
 
 ---
 
-# Example Configuration
-
 ```yaml
 object:
   name: TARGET
@@ -140,7 +148,12 @@ fit:
 
   sampler:
     name: dynesty
+    sample: rslice
     nlive: 300
+    dlogz: 0.1
+    seed: 42
+    n_processes: 12
+    queue_size: 12
 
   comparison:
     enabled: true
@@ -164,11 +177,13 @@ The software is currently in an active validation phase.
 
 Current development priorities include:
 
-- Improved empirical PSF construction
-- Automatic diagnostic generation
-- Posterior-profile diagnostics
+- Empirical PSF scientific validation
 - Interactive masking workflows
 - Expanded model libraries
+- Larger-scale real-galaxy validation campaigns
+- Benchmarking on heterogeneous datasets
+
+The current real-image validation target is TARGET, which is used as the primary end-to-end integration and scientific validation case.
 
 ---
 
