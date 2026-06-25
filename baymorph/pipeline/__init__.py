@@ -66,6 +66,11 @@ from .real_fit import (
     run_real_fit_from_config,
     save_real_fit_products,
 )
+from .cutout import (
+    CutoutDefinition,
+    resolve_cutout,
+    resolve_fixed_cutout,
+)
 
 __all__ = [
     "RealFITSPreparation",
@@ -120,4 +125,7 @@ __all__ = [
     "run_real_fit_from_config",
     "save_real_fit_products",
     "load_real_fit_products",
+    "CutoutDefinition",
+    "resolve_cutout",
+    "resolve_fixed_cutout",
 ]

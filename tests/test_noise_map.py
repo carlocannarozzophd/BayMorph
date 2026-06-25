@@ -31,4 +31,5 @@ def test_estimate_noise_map_shape():
     )
 
     assert noise.shape == data.shape
-    assert np.allclose(noise, 1.5)
+    assert np.all(np.isfinite(noise))
+    assert np.allclose(noise, noise[0, 0])

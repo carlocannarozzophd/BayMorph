@@ -113,6 +113,9 @@ from .pipeline import (
     load_real_fit_products,
     run_real_fit_from_config,
     save_real_fit_products,
+    CutoutDefinition,
+    resolve_cutout,
+    resolve_fixed_cutout,
 )
 from .interactive import MaskActionEditor
 from .analysis import (
@@ -242,4 +245,7 @@ __all__ = [
     "run_real_fit_from_config",
     "save_real_fit_products",
     "load_real_fit_products",
+    "CutoutDefinition",
+    "resolve_cutout",
+    "resolve_fixed_cutout",
 ]

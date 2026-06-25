@@ -9,38 +9,48 @@ from baymorph import (
     pipeline_paths,
     resolve_config,
     save_image_preparation_products,
+    resolve_fixed_cutout,
 )
 
 
 def test_make_target_cutout_returns_expected_shape():
     data = np.zeros((100, 100))
 
-    cutout, bounds = make_target_cutout(
+    cutout_definition = resolve_fixed_cutout(
+        image_shape=data.shape,
+        center_x=50,
+        center_y=50,
+        size=40,
+    )
+
+    cutout = make_target_cutout(
         data,
-        target_x=50,
-        target_y=50,
-        cutout_size=40,
+        cutout_definition,
     )
 
     assert cutout.shape == (40, 40)
-    assert bounds == {
-        "x_min": 30,
-        "x_max": 70,
-        "y_min": 30,
-        "y_max": 70,
-    }
 
 
-def test_make_target_cutout_raises_if_outside_image():
+def test_make_target_cutout_shifts_cutout_inside_image():
     data = np.zeros((100, 100))
 
-    with pytest.raises(ValueError, match="outside the image boundaries"):
-        make_target_cutout(
-            data,
-            target_x=10,
-            target_y=10,
-            cutout_size=40,
-        )
+    cutout_definition = resolve_fixed_cutout(
+        image_shape=data.shape,
+        center_x=5,
+        center_y=5,
+        size=40,
+    )
+
+    cutout = make_target_cutout(
+        data,
+        cutout_definition,
+    )
+
+    assert cutout.shape == (40, 40)
+    assert cutout_definition.xmin == 0
+    assert cutout_definition.xmax == 40
+    assert cutout_definition.ymin == 0
+    assert cutout_definition.ymax == 40
 
 
 def test_save_and_load_image_preparation_products_roundtrip(tmp_path):

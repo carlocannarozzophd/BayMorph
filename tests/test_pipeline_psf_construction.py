@@ -86,16 +86,17 @@ def test_subtract_outer_background_removes_border_level():
 
 
 def test_stack_psf_cutouts_returns_normalized_stack():
-    cutouts = [
-        np.ones((5, 5)),
-        np.ones((5, 5)) * 2,
-        np.ones((5, 5)) * 3,
-    ]
+    cutouts = []
+
+    for amp in (1.0, 2.0, 3.0):
+        cutout = np.ones((5, 5)) * 0.01
+        cutout[2, 2] = amp
+        cutouts.append(cutout)
 
     psf = stack_psf_cutouts(cutouts)
 
     assert psf.shape == (5, 5)
-    assert np.isclose(psf.sum(), 1.0)
+    assert np.isclose(np.sum(psf), 1.0)
 
 
 def test_centroid_from_flux_recovers_peak_position():

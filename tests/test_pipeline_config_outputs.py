@@ -136,10 +136,10 @@ def test_resolve_config_applies_nested_defaults():
 
     candidate_cfg = resolved["psf"]["empirical"]["candidate_selection"]
 
-    assert candidate_cfg["target_n_candidates"] == 15
+    assert candidate_cfg["target_n_candidates"] == 30
     assert candidate_cfg["sigma_factor"] == 4.0
     assert candidate_cfg["min_half_size"] == 12
-    assert candidate_cfg["max_half_size"] == 25
+    assert candidate_cfg["max_half_size"] == 30
 
 
 def test_resolve_config_preserves_user_nested_overrides():
