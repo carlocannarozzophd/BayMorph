@@ -15,7 +15,10 @@ DEFAULT_CONFIG = {
         "psf_path": None,
         "pixel_scale": None,
         "target_position": None,
-        "cutout_size": None,
+        "cutout": {
+            "mode": "fixed",
+            "size": None,
+        },
     },
     "outputs": {
         "overwrite": False,
@@ -141,6 +144,21 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
     resolved["object"]["name"] = str(resolved["object"]["name"])
     resolved["data"]["image_path"] = str(Path(resolved["data"]["image_path"]))
     resolved["outputs"]["root"] = str(Path(resolved["outputs"]["root"]))
+
+    # --------------------------------------------------
+    # Backward compatibility for cutout configuration
+    # --------------------------------------------------
+
+    data_cfg = resolved["data"]
+
+    if (
+        "cutout" not in data_cfg
+        and data_cfg.get("cutout_size") is not None
+    ):
+        data_cfg["cutout"] = {
+            "mode": "fixed",
+            "size": data_cfg["cutout_size"],
+        }
 
     return resolved
 

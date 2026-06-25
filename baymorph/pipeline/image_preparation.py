@@ -22,6 +22,7 @@ from baymorph.core.noise import estimate_noise_map
 from baymorph.pipeline.segmentation import select_segment_near_position
 from .config import load_resolved_config
 from .outputs import make_output_tree, pipeline_paths, save_resolved_config
+from .cutout import resolve_cutout
 
 @dataclass
 class RealFITSPreparation:
@@ -106,33 +107,12 @@ class ImagePreparationProducts:
 
 def make_target_cutout(
     data: np.ndarray,
-    target_x: int,
-    target_y: int,
-    cutout_size: int,
-) -> tuple[np.ndarray, dict[str, int]]:
-    half_size = cutout_size // 2
-
-    x_min = int(target_x) - half_size
-    x_max = int(target_x) + half_size
-    y_min = int(target_y) - half_size
-    y_max = int(target_y) + half_size
-
-    if x_min < 0 or y_min < 0 or x_max > data.shape[1] or y_max > data.shape[0]:
-        raise ValueError(
-            "Requested cutout extends outside the image boundaries."
-        )
-
-    cutout = data[y_min:y_max, x_min:x_max]
-
-    bounds = {
-        "x_min": x_min,
-        "x_max": x_max,
-        "y_min": y_min,
-        "y_max": y_max,
-    }
-
-    return cutout, bounds
-
+    cutout: CutoutDefinition,
+) -> np.ndarray:
+    return data[
+        cutout.ymin:cutout.ymax,
+        cutout.xmin:cutout.xmax,
+    ]
 
 def prepare_real_image_from_config(
     config: str | Path | dict[str, Any],
@@ -152,15 +132,18 @@ def prepare_real_image_from_config(
     if target_position is None:
         raise ValueError("Config data.target_position is required for image preparation.")
 
-    cutout_size = resolved["data"]["cutout_size"]
-    if cutout_size is None:
-        raise ValueError("Config data.cutout_size is required for image preparation.")
+    cutout_cfg = resolved["data"]["cutout"]
 
-    cutout, bounds = make_target_cutout(
+    cutout_definition = resolve_cutout(
+    image_shape=image.data.shape,
+    center_x=target_position["x"],
+    center_y=target_position["y"],
+    config=cutout_cfg,
+    )
+
+    cutout = make_target_cutout(
         image.data,
-        target_x=target_position["x"],
-        target_y=target_position["y"],
-        cutout_size=cutout_size,
+        cutout_definition,
     )
 
     detection_cfg = resolved["preparation"]["detection"]
@@ -179,8 +162,15 @@ def prepare_real_image_from_config(
     if segmentation is None:
         raise RuntimeError("No segmentation map was produced.")
 
-    target_x = int(target_position["x"]) - bounds["x_min"]
-    target_y = int(target_position["y"]) - bounds["y_min"]
+    target_x = (
+        int(target_position["x"])
+        - cutout_definition.xmin
+    )
+
+    target_y = (
+        int(target_position["y"])
+        - cutout_definition.ymin
+    )
 
     target_label = select_segment_near_position(
         segmentation,
