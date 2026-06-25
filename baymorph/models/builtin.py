@@ -1,35 +1,25 @@
 from __future__ import annotations
 
 from .definition import ModelDefinition
-from .labels import (
-    parameter_names,
-    parameter_labels,
-)
+from .labels import parameter_labels, parameter_names
 from .registry import register_model
 
 
-register_model(
-    ModelDefinition(
-        name="single_sersic",
-        parameter_names=parameter_names(
-            "single_sersic",
-        ),
-        parameter_labels=parameter_labels(
-            "single_sersic",
-        ),
-        factory=None,
-    )
-)
+def register_builtin_models() -> None:
+    """Register BayMorph built-in model definitions."""
 
-register_model(
-    ModelDefinition(
-        name="double_sersic",
-        parameter_names=parameter_names(
-            "double_sersic",
-        ),
-        parameter_labels=parameter_labels(
-            "double_sersic",
-        ),
-        factory=None,
-    )
-)
+    for model_name in (
+        "single_sersic",
+        "double_sersic",
+    ):
+        register_model(
+            ModelDefinition(
+                name=model_name,
+                parameter_names=parameter_names(model_name),
+                parameter_labels=parameter_labels(model_name),
+                factory=None,
+            )
+        )
+
+
+register_builtin_models()
