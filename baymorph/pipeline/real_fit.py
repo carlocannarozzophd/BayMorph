@@ -101,6 +101,7 @@ def run_real_fit_from_config(
                 mask_fit=image_products.contaminant_mask,
                 target_x=image_products.target_x,
                 target_y=image_products.target_y,
+                prior_cfg=resolved["fit"]["priors"],
             )
         )
 
@@ -713,6 +714,80 @@ def _load_psf_from_config(
     )
 
 
+def _parse_prior_value(value):
+    if isinstance(value, str):
+        if value == "pi/2":
+            return float(np.pi / 2)
+
+        if value == "-pi/2":
+            return float(-np.pi / 2)
+
+    return float(value)
+
+
+def _bounds_from_prior(
+    name: str,
+    cfg: dict,
+    *,
+    flux_total: float,
+    target_x: float,
+    target_y: float,
+):
+    if "min_factor" in cfg or "max_factor" in cfg:
+        return (
+            float(cfg["min_factor"]) * flux_total,
+            float(cfg["max_factor"]) * flux_total,
+        )
+
+    if "offset" in cfg:
+        offset = float(cfg["offset"])
+
+        if name == "x0":
+            return (
+                float(target_x - offset),
+                float(target_x + offset),
+            )
+
+        if name == "y0":
+            return (
+                float(target_y - offset),
+                float(target_y + offset),
+            )
+
+        raise ValueError(
+            f"Offset prior is only supported for x0/y0, got {name}."
+        )
+
+    return (
+        _parse_prior_value(cfg["min"]),
+        _parse_prior_value(cfg["max"]),
+    )
+
+
+def _build_parameter_list(
+    prior_cfg: dict,
+    *,
+    flux_total: float,
+    target_x: float,
+    target_y: float,
+) -> ParameterSet:
+    return ParameterSet(
+        [
+            Parameter(
+                name,
+                *_bounds_from_prior(
+                    name,
+                    cfg,
+                    flux_total=flux_total,
+                    target_x=target_x,
+                    target_y=target_y,
+                ),
+            )
+            for name, cfg in prior_cfg.items()
+        ]
+    )
+
+
 def _build_parameter_set(
     model_name: str,
     data_fit: np.ndarray,
@@ -720,6 +795,7 @@ def _build_parameter_set(
     mask_fit: np.ndarray,
     target_x: float,
     target_y: float,
+    prior_cfg: dict,
 ):
     valid_for_flux = (
         (~mask_fit)
@@ -740,105 +816,31 @@ def _build_parameter_set(
         data_fit[valid_for_flux],
     )
 
-    if model_name == "single_sersic":
-        parameter_names = [
-            "flux",
-            "re",
-            "n",
-            "q",
-            "theta",
-            "x0",
-            "y0",
-            "sky",
-        ]
+    model_prior_cfg = prior_cfg[model_name]
 
-        parameters = ParameterSet(
-            [
-                Parameter("flux", 0.0, 2.0 * flux_total),
-                Parameter("re", 1.0, 120.0),
-                Parameter("n", 0.5, 6.0),
-                Parameter("q", 0.4, 1.0),
-                Parameter("theta", -np.pi / 2, np.pi / 2),
-                Parameter("x0", target_x - 8, target_x + 8),
-                Parameter("y0", target_y - 8, target_y + 8),
-                Parameter("sky", -50.0, 50.0),
-            ]
+    if model_name == "single_sersic":
+        parameter_names = list(
+            model_prior_cfg.keys()
+        )
+
+        parameters = _build_parameter_list(
+            model_prior_cfg,
+            flux_total=flux_total,
+            target_x=target_x,
+            target_y=target_y,
         )
 
     elif model_name == "double_sersic":
 
-        parameter_names = [
-            "flux_bulge",
-            "re_bulge",
-            "n_bulge",
-            "flux_disk",
-            "re_disk",
-            "n_disk",
-            "q",
-            "theta",
-            "x0",
-            "y0",
-            "sky",
-        ]
+        parameter_names = list(
+            model_prior_cfg.keys()
+        )
 
-        parameters = ParameterSet(
-            [
-                Parameter(
-                    "flux_bulge",
-                    0.0,
-                    1.0 * flux_total,
-                ),
-                Parameter(
-                    "re_bulge",
-                    1.0,
-                    30.0,
-                ),
-                Parameter(
-                    "n_bulge",
-                    1.5,
-                    6.0,
-                ),
-                Parameter(
-                    "flux_disk",
-                    0.0,
-                    2.0 * flux_total,
-                ),
-                Parameter(
-                    "re_disk",
-                    10.0,
-                    120.0,
-                ),
-                Parameter(
-                    "n_disk",
-                    0.5,
-                    3.0,
-                ),
-                Parameter(
-                    "q",
-                    0.4,
-                    1.0,
-                ),
-                Parameter(
-                    "theta",
-                    -np.pi / 2,
-                    np.pi / 2,
-                ),
-                Parameter(
-                    "x0",
-                    target_x - 8,
-                    target_x + 8,
-                ),
-                Parameter(
-                    "y0",
-                    target_y - 8,
-                    target_y + 8,
-                ),
-                Parameter(
-                    "sky",
-                    -50.0,
-                    50.0,
-                ),
-            ]
+        parameters = _build_parameter_list(
+            model_prior_cfg,
+            flux_total=flux_total,
+            target_x=target_x,
+            target_y=target_y,
         )
 
     else:
