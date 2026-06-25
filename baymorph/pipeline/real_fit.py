@@ -44,6 +44,7 @@ from baymorph.analysis import (
 )
 
 from baymorph.models import (
+    get_model,
     parameter_labels,
     parameter_names as model_parameter_names,
 )
@@ -825,57 +826,8 @@ def _build_parameter_set(
 
     model_prior_cfg = prior_cfg[model_name]
 
-    if model_name == "single_sersic":
-        parameter_names = model_parameter_names(
-            model_name,
-        )
-
-        missing = [
-            name
-            for name in parameter_names
-            if name not in model_prior_cfg
-        ]
-
-        if missing:
-            raise ValueError(
-                f"Missing priors for {model_name}: {missing}"
-            )
-
-        parameters = _build_parameter_list(
-            model_prior_cfg,
-            flux_total=flux_total,
-            target_x=target_x,
-            target_y=target_y,
-        )
-
-    elif model_name == "double_sersic":
-
-        parameter_names = model_parameter_names(
-            model_name,
-        )
-
-        missing = [
-            name
-            for name in parameter_names
-            if name not in model_prior_cfg
-        ]
-
-        if missing:
-            raise ValueError(
-                f"Missing priors for {model_name}: {missing}"
-            )
-
-        parameters = _build_parameter_list(
-            model_prior_cfg,
-            flux_total=flux_total,
-            target_x=target_x,
-            target_y=target_y,
-        )
-
-    else:
-        raise ValueError(
-            f"Unsupported model: {model_name}"
-        )
+    model_definition = get_model(model_name)
+    parameter_names = model_definition.parameter_names
 
     return (
         parameter_names,
