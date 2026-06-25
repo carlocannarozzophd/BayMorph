@@ -8,7 +8,7 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .config import load_resolved_config
+from .config import load_resolved_config, DEFAULT_CONFIG
 from .outputs import make_output_tree, save_resolved_config, pipeline_paths
 
 from .psf_construction import (
@@ -803,8 +803,12 @@ def _build_parameter_set(
     mask_fit: np.ndarray,
     target_x: float,
     target_y: float,
-    prior_cfg: dict,
+    prior_cfg=None,
 ):
+    
+    if prior_cfg is None:
+        prior_cfg = DEFAULT_CONFIG["fit"]["priors"]
+
     valid_for_flux = (
         (~mask_fit)
         & np.isfinite(data_fit)
@@ -828,6 +832,13 @@ def _build_parameter_set(
 
     model_definition = get_model(model_name)
     parameter_names = model_definition.parameter_names
+
+    parameters = _build_parameter_list(
+    model_prior_cfg,
+    flux_total=flux_total,
+    target_x=target_x,
+    target_y=target_y,
+    )
 
     return (
         parameter_names,
@@ -903,20 +914,21 @@ def _make_model_factory(
     model_name,
     psf,
 ):
-    if model_name == "single_sersic":
-        return SingleSersicModelFactory(
-            psf,
-        )
+    model_definition = get_model(model_name)
 
-    if model_name == "double_sersic":
-        return DoubleSersicModelFactory(
-            psf,
-        )
+    factories = {
+        "SingleSersicModelFactory": SingleSersicModelFactory,
+        "DoubleSersicModelFactory": DoubleSersicModelFactory,
+    }
 
-    raise ValueError(
-        f"Unsupported model: {model_name}"
-    )
+    try:
+        factory_class = factories[model_definition.factory_name]
+    except KeyError as exc:
+        raise ValueError(
+            f"Unsupported model factory: {model_definition.factory_name}"
+        ) from exc
 
+    return factory_class(psf)
 
 def _compute_best_model(
     result,

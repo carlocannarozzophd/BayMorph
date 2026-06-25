@@ -12,4 +12,5 @@ class ModelDefinition:
     name: str
     parameter_names: list[str]
     parameter_labels: list[str]
+    factory_name: str
     factory: Callable[..., Any] | None = None
