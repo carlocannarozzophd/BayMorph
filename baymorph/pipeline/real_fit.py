@@ -43,6 +43,11 @@ from baymorph.analysis import (
     compute_posterior_profile_bands,
 )
 
+from baymorph.models import (
+    parameter_labels,
+    parameter_names as model_parameter_names,
+)
+
 @dataclass
 class RealFitProducts:
     posterior: object | None
@@ -495,7 +500,9 @@ def save_real_fit_products(
     ):
         fig, _, _ = corner_plot(
             products.posterior.posterior_samples.T,
-            parameter_labels=products.posterior.parameter_names,
+            parameter_labels=parameter_labels(
+                model_name,
+            ),
         )
 
         fig.savefig(
@@ -819,9 +826,20 @@ def _build_parameter_set(
     model_prior_cfg = prior_cfg[model_name]
 
     if model_name == "single_sersic":
-        parameter_names = list(
-            model_prior_cfg.keys()
+        parameter_names = model_parameter_names(
+            model_name,
         )
+
+        missing = [
+            name
+            for name in parameter_names
+            if name not in model_prior_cfg
+        ]
+
+        if missing:
+            raise ValueError(
+                f"Missing priors for {model_name}: {missing}"
+            )
 
         parameters = _build_parameter_list(
             model_prior_cfg,
@@ -832,9 +850,20 @@ def _build_parameter_set(
 
     elif model_name == "double_sersic":
 
-        parameter_names = list(
-            model_prior_cfg.keys()
+        parameter_names = model_parameter_names(
+            model_name,
         )
+
+        missing = [
+            name
+            for name in parameter_names
+            if name not in model_prior_cfg
+        ]
+
+        if missing:
+            raise ValueError(
+                f"Missing priors for {model_name}: {missing}"
+            )
 
         parameters = _build_parameter_list(
             model_prior_cfg,
