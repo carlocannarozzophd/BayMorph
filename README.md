@@ -213,6 +213,14 @@ Additional documentation is available in:
 
 ---
 
+## Validation notebooks
+
+BayMorph includes an incremental validation sequence in `notebooks/`, from an ideal single-Sérsic fitter test to full mock-pipeline tests with PSF, sky, and Gaussian noise. See `docs/validation.md` for the validation plan and current status.
+
+---
+
 # License
 
 MIT License.
+
+
