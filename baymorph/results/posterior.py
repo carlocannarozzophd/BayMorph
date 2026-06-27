@@ -79,6 +79,7 @@ class PosteriorResult:
             )
         }
 
+    @property
     def median_parameters(
         self,
     ) -> dict[str, float]:

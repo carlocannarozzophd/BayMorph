@@ -309,3 +309,29 @@ def plot_log_data_model_residual(
         plt.show()
 
     return fig, axes
+
+
+def plot_fit_summary(
+    data,
+    model,
+    noise=None,
+    title: str = "",
+    cmap: str = BAYMORPH_IMAGE_CMAP,
+    show: bool = False,
+):
+    """Plot a standard BayMorph fit summary.
+
+    This is a user-facing wrapper around
+    :func:`plot_log_data_model_residual`.
+
+    It shows the data, model, residual, and, when a noise map is provided,
+    the normalized residual.
+    """
+    return plot_log_data_model_residual(
+        data=data,
+        model=model,
+        noise=noise,
+        title=title,
+        cmap=cmap,
+        show=show,
+    )

@@ -20,6 +20,7 @@ from .style import (
 from .images import (
     show_log_image,
     plot_log_data_model_residual,
+    plot_fit_summary,
 )
 __all__ = [
     "set_plot_style",
@@ -33,4 +34,5 @@ __all__ = [
     "plot_data_model_residual",
     "show_log_image",
     "plot_log_data_model_residual",
+    "plot_fit_summary",
 ]
