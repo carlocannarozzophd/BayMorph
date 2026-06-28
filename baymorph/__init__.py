@@ -61,6 +61,7 @@ from .plotting import (
     show_log_image,
     style_axes,
     plot_fit_summary,
+    plot_mock_fit_report,
 )
 from .results import PosteriorResult
 from .pipeline import (
@@ -250,4 +251,5 @@ __all__ = [
     "resolve_cutout",
     "resolve_fixed_cutout",
     "plot_fit_summary",
+    "plot_mock_fit_report",
 ]

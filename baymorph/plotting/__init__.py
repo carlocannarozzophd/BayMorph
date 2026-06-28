@@ -17,6 +17,7 @@ from .style import (
     set_plot_style,
     style_axes,
 )
+from .report import plot_mock_fit_report
 from .images import (
     show_log_image,
     plot_log_data_model_residual,
@@ -35,4 +36,5 @@ __all__ = [
     "show_log_image",
     "plot_log_data_model_residual",
     "plot_fit_summary",
+    "plot_mock_fit_report",
 ]
