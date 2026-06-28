@@ -1,9 +1,0 @@
-input:
-  image: "data/example.fits"
-
-model:
-  name: "sersic"
-
-sampler:
-  engine: "dynesty"
-  nlive: 300
