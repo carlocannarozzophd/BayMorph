@@ -1,41 +1,33 @@
-# 🚧 BayMorph (under development 🏗️) 🚧
+# BayMorph
 
-BayMorph is a Bayesian framework for the morphological analysis of astronomical images.
+> **Status:** Active development. Core functionality has been scientifically validated on synthetic datasets and is currently undergoing validation on real galaxies.
 
-The project is designed to provide a unified workflow from image preparation to Bayesian model comparison, combining physically motivated galaxy models, realistic observational effects, and posterior-based parameter inference.
+BayMorph is a Python library for **Bayesian structural decomposition of galaxies**. It provides an end-to-end workflow from astronomical images to Bayesian parameter inference and model comparison, integrating image preparation, source detection and masking, PSF handling, physically motivated galaxy models, and publication-quality diagnostics within a unified framework.
 
-BayMorph currently supports:
-
-- FITS-based image preparation
-- Background estimation and subtraction
-- Noise-map generation
-- Source detection and segmentation
-- Empirical and Gaussian PSF workflows
-- Single-Sérsic fitting
-- Double-Sérsic fitting
-- Bayesian model comparison using nested sampling and Bayes factors
-
-The software is currently undergoing scientific validation on real astronomical datasets. Core functionality is operational and actively tested, but interfaces, diagnostics, and workflow details may continue to evolve before the first public release.
+The project is designed to make Bayesian galaxy fitting reproducible, configurable, and easy to apply to both synthetic and real astronomical observations.
 
 ---
 
-# Current Workflow
+# Workflow
 
 ```text
 FITS image
     ↓
 Image preparation
     ↓
-Source detection and masking
+Background estimation
+    ↓
+Noise estimation
+    ↓
+Source detection & masking
     ↓
 PSF construction
     ↓
-Single-Sérsic fit
-Double-Sérsic fit
+Bayesian galaxy fitting
     ↓
-Bayesian model comparison
+Model comparison
     ↓
-Diagnostics
+Posterior analysis & diagnostics
 ```
 
 ---
@@ -44,60 +36,36 @@ Diagnostics
 
 ## Image Preparation
 
-- FITS image loading and metadata handling
+- FITS image loading
 - Automatic target cutout extraction
 - Background estimation and subtraction
-- Empirical noise-map generation
+- Noise-map generation
 - Source detection and segmentation
 - Automatic contaminant masking
 - Configuration-driven workflows
-
-## Point Spread Function (PSF)
-
-- Gaussian PSF models
-- Empirical PSF construction from field stars
-- PSF candidate selection and quality filtering
-- PSF-convolved galaxy models
 
 ## Galaxy Modelling
 
 - Single-Sérsic models
 - Double-Sérsic models
-- Bulge + disk style decompositions
 - PSF-convolved forward modelling
+- Flexible parameter definitions and priors
 
 ## Bayesian Inference
 
-- Generic Dynesty nested-sampling framework
-- Flexible parameter definitions through `Parameter` and `ParameterSet`
-- Support for masked likelihood evaluation
+- Dynesty nested sampling
 - Bayesian evidence estimation
-- Evidence uncertainty estimation (`logZerr`)
 - Bayesian model comparison
-- Bayes-factor model comparison
-- Reproducible sampling through configurable random seeds
-- Parallel nested sampling (`n_processes`, `queue_size`)
-- Configurable convergence thresholds (`dlogz`)
-
-## Posterior Analysis
-
-- Posterior sample storage
-- Weighted posterior statistics
-- Best-fit parameter estimates
-- Median posterior estimates
-- Dynesty posterior reconstruction
+- Parallel sampling
+- Reproducible analyses through configurable random seeds
 
 ## Diagnostics
 
-- Model-image generation
-- Residual-image generation
-- Sigma-normalized residual maps
+- Publication-quality model/residual figures
 - Corner plots
 - Radial-profile diagnostics
-- Radial residual diagnostics
 - Posterior profile bands
-- Fit summaries and metadata products
-- Bayesian model-comparison summaries
+- Fit summary reports
 
 ---
 
@@ -110,7 +78,7 @@ git clone <repository-url>
 cd BayMorph
 ```
 
-Create an environment:
+Create a Python environment:
 
 ```bash
 conda create -n baymorph python=3.11
@@ -131,63 +99,44 @@ pip install -e ".[dev]"
 
 ---
 
-```yaml
-object:
-  name: TARGET
+# Examples
 
-data:
-  image_path: path/to/image.fits
+The repository contains three official notebooks demonstrating the standard BayMorph workflow.
 
-outputs:
-  root: outputs
+| Notebook | Description |
+|----------|-------------|
+| `01_SingleSersic_Validation.ipynb` | Validate Bayesian recovery of a synthetic single-Sérsic galaxy with known truth parameters. |
+| `02_MockPipeline_Validation.ipynb` | Demonstrate the complete mock-observation workflow, including PSF convolution, sky background, Gaussian noise, image preparation, Bayesian fitting, and diagnostics. |
+| `TARGET_BayMorph_Test.ipynb` | Apply BayMorph to a real galaxy using the standard analysis pipeline. |
 
-fit:
-  models:
-    - single_sersic
-    - double_sersic
-
-  sampler:
-    name: dynesty
-    sample: rslice
-    nlive: 300
-    dlogz: 0.1
-    seed: 42
-    n_processes: 12
-    queue_size: 12
-
-  comparison:
-    enabled: true
-    metric: bayes_factor
-```
+The corresponding YAML configuration files are provided in the `examples/` directory.
 
 ---
 
-# Current Status
+# Scientific Validation
 
-BayMorph has successfully completed its first end-to-end real-galaxy tests, including:
+The mathematical core of BayMorph has been incrementally validated using synthetic galaxies with known ground-truth parameters.
 
-- Image preparation
-- Source detection and segmentation
-- Empirical and Gaussian PSF workflows
-- Single-Sérsic fitting
-- Double-Sérsic fitting
-- Bayesian model comparison
+Completed validation includes:
 
-The software is currently in an active validation phase.
+- Single-Sérsic parameter recovery
+- PSF-convolved forward modelling
+- Gaussian-noise likelihood validation
+- Complete mock-observation pipeline
+- End-to-end pipeline validation
 
-Current development priorities include:
+Current scientific development focuses on:
 
-- Empirical PSF scientific validation
-- Interactive masking workflows
-- Expanded model libraries
-- Larger-scale real-galaxy validation campaigns
-- Benchmarking on heterogeneous datasets
+- Empirical PSF validation
+- Contaminant masking improvements
+- Local background estimation
+- Validation on larger samples of real galaxies
 
-The current real-image validation target is TARGET, which is used as the primary end-to-end integration and scientific validation case.
+The current real-galaxy validation target is **TARGET**, which serves as the primary end-to-end scientific demonstration of the pipeline.
 
 ---
 
-# Validation
+# Testing
 
 The automated test suite currently validates:
 
@@ -197,8 +146,9 @@ The automated test suite currently validates:
 - Source detection and masking
 - PSF construction
 - Sérsic models
-- Dynesty fitting
-- Bayesian model comparison
+- Bayesian inference
+- Model comparison
+- Pipeline configuration
 - Real-image workflow components
 
 ---
@@ -213,14 +163,6 @@ Additional documentation is available in:
 
 ---
 
-## Validation notebooks
-
-BayMorph includes an incremental validation sequence in `notebooks/`, from an ideal single-Sérsic fitter test to full mock-pipeline tests with PSF, sky, and Gaussian noise. See `docs/validation.md` for the validation plan and current status.
-
----
-
 # License
 
-MIT License.
-
-
+Released under the **MIT License**.

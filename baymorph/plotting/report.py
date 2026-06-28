@@ -47,6 +47,7 @@ def plot_mock_fit_report(
     observed_image,
     best_model_image,
     noise_map,
+    statistics=None,
     output_path=None,
     show=True,
 ):
@@ -57,25 +58,57 @@ def plot_mock_fit_report(
     valid = np.isfinite(noise_map) & (noise_map > 0)
     norm_residual[valid] = residual[valid] / noise_map[valid]
 
-    fig, axes = plt.subplots(2, 5, figsize=(22, 9))
-    fig.suptitle("BayMorph mock-observation and fit report", fontsize=18)
+    fig, axes = plt.subplots(
+        2,
+        6,
+        figsize=(28, 9),
+        constrained_layout=False,
+    )
 
-    im = _show_log(axes[0, 0], intrinsic_image, "Intrinsic Sérsic")
+    fig.text(
+        0.5,
+        0.92,
+        "MOCK OBSERVATION",
+        ha="center",
+        fontsize=16,
+        fontweight="bold",
+    )
+
+    fig.text(
+        0.5,
+        0.47,
+        "BAYMORPH RECONSTRUCTION",
+        ha="center",
+        fontsize=16,
+        fontweight="bold",
+    )
+
+    fig.suptitle(
+        "BayMorph Mock Observation and Bayesian Reconstruction",
+        fontsize=20,
+        fontweight="bold",
+        y=0.98,
+    )
+
+    im = _show_log(axes[0, 0], intrinsic_image, "Intrinsic Galaxy")
     fig.colorbar(im, ax=axes[0, 0], fraction=0.046)
 
-    im = _show_log(axes[0, 1], psf, "Gaussian PSF")
+    im = _show_log(axes[0, 1], psf, "PSF")
     fig.colorbar(im, ax=axes[0, 1], fraction=0.046)
 
-    im = _show_log(axes[0, 2], convolved_image, "PSF-convolved galaxy")
+    im = _show_log(axes[0, 2], convolved_image, "PSF-convolved")
     fig.colorbar(im, ax=axes[0, 2], fraction=0.046)
 
-    im = _show_linear(axes[0, 3], sky_image, "Sky background", cmap="viridis", symmetric=False)
+    im = _show_linear(axes[0, 3], sky_image, "Sky Background", cmap="viridis", symmetric=False)
     fig.colorbar(im, ax=axes[0, 3], fraction=0.046)
 
-    im = _show_linear(axes[0, 4], noise_realization, "Gaussian noise")
+    im = _show_linear(axes[0, 4], noise_realization, "Noise")
     fig.colorbar(im, ax=axes[0, 4], fraction=0.046)
 
-    im = _show_log(axes[1, 0], observed_image, "Final mock observation")
+    im = _show_log(axes[0, 5], observed_image,"Observed Image")
+    fig.colorbar(im, ax=axes[0, 5], fraction=0.046)
+
+    im = _show_log(axes[1, 0], observed_image, "Observed Image")
     fig.colorbar(im, ax=axes[1, 0], fraction=0.046)
 
     im = _show_log(axes[1, 1], best_model_image, "Best-fit model")
@@ -84,21 +117,50 @@ def plot_mock_fit_report(
     im = _show_linear(axes[1, 2], residual, "Residual")
     fig.colorbar(im, ax=axes[1, 2], fraction=0.046)
 
-    im = _show_linear(axes[1, 3], norm_residual, "Residual / noise")
+    im = _show_linear(axes[1, 3], norm_residual, "Residual / Noise")
     fig.colorbar(im, ax=axes[1, 3], fraction=0.046)
 
-    axes[1, 4].axis("off")
-    axes[1, 4].text(
-        0.5,
-        0.5,
-        "Final mock observation\n=\ninput to BayMorph\n\nBest-fit model\n=\nDynesty reconstruction",
-        ha="center",
-        va="center",
-        fontsize=14,
+    im = _show_linear(
+        axes[1, 4],
+        noise_map,
+        "Noise Map",
+        cmap="viridis",
+        symmetric=False,
+    )
+    fig.colorbar(im, ax=axes[1, 4], fraction=0.046)
+
+    axes[1, 5].axis("off")
+
+    lines = ["BayMorph statistics", ""]
+
+    if statistics:
+        for key, value in statistics.items():
+            if isinstance(value, float):
+                lines.append(f"{key}: {value:.4g}")
+            else:
+                lines.append(f"{key}: {value}")
+    else:
+        lines.append("No statistics provided.")
+
+    axes[1, 5].text(
+        0.02,
+        0.98,
+        "\n".join(lines),
+        ha="left",
+        va="top",
+        fontsize=12,
+        family="monospace",
     )
 
-    plt.tight_layout()
-
+    fig.subplots_adjust(
+        left=0.04,
+        right=0.98,
+        bottom=0.06,
+        top=0.90,
+        wspace=0.35,
+        hspace=0.45,
+    )
+     
     if output_path is not None:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
