@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .config import load_resolved_config
+from .config import load_resolved_config, resolve_config
 from .outputs import make_output_tree, save_resolved_config
 from .image_preparation import prepare_real_image_from_config
 from .psf_candidates import run_psf_candidate_selection_from_config
@@ -20,10 +20,15 @@ def _coerce_config(config: str | Path | dict[str, Any]) -> dict[str, Any]:
     raise TypeError("config must be a path or a dictionary.")
 
 
-def initialize_pipeline_run(config: str | Path | dict[str, Any]) -> dict[str, Any]:
-    resolved = _coerce_config(config)
+def initialize_pipeline_run(config: str | Path | dict[str, Any],):
+    if isinstance(config, (str, Path)):
+        resolved = load_resolved_config(config)
+    else:
+        resolved = resolve_config(config)
+
     make_output_tree(resolved)
     save_resolved_config(resolved)
+
     return resolved
 
 

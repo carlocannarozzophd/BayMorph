@@ -57,6 +57,59 @@ def _sigma_colors(
     ]
 
 
+def _style_corner_axis(
+    ax,
+    spine_width=3,
+    major_length=10,
+    minor_length=5,
+    max_n_ticks=4,
+):
+    for spine in ax.spines.values():
+        spine.set_linewidth(spine_width)
+
+    ax.tick_params(
+        axis="x",
+        rotation=45,
+        labelsize=20,
+    )
+    ax.tick_params(
+        axis="y",
+        rotation=45,
+        labelsize=20,
+    )
+    ax.tick_params(
+        which="major",
+        length=major_length,
+        width=spine_width,
+        direction="out",
+    )
+    ax.tick_params(
+        which="minor",
+        length=minor_length,
+        width=spine_width,
+        direction="out",
+    )
+
+    if max_n_ticks == 0:
+        ax.xaxis.set_major_locator(NullLocator())
+        ax.yaxis.set_major_locator(NullLocator())
+    else:
+        ax.xaxis.set_major_locator(
+            MaxNLocator(
+                max_n_ticks,
+                prune="lower",
+            )
+        )
+        ax.yaxis.set_major_locator(
+            MaxNLocator(
+                max_n_ticks,
+                prune="lower",
+            )
+        )
+        ax.xaxis.set_minor_locator(AutoMinorLocator())
+        ax.yaxis.set_minor_locator(AutoMinorLocator())
+
+
 def _hist2d_smoothed(
     x,
     y,
@@ -85,6 +138,65 @@ def _hist2d_smoothed(
     return counts, xedges, yedges
 
 
+def _resolve_corner_grid(
+    n_params,
+    fig=None,
+    ax=None,
+):
+    if ax is not None and fig is not None:
+        raise ValueError("Pass either `fig` or `ax`, not both.")
+
+    if ax is not None:
+        ax.axis("off")
+        subfig = ax.figure
+        bbox = ax.get_position()
+        grid_spec = subfig.add_gridspec(
+            n_params,
+            n_params,
+            left=bbox.x0,
+            right=bbox.x1,
+            bottom=bbox.y0,
+            top=bbox.y1,
+            wspace=0.05,
+            hspace=0.05,
+        )
+        ax_grid = np.empty(
+            (n_params, n_params),
+            dtype=object,
+        )
+
+        for i in range(n_params):
+            for j in range(n_params):
+                ax_grid[i, j] = subfig.add_subplot(
+                    grid_spec[i, j]
+                )
+
+        return subfig, ax_grid
+
+    if fig is None:
+        fig, ax_grid = plt.subplots(
+            n_params,
+            n_params,
+            figsize=(15, 15),
+        )
+        return fig, ax_grid
+
+    axes = np.array(fig.axes)
+
+    if axes.size != n_params * n_params:
+        raise ValueError(
+            f"Provided figure has {axes.size} axes, "
+            f"but n_params={n_params} requires "
+            f"{n_params * n_params}."
+        )
+
+    ax_grid = axes.reshape(
+        (n_params, n_params)
+    )
+
+    return fig, ax_grid
+
+
 def corner_plot(
     parameters,
     sigma=None,
@@ -101,6 +213,7 @@ def corner_plot(
     hist_color=None,
     max_n_ticks=4,
     fig=None,
+    ax=None,
     range_xy=None,
     alpha_2d=0.95,
     alpha_1d=0.90,
@@ -115,6 +228,9 @@ def corner_plot(
 
     - (n_params, n_samples)
     - or (n_sets, n_params, n_samples)
+
+    If ``ax`` is provided, the corner plot is embedded inside the
+    bounding box of that axis.
     """
     params = np.asarray(
         parameters,
@@ -177,91 +293,29 @@ def corner_plot(
             "the number of parameters."
         )
 
-    if fig is None:
-        fig, ax_grid = plt.subplots(
-            n_params,
-            n_params,
-            figsize=(15, 15),
-        )
-    else:
-        axes = np.array(fig.axes)
-
-        if axes.size != n_params * n_params:
-            raise ValueError(
-                f"Provided figure has {axes.size} axes, "
-                f"but n_params={n_params} requires "
-                f"{n_params * n_params}."
-            )
-
-        ax_grid = axes.reshape(
-            (n_params, n_params)
-        )
-
-    def _style_ticks(ax):
-        ax.tick_params(
-            axis="x",
-            rotation=45,
-            labelsize=20,
-        )
-        ax.tick_params(
-            axis="y",
-            rotation=45,
-            labelsize=20,
-        )
-        ax.tick_params(
-            which="major",
-            length=10,
-            width=3,
-            direction="out",
-        )
-        ax.tick_params(
-            which="minor",
-            length=5,
-            width=3,
-            direction="out",
-        )
-
-        if max_n_ticks == 0:
-            ax.xaxis.set_major_locator(
-                NullLocator()
-            )
-            ax.yaxis.set_major_locator(
-                NullLocator()
-            )
-        else:
-            ax.xaxis.set_major_locator(
-                MaxNLocator(
-                    max_n_ticks,
-                    prune="lower",
-                )
-            )
-            ax.yaxis.set_major_locator(
-                MaxNLocator(
-                    max_n_ticks,
-                    prune="lower",
-                )
-            )
-            ax.xaxis.set_minor_locator(
-                AutoMinorLocator()
-            )
-            ax.yaxis.set_minor_locator(
-                AutoMinorLocator()
-            )
+    fig, ax_grid = _resolve_corner_grid(
+        n_params=n_params,
+        fig=fig,
+        ax=ax,
+    )
 
     for i in range(n_params):
         for j in range(n_params):
-            ax = ax_grid[i, j]
-            _style_ticks(ax)
+            axis = ax_grid[i, j]
+            _style_corner_axis(
+                axis,
+                max_n_ticks=max_n_ticks,
+            )
 
             if j > i:
-                ax.axis("off")
+                axis.axis("off")
                 continue
 
             if i < n_params - 1:
-                ax.set_xticklabels([])
+                axis.set_xticklabels([])
 
             if j > 0:
-                ax.set_yticklabels([])
+                axis.set_yticklabels([])
 
             if j < i:
                 for s in range(n_sets):
@@ -290,7 +344,7 @@ def corner_plot(
                     ]
 
                     if fill_contours:
-                        ax.contourf(
+                        axis.contourf(
                             norm.T,
                             extent=extent,
                             levels=levels_filled,
@@ -299,7 +353,7 @@ def corner_plot(
                             antialiased=True,
                         )
 
-                    ax.contour(
+                    axis.contour(
                         norm.T,
                         extent=extent,
                         levels=base_levels,
@@ -312,17 +366,17 @@ def corner_plot(
                         xm = np.median(x)
                         ym = np.median(y)
 
-                        ax.axvline(
+                        axis.axvline(
                             xm,
                             color=inner_color,
                             lw=1,
                         )
-                        ax.axhline(
+                        axis.axhline(
                             ym,
                             color=inner_color,
                             lw=1,
                         )
-                        ax.scatter(
+                        axis.scatter(
                             xm,
                             ym,
                             marker="X",
@@ -334,7 +388,7 @@ def corner_plot(
                         )
 
                 if j == 0:
-                    ax.set_ylabel(
+                    axis.set_ylabel(
                         parameter_labels[i],
                         fontsize=25,
                     )
@@ -368,7 +422,7 @@ def corner_plot(
                         )
                         ygrid = kde.evaluate(xgrid)
 
-                        ax.plot(
+                        axis.plot(
                             xgrid,
                             ygrid,
                             lw=1.5,
@@ -396,7 +450,7 @@ def corner_plot(
                             )
 
                             if np.any(sel):
-                                ax.fill_between(
+                                axis.fill_between(
                                     xgrid[sel],
                                     ygrid[sel],
                                     0.0,
@@ -427,7 +481,7 @@ def corner_plot(
                             else inner_color
                         )
 
-                        ax.plot(
+                        axis.plot(
                             centers,
                             counts,
                             lw=1.5,
@@ -469,7 +523,7 @@ def corner_plot(
                             )
 
                             if np.any(sel):
-                                ax.fill_between(
+                                axis.fill_between(
                                     xgrid[sel],
                                     ygrid[sel],
                                     0.0,
@@ -496,7 +550,7 @@ def corner_plot(
                     ) - med
 
                     if show_medians:
-                        ax.axvline(
+                        axis.axvline(
                             med,
                             color=inner_color,
                             lw=1.2,
@@ -513,13 +567,13 @@ def corner_plot(
                             rf"^{{+{fmt(q84)}}}$"
                         )
 
-                        ax.set_title(
+                        axis.set_title(
                             f"{parameter_labels[j]} = {title}",
                             fontsize=20,
                         )
 
-                ax.set_ylim(bottom=0)
-                ax.set_xlim(
+                axis.set_ylim(bottom=0)
+                axis.set_xlim(
                     left=xmin,
                     right=xmax,
                 )
@@ -529,18 +583,20 @@ def corner_plot(
                 )
 
     for k in range(n_params):
-        ax = ax_grid[k, k]
-        ax.set_yticks([])
-        ax.set_yticklabels([])
-        ax.yaxis.set_visible(False)
-        ax.spines["left"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-        ax.spines["top"].set_visible(False)
+        axis = ax_grid[k, k]
+        axis.set_yticks([])
+        axis.set_yticklabels([])
+        axis.yaxis.set_visible(False)
+        axis.spines["left"].set_visible(False)
+        axis.spines["right"].set_visible(False)
+        axis.spines["top"].set_visible(False)
 
-    plt.subplots_adjust(
-        left=0.10,
-        bottom=0.10,
-    )
+    if ax is None:
+        plt.subplots_adjust(
+            left=0.10,
+            bottom=0.10,
+        )
+
     fig.align_labels(ax_grid)
 
     return fig, ax_grid, params

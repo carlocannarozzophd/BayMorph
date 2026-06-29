@@ -6,7 +6,7 @@ from matplotlib.colors import LogNorm
 
 from .style import set_plot_style, style_axes
 
-BAYMORPH_IMAGE_CMAP = "turbo"
+BAYMORPH_IMAGE_CMAP = "gist_earth"
 
 
 def _log_limits(

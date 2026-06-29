@@ -8,7 +8,12 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 
-from .config import load_resolved_config, DEFAULT_CONFIG
+from .config import (
+    load_resolved_config,
+    resolve_config,
+    DEFAULT_CONFIG,
+)
+
 from .outputs import make_output_tree, save_resolved_config, pipeline_paths
 
 from .psf_construction import (
@@ -45,28 +50,85 @@ from baymorph.analysis import (
 
 from baymorph.models import (
     get_model,
-    parameter_labels,
-    parameter_names as model_parameter_names,
+    parameter_labels as model_parameter_labels,
 )
 
 @dataclass
 class RealFitProducts:
     posterior: object | None
-
     best_parameters: dict[str, float]
-
     best_model_image: np.ndarray
-
     residual: np.ndarray
-
     norm_residual: np.ndarray
-
     chi2: float
-
     ndof: int
-
     reduced_chi2: float
 
+    model_name: str = "unknown"
+    noise: np.ndarray | None = None
+
+    radius: np.ndarray | None = None
+    profile_data: np.ndarray | None = None
+    profile_model: np.ndarray | None = None
+    profile_noise: np.ndarray | None = None
+
+    @property
+    def statistics(self) -> dict[str, float]:
+        return {
+            "chi2": self.chi2,
+            "reduced chi2": self.reduced_chi2,
+        }
+    
+    def corner(
+        self,
+        parameter_labels=None,
+        **kwargs,
+    ):
+        if parameter_labels is None:
+            parameter_labels = model_parameter_labels(
+                self.model_name,
+            )
+
+        return corner_plot(
+            self.posterior.posterior_samples.T,
+            parameter_labels=parameter_labels,
+            **kwargs,
+        )
+    
+    def radial_profile(
+        self,
+        ax=None,
+    ):
+        from baymorph.plotting import (
+            plot_radial_profile_diagnostics,
+        )
+
+        return plot_radial_profile_diagnostics(
+            self.radius,
+            self.profile_data,
+            self.profile_model,
+            self.profile_noise,
+            ax=ax,
+        )
+
+    def report(
+        self,
+        observation,
+        **kwargs,
+    ):
+        from baymorph.plotting import (
+            plot_mock_fit_report,
+        )
+
+        return plot_mock_fit_report(
+            observation=observation,
+            fit=self,
+            noise_map=self.noise,
+            statistics=self.statistics,
+            corner_plotter=lambda ax: self.corner(ax=ax),
+            radial_profile_plotter=lambda ax: self.radial_profile(ax=ax),
+            **kwargs,
+        )
 
 def run_real_fit_from_config(
     config: str | Path | dict[str, Any],
@@ -74,7 +136,7 @@ def run_real_fit_from_config(
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
     else:
-        resolved = config
+        resolved = resolve_config(config)
 
     make_output_tree(resolved)
     save_resolved_config(resolved)
@@ -161,6 +223,7 @@ def run_real_fit_from_config(
         )
 
         products = RealFitProducts(
+            model_name=model_name,
             posterior=result,
             best_parameters=best_parameters,
             best_model_image=best_model_image,
@@ -169,6 +232,7 @@ def run_real_fit_from_config(
             chi2=stats["chi2"],
             ndof=stats["ndof"],
             reduced_chi2=stats["reduced_chi2"],
+            noise=image_products.noise,
         )
 
         save_real_fit_products(
@@ -179,15 +243,17 @@ def run_real_fit_from_config(
 
         all_products[model_name] = products
 
-    if len(all_products) > 1:
-        comparison = _compute_bayesian_model_comparison(
-            all_products,
-        )
+    if len(all_products) == 1:
+        return next(iter(all_products.values()))
 
-        save_bayesian_model_comparison(
-            resolved,
-            comparison,
-        )
+    comparison = _compute_bayesian_model_comparison(
+        all_products,
+    )
+
+    save_bayesian_model_comparison(
+        resolved,
+        comparison,
+    )
 
     return all_products
 
@@ -288,6 +354,11 @@ def save_real_fit_products(
             radii=radii,
             mask=image_products.contaminant_mask,
         )
+
+        products.radius = radius
+        products.profile_data = profile_data
+        products.profile_model = profile_model
+        products.profile_noise = profile_noise
 
         residual_sigma_profile = (
             profile_data
@@ -501,7 +572,7 @@ def save_real_fit_products(
     ):
         fig, _, _ = corner_plot(
             products.posterior.posterior_samples.T,
-            parameter_labels=parameter_labels(
+            parameter_labels=model_parameter_labels(
                 model_name,
             ),
         )
@@ -658,7 +729,7 @@ def load_real_fit_products(
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
     else:
-        resolved = config
+        resolved = resolve_config(config)
 
     paths = pipeline_paths(resolved)["fits"][model_name]
 
@@ -672,7 +743,10 @@ def load_real_fit_products(
     with open(paths["dir"] / "fit_summary.json", "r") as f:
         summary = json.load(f)
 
+    image_products = load_image_preparation_products(resolved)
+
     return RealFitProducts(
+        model_name=model_name,
         posterior=None,
         best_parameters={
             key: float(value)
@@ -684,6 +758,7 @@ def load_real_fit_products(
         chi2=float(summary["chi2"]),
         ndof=int(summary["ndof"]),
         reduced_chi2=float(summary["reduced_chi2"]),
+        noise=image_products.noise,
     )
 
 

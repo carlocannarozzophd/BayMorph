@@ -47,6 +47,7 @@ from .simulation import (
     add_poisson_noise,
     convolve_with_psf,
     make_observation,
+    make_observation_from_config,
 )
 from .plotting import (
     corner_plot,
@@ -62,6 +63,7 @@ from .plotting import (
     style_axes,
     plot_fit_summary,
     plot_mock_fit_report,
+    plot_radial_profile_diagnostics,
 )
 from .results import PosteriorResult
 from .pipeline import (
@@ -252,4 +254,6 @@ __all__ = [
     "resolve_fixed_cutout",
     "plot_fit_summary",
     "plot_mock_fit_report",
+    "make_observation_from_config",
+    "plot_radial_profile_diagnostics",
 ]

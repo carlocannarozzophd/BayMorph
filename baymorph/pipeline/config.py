@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -213,7 +214,10 @@ def validate_config(config: dict[str, Any]) -> None:
 def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
     validate_config(config)
 
-    resolved = deep_update(DEFAULT_CONFIG, config)
+    resolved = deep_update(
+        deepcopy(DEFAULT_CONFIG),
+        config,
+    )
 
     resolved["object"] = dict(resolved["object"])
     resolved["data"] = dict(resolved["data"])

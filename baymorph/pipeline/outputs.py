@@ -5,6 +5,7 @@ from typing import Any
 
 import yaml
 
+from .config import resolve_config
 
 def object_output_dir(config: dict[str, Any]) -> Path:
     root = Path(config["outputs"]["root"])
@@ -13,20 +14,29 @@ def object_output_dir(config: dict[str, Any]) -> Path:
 
 
 def make_output_tree(config: dict[str, Any]) -> Path:
+    config = resolve_config(config)
+
     base = object_output_dir(config)
 
     subdirs = [
         base,
+        base / "input",
         base / "image_preparation",
         base / "psf",
         base / "fits",
-        base / "fits" / "single_sersic",
-        base / "fits" / "double_sersic",
         base / "model_comparison",
     ]
 
+    subdirs.extend(
+        base / "fits" / model_name
+        for model_name in config["fit"]["models"]
+    )
+
     for path in subdirs:
-        path.mkdir(parents=True, exist_ok=True)
+        path.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
     return base
 
@@ -54,19 +64,46 @@ def diagnostic_format(config: dict[str, Any]) -> str:
 
 
 def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
+    config = resolve_config(config)
+
     base = object_output_dir(config)
 
     plot_format = diagnostic_format(config)
 
+    input_image = base / "input" / Path(
+        config["data"]["image_path"]
+    ).name
+
+    fit_paths = {}
+
+    for model_name in config["fit"]["models"]:
+        fit_dir = base / "fits" / model_name
+
+        fit_paths[model_name] = {
+            "dir": fit_dir,
+            "fit_results": fit_dir / "fit_results.json",
+            "corner": fit_dir / f"corner.{plot_format}",
+            "residual": fit_dir / f"data_model_residual.{plot_format}",
+            "radial_profile": fit_dir / f"radial_profile.{plot_format}",
+        }
+
     return {
         "base": base,
+
         "config_resolved": base / "config_resolved.yaml",
+
+        "input": {
+            "dir": base / "input",
+            "image": input_image,
+        },
+
         "image_preparation": {
             "dir": base / "image_preparation",
             "prepared_image": base / "image_preparation" / "prepared_image.fits",
             "noise_map": base / "image_preparation" / "noise_map.fits",
             "mask": base / "image_preparation" / "mask.fits",
         },
+
         "psf": {
             "dir": base / "psf",
             "psf_fits": base / "psf" / "psf.fits",
@@ -75,23 +112,12 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
             "candidates_plot": base / "psf" / f"psf_candidates.{plot_format}",
             "diagnostics_plot": base / "psf" / f"psf_diagnostics.{plot_format}",
         },
+
         "fits": {
             "dir": base / "fits",
-            "single_sersic": {
-                "dir": base / "fits" / "single_sersic",
-                "fit_results": base / "fits" / "single_sersic" / "fit_results.json",
-                "corner": base / "fits" / "single_sersic" / f"corner.{plot_format}",
-                "residual": base / "fits" / "single_sersic" / f"data_model_residual.{plot_format}",
-                "radial_profile": base / "fits" / "single_sersic" / f"radial_profile.{plot_format}",
-            },
-            "double_sersic": {
-                "dir": base / "fits" / "double_sersic",
-                "fit_results": base / "fits" / "double_sersic" / "fit_results.json",
-                "corner": base / "fits" / "double_sersic" / f"corner.{plot_format}",
-                "residual": base / "fits" / "double_sersic" / f"data_model_residual.{plot_format}",
-                "radial_profile": base / "fits" / "double_sersic" / f"radial_profile.{plot_format}",
-            },
+            **fit_paths,
         },
+
         "model_comparison": {
             "dir": base / "model_comparison",
             "bayes_factor": base / "model_comparison" / "bayes_factor.json",

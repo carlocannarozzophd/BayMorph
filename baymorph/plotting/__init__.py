@@ -23,6 +23,7 @@ from .images import (
     plot_log_data_model_residual,
     plot_fit_summary,
 )
+from .radial import plot_radial_profile_diagnostics
 __all__ = [
     "set_plot_style",
     "style_axes",
@@ -37,4 +38,5 @@ __all__ = [
     "plot_log_data_model_residual",
     "plot_fit_summary",
     "plot_mock_fit_report",
+    "plot_radial_profile_diagnostics"
 ]

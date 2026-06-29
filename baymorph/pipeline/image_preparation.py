@@ -22,7 +22,7 @@ from baymorph.core.noise import estimate_noise_map
 from baymorph.pipeline.segmentation import select_segment_near_position
 from .config import load_resolved_config
 from .outputs import make_output_tree, pipeline_paths, save_resolved_config
-from .cutout import resolve_cutout
+from .cutout import CutoutDefinition, resolve_cutout
 
 @dataclass
 class RealFITSPreparation:
