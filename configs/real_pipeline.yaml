@@ -13,7 +13,7 @@ data:
     size: 600
 
 outputs:
-  root: outputs
+  root: runs
   overwrite: false
 
 preparation:

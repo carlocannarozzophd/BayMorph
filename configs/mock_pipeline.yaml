@@ -4,14 +4,14 @@ object:
   name: mock_pipeline
 
 data:
-  image_path: notebooks/outputs/mock_pipeline/input/mock_pipeline.fits
+  image_path: runs/mock_pipeline/input/mock_pipeline.fits
   target_position: {x: 50, y: 50}
   cutout:
     mode: fixed
     size: 101
 
 outputs:
-  root: notebooks/outputs/mock_pipeline
+  root: runs
   overwrite: true
 
 simulation:
