@@ -1,18 +1,28 @@
 # BayMorph
 
-> **Status:** active development. BayMorph has been validated on synthetic datasets and includes an end-to-end real-galaxy demonstration, but interfaces may still evolve before a stable public release.
+> [!IMPORTANT]
+> **Status:** Active development. BayMorph has been validated on synthetic datasets and includes an end-to-end real-galaxy demonstration, but interfaces may still evolve before a stable public release.
 
-BayMorph is an open-source Python package for **Bayesian morphological modelling of astronomical images**. It provides a configurable workflow from FITS images to structural galaxy fitting, Bayesian model comparison, and publication-quality diagnostics.
+BayMorph is an open-source Python framework for **Bayesian morphological modelling of astronomical images**. It provides a configurable workflow from FITS images to structural galaxy fitting, Bayesian model comparison, and publication-quality diagnostics.
 
 BayMorph is designed to be more than a fitting routine: it is a reproducible scientific workflow for galaxy structural decomposition, including image preparation, background and noise estimation, masking, PSF handling, Bayesian inference, and diagnostic reporting.
 
-> **BayMorph is not designed as a standalone fitting engine only.**
+> [!NOTE]
+> ## BayMorph adopts a **workflow-first philosophy**
 >
-> Many morphological-analysis tools in the literature focus primarily on the optimization or inference step, assuming that the image, mask, PSF, noise model, and diagnostic workflow have already been prepared externally.
+> **BayMorph treats galaxy structural decomposition as a complete scientific workflow rather than an isolated fitting problem.**
 >
-> **BayMorph instead adopts a pipeline-first philosophy:** it treats galaxy structural decomposition as a complete, reproducible scientific workflow, from FITS image preparation to Bayesian model comparison and diagnostic reporting.
+> Instead of focusing exclusively on the model-fitting stage, BayMorph integrates the entire analysis chain within a single, configurable, and reproducible framework:
 >
-> In this sense, BayMorph is intended to help users not only fit a galaxy model, but also document, reproduce, inspect, and scientifically validate the full analysis chain.
+> - FITS image preparation
+> - background and noise estimation
+> - source detection and contaminant masking
+> - PSF construction or ingestion
+> - Bayesian structural modelling
+> - Bayesian model comparison
+> - publication-quality diagnostics and scientific reports
+>
+> **The objective of BayMorph is therefore not simply to fit a galaxy model, but to make the complete structural-analysis process transparent, reproducible, scientifically inspectable, and easy to apply to both synthetic and real astronomical observations.**
 
 ---
 
