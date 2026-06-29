@@ -6,6 +6,14 @@ BayMorph is an open-source Python package for **Bayesian morphological modelling
 
 BayMorph is designed to be more than a fitting routine: it is a reproducible scientific workflow for galaxy structural decomposition, including image preparation, background and noise estimation, masking, PSF handling, Bayesian inference, and diagnostic reporting.
 
+> **BayMorph is not designed as a standalone fitting engine only.**
+>
+> Many morphological-analysis tools in the literature focus primarily on the optimization or inference step, assuming that the image, mask, PSF, noise model, and diagnostic workflow have already been prepared externally.
+>
+> **BayMorph instead adopts a pipeline-first philosophy:** it treats galaxy structural decomposition as a complete, reproducible scientific workflow, from FITS image preparation to Bayesian model comparison and diagnostic reporting.
+>
+> In this sense, BayMorph is intended to help users not only fit a galaxy model, but also document, reproduce, inspect, and scientifically validate the full analysis chain.
+
 ---
 
 ## Overview
