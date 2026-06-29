@@ -39,9 +39,10 @@ def test_initialize_pipeline_run_creates_output_tree(tmp_path):
     assert base.is_dir()
     assert (base / "config_resolved.yaml").exists()
     assert (base / "psf").is_dir()
-    assert (base / "fits" / "single_sersic").is_dir()
-    assert (base / "fits" / "double_sersic").is_dir()
+    assert (base / "fits").is_dir()
 
+    for model_name in resolved["fit"]["models"]:
+        assert (base / "fits" / model_name).is_dir()
 
 def test_workflow_entrypoints_accept_dict_config(tmp_path):
     config = minimal_config(tmp_path)

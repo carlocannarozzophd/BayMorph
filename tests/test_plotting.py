@@ -5,7 +5,6 @@ from baymorph import plot_1d_posterior, plot_2d_samples
 from baymorph import (
     corner_plot,
     make_plot,
-    set_plot_style,
 )
 
 def test_plot_1d_posterior():

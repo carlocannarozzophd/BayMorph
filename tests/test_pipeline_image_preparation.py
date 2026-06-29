@@ -1,6 +1,4 @@
-from astropy.io import fits
 import numpy as np
-import pytest
 
 from baymorph import (
     ImagePreparationProducts,
