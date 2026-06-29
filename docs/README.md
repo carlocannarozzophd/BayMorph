@@ -1,132 +1,66 @@
 # BayMorph Documentation
 
-BayMorph is a Bayesian framework for the morphological analysis of astronomical images.
+This directory contains the technical documentation for BayMorph.
 
-The project combines image preparation, PSF handling, galaxy modelling, Bayesian inference, model comparison, and scientific diagnostics within a unified workflow.
-
-## Current Capabilities
-
-### Image Preparation
-
-- FITS image ingestion
-- Automatic target cutout extraction
-- Background estimation and subtraction
-- Source-masked noise-map generation
-- Source detection and segmentation
-- Automatic contaminant masking
-
-### Point Spread Functions
-
-- Gaussian PSF models
-- Empirical PSF construction from field stars
-- PSF candidate selection and filtering
-- PSF-convolved galaxy modelling
-
-The empirical PSF workflow is now validated for TARGET when a sufficiently large candidate sample is used. In practice, BayMorph should aim for at least 10 usable stars, with 20–30 candidates preferred for robust empirical PSF construction.
-
-### Galaxy Modelling
-
-- Single-Sérsic models
-- Double-Sérsic models
-- Bulge + disk style decompositions
-- PSF-convolved forward modelling
-
-### Bayesian Inference
-
-- Generic Dynesty fitting
-- Bayesian evidence estimation
-- Evidence uncertainty estimation (`logZerr`)
-- Bayes-factor model comparison
-- Reproducible sampling through random seeds
-- Parallel nested sampling
-- Configurable convergence thresholds (`dlogz`)
-- Multi-model fitting workflows
-
-### Posterior Analysis
-
-- Weighted posterior statistics
-- Equal-weight posterior samples
-- Posterior summaries
-- Corner plots
-- Posterior profile bands
-
-### Diagnostics
-
-- Model-image generation
-- Residual-image generation
-- Sigma-normalized residual maps
-- Radial-profile diagnostics
-- Radial residual diagnostics
-- Fit summaries
-- Bayesian model-comparison summaries
+BayMorph is a Bayesian framework for morphological modelling of astronomical images. The main repository README provides the user-facing overview, installation instructions, quick-start example, and links to the tutorial notebooks. The documents in this directory describe the architecture and validation strategy in more detail.
 
 ---
 
-## Current Workflow
+## Documents
 
-```text
-FITS image
-    ↓
-Image preparation
-    ↓
-Source detection and masking
-    ↓
-PSF construction
-    ↓
-Single-Sérsic fit
-Double-Sérsic fit
-    ↓
-Bayesian model comparison
-    ↓
-Diagnostics
-```
+### `ARCHITECTURE.md`
+
+Describes the internal structure of BayMorph, including:
+
+- design philosophy
+- public and internal APIs
+- package organization
+- pipeline architecture
+- model, PSF, fitting, and plotting components
+- run-output organization
+
+Read this document if you want to understand how the package is structured or where new functionality should be added.
 
 ---
 
-## Documentation Structure
+### `VALIDATION.md`
 
-### Architecture
+Describes the validation strategy, including:
 
-See:
+- synthetic single-Sérsic validation
+- end-to-end mock-pipeline validation
+- real-galaxy demonstration on TARGET
+- the purpose of each official notebook
+- current validation limits and next steps
 
-```text
-docs/ARCHITECTURE.md
-```
-
-for package structure, workflow design, implementation details, and architectural decisions.
-
-### Roadmap
-
-See:
-
-```text
-ROADMAP.md
-```
-
-for current development priorities, validation status, and planned future developments.
+Read this document if you want to understand what has been tested and what remains under active validation.
 
 ---
 
-## Development Status
+## Related top-level documents
 
-BayMorph is currently in an active scientific validation phase.
+### `ROADMAP.md`
 
-The software has successfully completed its first end-to-end real-galaxy validation campaign, including:
+Summarizes near-term, medium-term, and long-term development plans.
 
-- image preparation
-- source detection and segmentation
-- contaminant masking
-- Gaussian and empirical PSF workflows
-- single-Sérsic fitting
-- double-Sérsic fitting
-- Bayesian model comparison
-- residual diagnostics
-- posterior diagnostics
+### `DECISIONS.md`
 
-Current validation target:
+Records accepted architectural decisions, including the choice of Bayesian evidence, `dynesty`, source-masked noise estimation, diagnostic products, `configs/`, and `runs/`.
 
-```text
-TARGET
-```
+---
 
-Interfaces and workflow details may continue to evolve before the first public release, but the core scientific workflow is operational and under active validation on real astronomical datasets.
+## Recommended reading order
+
+For new users:
+
+1. `README.md`
+2. `notebooks/01_SingleSersic_Validation.ipynb`
+3. `notebooks/02_MockPipeline_Validation.ipynb`
+4. `notebooks/TARGET_BayMorph_Test.ipynb`
+
+For developers:
+
+1. `docs/ARCHITECTURE.md`
+2. `docs/VALIDATION.md`
+3. `DECISIONS.md`
+4. `ROADMAP.md`
