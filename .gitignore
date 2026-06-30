@@ -4,7 +4,9 @@
 
 __pycache__/
 *.py[cod]
-*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 
 # ------------------------------------------------------------------
 # Virtual environments
@@ -57,3 +59,24 @@ data/
 # ------------------------------------------------------------------
 
 .vscode/
+
+# ------------------------------------------------------------------
+# BayMorph outputs
+# ------------------------------------------------------------------
+
+output/
+outputs/
+
+# Dynesty checkpoints
+*.save
+*.resume
+
+# NumPy serialized arrays
+*.npy
+*.npz
+
+# Temporary tables
+*.csv
+
+# Logs
+*.log
