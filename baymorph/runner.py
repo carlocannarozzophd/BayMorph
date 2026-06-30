@@ -13,6 +13,7 @@ from .pipeline import (
     run_real_fit,
 )
 
+
 @dataclass
 class BayMorphRunner:
     """High-level orchestrator for BayMorph workflows."""
@@ -24,6 +25,10 @@ class BayMorphRunner:
     psf_products: Any = None
     fit_result: Any = None
     profile_bands: Any = None
+
+    # ------------------------------------------------------------
+    # Constructors
+    # ------------------------------------------------------------
 
     @classmethod
     def from_config(cls, config):
@@ -39,63 +44,119 @@ class BayMorphRunner:
             return None
 
         return Path(value)
+    
+    @property
+    def image(self):
+        """Image preparation products."""
+        return self.image_preparation_products
 
-    def prepare_image(self):
-        """Run image preparation and store the resulting products."""
+
+    @property
+    def psf_candidates(self):
+        """Selected PSF candidates."""
+        return self.psf_candidate_products
+
+
+    @property
+    def psf(self):
+        """Empirical PSF."""
+        return self.psf_products
+
+
+    @property
+    def results(self):
+        """Bayesian fitting results."""
+        return self.fit_result
+
+    # ------------------------------------------------------------
+    # Console utilities
+    # ------------------------------------------------------------
+
+    @staticmethod
+    def _separator():
+        print("────────────────────────────────────────────────────")
+
+    @staticmethod
+    def _status(message: str):
+        print(f"✓ {message}")
+
+    @staticmethod
+    def _info(message: str):
+        print(f"• {message}")
+
+    # ------------------------------------------------------------
+    # Pipeline steps
+    # ------------------------------------------------------------
+
+    def prepare_image(
+        self,
+        *,
+        return_result: bool = False,
+    ):
+        """Run image preparation."""
+
         self.image_preparation_products = run_image_preparation(
             self.config,
         )
 
-        return self
+        self._status("Image preparation completed")
 
-    def select_psf_candidates(self):
-        """Run PSF candidate selection and store the results."""
+        if return_result:
+            return self.image_preparation_products
+
+
+    def select_psf_candidates(
+        self,
+        *,
+        return_result: bool = False,
+    ):
+        """Run PSF candidate selection."""
+
         self.psf_candidate_products = (
             run_psf_candidate_selection(
                 self.config,
             )
         )
 
-        return self
+        try:
+            n = len(self.psf_candidate_products)
+            self._status(f"{n} PSF candidates selected")
+        except Exception:
+            self._status("PSF candidates selected")
 
-    def build_psf(self):
-        """Run empirical PSF construction and store the products."""
+        if return_result:
+            return self.psf_candidate_products
+
+
+    def build_psf(
+        self,
+        *,
+        return_result: bool = False,
+    ):
+        """Build the empirical PSF."""
+
         self.psf_products = run_psf_construction(
             self.config,
         )
 
-        return self
+        self._status("Empirical PSF constructed")
+
+        if return_result:
+            return self.psf_products
 
 
-    def fit(self):
-        """Run the real-image fitting workflow and store the result."""
+    def fit(
+        self,
+        *,
+        return_result: bool = False,
+    ):
+        """Run Bayesian fitting."""
+
         self.fit_result = run_real_fit(
             self.config,
         )
 
-        return self
+        self._status("Bayesian fitting completed")
 
-    def posterior_profiles(self):
-        if self.fit_result is None:
-            raise RuntimeError(
-                "Run fit() before posterior_profiles()."
-            )
-
-        raise NotImplementedError(
-            "Posterior profile diagnostics require a full fit result."
-        )
-
-    def run_all(
-        self,
-        *,
-        include_posterior_profiles=False,
-    ):
-        self.prepare_image()
-        self.select_psf_candidates()
-        self.build_psf()
-        self.fit()
-
-        if include_posterior_profiles:
-            self.posterior_profiles()
-
-        return self
+        if return_result:
+            return self.fit_result

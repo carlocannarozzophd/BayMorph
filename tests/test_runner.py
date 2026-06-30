@@ -1,5 +1,3 @@
-import pytest
-
 from baymorph import BayMorphRunner
 
 
@@ -27,19 +25,6 @@ def test_runner_output_dir_can_be_missing():
     )
 
     assert runner.output_dir is None
-
-
-def test_runner_step_methods_are_not_implemented_yet():
-    runner = BayMorphRunner.from_config(
-        {
-            "object_name": "test_galaxy",
-        }
-    )
-
-    runner.fit_result = object()
-
-    with pytest.raises(NotImplementedError):
-        runner.posterior_profiles()
 
 
 def test_runner_initializes_workflow_products_to_none():
@@ -74,10 +59,9 @@ def test_runner_prepare_image_stores_products(monkeypatch):
         }
     )
 
-    result = runner.prepare_image()
+    runner.prepare_image()
 
-    assert result is runner
-    assert runner.image_preparation_products is expected_products
+    assert runner.image is expected_products
 
 
 def test_runner_select_psf_candidates_stores_products(
@@ -105,13 +89,9 @@ def test_runner_select_psf_candidates_stores_products(
         }
     )
 
-    result = runner.select_psf_candidates()
+    runner.select_psf_candidates()
 
-    assert result is runner
-    assert (
-        runner.psf_candidate_products
-        is expected_products
-    )
+    assert runner.psf_candidates is expected_products
 
 
 def test_runner_build_psf_stores_products(monkeypatch):
@@ -132,10 +112,9 @@ def test_runner_build_psf_stores_products(monkeypatch):
         }
     )
 
-    result = runner.build_psf()
+    runner.build_psf()
 
-    assert result is runner
-    assert runner.psf_products is expected_products
+    assert runner.psf is expected_products
 
 
 def test_runner_fit_stores_result(monkeypatch):
@@ -156,77 +135,9 @@ def test_runner_fit_stores_result(monkeypatch):
         }
     )
 
-    result = runner.fit()
+    runner.fit()
 
-    assert result is runner
-    assert runner.fit_result is expected_result
-
-def test_runner_run_all_runs_available_steps(monkeypatch):
-    calls = []
-
-    def fake_prepare_image(self):
-        calls.append("prepare_image")
-        return self
-
-    def fake_select_psf_candidates(self):
-        calls.append("select_psf_candidates")
-        return self
-
-    def fake_build_psf(self):
-        calls.append("build_psf")
-        return self
-
-    def fake_fit(self):
-        calls.append("fit")
-        return self
-
-    monkeypatch.setattr(
-        BayMorphRunner,
-        "prepare_image",
-        fake_prepare_image,
-    )
-    monkeypatch.setattr(
-        BayMorphRunner,
-        "select_psf_candidates",
-        fake_select_psf_candidates,
-    )
-    monkeypatch.setattr(
-        BayMorphRunner,
-        "build_psf",
-        fake_build_psf,
-    )
-    monkeypatch.setattr(
-        BayMorphRunner,
-        "fit",
-        fake_fit,
-    )
-
-    runner = BayMorphRunner.from_config(
-        {
-            "object_name": "test_galaxy",
-        }
-    )
-
-    result = runner.run_all()
-
-    assert result is runner
-    assert calls == [
-        "prepare_image",
-        "select_psf_candidates",
-        "build_psf",
-        "fit",
-    ]
-
-
-def test_runner_posterior_profiles_requires_fit_result():
-    runner = BayMorphRunner.from_config(
-        {
-            "object_name": "test_galaxy",
-        }
-    )
-
-    with pytest.raises(RuntimeError):
-        runner.posterior_profiles()
+    assert runner.results is expected_result
 
 
 def test_runner_fit_stores_posterior_result(monkeypatch):
@@ -246,7 +157,6 @@ def test_runner_fit_stores_posterior_result(monkeypatch):
         }
     )
 
-    result = runner.fit()
+    runner.fit()
 
-    assert result is runner
-    assert runner.fit_result is expected_result
+    assert runner.results is expected_result

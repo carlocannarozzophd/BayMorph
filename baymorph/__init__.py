@@ -65,7 +65,7 @@ from .plotting import (
     plot_mock_fit_report,
     plot_radial_profile_diagnostics,
 )
-from .results import PosteriorResult
+from .results import PosteriorResult, RealFitProducts
 from .pipeline import (
     ImagePreparationProducts,
     PSFCandidate,
@@ -113,7 +113,6 @@ from .pipeline import (
     stack_psf_cutouts,
     subtract_outer_background,
     validate_config,
-    RealFitProducts,
     load_real_fit_products,
     run_real_fit_from_config,
     save_real_fit_products,

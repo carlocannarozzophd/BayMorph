@@ -61,7 +61,6 @@ from .psf_construction import (
     crop_center,
 )
 from .real_fit import (
-    RealFitProducts,
     load_real_fit_products,
     run_real_fit_from_config,
     save_real_fit_products,
@@ -71,6 +70,8 @@ from .cutout import (
     resolve_cutout,
     resolve_fixed_cutout,
 )
+
+from baymorph.results import RealFitProducts
 
 __all__ = [
     "RealFITSPreparation",

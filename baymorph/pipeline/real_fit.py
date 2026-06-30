@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -53,82 +52,8 @@ from baymorph.models import (
     parameter_labels as model_parameter_labels,
 )
 
-@dataclass
-class RealFitProducts:
-    posterior: object | None
-    best_parameters: dict[str, float]
-    best_model_image: np.ndarray
-    residual: np.ndarray
-    norm_residual: np.ndarray
-    chi2: float
-    ndof: int
-    reduced_chi2: float
+from baymorph.results import RealFitProducts
 
-    model_name: str = "unknown"
-    noise: np.ndarray | None = None
-
-    radius: np.ndarray | None = None
-    profile_data: np.ndarray | None = None
-    profile_model: np.ndarray | None = None
-    profile_noise: np.ndarray | None = None
-
-    @property
-    def statistics(self) -> dict[str, float]:
-        return {
-            "chi2": self.chi2,
-            "reduced chi2": self.reduced_chi2,
-        }
-    
-    def corner(
-        self,
-        parameter_labels=None,
-        **kwargs,
-    ):
-        if parameter_labels is None:
-            parameter_labels = model_parameter_labels(
-                self.model_name,
-            )
-
-        return corner_plot(
-            self.posterior.posterior_samples.T,
-            parameter_labels=parameter_labels,
-            **kwargs,
-        )
-    
-    def radial_profile(
-        self,
-        ax=None,
-    ):
-        from baymorph.plotting import (
-            plot_radial_profile_diagnostics,
-        )
-
-        return plot_radial_profile_diagnostics(
-            self.radius,
-            self.profile_data,
-            self.profile_model,
-            self.profile_noise,
-            ax=ax,
-        )
-
-    def report(
-        self,
-        observation,
-        **kwargs,
-    ):
-        from baymorph.plotting import (
-            plot_mock_fit_report,
-        )
-
-        return plot_mock_fit_report(
-            observation=observation,
-            fit=self,
-            noise_map=self.noise,
-            statistics=self.statistics,
-            corner_plotter=lambda ax: self.corner(ax=ax),
-            radial_profile_plotter=lambda ax: self.radial_profile(ax=ax),
-            **kwargs,
-        )
 
 def run_real_fit_from_config(
     config: str | Path | dict[str, Any],
