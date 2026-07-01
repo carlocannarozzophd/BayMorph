@@ -7,7 +7,23 @@ from typing import Any
 
 @dataclass(frozen=True)
 class ModelDefinition:
-    """Complete description of a BayMorph model."""
+    """Definition of a morphological model registered in BayMorph.
+
+    Parameters
+    ----------
+    name : str
+        Unique model identifier.
+    parameter_names : list of str
+        Ordered names of the model parameters.
+    parameter_labels : list of str
+        Human-readable labels corresponding to ``parameter_names``.
+    factory_name : str
+        Name of the factory class responsible for constructing the model.
+    factory : callable, optional
+        Factory callable used to instantiate the model. This may be ``None``
+        when the model definition is registered before the corresponding
+        factory is available.
+    """
 
     name: str
     parameter_names: list[str]

@@ -1,15 +1,19 @@
 """Morphological models for BayMorph."""
 
+# Register built-in model definitions.
+from . import builtin as _builtin  # noqa: F401
 from .composite import CompositeModel
 from .convolved import ConvolvedModel
 from .double_sersic import DoubleSersicModel
-from .labels import parameter_labels, parameter_names
-from .registry import get_model, registered_models
+from .labels import (
+    parameter_labels,
+    parameter_names,
+)
+from .registry import (
+    get_model,
+    registered_models,
+)
 from .sersic import SersicModel
-
-# Register built-in model definitions.
-from . import builtin as _builtin  # noqa: F401
-
 
 __all__ = [
     "SersicModel",

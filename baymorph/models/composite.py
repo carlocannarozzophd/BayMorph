@@ -4,7 +4,15 @@ import numpy as np
 
 
 class CompositeModel:
-    """Sum of multiple renderable models."""
+    """Composite model formed by the sum of multiple renderable components.
+
+    Parameters
+    ----------
+    components : iterable
+        Collection of model objects exposing a ``render(shape=...)`` method.
+        The rendered image is obtained by summing the contribution of every
+        component.
+    """
 
     def __init__(
         self,
@@ -18,7 +26,19 @@ class CompositeModel:
         self,
         shape,
     ):
-        """Render all components and sum them."""
+        """Render the composite model.
+
+        Parameters
+        ----------
+        shape : tuple of int
+            Output image shape as ``(ny, nx)``.
+
+        Returns
+        -------
+        ndarray
+            Image obtained by summing the rendered contribution of every
+            component.
+        """
         image = np.zeros(
             shape,
             dtype=float,

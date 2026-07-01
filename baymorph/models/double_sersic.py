@@ -1,25 +1,32 @@
-"""Double Sérsic model."""
+from __future__ import annotations
 
-from .composite import CompositeModel
-from .sersic import SersicModel
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 
-class DoubleSersicModel(
-    CompositeModel,
-):
-    """Convenience wrapper for a bulge+disk Sérsic model."""
+@dataclass(frozen=True)
+class ModelDefinition:
+    """Definition of a morphological model registered in BayMorph.
 
-    def __init__(
-        self,
-        bulge: SersicModel,
-        disk: SersicModel,
-    ):
-        self.bulge = bulge
-        self.disk = disk
+    Parameters
+    ----------
+    name : str
+        Unique model identifier.
+    parameter_names : list of str
+        Ordered names of the model parameters.
+    parameter_labels : list of str
+        Human-readable labels corresponding to ``parameter_names``.
+    factory_name : str
+        Name of the factory class responsible for constructing the model.
+    factory : callable, optional
+        Factory callable used to instantiate the model. This may be ``None``
+        when the model definition is registered before the corresponding
+        factory is available.
+    """
 
-        super().__init__(
-            [
-                bulge,
-                disk,
-            ]
-        )
+    name: str
+    parameter_names: list[str]
+    parameter_labels: list[str]
+    factory_name: str
+    factory: Callable[..., Any] | None = None

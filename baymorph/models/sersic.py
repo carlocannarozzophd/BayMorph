@@ -8,7 +8,25 @@ from scipy.special import gammaincinv
 
 @dataclass
 class SersicModel:
-    """Single-component Sersic model."""
+    """Single-component Sérsic surface-brightness model.
+
+    Parameters
+    ----------
+    flux : float
+        Total integrated flux of the model.
+    re : float
+        Effective (half-light) radius, in pixels.
+    n : float
+        Sérsic index.
+    q : float
+        Projected axis ratio.
+    theta : float
+        Position angle, in radians.
+    x0 : float
+        X-coordinate of the model center, in pixels.
+    y0 : float
+        Y-coordinate of the model center, in pixels.
+    """
 
     flux: float
     re: float
@@ -22,7 +40,23 @@ class SersicModel:
         self,
         shape: tuple[int, int],
     ) -> np.ndarray:
-        """Render the Sersic model on a pixel-centered grid."""
+        """Render the Sérsic model on a pixel-centered grid.
+
+        Parameters
+        ----------
+        shape : tuple of int
+            Output image shape as ``(ny, nx)``.
+
+        Returns
+        -------
+        ndarray
+            Rendered image normalized to the requested total flux.
+
+        Raises
+        ------
+        ValueError
+            If the rendered model has a non-positive normalization.
+        """
         ny, nx = shape
         y, x = np.mgrid[0:ny, 0:nx]
 
@@ -45,7 +79,8 @@ class SersicModel:
         )
 
         intensity = np.exp(
-            -bn * (
+            -bn
+            * (
                 (radius / self.re) ** (1.0 / self.n)
                 - 1.0
             )

@@ -12,8 +12,19 @@ _BUILTIN_FACTORY_NAMES = {
 
 
 def register_builtin_models() -> None:
-    """Register BayMorph built-in model definitions."""
+    """Register the built-in BayMorph model definitions.
 
+    This function populates the global model registry with the built-in
+    morphological models shipped with BayMorph. Each registered model stores
+    its parameter names, display labels, and the name of the factory class
+    responsible for constructing the corresponding model.
+
+    Notes
+    -----
+    This function is executed automatically when
+    :mod:`baymorph.models.builtin` is imported. Users normally do not need to
+    call it explicitly.
+    """
     for model_name, factory_name in _BUILTIN_FACTORY_NAMES.items():
         register_model(
             ModelDefinition(
