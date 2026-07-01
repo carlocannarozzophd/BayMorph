@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Configuration loading, validation, and resolution for BayMorph pipelines."""
+
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -178,7 +180,29 @@ DEFAULT_CONFIG = {
     },
 }
 
+
 def load_config(path: str | Path) -> dict[str, Any]:
+    """Load a BayMorph pipeline configuration from a YAML file.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Path to the YAML configuration file.
+
+    Returns
+    -------
+    dict
+        Raw configuration dictionary loaded from disk.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the configuration file does not exist.
+    ValueError
+        If the YAML file is empty.
+    TypeError
+        If the YAML top level is not a mapping.
+    """
     path = Path(path)
 
     if not path.exists():
@@ -197,6 +221,18 @@ def load_config(path: str | Path) -> dict[str, Any]:
 
 
 def validate_config(config: dict[str, Any]) -> None:
+    """Validate required top-level BayMorph configuration entries.
+
+    Parameters
+    ----------
+    config : dict
+        Raw or partially resolved configuration dictionary.
+
+    Raises
+    ------
+    ValueError
+        If a required top-level section or required entry is missing.
+    """
     missing = [key for key in REQUIRED_TOP_LEVEL_KEYS if key not in config]
     if missing:
         raise ValueError(f"Missing required config sections: {missing}")
@@ -212,6 +248,24 @@ def validate_config(config: dict[str, Any]) -> None:
 
 
 def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Merge a user configuration with BayMorph defaults.
+
+    Parameters
+    ----------
+    config : dict
+        User configuration dictionary.
+
+    Returns
+    -------
+    dict
+        Fully resolved configuration dictionary containing default values for
+        omitted optional sections.
+
+    Raises
+    ------
+    ValueError
+        If the input configuration is missing required entries.
+    """
     validate_config(config)
 
     resolved = deep_update(
@@ -226,10 +280,6 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
     resolved["object"]["name"] = str(resolved["object"]["name"])
     resolved["data"]["image_path"] = str(Path(resolved["data"]["image_path"]))
     resolved["outputs"]["root"] = str(Path(resolved["outputs"]["root"]))
-
-    # --------------------------------------------------
-    # Backward compatibility for cutout configuration
-    # --------------------------------------------------
 
     data_cfg = resolved["data"]
 
@@ -246,10 +296,37 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_resolved_config(path: str | Path) -> dict[str, Any]:
+    """Load, validate, and resolve a BayMorph YAML configuration.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Path to the YAML configuration file.
+
+    Returns
+    -------
+    dict
+        Resolved configuration dictionary.
+    """
     return resolve_config(load_config(path))
 
 
 def deep_update(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
+    """Recursively update a nested dictionary.
+
+    Parameters
+    ----------
+    base : dict
+        Base dictionary.
+    updates : dict
+        Dictionary containing replacement or nested update values.
+
+    Returns
+    -------
+    dict
+        Updated dictionary. Nested dictionaries are recursively merged, while
+        non-dictionary values replace the corresponding base value.
+    """
     result = dict(base)
 
     for key, value in updates.items():

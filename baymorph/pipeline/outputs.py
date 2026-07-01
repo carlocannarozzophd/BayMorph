@@ -1,3 +1,5 @@
+"""Output-path management for BayMorph pipeline runs."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,13 +9,38 @@ import yaml
 
 from .config import resolve_config
 
+
 def object_output_dir(config: dict[str, Any]) -> Path:
+    """Return the base output directory for one target object.
+
+    Parameters
+    ----------
+    config : dict
+        Resolved or resolvable pipeline configuration.
+
+    Returns
+    -------
+    pathlib.Path
+        Output directory for the configured object.
+    """
     root = Path(config["outputs"]["root"])
     object_name = config["object"]["name"]
     return root / object_name
 
 
 def make_output_tree(config: dict[str, Any]) -> Path:
+    """Create the standard BayMorph output directory tree.
+
+    Parameters
+    ----------
+    config : dict
+        Pipeline configuration.
+
+    Returns
+    -------
+    pathlib.Path
+        Base output directory for the configured object.
+    """
     config = resolve_config(config)
 
     base = object_output_dir(config)
@@ -42,6 +69,18 @@ def make_output_tree(config: dict[str, Any]) -> Path:
 
 
 def save_resolved_config(config: dict[str, Any]) -> Path:
+    """Save the resolved pipeline configuration to disk.
+
+    Parameters
+    ----------
+    config : dict
+        Resolved or resolvable pipeline configuration.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the saved resolved configuration file.
+    """
     make_output_tree(config)
     path = pipeline_paths(config)["config_resolved"]
 
@@ -52,6 +91,18 @@ def save_resolved_config(config: dict[str, Any]) -> Path:
 
 
 def diagnostic_format(config: dict[str, Any]) -> str:
+    """Return the configured diagnostic-plot file format.
+
+    Parameters
+    ----------
+    config : dict
+        Pipeline configuration.
+
+    Returns
+    -------
+    str
+        Lowercase diagnostic file extension.
+    """
     return str(
         config.get(
             "diagnostics",
@@ -64,6 +115,20 @@ def diagnostic_format(config: dict[str, Any]) -> str:
 
 
 def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
+    """Build the standard output-path dictionary for a pipeline run.
+
+    Parameters
+    ----------
+    config : dict
+        Pipeline configuration.
+
+    Returns
+    -------
+    dict
+        Nested dictionary containing output directories and file paths for
+        image preparation, PSF construction, fitting, diagnostics, and model
+        comparison products.
+    """
     config = resolve_config(config)
 
     base = object_output_dir(config)
@@ -89,21 +154,17 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "base": base,
-
         "config_resolved": base / "config_resolved.yaml",
-
         "input": {
             "dir": base / "input",
             "image": input_image,
         },
-
         "image_preparation": {
             "dir": base / "image_preparation",
             "prepared_image": base / "image_preparation" / "prepared_image.fits",
             "noise_map": base / "image_preparation" / "noise_map.fits",
             "mask": base / "image_preparation" / "mask.fits",
         },
-
         "psf": {
             "dir": base / "psf",
             "psf_fits": base / "psf" / "psf.fits",
@@ -112,12 +173,10 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
             "candidates_plot": base / "psf" / f"psf_candidates.{plot_format}",
             "diagnostics_plot": base / "psf" / f"psf_diagnostics.{plot_format}",
         },
-
         "fits": {
             "dir": base / "fits",
             **fit_paths,
         },
-
         "model_comparison": {
             "dir": base / "model_comparison",
             "bayes_factor": base / "model_comparison" / "bayes_factor.json",

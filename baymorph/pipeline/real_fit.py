@@ -1,50 +1,50 @@
+"""Real-galaxy fitting workflow."""
+
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
-import json
 import numpy as np
-from .config import (
-    load_resolved_config,
-    resolve_config,
-    DEFAULT_CONFIG,
-)
-
-from .outputs import make_output_tree, save_resolved_config, pipeline_paths
-
-from .psf_construction import (
-    load_empirical_psf,
-)
-
-from baymorph.fitting.factories import (
-    make_single_sersic_psf_sky_model,
-    make_double_sersic_psf_sky_model,
-)
-
-from .image_preparation import (
-    load_image_preparation_products,
-)
-
-from baymorph.fitting.parameters import (
-    Parameter,
-    ParameterSet,
-)
 
 from baymorph.fitting import DynestyFitter
-
+from baymorph.fitting.factories import (
+    make_double_sersic_psf_sky_model,
+    make_single_sersic_psf_sky_model,
+)
+from baymorph.fitting.parameters import Parameter, ParameterSet
+from baymorph.models import get_model
+from baymorph.results import RealFitProducts
 from baymorph.simulation.psf import GaussianPSF
 
-from baymorph.models import (
-    get_model,
+from .config import (
+    DEFAULT_CONFIG,
+    load_resolved_config,
+    resolve_config,
 )
-
-from baymorph.results import RealFitProducts
+from .image_preparation import load_image_preparation_products
+from .outputs import make_output_tree, pipeline_paths, save_resolved_config
+from .psf_construction import load_empirical_psf
 
 
 def run_real_fit_from_config(
     config: str | Path | dict[str, Any],
 ):
+    """Run real-galaxy model fitting from a pipeline configuration.
+
+    Parameters
+    ----------
+    config : dict, str, or pathlib.Path
+        Resolved configuration dictionary or path to a YAML configuration file.
+
+    Returns
+    -------
+    RealFitProducts, dict, or dict
+        Fit products for a single model, a mapping from model name to products
+        for multiple models, or the resolved configuration if prerequisite
+        products are not available.
+    """
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
     else:
@@ -66,23 +66,19 @@ def run_real_fit_from_config(
         return resolved
 
     fit_cfg = resolved["fit"]
-
     sampler_cfg = fit_cfg["sampler"]
 
     all_products = {}
 
     for model_name in resolved["fit"]["models"]:
-
-        parameter_names, parameters, _, _ = (
-            _build_parameter_set(
-                model_name,
-                data_fit=image_products.prepared_data,
-                noise_fit=image_products.noise,
-                mask_fit=image_products.contaminant_mask,
-                target_x=image_products.target_x,
-                target_y=image_products.target_y,
-                prior_cfg=resolved["fit"]["priors"],
-            )
+        parameter_names, parameters, _, _ = _build_parameter_set(
+            model_name,
+            data_fit=image_products.prepared_data,
+            noise_fit=image_products.noise,
+            mask_fit=image_products.contaminant_mask,
+            target_x=image_products.target_x,
+            target_y=image_products.target_y,
+            prior_cfg=resolved["fit"]["priors"],
         )
 
         model_factory = _make_model_factory(
@@ -161,6 +157,7 @@ def save_real_fit_products(
     model_name: str,
     products: RealFitProducts,
 ) -> None:
+    """Save real-galaxy fit products to disk."""
     paths = pipeline_paths(config)["fits"][model_name]
 
     paths["dir"].mkdir(
@@ -253,6 +250,7 @@ def save_fit_summary_text(
     model_title: str,
     products: RealFitProducts,
 ) -> None:
+    """Save a human-readable text summary of a fit."""
     logz = (
         None
         if products.posterior is None
@@ -295,6 +293,7 @@ def save_bayesian_model_comparison(
     config: dict[str, Any],
     comparison: dict[str, Any],
 ) -> None:
+    """Save Bayesian model-comparison results."""
     paths = pipeline_paths(config)["model_comparison"]
 
     paths["dir"].mkdir(
@@ -314,6 +313,7 @@ def load_real_fit_products(
     config: str | Path | dict[str, Any],
     model_name: str,
 ) -> RealFitProducts:
+    """Load saved real-galaxy fit products from disk."""
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
     else:
@@ -353,6 +353,7 @@ def load_real_fit_products(
 def _load_psf_from_config(
     config: dict[str, Any],
 ):
+    """Load the configured PSF model."""
     psf_cfg = config.get(
         "psf",
         {},
@@ -386,6 +387,7 @@ def _load_psf_from_config(
 
 
 def _parse_prior_value(value):
+    """Parse numeric prior values, including symbolic pi/2 strings."""
     if isinstance(value, str):
         if value == "pi/2":
             return float(np.pi / 2)
@@ -404,6 +406,7 @@ def _bounds_from_prior(
     target_x: float,
     target_y: float,
 ):
+    """Resolve parameter bounds from a prior configuration entry."""
     if "min_factor" in cfg or "max_factor" in cfg:
         return (
             float(cfg["min_factor"]) * flux_total,
@@ -442,6 +445,7 @@ def _build_parameter_list(
     target_x: float,
     target_y: float,
 ) -> ParameterSet:
+    """Build a ParameterSet from model prior configuration."""
     return ParameterSet(
         [
             Parameter(
@@ -468,7 +472,7 @@ def _build_parameter_set(
     target_y: float,
     prior_cfg=None,
 ):
-    
+    """Build model parameters and data-derived prior-scale estimates."""
     if prior_cfg is None:
         prior_cfg = DEFAULT_CONFIG["fit"]["priors"]
 
@@ -497,10 +501,10 @@ def _build_parameter_set(
     parameter_names = model_definition.parameter_names
 
     parameters = _build_parameter_list(
-    model_prior_cfg,
-    flux_total=flux_total,
-    target_x=target_x,
-    target_y=target_y,
+        model_prior_cfg,
+        flux_total=flux_total,
+        target_x=target_x,
+        target_y=target_y,
     )
 
     return (
@@ -512,6 +516,8 @@ def _build_parameter_set(
 
 
 class SingleSersicModelFactory:
+    """Factory for PSF-convolved single-Sérsic plus sky models."""
+
     def __init__(self, psf):
         self.psf = psf
 
@@ -526,6 +532,7 @@ class SingleSersicModelFactory:
         y0,
         sky,
     ):
+        """Create a single-Sérsic model instance."""
         return make_single_sersic_psf_sky_model(
             flux,
             re,
@@ -540,6 +547,8 @@ class SingleSersicModelFactory:
 
 
 class DoubleSersicModelFactory:
+    """Factory for PSF-convolved double-Sérsic plus sky models."""
+
     def __init__(self, psf):
         self.psf = psf
 
@@ -557,6 +566,7 @@ class DoubleSersicModelFactory:
         y0,
         sky,
     ):
+        """Create a double-Sérsic model instance."""
         return make_double_sersic_psf_sky_model(
             flux_bulge,
             re_bulge,
@@ -577,6 +587,7 @@ def _make_model_factory(
     model_name,
     psf,
 ):
+    """Build the model factory associated with a registered model."""
     model_definition = get_model(model_name)
 
     factories = {
@@ -593,12 +604,14 @@ def _make_model_factory(
 
     return factory_class(psf)
 
+
 def _compute_best_model(
     result,
     parameter_names,
     model_factory,
     image_shape,
 ):
+    """Render the best-fit model image from a posterior result."""
     best_parameters = {
         name: result.best_parameters[name]
         for name in parameter_names
@@ -623,6 +636,7 @@ def _compute_fit_statistics(
     mask,
     n_parameters: int,
 ):
+    """Compute residuals and chi-squared fit statistics."""
     residual = data - model_image
 
     valid = (
@@ -673,6 +687,7 @@ def _compute_fit_statistics(
 def _compute_bayesian_model_comparison(
     products_by_model,
 ):
+    """Compute Bayesian model-comparison quantities from model evidences."""
     logz = {
         model_name: float(
             products.posterior.logz[-1]
@@ -734,6 +749,7 @@ def _run_dynesty(
     seed: int | None = None,
     progress_label: str | None = None,
 ):
+    """Run Dynesty for one model and prepared dataset."""
     fitter = DynestyFitter(
         model_factory=model_factory,
         data=data_fit,
@@ -758,6 +774,7 @@ def _diagnostic_title(
     config: dict[str, Any],
     model_name: str,
 ) -> str:
+    """Return a human-readable diagnostic title for a model."""
     diagnostics_cfg = config.get(
         "diagnostics",
         {},

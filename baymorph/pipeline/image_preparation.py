@@ -1,14 +1,15 @@
+"""Image-preparation workflows for real BayMorph FITS images."""
+
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 from astropy.io import fits
-# from scipy.ndimage import binary_dilation
 
-from baymorph.core.image import ImageData
 from baymorph.core.background import (
     estimate_background_photutils,
     estimate_background_sigma,
@@ -18,15 +19,36 @@ from baymorph.core.detection import (
     DetectionResult,
     detect_sources_segmentation,
 )
+from baymorph.core.image import ImageData
 from baymorph.core.noise import estimate_noise_map
 from baymorph.pipeline.segmentation import select_segment_near_position
+
 from .config import load_resolved_config
-from .outputs import make_output_tree, pipeline_paths, save_resolved_config
 from .cutout import CutoutDefinition, resolve_cutout
+from .outputs import (
+    make_output_tree,
+    pipeline_paths,
+    save_resolved_config,
+)
+
 
 @dataclass
 class RealFITSPreparation:
-    """Prepared real-image products before target-specific masking."""
+    """Prepared real-image products before target-specific masking.
+
+    Parameters
+    ----------
+    data : ndarray
+        Background-subtracted image data.
+    background : float
+        Estimated scalar background level.
+    mask : ndarray of bool
+        Automatic source-detection mask.
+    noise : ndarray
+        Estimated noise map.
+    detection : DetectionResult
+        Source-detection products.
+    """
 
     data: np.ndarray
     background: float
@@ -43,7 +65,29 @@ def prepare_real_fits_image(
     detection_n_pixels: int = 5,
     detection_n_levels: int = 32,
 ):
-    """Prepare a real image for fitting."""
+    """Prepare a real image array for fitting.
+
+    Parameters
+    ----------
+    data : array-like
+        Input image.
+    background_box_size : int, default=20
+        Background mesh size used by Photutils.
+    background_filter_size : int, default=3
+        Median-filter size applied to the background mesh.
+    detection_sigma : float, default=3.0
+        Source-detection threshold in units of noise.
+    detection_n_pixels : int, default=5
+        Minimum connected pixels required for source detection.
+    detection_n_levels : int, default=32
+        Number of detection levels forwarded to the detection interface.
+
+    Returns
+    -------
+    RealFITSPreparation
+        Prepared image, background estimate, detection mask, noise map, and
+        detection products.
+    """
     data = np.asarray(
         data,
         dtype=float,
@@ -65,7 +109,6 @@ def prepare_real_fits_image(
             filter_size=background_filter_size,
             mask=mask,
         )
-
     except ValueError:
         background_result = estimate_background_sigma(
             data,
@@ -92,6 +135,32 @@ def prepare_real_fits_image(
 
 @dataclass
 class ImagePreparationProducts:
+    """Target-specific image-preparation products.
+
+    Parameters
+    ----------
+    cutout : ndarray
+        Original target cutout before background subtraction.
+    prepared_data : ndarray
+        Background-subtracted cutout used for fitting.
+    noise : ndarray
+        Noise map associated with ``prepared_data``.
+    automatic_mask : ndarray of bool
+        Automatic source-detection mask.
+    target_segment : ndarray of bool
+        Boolean mask identifying the target segment.
+    contaminant_mask : ndarray of bool
+        Boolean mask identifying non-target detected sources.
+    segmentation : ndarray
+        Integer segmentation map.
+    background : float
+        Estimated scalar background level.
+    target_x, target_y : int
+        Target position in cutout pixel coordinates.
+    target_label : int
+        Segmentation label assigned to the target source.
+    """
+
     cutout: np.ndarray
     prepared_data: np.ndarray
     noise: np.ndarray
@@ -109,16 +178,52 @@ def make_target_cutout(
     data: np.ndarray,
     cutout: CutoutDefinition,
 ) -> np.ndarray:
+    """Extract a target cutout from an image.
+
+    Parameters
+    ----------
+    data : ndarray
+        Parent image.
+    cutout : CutoutDefinition
+        Resolved cutout bounds.
+
+    Returns
+    -------
+    ndarray
+        Extracted image cutout.
+    """
     return data[
         cutout.ymin:cutout.ymax,
         cutout.xmin:cutout.xmax,
     ]
+
 
 def prepare_real_image_from_config(
     config: str | Path | dict[str, Any],
     *,
     save: bool = True,
 ) -> ImagePreparationProducts:
+    """Prepare a real galaxy image from a BayMorph configuration.
+
+    Parameters
+    ----------
+    config : dict, str, or pathlib.Path
+        Resolved configuration dictionary or path to a YAML configuration file.
+    save : bool, default=True
+        If True, save image-preparation products to the configured output tree.
+
+    Returns
+    -------
+    ImagePreparationProducts
+        Prepared target cutout, masks, segmentation products, and metadata.
+
+    Raises
+    ------
+    ValueError
+        If ``data.target_position`` is missing.
+    RuntimeError
+        If no segmentation map is produced.
+    """
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
     else:
@@ -130,15 +235,17 @@ def prepare_real_image_from_config(
 
     target_position = resolved["data"]["target_position"]
     if target_position is None:
-        raise ValueError("Config data.target_position is required for image preparation.")
+        raise ValueError(
+            "Config data.target_position is required for image preparation."
+        )
 
     cutout_cfg = resolved["data"]["cutout"]
 
     cutout_definition = resolve_cutout(
-    image_shape=image.data.shape,
-    center_x=target_position["x"],
-    center_y=target_position["y"],
-    config=cutout_cfg,
+        image_shape=image.data.shape,
+        center_x=target_position["x"],
+        center_y=target_position["y"],
+        config=cutout_cfg,
     )
 
     cutout = make_target_cutout(
@@ -149,12 +256,17 @@ def prepare_real_image_from_config(
     detection_cfg = resolved["preparation"]["detection"]
     background_cfg = resolved["preparation"]["background"]
 
+    detection_n_pixels = detection_cfg.get(
+        "n_pixels",
+        detection_cfg.get("npixels"),
+    )
+
     prepared = prepare_real_fits_image(
         cutout,
         background_box_size=background_cfg["box_size"],
         background_filter_size=background_cfg["filter_size"],
         detection_sigma=detection_cfg["n_sigma"],
-        detection_n_pixels=detection_cfg["npixels"],
+        detection_n_pixels=detection_n_pixels,
         detection_n_levels=detection_cfg["n_levels"],
     )
 
@@ -162,15 +274,8 @@ def prepare_real_image_from_config(
     if segmentation is None:
         raise RuntimeError("No segmentation map was produced.")
 
-    target_x = (
-        int(target_position["x"])
-        - cutout_definition.xmin
-    )
-
-    target_y = (
-        int(target_position["y"])
-        - cutout_definition.ymin
-    )
+    target_x = int(target_position["x"]) - cutout_definition.xmin
+    target_y = int(target_position["y"]) - cutout_definition.ymin
 
     target_label = select_segment_near_position(
         segmentation,
@@ -184,27 +289,6 @@ def prepare_real_image_from_config(
         (segmentation.data > 0)
         & (segmentation.data != target_label)
     )
-
-    # masking_cfg = resolved.get( 
-    #     "masking",
-    #     {},
-    # )
-
-    # dilation_cfg = masking_cfg.get(
-    #     "contaminant_dilation",
-    #     {},
-    # )
-
-    # if dilation_cfg.get("enabled", True):
-    #     contaminant_mask = binary_dilation(
-    #         contaminant_mask,
-    #         iterations=int(
-    #             dilation_cfg.get(
-    #                 "iterations",
-    #                 8,
-    #             )
-    #         ),
-    #     )
 
     products = ImagePreparationProducts(
         cutout=cutout,
@@ -231,6 +315,20 @@ def save_image_preparation_products(
     config: dict[str, Any],
     products: ImagePreparationProducts,
 ) -> None:
+    """Save image-preparation products to disk.
+
+    Parameters
+    ----------
+    config : dict
+        Resolved pipeline configuration.
+    products : ImagePreparationProducts
+        Image-preparation products to save.
+
+    Returns
+    -------
+    None
+        Products are written to the configured output directory.
+    """
     paths = pipeline_paths(config)["image_preparation"]
     overwrite = bool(config["outputs"].get("overwrite", False))
 
@@ -261,8 +359,6 @@ def save_image_preparation_products(
         "target_label": products.target_label,
     }
 
-    import json
-
     with open(paths["dir"] / "image_preparation_metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)
 
@@ -270,6 +366,18 @@ def save_image_preparation_products(
 def load_image_preparation_products(
     config: str | Path | dict[str, Any],
 ) -> ImagePreparationProducts:
+    """Load saved image-preparation products from disk.
+
+    Parameters
+    ----------
+    config : dict, str, or pathlib.Path
+        Resolved configuration dictionary or path to a YAML configuration file.
+
+    Returns
+    -------
+    ImagePreparationProducts
+        Image-preparation products reconstructed from saved files.
+    """
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
     else:
@@ -284,8 +392,6 @@ def load_image_preparation_products(
     cutout = np.load(paths["dir"] / "large_cutout.npy")
     target_segment = np.load(paths["dir"] / "target_segment.npy")
     segmentation = np.load(paths["dir"] / "segmentation.npy")
-
-    import json
 
     with open(paths["dir"] / "image_preparation_metadata.json", "r") as f:
         metadata = json.load(f)

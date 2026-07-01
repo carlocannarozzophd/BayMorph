@@ -8,21 +8,30 @@ def select_segment_near_position(
     x: float,
     y: float,
 ):
-    """
-    Select the segmentation label nearest to a position.
+    """Select the segmentation label closest to a target position.
+
+    The function first checks whether the requested position falls inside a
+    detected segment. If not, it selects the detected segment whose centroid
+    is closest to the requested position.
 
     Parameters
     ----------
-    segmentation
-        Photutils SegmentationImage.
-
-    x, y
-        Approximate target coordinates.
+    segmentation : photutils.segmentation.SegmentationImage
+        Segmentation image produced by Photutils.
+    x : float
+        Approximate target x-coordinate, in pixels.
+    y : float
+        Approximate target y-coordinate, in pixels.
 
     Returns
     -------
     int
         Selected segmentation label.
+
+    Raises
+    ------
+    ValueError
+        If the segmentation image is ``None`` or contains no detected labels.
     """
     if segmentation is None:
         raise ValueError(
@@ -52,8 +61,7 @@ def select_segment_near_position(
 
     if (
         0 <= y < segmentation.data.shape[0]
-        and
-        0 <= x < segmentation.data.shape[1]
+        and 0 <= x < segmentation.data.shape[1]
     ):
         label = segmentation.data[
             y,
@@ -67,7 +75,6 @@ def select_segment_near_position(
     best_distance = np.inf
 
     for label in labels:
-
         pixels = np.where(
             segmentation.data == label
         )

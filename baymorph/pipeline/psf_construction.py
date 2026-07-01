@@ -1,25 +1,41 @@
+"""Empirical PSF construction utilities."""
+
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
-import json
 
+import matplotlib.pyplot as plt
 import numpy as np
 from astropy.io import fits
-import matplotlib.pyplot as plt
-
-from .config import load_resolved_config
-from .outputs import make_output_tree, pipeline_paths
 
 from baymorph.core.image import ImageData
 from baymorph.simulation.psf import EmpiricalPSF
 
+from .config import load_resolved_config
+from .outputs import make_output_tree, pipeline_paths
 from .psf_candidates import load_psf_candidates
+
 
 def save_empirical_psf(
     config: dict[str, Any],
     psf: np.ndarray,
 ) -> Path:
+    """Save an empirical PSF image to disk.
+
+    Parameters
+    ----------
+    config : dict
+        Resolved pipeline configuration.
+    psf : ndarray
+        Empirical PSF image.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the saved FITS file.
+    """
     make_output_tree(config)
     path = pipeline_paths(config)["psf"]["psf_fits"]
 
@@ -33,6 +49,18 @@ def save_empirical_psf(
 def load_empirical_psf(
     config: str | Path | dict[str, Any],
 ) -> EmpiricalPSF:
+    """Load a saved empirical PSF from disk.
+
+    Parameters
+    ----------
+    config : dict, str, or pathlib.Path
+        Resolved configuration dictionary or path to a YAML configuration file.
+
+    Returns
+    -------
+    EmpiricalPSF
+        Empirical PSF object initialized from the saved FITS image.
+    """
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
     else:
@@ -48,6 +76,19 @@ def load_empirical_psf(
 def estimate_psf_fwhm(
     psf: np.ndarray,
 ) -> float | None:
+    """Estimate the empirical PSF FWHM in pixels.
+
+    Parameters
+    ----------
+    psf : ndarray
+        Two-dimensional PSF image.
+
+    Returns
+    -------
+    float or None
+        Approximate full width at half maximum in pixels. Returns ``None`` if
+        the estimate cannot be computed robustly.
+    """
     data = np.asarray(psf, dtype=float)
 
     if data.ndim != 2:
@@ -90,6 +131,20 @@ def estimate_psf_fwhm(
 def psf_radial_profile(
     psf: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
+    """Compute a median radial profile of a PSF image.
+
+    Parameters
+    ----------
+    psf : ndarray
+        Two-dimensional PSF image.
+
+    Returns
+    -------
+    radius : ndarray
+        Radial-bin centers in pixels.
+    profile : ndarray
+        Median PSF value in each radial bin.
+    """
     data = np.asarray(psf, dtype=float)
 
     yy, xx = np.indices(data.shape)
@@ -145,6 +200,22 @@ def save_empirical_psf_diagnostics(
     psf: np.ndarray,
     cutouts: list[np.ndarray],
 ) -> None:
+    """Save empirical PSF diagnostic plots.
+
+    Parameters
+    ----------
+    config : dict
+        Resolved pipeline configuration.
+    psf : ndarray
+        Final empirical PSF image.
+    cutouts : list of ndarray
+        Individual PSF-star cutouts used to build the empirical PSF.
+
+    Returns
+    -------
+    None
+        Diagnostic plots are written to disk.
+    """
     paths = pipeline_paths(config)["psf"]
 
     diagnostics_dir = paths["dir"] / "diagnostics"
@@ -248,6 +319,24 @@ def save_empirical_psf_diagnostics(
 def run_psf_construction_from_config(
     config: str | Path | dict[str, Any],
 ) -> np.ndarray:
+    """Construct an empirical PSF from selected candidates.
+
+    Parameters
+    ----------
+    config : dict, str, or pathlib.Path
+        Resolved configuration dictionary or path to a YAML configuration file.
+
+    Returns
+    -------
+    ndarray
+        Normalized empirical PSF image.
+
+    Raises
+    ------
+    ValueError
+        If no candidates are available or if any candidate is missing its
+        cutout half-size.
+    """
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
     else:
@@ -279,7 +368,6 @@ def run_psf_construction_from_config(
         )
 
         cutout = subtract_outer_background(cutout)
-
         cutout = recenter_cutout(cutout)
 
         cutouts.append(cutout)
@@ -334,6 +422,23 @@ def run_psf_construction_from_config(
 
 
 def normalize_psf(psf: np.ndarray) -> np.ndarray:
+    """Normalize a PSF image to unit sum.
+
+    Parameters
+    ----------
+    psf : ndarray
+        Input PSF image.
+
+    Returns
+    -------
+    ndarray
+        Unit-normalized PSF image.
+
+    Raises
+    ------
+    ValueError
+        If the PSF sum is not finite or is not strictly positive.
+    """
     total = np.sum(psf)
 
     if not np.isfinite(total) or total <= 0:
@@ -348,6 +453,27 @@ def extract_centered_cutout(
     y: float,
     half_size: int,
 ) -> np.ndarray:
+    """Extract a square cutout centered on a source position.
+
+    Parameters
+    ----------
+    image : ndarray
+        Parent image.
+    x, y : float
+        Source position in image pixels.
+    half_size : int
+        Half-size of the requested cutout.
+
+    Returns
+    -------
+    ndarray
+        Extracted square cutout.
+
+    Raises
+    ------
+    ValueError
+        If the requested cutout extends outside the image boundaries.
+    """
     x0 = int(round(x))
     y0 = int(round(y))
 
@@ -366,6 +492,25 @@ def subtract_outer_background(
     cutout: np.ndarray,
     border_width: int = 3,
 ) -> np.ndarray:
+    """Subtract a border-based background estimate from a PSF cutout.
+
+    Parameters
+    ----------
+    cutout : ndarray
+        Input PSF-star cutout.
+    border_width : int, default=3
+        Width of the border region used to estimate the local background.
+
+    Returns
+    -------
+    ndarray
+        Background-subtracted cutout.
+
+    Raises
+    ------
+    ValueError
+        If ``border_width`` is not positive or is too large for the cutout.
+    """
     if border_width <= 0:
         raise ValueError("border_width must be positive.")
 
@@ -392,6 +537,28 @@ def clean_empirical_psf(
     background_radius_fraction: float = 0.65,
     taper_start_fraction: float = 0.55,
 ) -> np.ndarray:
+    """Clean and taper an empirical PSF image.
+
+    Parameters
+    ----------
+    psf : ndarray
+        Input empirical PSF image.
+    background_radius_fraction : float, default=0.65
+        Fraction of the maximum radius beyond which pixels are used to
+        estimate the residual background.
+    taper_start_fraction : float, default=0.55
+        Fraction of the maximum radius where the cosine taper begins.
+
+    Returns
+    -------
+    ndarray
+        Cleaned and unit-normalized empirical PSF.
+
+    Raises
+    ------
+    ValueError
+        If ``psf`` is not two-dimensional.
+    """
     data = np.asarray(
         psf,
         dtype=float,
@@ -442,14 +609,9 @@ def clean_empirical_psf(
         background = 0.0
 
     data = data - background
-
     data[data < 0.0] = 0.0
 
-    taper_start = (
-        taper_start_fraction
-        * max_radius
-    )
-
+    taper_start = taper_start_fraction * max_radius
     taper_end = max_radius
 
     taper = np.ones_like(
@@ -478,6 +640,23 @@ def clean_empirical_psf(
 
 
 def stack_psf_cutouts(cutouts: list[np.ndarray]) -> np.ndarray:
+    """Stack PSF-star cutouts into a cleaned empirical PSF.
+
+    Parameters
+    ----------
+    cutouts : list of ndarray
+        Individual background-subtracted, recentered PSF-star cutouts.
+
+    Returns
+    -------
+    ndarray
+        Cleaned and unit-normalized empirical PSF.
+
+    Raises
+    ------
+    ValueError
+        If no cutouts are provided.
+    """
     if len(cutouts) == 0:
         raise ValueError("At least one PSF cutout is required.")
 
@@ -516,12 +695,14 @@ def stack_psf_cutouts(cutouts: list[np.ndarray]) -> np.ndarray:
 
     return psf
 
+
 def _empirical_psf_warnings(
     psf: np.ndarray,
     *,
     n_candidates_used: int,
     psf_fwhm_pix: float | None,
 ) -> list[str]:
+    """Build quality-control warnings for an empirical PSF."""
     warnings = []
 
     data = np.asarray(
@@ -582,6 +763,23 @@ def _empirical_psf_warnings(
 
 
 def centroid_from_flux(cutout: np.ndarray) -> tuple[float, float]:
+    """Compute a flux-weighted centroid for a cutout.
+
+    Parameters
+    ----------
+    cutout : ndarray
+        Input image cutout.
+
+    Returns
+    -------
+    x_centroid, y_centroid : float
+        Flux-weighted centroid coordinates.
+
+    Raises
+    ------
+    ValueError
+        If the shifted flux has non-positive total flux.
+    """
     data = np.asarray(cutout, dtype=float)
     data = np.where(np.isfinite(data), data, 0.0)
     data = data - np.min(data)
@@ -604,6 +802,24 @@ def recenter_cutout(
     target_x: float | None = None,
     target_y: float | None = None,
 ) -> np.ndarray:
+    """Recenter a cutout using its flux-weighted centroid.
+
+    Parameters
+    ----------
+    cutout : ndarray
+        Input image cutout.
+    target_x : float, optional
+        Desired output x-coordinate of the centroid. If None, use the cutout
+        center.
+    target_y : float, optional
+        Desired output y-coordinate of the centroid. If None, use the cutout
+        center.
+
+    Returns
+    -------
+    ndarray
+        Shifted cutout.
+    """
     from scipy.ndimage import shift
 
     y_size, x_size = cutout.shape
@@ -632,6 +848,20 @@ def save_empirical_psf_metadata(
     config: dict[str, Any],
     metadata: dict[str, Any],
 ) -> Path:
+    """Save empirical PSF metadata to disk.
+
+    Parameters
+    ----------
+    config : dict
+        Resolved pipeline configuration.
+    metadata : dict
+        JSON-serializable PSF metadata.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the saved metadata file.
+    """
     make_output_tree(config)
     path = pipeline_paths(config)["psf"]["metadata"]
 
@@ -646,6 +876,20 @@ def estimate_psf_half_size(
     *,
     fallback_half_size: int = 25,
 ) -> int:
+    """Estimate a representative PSF half-size from candidates.
+
+    Parameters
+    ----------
+    candidates : iterable
+        PSF candidates with optional ``half_size`` attributes.
+    fallback_half_size : int, default=25
+        Value returned when no candidates contain a half-size.
+
+    Returns
+    -------
+    int
+        Maximum candidate half-size, or the fallback value.
+    """
     half_sizes = [
         candidate.half_size
         for candidate in candidates
@@ -662,6 +906,26 @@ def crop_center(
     image: np.ndarray,
     half_size: int,
 ) -> np.ndarray:
+    """Crop the central square region of an image.
+
+    Parameters
+    ----------
+    image : ndarray
+        Input image.
+    half_size : int
+        Half-size of the requested central crop.
+
+    Returns
+    -------
+    ndarray
+        Central square crop.
+
+    Raises
+    ------
+    ValueError
+        If ``half_size`` is not positive or the requested crop exceeds the
+        image boundaries.
+    """
     if half_size <= 0:
         raise ValueError("half_size must be positive.")
 

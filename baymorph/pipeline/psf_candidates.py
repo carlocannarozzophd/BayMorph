@@ -1,19 +1,53 @@
+"""PSF-candidate selection utilities."""
+
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
-import json
 
 import numpy as np
 
-from .config import load_resolved_config
-from .outputs import make_output_tree, pipeline_paths
 from baymorph.core.image import ImageData
 from baymorph.pipeline.image_preparation import prepare_real_fits_image
 
+from .config import load_resolved_config
+from .outputs import make_output_tree, pipeline_paths
+
+
 @dataclass
 class PSFCandidate:
+    """Candidate point source for empirical PSF construction.
+
+    Parameters
+    ----------
+    x, y : float
+        Candidate centroid coordinates in image pixels.
+    label : int, optional
+        Segmentation label associated with the candidate.
+    area : float, optional
+        Segmented source area.
+    max_value : float, optional
+        Peak pixel value of the candidate source.
+    flux : float, optional
+        Segment flux measured by the source catalog.
+    eccentricity : float, optional
+        Source eccentricity.
+    elongation : float, optional
+        Source elongation.
+    semimajor_sigma, semiminor_sigma : float, optional
+        Source size estimates from the catalog.
+    fwhm : float, optional
+        Full width at half maximum estimate, if available.
+    sharpness : float, optional
+        Sharpness diagnostic, if available.
+    roundness : float, optional
+        Roundness diagnostic, if available.
+    half_size : int, optional
+        Half-size of the PSF cutout assigned to this candidate.
+    """
+
     x: float
     y: float
     label: int | None = None
@@ -34,6 +68,20 @@ def save_psf_candidates(
     config: dict[str, Any],
     candidates: list[PSFCandidate],
 ) -> Path:
+    """Save PSF candidates to the configured pipeline output path.
+
+    Parameters
+    ----------
+    config : dict
+        Resolved pipeline configuration.
+    candidates : list of PSFCandidate
+        Candidate point sources to save.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the saved JSON file.
+    """
     make_output_tree(config)
     path = pipeline_paths(config)["psf"]["candidates"]
 
@@ -46,6 +94,18 @@ def save_psf_candidates(
 def load_psf_candidates(
     config: str | Path | dict[str, Any],
 ) -> list[PSFCandidate]:
+    """Load saved PSF candidates from disk.
+
+    Parameters
+    ----------
+    config : dict, str, or pathlib.Path
+        Resolved configuration dictionary or path to a YAML configuration file.
+
+    Returns
+    -------
+    list of PSFCandidate
+        Previously saved PSF candidates.
+    """
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
     else:
@@ -62,6 +122,23 @@ def load_psf_candidates(
 def run_psf_candidate_selection_from_config(
     config: str | Path | dict[str, Any],
 ) -> list[PSFCandidate]:
+    """Select empirical PSF candidates from a pipeline configuration.
+
+    Parameters
+    ----------
+    config : dict, str, or pathlib.Path
+        Resolved configuration dictionary or path to a YAML configuration file.
+
+    Returns
+    -------
+    list of PSFCandidate
+        Selected PSF candidates.
+
+    Raises
+    ------
+    RuntimeError
+        If source segmentation or source-catalog construction fails.
+    """
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
     else:
@@ -74,18 +151,23 @@ def run_psf_candidate_selection_from_config(
     detection_cfg = resolved["preparation"]["detection"]
     background_cfg = resolved["preparation"]["background"]
 
+    detection_n_pixels = detection_cfg.get(
+        "n_pixels",
+        detection_cfg.get("npixels"),
+    )
+
     prepared = prepare_real_fits_image(
         image.data,
         background_box_size=background_cfg["box_size"],
         background_filter_size=background_cfg["filter_size"],
         detection_sigma=detection_cfg["n_sigma"],
-        detection_n_pixels=detection_cfg["npixels"],
+        detection_n_pixels=detection_n_pixels,
         detection_n_levels=detection_cfg["n_levels"],
     )
 
     segmentation = prepared.detection.segmentation
     source_catalog = prepared.detection.catalog
-    
+
     if segmentation is None:
         raise RuntimeError("No segmentation map was produced.")
 
@@ -127,6 +209,29 @@ def estimate_candidate_half_size(
     min_half_size: int = 12,
     max_half_size: int = 40,
 ) -> int:
+    """Estimate a PSF cutout half-size from an FWHM value.
+
+    Parameters
+    ----------
+    fwhm : float
+        Full width at half maximum, in pixels.
+    scale_factor : float, default=4.0
+        Multiplicative factor applied to ``fwhm``.
+    min_half_size : int, default=12
+        Minimum allowed half-size.
+    max_half_size : int, default=40
+        Maximum allowed half-size.
+
+    Returns
+    -------
+    int
+        Clipped PSF cutout half-size.
+
+    Raises
+    ------
+    ValueError
+        If ``fwhm`` is not strictly positive.
+    """
     if fwhm <= 0:
         raise ValueError("fwhm must be positive.")
 
@@ -142,6 +247,30 @@ def is_isolated_candidate(
     y: float,
     half_size: int,
 ) -> bool:
+    """Check whether a candidate is isolated within a local segmentation window.
+
+    Parameters
+    ----------
+    segmentation : ndarray
+        Integer segmentation map.
+    label : int
+        Segmentation label of the candidate source.
+    x, y : float
+        Candidate centroid coordinates.
+    half_size : int
+        Half-size of the local window inspected around the candidate.
+
+    Returns
+    -------
+    bool
+        True if no non-background, non-candidate labels are present in the
+        local window.
+
+    Raises
+    ------
+    ValueError
+        If ``half_size`` is not strictly positive.
+    """
     if half_size <= 0:
         raise ValueError("half_size must be positive.")
 
@@ -181,6 +310,47 @@ def select_psf_candidates_from_rows(
     max_half_size: int,
     isolation_margin: int,
 ) -> list[PSFCandidate]:
+    """Select high-quality empirical PSF candidates from source-catalog rows.
+
+    Parameters
+    ----------
+    rows : list of dict
+        Source-catalog rows converted to plain dictionaries.
+    segmentation : ndarray
+        Integer segmentation map.
+    target_n_candidates : int
+        Maximum number of candidates to return.
+    min_area, max_area : float
+        Allowed source-area range.
+    min_peak, max_peak : float
+        Allowed peak-pixel range.
+    max_eccentricity : float
+        Maximum allowed source eccentricity.
+    max_elongation : float
+        Maximum allowed source elongation.
+    edge_margin : int
+        Minimum distance from image edges.
+    galaxy_exclusion_box : dict, optional
+        Box inside which candidates are rejected.
+    sigma_factor : float
+        Multiplicative factor used to convert catalog sigmas to cutout size.
+    size_margin : int
+        Additional margin added to the estimated half-size.
+    min_half_size, max_half_size : int
+        Bounds applied to the estimated half-size.
+    isolation_margin : int
+        Extra margin used when checking candidate isolation.
+
+    Returns
+    -------
+    list of PSFCandidate
+        Selected candidates sorted by quality.
+
+    Raises
+    ------
+    ValueError
+        If ``target_n_candidates`` is not strictly positive.
+    """
     if target_n_candidates <= 0:
         raise ValueError("target_n_candidates must be positive.")
 
@@ -254,6 +424,20 @@ def is_inside_exclusion_box(
     y: float,
     box: dict[str, float] | None,
 ) -> bool:
+    """Return whether a position lies inside an exclusion box.
+
+    Parameters
+    ----------
+    x, y : float
+        Position coordinates.
+    box : dict, optional
+        Exclusion box with ``xmin``, ``xmax``, ``ymin``, and ``ymax`` entries.
+
+    Returns
+    -------
+    bool
+        True if the position lies inside the box.
+    """
     if box is None:
         return False
 
@@ -272,6 +456,31 @@ def estimate_candidate_half_size_from_sigmas(
     min_half_size: int,
     max_half_size: int,
 ) -> int:
+    """Estimate a candidate cutout half-size from source-catalog sigmas.
+
+    Parameters
+    ----------
+    semimajor_sigma : float
+        Semimajor-axis sigma estimate.
+    semiminor_sigma : float
+        Semiminor-axis sigma estimate.
+    sigma_factor : float
+        Multiplicative factor applied to the larger sigma.
+    size_margin : int
+        Additional margin added to the estimated half-size.
+    min_half_size, max_half_size : int
+        Bounds applied to the returned half-size.
+
+    Returns
+    -------
+    int
+        Clipped PSF cutout half-size.
+
+    Raises
+    ------
+    ValueError
+        If either sigma estimate is not strictly positive.
+    """
     if semimajor_sigma <= 0 or semiminor_sigma <= 0:
         raise ValueError("semimajor_sigma and semiminor_sigma must be positive.")
 
@@ -294,6 +503,32 @@ def candidate_row_passes_quality_cuts(
     edge_margin: int,
     galaxy_exclusion_box: dict[str, float] | None,
 ) -> bool:
+    """Check whether a source-catalog row satisfies PSF-candidate cuts.
+
+    Parameters
+    ----------
+    row : dict
+        Source-catalog row.
+    image_shape : tuple of int
+        Image shape as ``(ny, nx)``.
+    min_area, max_area : float
+        Allowed source-area range.
+    min_peak, max_peak : float
+        Allowed peak-pixel range.
+    max_eccentricity : float
+        Maximum allowed source eccentricity.
+    max_elongation : float
+        Maximum allowed source elongation.
+    edge_margin : int
+        Minimum distance from image edges.
+    galaxy_exclusion_box : dict, optional
+        Box inside which candidates are rejected.
+
+    Returns
+    -------
+    bool
+        True if the row passes all cuts.
+    """
     x = float(row["x"])
     y = float(row["y"])
 
@@ -322,6 +557,7 @@ def candidate_row_passes_quality_cuts(
 
 
 def _as_float(value):
+    """Convert scalar-like catalog values to float."""
     if hasattr(value, "value"):
         value = value.value
 
@@ -329,6 +565,18 @@ def _as_float(value):
 
 
 def source_catalog_to_candidate_rows(source_catalog) -> list[dict[str, Any]]:
+    """Convert a Photutils source catalog to PSF-candidate rows.
+
+    Parameters
+    ----------
+    source_catalog : photutils.segmentation.SourceCatalog
+        Source catalog produced during image preparation.
+
+    Returns
+    -------
+    list of dict
+        Plain-Python source rows used by PSF-candidate selection.
+    """
     rows: list[dict[str, Any]] = []
 
     for source in source_catalog:

@@ -3,11 +3,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-
 @dataclass(frozen=True)
 class CutoutDefinition:
-    """
-    Fully resolved cutout definition.
+    """Definition of a resolved image cutout.
+
+    Parameters
+    ----------
+    xmin, xmax : int
+        Horizontal pixel bounds of the cutout.
+    ymin, ymax : int
+        Vertical pixel bounds of the cutout.
+    width : int
+        Width of the cutout, in pixels.
+    height : int
+        Height of the cutout, in pixels.
+    mode : str
+        Name of the cutout strategy used to generate the cutout.
     """
 
     xmin: int
@@ -29,10 +40,29 @@ def resolve_fixed_cutout(
     center_y: float,
     size: int,
 ) -> CutoutDefinition:
-    """
-    Resolve a fixed-size cutout centred on (center_x, center_y).
-    """
+    """Resolve a fixed-size cutout centered on a target position.
 
+    Parameters
+    ----------
+    image_shape : tuple of int
+        Shape of the parent image as ``(ny, nx)``.
+    center_x : float
+        X-coordinate of the cutout center, in pixels.
+    center_y : float
+        Y-coordinate of the cutout center, in pixels.
+    size : int
+        Requested cutout size, in pixels.
+
+    Returns
+    -------
+    CutoutDefinition
+        Fully resolved cutout definition clipped to the image boundaries.
+
+    Raises
+    ------
+    ValueError
+        If ``size`` is not strictly positive.
+    """
     if size <= 0:
         raise ValueError(
             "cutout size must be positive."
@@ -95,10 +125,30 @@ def resolve_cutout(
     center_y: float,
     config: dict,
 ) -> CutoutDefinition:
-    """
-    Resolve the requested cutout strategy.
-    """
+    """Resolve a cutout definition from the pipeline configuration.
 
+    Parameters
+    ----------
+    image_shape : tuple of int
+        Shape of the parent image as ``(ny, nx)``.
+    center_x : float
+        X-coordinate of the cutout center, in pixels.
+    center_y : float
+        Y-coordinate of the cutout center, in pixels.
+    config : dict
+        Cutout configuration dictionary. The ``mode`` entry selects the
+        cutout strategy.
+
+    Returns
+    -------
+    CutoutDefinition
+        Fully resolved cutout definition.
+
+    Raises
+    ------
+    ValueError
+        If the requested cutout mode is not supported.
+    """
     mode = config["mode"]
 
     if mode == "fixed":

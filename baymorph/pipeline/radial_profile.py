@@ -1,3 +1,5 @@
+"""Radial-profile diagnostic workflow."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,31 +12,20 @@ from baymorph.analysis import (
     radial_profile_from_image,
 )
 
-from .image_preparation import (
-    load_image_preparation_products,
-)
-
 from .config import (
     load_resolved_config,
     resolve_config,
 )
-
-from .outputs import (
-    pipeline_paths,
-)
-
-from .psf_construction import (
-    load_empirical_psf,
-)
-
-from .real_fit import (
-    _diagnostic_title,
-)
+from .image_preparation import load_image_preparation_products
+from .outputs import pipeline_paths
+from .psf_construction import load_empirical_psf
+from .real_fit import _diagnostic_title
 
 
 def _load_psf_from_config(
     config,
 ):
+    """Load the empirical PSF for radial-profile posterior diagnostics."""
     return load_empirical_psf(config)
 
 
@@ -42,13 +33,26 @@ def run_radial_profile_diagnostics(
     config,
     fit_results,
 ):
+    """Generate and save radial-profile diagnostics for fitted models.
 
+    Parameters
+    ----------
+    config : dict, str, or pathlib.Path
+        Pipeline configuration dictionary or path to a YAML configuration file.
+    fit_results : object or dict
+        Single fit result or mapping from model name to fit result. Each fit
+        result must expose model metadata, best-fit parameters, a best-fit
+        model image, and optionally posterior samples.
+
+    Returns
+    -------
+    None
+        Diagnostic figures are written to the configured fitting output paths.
+    """
     if isinstance(config, (str, Path)):
         config = load_resolved_config(config)
     else:
         config = resolve_config(config)
-
-    """Generate and save radial-profile diagnostics."""
 
     image_products = load_image_preparation_products(
         config,
@@ -67,7 +71,6 @@ def run_radial_profile_diagnostics(
         }
 
     for model_name, fit in fit_results.items():
-
         max_radius = 0.5 * min(
             image_products.prepared_data.shape
         )

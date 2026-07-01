@@ -1,3 +1,5 @@
+"""Utilities for reproducible mask refinement."""
+
 import numpy as np
 
 from baymorph.core import (
@@ -11,26 +13,33 @@ def refine_mask(
     mask,
     actions,
 ):
-    """
-    Refine a boolean mask using reproducible masking actions.
+    """Refine a boolean mask using a sequence of masking actions.
+
+    Each action is represented as a dictionary describing a masking operation.
+    Actions are applied sequentially, allowing interactive mask editing to be
+    reproduced deterministically.
 
     Parameters
     ----------
     image : ndarray
         Input image.
-
     mask : ndarray of bool
-        Initial mask.
-
+        Initial boolean mask.
     actions : list of dict
-        List of masking actions.
+        Sequence of masking actions. Each action must contain a ``"type"``
+        entry identifying the masking operation together with the parameters
+        required by that operation.
 
     Returns
     -------
-    refined_mask : ndarray of bool
-        Refined boolean mask.
-    """
+    ndarray of bool
+        Refined boolean mask obtained after applying all masking actions.
 
+    Raises
+    ------
+    ValueError
+        If an action specifies an unsupported masking type.
+    """
     refined_mask = np.array(
         mask,
         dtype=bool,
@@ -38,11 +47,9 @@ def refine_mask(
     )
 
     for action in actions:
-
         action_type = action["type"]
 
         if action_type == "source":
-
             extra_mask = connected_source_mask(
                 image=image,
                 x=action["x"],
@@ -57,7 +64,6 @@ def refine_mask(
             )
 
         elif action_type == "star":
-
             extra_mask = star_halo_mask(
                 image=image,
                 x=action["x"],
