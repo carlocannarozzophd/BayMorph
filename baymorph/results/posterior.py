@@ -5,12 +5,31 @@ from dataclasses import dataclass
 import numpy as np
 from dynesty.utils import resample_equal
 
-from baymorph.stats import dynesty_weights, posterior_summary
+from baymorph.stats import (
+    dynesty_weights,
+    posterior_summary,
+)
 
 
 @dataclass
 class PosteriorResult:
-    """Generic posterior result."""
+    """Container for Bayesian posterior samples.
+
+    Parameters
+    ----------
+    samples : ndarray
+        Posterior samples with shape ``(n_samples, n_parameters)``.
+    logwt : ndarray
+        Logarithmic Dynesty sample weights.
+    logz : ndarray
+        Cumulative logarithmic Bayesian evidence.
+    parameter_names : list of str
+        Names of the fitted parameters in the same order as the sample columns.
+    logl : ndarray, optional
+        Log-likelihood values for each sample.
+    logzerr : ndarray, optional
+        Estimated uncertainty on the cumulative evidence.
+    """
 
     samples: np.ndarray
     logwt: np.ndarray
@@ -21,7 +40,7 @@ class PosteriorResult:
 
     @property
     def weights(self) -> np.ndarray:
-        """Posterior weights."""
+        """ndarray : Normalized posterior sample weights."""
         return dynesty_weights(
             self.logwt,
             self.logz,
@@ -29,7 +48,7 @@ class PosteriorResult:
 
     @property
     def posterior_samples(self) -> np.ndarray:
-        """Equal-weight posterior samples."""
+        """ndarray : Equal-weight posterior samples."""
         return resample_equal(
             self.samples,
             self.weights,
@@ -39,7 +58,24 @@ class PosteriorResult:
         self,
         parameter_name: str,
     ):
-        """Posterior summary for one parameter."""
+        """Return summary statistics for one fitted parameter.
+
+        Parameters
+        ----------
+        parameter_name : str
+            Name of the fitted parameter.
+
+        Returns
+        -------
+        dict
+            Posterior summary returned by
+            :func:`baymorph.stats.posterior_summary`.
+
+        Raises
+        ------
+        ValueError
+            If ``parameter_name`` is not present in the posterior.
+        """
         idx = self.parameter_names.index(
             parameter_name
         )
@@ -51,7 +87,13 @@ class PosteriorResult:
 
     @property
     def best_index(self) -> int:
-        """Index of the maximum-likelihood sample."""
+        """int : Index of the maximum-likelihood sample.
+
+        Raises
+        ------
+        ValueError
+            If log-likelihood values are not available.
+        """
         if self.logl is None:
             raise ValueError(
                 "logl is required to compute best-fit parameters."
@@ -63,14 +105,14 @@ class PosteriorResult:
 
     @property
     def best_sample(self) -> np.ndarray:
-        """Maximum-likelihood sample."""
+        """ndarray : Maximum-likelihood parameter vector."""
         return self.samples[
             self.best_index
         ]
 
     @property
     def best_parameters(self) -> dict[str, float]:
-        """Maximum-likelihood parameters as a dictionary."""
+        """dict of str to float : Maximum-likelihood parameter values."""
         return {
             name: float(value)
             for name, value in zip(
@@ -83,7 +125,7 @@ class PosteriorResult:
     def median_parameters(
         self,
     ) -> dict[str, float]:
-        """Posterior-median parameters as a dictionary."""
+        """dict of str to float : Posterior-median parameter values."""
         return {
             name: self.summary(name)["median"]
             for name in self.parameter_names
@@ -93,7 +135,31 @@ class PosteriorResult:
         self,
         name,
     ):
-        """Dynamic attributes such as flux_median, flux_q16, flux_q84."""
+        """Provide dynamic posterior-summary attributes.
+
+        Dynamic attributes of the form
+
+        - ``<parameter>_median``
+        - ``<parameter>_q16``
+        - ``<parameter>_q84``
+
+        are resolved automatically from the posterior summaries.
+
+        Parameters
+        ----------
+        name : str
+            Requested attribute name.
+
+        Returns
+        -------
+        float
+            Requested posterior statistic.
+
+        Raises
+        ------
+        AttributeError
+            If the requested attribute cannot be resolved.
+        """
         suffixes = [
             "_median",
             "_q16",

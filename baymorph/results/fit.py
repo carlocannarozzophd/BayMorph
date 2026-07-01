@@ -6,24 +6,46 @@ from typing import Any
 import numpy as np
 from matplotlib.axes import Axes
 
-from baymorph.models import (
-    parameter_labels as model_parameter_labels,
-)
-
-from baymorph.plotting import (
-    corner_plot,
-)
+from baymorph.models import parameter_labels as model_parameter_labels
+from baymorph.plotting import corner_plot
 
 
 @dataclass
 class RealFitProducts:
-    """
-    Container holding the products of a Bayesian galaxy fit.
+    """Container for the products of a Bayesian galaxy fit.
 
-    Besides storing the numerical results of the fit, this class
-    provides convenience methods for generating diagnostic plots
-    and summary reports.
+    Parameters
+    ----------
+    posterior : object or None
+        Posterior result returned by the sampler.
+    best_parameters : dict of str to float
+        Best-fit parameter values.
+    best_model_image : ndarray
+        Rendered best-fit model image.
+    residual : ndarray
+        Data-minus-model residual image.
+    norm_residual : ndarray
+        Residual image normalized by the noise map.
+    chi2 : float
+        Chi-squared value of the best-fit model.
+    ndof : int
+        Number of degrees of freedom.
+    reduced_chi2 : float
+        Reduced chi-squared value.
+    model_name : str, default="unknown"
+        Name of the fitted model.
+    noise : ndarray, optional
+        Noise map used during fitting.
+    radius : ndarray, optional
+        Radial-bin centers used by radial-profile diagnostics.
+    profile_data : ndarray, optional
+        Observed radial profile.
+    profile_model : ndarray, optional
+        Model radial profile.
+    profile_noise : ndarray, optional
+        Radial noise profile.
     """
+
     posterior: Any | None
     best_parameters: dict[str, float]
     best_model_image: np.ndarray
@@ -43,17 +65,35 @@ class RealFitProducts:
 
     @property
     def statistics(self) -> dict[str, float]:
+        """dict of str to float : Scalar goodness-of-fit statistics."""
         return {
             "chi2": self.chi2,
             "reduced_chi2": self.reduced_chi2,
             "ndof": self.ndof,
         }
-    
+
     def corner(
         self,
         parameter_labels: list[str] | None = None,
         **kwargs,
     ):
+        """Plot the posterior corner diagram.
+
+        Parameters
+        ----------
+        parameter_labels : list of str, optional
+            Labels used for the corner-plot axes. If None, labels are inferred
+            from ``model_name``.
+        **kwargs
+            Additional keyword arguments passed to
+            :func:`baymorph.plotting.corner_plot`.
+
+        Returns
+        -------
+        tuple
+            Figure, axes grid, and parameter array returned by
+            :func:`baymorph.plotting.corner_plot`.
+        """
         if parameter_labels is None:
             parameter_labels = model_parameter_labels(
                 self.model_name,
@@ -64,11 +104,24 @@ class RealFitProducts:
             parameter_labels=parameter_labels,
             **kwargs,
         )
-    
+
     def radial_profile(
         self,
         ax: Axes | None = None,
     ):
+        """Plot radial-profile diagnostics.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes, optional
+            Existing axis whose position is replaced by the diagnostic layout.
+
+        Returns
+        -------
+        tuple
+            Figure and radial-profile axes returned by
+            :func:`baymorph.plotting.plot_radial_profile_diagnostics`.
+        """
         from baymorph.plotting import (
             plot_radial_profile_diagnostics,
         )
@@ -86,6 +139,23 @@ class RealFitProducts:
         observation: Any,
         **kwargs,
     ):
+        """Plot a high-level mock-fit report.
+
+        Parameters
+        ----------
+        observation : object
+            Observation object passed to
+            :func:`baymorph.plotting.plot_mock_fit_report`.
+        **kwargs
+            Additional keyword arguments passed to
+            :func:`baymorph.plotting.plot_mock_fit_report`.
+
+        Returns
+        -------
+        tuple
+            Figure and axes returned by
+            :func:`baymorph.plotting.plot_mock_fit_report`.
+        """
         from baymorph.plotting import (
             plot_mock_fit_report,
         )
