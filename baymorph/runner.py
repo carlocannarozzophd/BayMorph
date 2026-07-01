@@ -104,7 +104,6 @@ class BayMorphRunner:
         if return_result:
             return self.image_preparation_products
 
-
     def select_psf_candidates(
         self,
         *,
@@ -127,7 +126,6 @@ class BayMorphRunner:
         if return_result:
             return self.psf_candidate_products
 
-
     def build_psf(
         self,
         *,
@@ -144,7 +142,6 @@ class BayMorphRunner:
         if return_result:
             return self.psf_products
 
-
     def fit(
         self,
         *,
@@ -160,7 +157,6 @@ class BayMorphRunner:
 
         if return_result:
             return self.fit_result
-
 
     def corner(self):
         """Generate corner plots."""
@@ -181,4 +177,57 @@ class BayMorphRunner:
 
         self._status(
             "Corner plots generated"
+        )
+
+    def residual_maps(self):
+        """Generate residual maps."""
+
+        if self.fit_result is None:
+            raise RuntimeError(
+                "Run fit() before residual_maps()."
+            )
+
+        from baymorph.pipeline import (
+            run_residual_map_diagnostics,
+        )
+
+        run_residual_map_diagnostics(
+            self.config,
+            self.fit_result,
+        )
+
+        self._status(
+            "Residual maps generated"
+        )
+    
+    def radial_profile(self):
+        """Generate radial-profile diagnostics."""
+
+        if self.fit_result is None:
+            raise RuntimeError(
+                "Run fit() before radial_profile()."
+            )
+
+        from baymorph.pipeline import (
+            run_radial_profile_diagnostics,
+        )
+
+        run_radial_profile_diagnostics(
+            self.config,
+            self.fit_result,
+        )
+
+        self._status(
+            "Radial profiles generated"
+        )
+
+    def diagnostics(self):
+        """Generate all available fit diagnostics."""
+
+        self.corner()
+        self.residual_maps()
+        self.radial_profile()
+
+        self._status(
+            "All diagnostics generated"
         )

@@ -76,6 +76,12 @@ from .corner import (
 from ..results import (
     RealFitProducts,
 )
+from .residual_maps import (
+    run_residual_map_diagnostics,
+)
+from .radial_profile import (
+    run_radial_profile_diagnostics,
+)
 
 __all__ = [
     "RealFITSPreparation",
@@ -132,4 +138,6 @@ __all__ = [
     "resolve_cutout",
     "resolve_fixed_cutout",
     "run_corner_diagnostics",
+    "run_residual_map_diagnostics",
+    "run_radial_profile_diagnostics",
 ]
