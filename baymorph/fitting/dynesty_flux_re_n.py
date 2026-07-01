@@ -1,4 +1,4 @@
-"""Minimal Dynesty fitter for flux, effective radius and Sersic index."""
+"""Minimal Dynesty fitter for flux, effective radius, and Sérsic index."""
 
 import dynesty
 import numpy as np
@@ -7,14 +7,29 @@ from baymorph.likelihood import gaussian_log_likelihood
 from baymorph.results import PosteriorResult
 
 
-class DynestyFluxReNResult(
-    PosteriorResult
-):
-    """Flux + Re + n posterior result."""
+class DynestyFluxReNResult(PosteriorResult):
+    """Posterior result for a flux, effective-radius, and Sérsic-index fit."""
 
 
 class DynestyFluxReNFitter:
-    """Fit flux, effective radius and Sersic index with Dynesty."""
+    """Fit flux, effective radius, and Sérsic index with Dynesty.
+
+    Parameters
+    ----------
+    model_factory : callable
+        Callable that receives ``flux``, ``re``, and ``n`` and returns a model
+        object with a ``render(shape=...)`` method.
+    data : array-like
+        Observed image data.
+    noise : array-like or float
+        Noise map or scalar noise level used in the Gaussian likelihood.
+    flux_min, flux_max : float
+        Lower and upper bounds of the uniform prior on total flux.
+    re_min, re_max : float
+        Lower and upper bounds of the uniform prior on effective radius.
+    n_min, n_max : float
+        Lower and upper bounds of the uniform prior on Sérsic index.
+    """
 
     def __init__(
         self,
@@ -42,32 +57,22 @@ class DynestyFluxReNFitter:
         self,
         u,
     ):
-        flux = (
-            self.flux_min
-            + u[0]
-            * (
-                self.flux_max
-                - self.flux_min
-            )
-        )
+        """Transform unit-cube samples to physical model parameters.
 
-        re = (
-            self.re_min
-            + u[1]
-            * (
-                self.re_max
-                - self.re_min
-            )
-        )
+        Parameters
+        ----------
+        u : array-like
+            Unit-cube sample with three values corresponding to flux,
+            effective radius, and Sérsic index.
 
-        n = (
-            self.n_min
-            + u[2]
-            * (
-                self.n_max
-                - self.n_min
-            )
-        )
+        Returns
+        -------
+        ndarray
+            Physical parameters ``[flux, re, n]``.
+        """
+        flux = self.flux_min + u[0] * (self.flux_max - self.flux_min)
+        re = self.re_min + u[1] * (self.re_max - self.re_min)
+        n = self.n_min + u[2] * (self.n_max - self.n_min)
 
         return np.array(
             [
@@ -81,6 +86,18 @@ class DynestyFluxReNFitter:
         self,
         theta,
     ):
+        """Evaluate the Gaussian log-likelihood for one parameter vector.
+
+        Parameters
+        ----------
+        theta : array-like
+            Physical model parameters ``[flux, re, n]``.
+
+        Returns
+        -------
+        float
+            Gaussian log-likelihood value.
+        """
         flux, re, n = theta
 
         model = self.model_factory(
@@ -90,7 +107,7 @@ class DynestyFluxReNFitter:
         )
 
         image = model.render(
-            shape=self.data.shape
+            shape=self.data.shape,
         )
 
         return gaussian_log_likelihood(
@@ -103,6 +120,19 @@ class DynestyFluxReNFitter:
         self,
         nlive=100,
     ):
+        """Run nested sampling.
+
+        Parameters
+        ----------
+        nlive : int, default=100
+            Number of live points used by Dynesty.
+
+        Returns
+        -------
+        DynestyFluxReNResult
+            Posterior samples, log-weights, evidence sequence, and parameter
+            names for the fit.
+        """
         sampler = dynesty.NestedSampler(
             self.loglikelihood,
             self.prior_transform,

@@ -7,14 +7,27 @@ from baymorph.likelihood import gaussian_log_likelihood
 from baymorph.results import PosteriorResult
 
 
-class DynestyFluxReResult(
-    PosteriorResult
-):
-    """Flux + Re posterior result."""
+class DynestyFluxReResult(PosteriorResult):
+    """Posterior result for a flux and effective-radius fit."""
 
 
 class DynestyFluxReFitter:
-    """Fit flux and effective radius with Dynesty."""
+    """Fit flux and effective radius with Dynesty.
+
+    Parameters
+    ----------
+    model_factory : callable
+        Callable that receives ``flux`` and ``re`` and returns a model object
+        with a ``render(shape=...)`` method.
+    data : array-like
+        Observed image data.
+    noise : array-like or float
+        Noise map or scalar noise level used in the Gaussian likelihood.
+    flux_min, flux_max : float
+        Lower and upper bounds of the uniform prior on total flux.
+    re_min, re_max : float
+        Lower and upper bounds of the uniform prior on effective radius.
+    """
 
     def __init__(
         self,
@@ -38,23 +51,21 @@ class DynestyFluxReFitter:
         self,
         u,
     ):
-        flux = (
-            self.flux_min
-            + u[0]
-            * (
-                self.flux_max
-                - self.flux_min
-            )
-        )
+        """Transform unit-cube samples to physical model parameters.
 
-        re = (
-            self.re_min
-            + u[1]
-            * (
-                self.re_max
-                - self.re_min
-            )
-        )
+        Parameters
+        ----------
+        u : array-like
+            Unit-cube sample with two values corresponding to flux and
+            effective radius.
+
+        Returns
+        -------
+        ndarray
+            Physical parameters ``[flux, re]``.
+        """
+        flux = self.flux_min + u[0] * (self.flux_max - self.flux_min)
+        re = self.re_min + u[1] * (self.re_max - self.re_min)
 
         return np.array(
             [
@@ -67,6 +78,18 @@ class DynestyFluxReFitter:
         self,
         theta,
     ):
+        """Evaluate the Gaussian log-likelihood for one parameter vector.
+
+        Parameters
+        ----------
+        theta : array-like
+            Physical model parameters ``[flux, re]``.
+
+        Returns
+        -------
+        float
+            Gaussian log-likelihood value.
+        """
         flux, re = theta
 
         model = self.model_factory(
@@ -75,7 +98,7 @@ class DynestyFluxReFitter:
         )
 
         image = model.render(
-            shape=self.data.shape
+            shape=self.data.shape,
         )
 
         return gaussian_log_likelihood(
@@ -88,6 +111,19 @@ class DynestyFluxReFitter:
         self,
         nlive=100,
     ):
+        """Run nested sampling.
+
+        Parameters
+        ----------
+        nlive : int, default=100
+            Number of live points used by Dynesty.
+
+        Returns
+        -------
+        DynestyFluxReResult
+            Posterior samples, log-weights, log-likelihoods, evidence sequence,
+            and parameter names for the fit.
+        """
         sampler = dynesty.NestedSampler(
             self.loglikelihood,
             self.prior_transform,

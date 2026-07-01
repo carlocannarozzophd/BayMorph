@@ -8,11 +8,24 @@ from baymorph.results import PosteriorResult
 
 
 class DynestyFluxResult(PosteriorResult):
-    """Flux-only posterior result."""
+    """Posterior result for a flux-only fit."""
 
 
 class DynestyFluxFitter:
-    """Fit only the flux parameter."""
+    """Fit only the flux parameter with Dynesty.
+
+    Parameters
+    ----------
+    model_factory : callable
+        Callable that receives ``flux`` and returns a model object with a
+        ``render(shape=...)`` method.
+    data : array-like
+        Observed image data.
+    noise : array-like or float
+        Noise map or scalar noise level used in the Gaussian likelihood.
+    flux_min, flux_max : float
+        Lower and upper bounds of the uniform prior on total flux.
+    """
 
     def __init__(
         self,
@@ -29,12 +42,34 @@ class DynestyFluxFitter:
         self.flux_max = flux_max
 
     def prior_transform(self, u):
-        """Transform unit-cube sample to physical flux."""
+        """Transform a unit-cube sample to physical flux.
+
+        Parameters
+        ----------
+        u : array-like
+            Unit-cube sample with one value.
+
+        Returns
+        -------
+        ndarray
+            Physical parameter array ``[flux]``.
+        """
         flux = self.flux_min + u[0] * (self.flux_max - self.flux_min)
         return np.array([flux])
 
     def loglikelihood(self, theta):
-        """Evaluate log-likelihood."""
+        """Evaluate the Gaussian log-likelihood for one flux value.
+
+        Parameters
+        ----------
+        theta : array-like
+            Physical parameter array ``[flux]``.
+
+        Returns
+        -------
+        float
+            Gaussian log-likelihood value.
+        """
         flux = theta[0]
 
         model = self.model_factory(flux)
@@ -47,7 +82,19 @@ class DynestyFluxFitter:
         )
 
     def run(self, nlive=100):
-        """Run nested sampling."""
+        """Run nested sampling.
+
+        Parameters
+        ----------
+        nlive : int, default=100
+            Number of live points used by Dynesty.
+
+        Returns
+        -------
+        DynestyFluxResult
+            Posterior samples, log-weights, log-likelihoods, evidence sequence,
+            and parameter names for the fit.
+        """
         sampler = dynesty.NestedSampler(
             self.loglikelihood,
             self.prior_transform,

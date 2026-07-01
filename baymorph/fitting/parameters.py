@@ -7,7 +7,17 @@ import numpy as np
 
 @dataclass(frozen=True)
 class Parameter:
-    """Single fitted parameter."""
+    """Definition of a fitted model parameter.
+
+    Parameters
+    ----------
+    name : str
+        Parameter name.
+    lower : float
+        Lower bound of the uniform prior.
+    upper : float
+        Upper bound of the uniform prior.
+    """
 
     name: str
     lower: float
@@ -17,14 +27,30 @@ class Parameter:
         self,
         u: float,
     ) -> float:
-        """Transform unit-cube value to physical value."""
-        return self.lower + u * (
-            self.upper - self.lower
-        )
+        """Transform a unit-cube value to the physical parameter space.
+
+        Parameters
+        ----------
+        u : float
+            Value in the interval ``[0, 1]``.
+
+        Returns
+        -------
+        float
+            Physical parameter value obtained by a linear transformation.
+        """
+        return self.lower + u * (self.upper - self.lower)
 
 
 class ParameterSet:
-    """Ordered collection of parameters."""
+    """Ordered collection of fitted parameters.
+
+    Parameters
+    ----------
+    parameters : list of Parameter
+        Sequence of parameter definitions. The order determines the order of
+        parameters used by the sampler.
+    """
 
     def __init__(
         self,
@@ -36,7 +62,7 @@ class ParameterSet:
     def names(
         self,
     ) -> list[str]:
-        """Parameter names."""
+        """list of str : Parameter names in sampling order."""
         return [
             parameter.name
             for parameter in self.parameters
@@ -46,7 +72,7 @@ class ParameterSet:
     def ndim(
         self,
     ) -> int:
-        """Number of parameters."""
+        """int : Number of fitted parameters."""
         return len(
             self.parameters
         )
@@ -55,7 +81,7 @@ class ParameterSet:
     def bounds(
         self,
     ) -> dict[str, tuple[float, float]]:
-        """Parameter bounds as dictionary."""
+        """dict : Mapping from parameter names to prior bounds."""
         return {
             parameter.name: (
                 parameter.lower,
@@ -68,7 +94,18 @@ class ParameterSet:
         self,
         u,
     ) -> np.ndarray:
-        """Transform unit-cube vector to physical parameter vector."""
+        """Transform a unit-cube parameter vector to physical parameters.
+
+        Parameters
+        ----------
+        u : array-like
+            Unit-cube parameter vector with one value per parameter.
+
+        Returns
+        -------
+        ndarray
+            Physical parameter vector in the same order as ``parameters``.
+        """
         return np.array(
             [
                 parameter.transform(value)

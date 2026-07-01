@@ -9,24 +9,32 @@ from baymorph.likelihood import gaussian_log_likelihood
 
 @dataclass
 class GridSearchResult:
-    """Result of a one-dimensional grid search."""
+    """Result of a one-dimensional grid search.
+
+    Parameters
+    ----------
+    values : ndarray
+        Grid of sampled parameter values.
+    loglikes : ndarray
+        Log-likelihood evaluated at each parameter value.
+    """
 
     values: np.ndarray
     loglikes: np.ndarray
 
     @property
     def best_index(self) -> int:
-        """Index of the best likelihood value."""
+        """int : Index of the maximum log-likelihood."""
         return int(np.argmax(self.loglikes))
 
     @property
     def best_value(self) -> float:
-        """Best-fit parameter value."""
+        """float : Parameter value corresponding to the maximum log-likelihood."""
         return float(self.values[self.best_index])
 
     @property
     def best_loglike(self) -> float:
-        """Best log-likelihood value."""
+        """float : Maximum log-likelihood value."""
         return float(self.loglikes[self.best_index])
 
 
@@ -37,7 +45,29 @@ def grid_search_1d(
     noise: np.ndarray,
     mask: np.ndarray | None = None,
 ) -> GridSearchResult:
-    """Run a one-dimensional grid search."""
+    """Perform a one-dimensional grid search.
+
+    Parameters
+    ----------
+    values : ndarray
+        Grid of parameter values to evaluate.
+    model_factory : callable
+        Callable that receives a parameter value and returns a model object
+        exposing a ``render(shape=...)`` method.
+    data : ndarray
+        Observed image.
+    noise : ndarray
+        Noise map associated with ``data``.
+    mask : ndarray of bool, optional
+        Boolean mask identifying pixels excluded from the likelihood
+        evaluation.
+
+    Returns
+    -------
+    GridSearchResult
+        Parameter grid together with the corresponding Gaussian
+        log-likelihood values.
+    """
     values = np.asarray(values, dtype=float)
 
     loglikes = []

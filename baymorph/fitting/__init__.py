@@ -16,18 +16,18 @@ from .dynesty_generic import (
     DynestyFitter,
     DynestyResult,
 )
+from .factories import (
+    SkyModelWrapper,
+    make_double_sersic_psf_sky_model,
+    make_single_sersic_psf_sky_model,
+)
 from .grid import (
     GridSearchResult,
     grid_search_1d,
 )
 from .parameters import (
     Parameter,
-    ParameterSet
-)
-from .factories import (
-    SkyModelWrapper,
-    make_single_sersic_psf_sky_model,
-    make_double_sersic_psf_sky_model,
+    ParameterSet,
 )
 
 __all__ = [
