@@ -1,32 +1,39 @@
-from __future__ import annotations
+"""Double-Sersic morphology model."""
 
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+
+import numpy as np
 
 
-@dataclass(frozen=True)
-class ModelDefinition:
-    """Definition of a morphological model registered in BayMorph.
+@dataclass
+class DoubleSersicModel:
+    """Two-component Sérsic model.
 
     Parameters
     ----------
-    name : str
-        Unique model identifier.
-    parameter_names : list of str
-        Ordered names of the model parameters.
-    parameter_labels : list of str
-        Human-readable labels corresponding to ``parameter_names``.
-    factory_name : str
-        Name of the factory class responsible for constructing the model.
-    factory : callable, optional
-        Factory callable used to instantiate the model. This may be ``None``
-        when the model definition is registered before the corresponding
-        factory is available.
+    bulge : object
+        Inner Sérsic-like component exposing a ``render(shape)`` method.
+    disk : object
+        Outer Sérsic-like component exposing a ``render(shape)`` method.
     """
 
-    name: str
-    parameter_names: list[str]
-    parameter_labels: list[str]
-    factory_name: str
-    factory: Callable[..., Any] | None = None
+    bulge: object
+    disk: object
+
+    def render(
+        self,
+        shape: tuple[int, int],
+    ) -> np.ndarray:
+        """Render the sum of the bulge and disk components.
+
+        Parameters
+        ----------
+        shape : tuple of int
+            Output image shape as ``(ny, nx)``.
+
+        Returns
+        -------
+        ndarray
+            Rendered double-Sérsic image.
+        """
+        return self.bulge.render(shape=shape) + self.disk.render(shape=shape)
