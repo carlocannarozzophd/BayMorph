@@ -2,63 +2,84 @@
 
 This directory contains the technical documentation for BayMorph.
 
-BayMorph is a Bayesian framework for morphological modelling of astronomical images. The main repository README provides the user-facing overview, installation instructions, quick-start example, and links to the tutorial notebooks. The documents in this directory describe the architecture and validation strategy in more detail.
+BayMorph is a Bayesian framework for the morphological modelling of astronomical images. The repository `README.md` provides the user-facing overview, installation instructions, quick-start examples, and links to the official notebooks. The documents in this directory describe the architecture, validation strategy, and long-term design decisions in greater detail.
 
 ---
 
-## Documents
+# Documents
 
-### `ARCHITECTURE.md`
+## `ARCHITECTURE.md`
 
-Describes the internal structure of BayMorph, including:
+Describes the internal architecture of BayMorph, including
 
-- design philosophy
-- public and internal APIs
-- package organization
-- pipeline architecture
-- model, PSF, fitting, and plotting components
-- run-output organization
+- design philosophy;
+- public and internal APIs;
+- package organization;
+- configuration and output architecture;
+- pipeline workflow;
+- model architecture;
+- PSF construction;
+- Bayesian inference;
+- plotting system.
 
-Read this document if you want to understand how the package is structured or where new functionality should be added.
-
----
-
-### `VALIDATION.md`
-
-Describes the validation strategy, including:
-
-- synthetic single-Sérsic validation
-- end-to-end mock-pipeline validation
-- real-galaxy demonstration on TARGET
-- the purpose of each official notebook
-- current validation limits and next steps
-
-Read this document if you want to understand what has been tested and what remains under active validation.
+Read this document if you want to understand how BayMorph is organized internally or where new functionality should be implemented.
 
 ---
 
-## Related top-level documents
+## `VALIDATION.md`
 
-### `ROADMAP.md`
+Describes the scientific validation strategy, including
 
-Summarizes near-term, medium-term, and long-term development plans.
+- synthetic-galaxy validation;
+- end-to-end pipeline validation;
+- real-galaxy demonstration on TARGET;
+- purpose of the official notebooks;
+- current validation status;
+- known limitations and future validation plans.
 
-### `DECISIONS.md`
-
-Records accepted architectural decisions, including the choice of Bayesian evidence, `dynesty`, source-masked noise estimation, diagnostic products, `configs/`, and `runs/`.
+Read this document if you want to understand what has been validated and what remains under active development.
 
 ---
 
-## Recommended reading order
+# Related top-level documents
 
-For new users:
+## `README.md`
+
+Repository overview, installation instructions, quick-start guide, and links to the official notebooks.
+
+---
+
+## `ROADMAP.md`
+
+Near-term, medium-term, and long-term development plans.
+
+---
+
+## `DECISIONS.md`
+
+Collection of accepted architectural decisions, including
+
+- Bayesian model comparison;
+- Dynesty as the inference engine;
+- source-masked noise estimation;
+- empirical PSF construction;
+- pipeline organization;
+- output structure;
+- public API design.
+
+---
+
+# Recommended reading order
+
+## For users
 
 1. `README.md`
-2. `notebooks/01_SingleSersic_Validation.ipynb`
-3. `notebooks/02_MockPipeline_Validation.ipynb`
-4. `notebooks/TARGET_BayMorph_Test.ipynb`
+2. `notebooks/01_Simulated_Galaxy_Analysis.ipynb`
+3. `notebooks/02_Real_Galaxy_Analysis.ipynb`
 
-For developers:
+---
+
+## For developers
 
 1. `docs/ARCHITECTURE.md`
 2. `docs/VALIDATION.md`
