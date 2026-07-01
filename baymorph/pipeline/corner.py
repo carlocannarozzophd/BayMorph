@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 
 from baymorph.models import (
@@ -16,6 +18,11 @@ from baymorph.plotting import (
     corner_plot,
 )
 
+from .config import (
+    load_resolved_config,
+    resolve_config,
+)
+
 
 def run_corner_diagnostics(
     config,
@@ -24,6 +31,11 @@ def run_corner_diagnostics(
     """
     Generate and save corner plots for one or more fitted models.
     """
+
+    if isinstance(config, (str, Path)):
+        config = load_resolved_config(config)
+    else:
+        config = resolve_config(config)
 
     paths = pipeline_paths(config)["fits"]
 

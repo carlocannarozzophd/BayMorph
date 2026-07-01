@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 
 from .image_preparation import (
     load_image_preparation_products,
+)
+
+from .config import (
+    load_resolved_config,
+    resolve_config,
 )
 
 from .outputs import (
@@ -23,6 +30,12 @@ def run_residual_map_diagnostics(
     config,
     fit_results,
 ):
+
+    if isinstance(config, (str, Path)):
+        config = load_resolved_config(config)
+    else:
+        config = resolve_config(config)
+
     """
     Generate and save residual maps for one or more fitted models.
     """

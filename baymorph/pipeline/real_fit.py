@@ -97,26 +97,12 @@ def run_real_fit_from_config(
             parameters=parameters,
             model_factory=model_factory,
             nlive=sampler_cfg["nlive"],
-            sample=sampler_cfg.get(
-                "sample",
-                "auto",
-            ),
-            dlogz=sampler_cfg.get(
-                "dlogz",
-                None,
-            ),
-            n_processes=sampler_cfg.get(
-                "n_processes",
-                1,
-            ),
-            queue_size=sampler_cfg.get(
-                "queue_size",
-                None,
-            ),
-            seed=sampler_cfg.get(
-                "seed",
-                None,
-            ),
+            sample=sampler_cfg.get("sample", "auto"),
+            dlogz=sampler_cfg.get("dlogz", None),
+            n_processes=sampler_cfg.get("n_processes", 1),
+            queue_size=sampler_cfg.get("queue_size", None),
+            seed=sampler_cfg.get("seed", None),
+            progress_label=model_name,
         )
 
         best_model_image, best_parameters = _compute_best_model(
@@ -746,6 +732,7 @@ def _run_dynesty(
     n_processes: int = 1,
     queue_size: int | None = None,
     seed: int | None = None,
+    progress_label: str | None = None,
 ):
     fitter = DynestyFitter(
         model_factory=model_factory,
@@ -763,6 +750,7 @@ def _run_dynesty(
         n_processes=n_processes,
         queue_size=queue_size,
         seed=seed,
+        progress_label=progress_label,
     )
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -10,6 +12,11 @@ from baymorph.analysis import (
 
 from .image_preparation import (
     load_image_preparation_products,
+)
+
+from .config import (
+    load_resolved_config,
+    resolve_config,
 )
 
 from .outputs import (
@@ -35,6 +42,12 @@ def run_radial_profile_diagnostics(
     config,
     fit_results,
 ):
+
+    if isinstance(config, (str, Path)):
+        config = load_resolved_config(config)
+    else:
+        config = resolve_config(config)
+
     """Generate and save radial-profile diagnostics."""
 
     image_products = load_image_preparation_products(
