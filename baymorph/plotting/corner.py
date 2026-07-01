@@ -14,11 +14,12 @@ from scipy.stats import gaussian_kde
 def erf_sigma_to_percentiles(
     sigma,
 ):
-    """Convert Gaussian sigma levels to percentile bounds."""
+    """Convert Gaussian sigma levels to enclosed percentile bounds."""
     sigma = np.asarray(
         sigma,
         dtype=float,
     )
+
     p_hi = 0.5 * (
         1.0 + ss.erf(sigma / np.sqrt(2.0))
     )
@@ -30,6 +31,7 @@ def erf_sigma_to_percentiles(
 def _as_cmap(
     cmap,
 ):
+    """Return a Matplotlib colormap instance."""
     if cmap is None:
         return colormaps.get_cmap("bone_r")
 
@@ -45,6 +47,7 @@ def _sigma_colors(
     vmin=0.20,
     vmax=0.90,
 ):
+    """Sample contour colors from a colormap."""
     vals = np.linspace(
         vmin,
         vmax,
@@ -64,6 +67,7 @@ def _style_corner_axis(
     minor_length=5,
     max_n_ticks=4,
 ):
+    """Apply BayMorph corner-plot styling to one axis."""
     for spine in ax.spines.values():
         spine.set_linewidth(spine_width)
 
@@ -117,6 +121,7 @@ def _hist2d_smoothed(
     smooth_sigma=0.0,
     range_xy=None,
 ):
+    """Compute a smoothed two-dimensional histogram."""
     counts, xedges, yedges = np.histogram2d(
         x,
         y,
@@ -143,6 +148,7 @@ def _resolve_corner_grid(
     fig=None,
     ax=None,
 ):
+    """Resolve or create the axes grid used by a corner plot."""
     if ax is not None and fig is not None:
         raise ValueError("Pass either `fig` or `ax`, not both.")
 
@@ -221,16 +227,77 @@ def corner_plot(
     cmap_min=0.20,
     cmap_max=0.90,
 ):
-    """
-    Create a publication-style corner plot.
+    """Create a publication-style corner plot.
 
-    Parameters should have shape:
+    Parameters
+    ----------
+    parameters : array-like
+        Posterior samples with shape ``(n_params, n_samples)`` or
+        ``(n_sets, n_params, n_samples)``.
+    sigma : sequence of float, optional
+        Gaussian-equivalent sigma levels used for contours and one-dimensional
+        credible intervals. If None, ``[1, 2]`` is used.
+    parameter_labels : sequence of str, optional
+        Labels displayed on the plot axes.
+    bins : int, default=30
+        Number of histogram bins.
+    fill_contours : bool, default=True
+        If True, draw filled two-dimensional contour regions.
+    cmap : str or matplotlib.colors.Colormap, default="bone_r"
+        Colormap used for credible regions.
+    density1d : {"hist", "kde"}, default="hist"
+        Method used for one-dimensional marginal distributions.
+    kde_bw_method : str, scalar, or callable, optional
+        Bandwidth method passed to :class:`scipy.stats.gaussian_kde`.
+    smooth_1d : float, default=0.0
+        Gaussian smoothing scale applied to one-dimensional histograms.
+    smooth_2d : float, default=1.0
+        Gaussian smoothing scale applied to two-dimensional histograms.
+    show_medians : bool, default=True
+        If True, draw median markers and median lines.
+    write_medians : bool, default=False
+        If True, write median and one-sigma interval values in diagonal panel
+        titles.
+    hist_color : color-like, optional
+        Color used for one-dimensional histogram lines. If None, the inner
+        contour color is used.
+    max_n_ticks : int, default=4
+        Maximum number of major ticks per axis. If zero, major ticks are
+        hidden.
+    fig : matplotlib.figure.Figure, optional
+        Existing figure containing an ``n_params`` by ``n_params`` axes grid.
+    ax : matplotlib.axes.Axes, optional
+        Existing axis whose bounding box is replaced by an embedded corner
+        grid.
+    range_xy : sequence, optional
+        Range passed to two-dimensional histograms.
+    alpha_2d : float, default=0.95
+        Alpha value for filled two-dimensional contours.
+    alpha_1d : float, default=0.90
+        Alpha value for one-dimensional credible-region fills.
+    alpha_lines : float, default=1.0
+        Alpha value for contour and marginal-distribution lines.
+    cmap_min : float, default=0.20
+        Lower colormap sampling value.
+    cmap_max : float, default=0.90
+        Upper colormap sampling value.
 
-    - (n_params, n_samples)
-    - or (n_sets, n_params, n_samples)
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Figure containing the corner plot.
+    ax_grid : ndarray
+        Two-dimensional array of Matplotlib axes.
+    params : ndarray
+        Parameter array used internally, always with shape
+        ``(n_sets, n_params, n_samples)``.
 
-    If ``ax`` is provided, the corner plot is embedded inside the
-    bounding box of that axis.
+    Raises
+    ------
+    ValueError
+        If the input parameter array has an invalid shape, if the number of
+        labels does not match the number of parameters, or if incompatible
+        figure/axis arguments are supplied.
     """
     params = np.asarray(
         parameters,
@@ -558,6 +625,7 @@ def corner_plot(
                         )
 
                     if write_medians:
+
                         def fmt(val):
                             return f"{val:.3f}"
 

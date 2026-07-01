@@ -16,7 +16,6 @@ def _style_axes(
     minor_length=5,
 ):
     """Apply BayMorph-style axis spines and ticks."""
-
     for spine in ax.spines.values():
         spine.set_linewidth(spine_width)
 
@@ -44,6 +43,7 @@ def _style_axes(
 
 
 def _show_log(ax, image, title, cmap=BAYMORPH_IMAGE_CMAP):
+    """Display an image with robust logarithmic normalization."""
     vmin, vmax = _log_limits(image)
     image = np.clip(np.asarray(image, dtype=float), vmin, vmax)
 
@@ -70,6 +70,7 @@ def _show_linear(
     cmap="RdBu_r",
     symmetric=True,
 ):
+    """Display an image with linear normalization."""
     image = np.asarray(image, dtype=float)
 
     if symmetric:
@@ -99,6 +100,7 @@ def _show_linear(
 
 
 def _format_stat_label(key):
+    """Format a statistic name for display in report figures."""
     key_lower = key.lower()
 
     if key_lower.startswith("reduced"):
@@ -117,6 +119,7 @@ def _format_stat_label(key):
 
 
 def _draw_statistics_panel(ax, statistics):
+    """Draw a text panel summarizing scalar fit statistics."""
     ax.axis("off")
 
     y = 0.95
@@ -180,31 +183,38 @@ def plot_mock_fit_report(
     output_path=None,
     show=True,
 ):
-    """
-    Plot a mock-observation and BayMorph reconstruction report.
+    """Plot a mock-observation and BayMorph reconstruction report.
 
     Parameters
     ----------
-    observation
-        SyntheticObservation returned by BayMorph.
-    fit
-        Fit result object containing at least ``best_model_image``.
-    noise_map
+    observation : SyntheticObservation
+        Synthetic observation containing intrinsic, convolved, sky, noise, and
+        observed images.
+    fit : object
+        Fit result object exposing at least ``best_model_image``.
+    noise_map : array-like
         Noise map used in the likelihood.
-    statistics
-        Optional dictionary of scalar statistics.
-    corner_plotter
-        Optional callable receiving an axis or subfigure-like target.
-        Example: ``corner_plotter(ax)``.
-    radial_profile_plotter
-        Optional callable receiving an axis.
-        Example: ``radial_profile_plotter(ax)``.
-    output_path
-        Optional path where the figure is saved.
-    show
-        If True, call ``plt.show()``.
-    """
+    statistics : dict, optional
+        Scalar statistics displayed in the report panel.
+    corner_plotter : callable, optional
+        Callable receiving a Matplotlib axis-like target and drawing a corner
+        diagnostic.
+    radial_profile_plotter : callable, optional
+        Callable receiving a Matplotlib axis-like target and drawing a radial
+        profile diagnostic.
+    output_path : str or pathlib.Path, optional
+        Path where the figure is saved. If None, the figure is not written to
+        disk.
+    show : bool, default=True
+        If True, call :func:`matplotlib.pyplot.show`.
 
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Output report figure.
+    axes : ndarray
+        Array of axes for the two main report rows.
+    """
     intrinsic_image = observation.intrinsic_image
     psf = observation.psf_kernel
     convolved_image = observation.convolved_image

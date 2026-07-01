@@ -1,3 +1,5 @@
+"""Radial-profile plotting utilities."""
+
 import matplotlib.pyplot as plt
 
 from .style import style_axes
@@ -10,18 +12,30 @@ def plot_radial_profile_diagnostics(
     profile_noise=None,
     ax=None,
 ):
-    """
-    Plot radial profile and residuals.
+    """Plot radial profiles and residuals.
 
     Parameters
     ----------
-    radius : array
-    profile_data : array
-    profile_model : array
-    profile_noise : array, optional
+    radius : array-like
+        Radial-bin centers.
+    profile_data : array-like
+        Observed radial profile.
+    profile_model : array-like
+        Model radial profile.
+    profile_noise : array-like, optional
+        Radial noise profile. If provided, a model-centered uncertainty band
+        is shown in the upper panel.
     ax : matplotlib.axes.Axes, optional
-    """
+        Existing axis whose position is replaced by a two-panel diagnostic
+        layout.
 
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Output figure.
+    axes : tuple of matplotlib.axes.Axes
+        Upper profile axis and lower residual axis.
+    """
     if ax is None:
         fig, (ax1, ax2) = plt.subplots(
             2,
@@ -73,7 +87,6 @@ def plot_radial_profile_diagnostics(
     ax2.set_ylabel("Residual")
     ax2.set_xlabel("Radius [pix]")
 
-    # Hide x tick labels on the upper panel
     ax1.tick_params(
         axis="x",
         which="both",

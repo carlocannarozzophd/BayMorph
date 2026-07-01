@@ -1,15 +1,27 @@
 """Plotting utilities for BayMorph."""
 
-from .residual import (
-    plot_data_model_residual,
-)
 from .corner import (
     corner_plot,
     erf_sigma_to_percentiles,
 )
+from .images import (
+    plot_fit_summary,
+    plot_log_data_model_residual,
+    plot_log_image,
+    show_log_image,
+)
 from .posterior import (
     plot_1d_posterior,
     plot_2d_samples,
+)
+from .radial import (
+    plot_radial_profile_diagnostics,
+)
+from .report import (
+    plot_mock_fit_report,
+)
+from .residual import (
+    plot_data_model_residual,
 )
 from .style import (
     finalize_figure,
@@ -17,13 +29,7 @@ from .style import (
     set_plot_style,
     style_axes,
 )
-from .report import plot_mock_fit_report
-from .images import (
-    show_log_image,
-    plot_log_data_model_residual,
-    plot_fit_summary,
-)
-from .radial import plot_radial_profile_diagnostics
+
 __all__ = [
     "set_plot_style",
     "style_axes",
@@ -37,6 +43,7 @@ __all__ = [
     "show_log_image",
     "plot_log_data_model_residual",
     "plot_fit_summary",
+    "plot_log_image",
     "plot_mock_fit_report",
-    "plot_radial_profile_diagnostics"
+    "plot_radial_profile_diagnostics",
 ]

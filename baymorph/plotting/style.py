@@ -9,7 +9,15 @@ def set_plot_style(
     fontsize: int = 35,
     usetex: bool = False,
 ) -> None:
-    """Set a robust global matplotlib style."""
+    """Set the global Matplotlib style used by BayMorph plots.
+
+    Parameters
+    ----------
+    fontsize : int, default=35
+        Base font size used for labels, titles, ticks, and legends.
+    usetex : bool, default=False
+        If True, enable LaTeX text rendering through Matplotlib.
+    """
     plt.rc("text", usetex=usetex)
     plt.rc("font", family="serif", size=fontsize)
     plt.rc("axes", linewidth=3)
@@ -24,6 +32,7 @@ def _style_single_axis(
     ax,
     fontsize: int = 35,
 ) -> None:
+    """Apply BayMorph styling to a single Matplotlib axis."""
     ax.tick_params(
         which="major",
         length=10,
@@ -49,7 +58,15 @@ def style_axes(
     ax,
     fontsize: int = 35,
 ) -> None:
-    """Apply BayMorph axis styling."""
+    """Apply BayMorph axis styling to one or more axes.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes or iterable of matplotlib.axes.Axes
+        Axis, array of axes, or iterable of axes to style.
+    fontsize : int, default=35
+        Base font size used for ticks, labels, and titles.
+    """
     if isinstance(ax, np.ndarray):
         for single_ax in ax.flatten():
             _style_single_axis(
@@ -78,7 +95,32 @@ def make_plot(
     flatten: bool = True,
     **kwargs,
 ):
-    """Create a matplotlib figure using the BayMorph style."""
+    """Create a Matplotlib figure using the BayMorph plotting style.
+
+    Parameters
+    ----------
+    nrows : int, default=1
+        Number of subplot rows.
+    ncols : int, default=1
+        Number of subplot columns.
+    figsize : tuple of float, default=(15, 15)
+        Figure size in inches.
+    fontsize : int, default=35
+        Base font size used by the BayMorph plotting style.
+    usetex : bool, default=False
+        If True, enable LaTeX text rendering through Matplotlib.
+    flatten : bool, default=True
+        If True and multiple axes are created, return a flattened axes array.
+    **kwargs
+        Additional keyword arguments passed to :func:`matplotlib.pyplot.subplots`.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Created figure.
+    ax : matplotlib.axes.Axes or ndarray
+        Created axis or axes.
+    """
     set_plot_style(
         fontsize=fontsize,
         usetex=usetex,
@@ -109,6 +151,17 @@ def make_plot(
 
 
 def finalize_figure(fig):
-    """Apply final layout adjustments."""
+    """Apply final layout adjustments to a figure.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        Figure to finalize.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        Finalized figure.
+    """
     fig.tight_layout()
     return fig

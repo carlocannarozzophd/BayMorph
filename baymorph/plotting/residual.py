@@ -11,7 +11,31 @@ def plot_data_model_residual(
     image_cmap: str = "viridis",
     residual_cmap: str = "RdBu_r",
 ):
-    """Plot data, model and residual images with consistent scaling."""
+    """Plot data, model, and residual images with consistent scaling.
+
+    Parameters
+    ----------
+    data : ndarray
+        Observed image.
+    model : ndarray
+        Model image evaluated on the same pixel grid as ``data``.
+    image_cmap : str, default="viridis"
+        Matplotlib colormap used for the data and model panels.
+    residual_cmap : str, default="RdBu_r"
+        Matplotlib colormap used for the residual panel.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Output figure.
+    axes : ndarray
+        Array of Matplotlib axes for the data, model, and residual panels.
+
+    Raises
+    ------
+    ValueError
+        If ``data`` and ``model`` do not have the same shape.
+    """
     data = np.asarray(data, dtype=float)
     model = np.asarray(model, dtype=float)
 

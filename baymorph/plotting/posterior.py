@@ -11,7 +11,26 @@ def plot_1d_posterior(
     parameter_name: str = "Parameter",
     bins: int = 30,
 ):
-    """Plot a one-dimensional posterior histogram."""
+    """Plot a one-dimensional posterior histogram.
+
+    Parameters
+    ----------
+    samples : ndarray
+        Posterior samples for one parameter.
+    true_value : float, optional
+        Reference value shown as a vertical dashed line.
+    parameter_name : str, default="Parameter"
+        Label for the x-axis.
+    bins : int, default=30
+        Number of histogram bins.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Output figure.
+    ax : matplotlib.axes.Axes
+        Posterior histogram axis.
+    """
     fig, ax = make_plot(
         figsize=(6, 4),
         fontsize=16,
@@ -44,7 +63,30 @@ def plot_2d_samples(
     x_name: str = "x",
     y_name: str = "y",
 ):
-    """Plot two-dimensional posterior samples."""
+    """Plot two-dimensional posterior samples.
+
+    Parameters
+    ----------
+    samples_x : ndarray
+        Posterior samples for the x-axis parameter.
+    samples_y : ndarray
+        Posterior samples for the y-axis parameter.
+    true_x : float, optional
+        Reference x value shown as a vertical dashed line.
+    true_y : float, optional
+        Reference y value shown as a horizontal dashed line.
+    x_name : str, default="x"
+        Label for the x-axis.
+    y_name : str, default="y"
+        Label for the y-axis.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Output figure.
+    ax : matplotlib.axes.Axes
+        Scatter-plot axis.
+    """
     fig, ax = make_plot(
         figsize=(6, 5),
         fontsize=16,

@@ -71,7 +71,26 @@ def show_log_image(
     colorbar_label: str = "Flux",
     show: bool = False,
 ):
-    """Display an image using robust logarithmic normalization."""
+    """Display an image using robust logarithmic normalization.
+
+    Parameters
+    ----------
+    image : array-like
+        Input image.
+    title : str
+        Figure title.
+    cmap : str, default=BAYMORPH_IMAGE_CMAP
+        Matplotlib colormap used for the image.
+    colorbar_label : str, default="Flux"
+        Colorbar label.
+    show : bool, default=False
+        If True, call :func:`matplotlib.pyplot.show`.
+
+    Returns
+    -------
+    None
+        The figure is created using the active Matplotlib state.
+    """
     vmin, vmax = _log_limits(
         image,
     )
@@ -111,6 +130,99 @@ def show_log_image(
         plt.show()
 
 
+def plot_log_image(
+    image,
+    title: str = "",
+    cmap: str = BAYMORPH_IMAGE_CMAP,
+    colorbar_label: str = "Flux",
+    figsize: tuple[float, float] = (8, 8),
+    show: bool = False,
+):
+    """Plot a single image using BayMorph logarithmic styling.
+
+    Parameters
+    ----------
+    image : array-like
+        Input image.
+    title : str, default=""
+        Optional axis title.
+    cmap : str, default=BAYMORPH_IMAGE_CMAP
+        Matplotlib colormap used for the image.
+    colorbar_label : str, default="Flux"
+        Colorbar label.
+    figsize : tuple of float, default=(8, 8)
+        Figure size in inches.
+    show : bool, default=False
+        If True, call :func:`matplotlib.pyplot.show`.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Output figure.
+    ax : matplotlib.axes.Axes
+        Image axis.
+    """
+    set_plot_style()
+
+    image = np.asarray(
+        image,
+        dtype=float,
+    )
+
+    vmin, vmax = _log_limits(
+        image,
+    )
+
+    display_image = np.clip(
+        image,
+        vmin,
+        vmax,
+    )
+
+    fig, ax = plt.subplots(
+        figsize=figsize,
+    )
+
+    style_axes(
+        ax,
+    )
+
+    im = ax.imshow(
+        display_image,
+        origin="lower",
+        cmap=cmap,
+        norm=LogNorm(
+            vmin=vmin,
+            vmax=vmax,
+        ),
+    )
+
+    if title:
+        ax.set_title(
+            title,
+        )
+
+    ax.set_xlabel(
+        "x [pix]",
+    )
+    ax.set_ylabel(
+        "y [pix]",
+    )
+
+    fig.colorbar(
+        im,
+        ax=ax,
+        label=colorbar_label,
+    )
+
+    plt.tight_layout()
+
+    if show:
+        plt.show()
+
+    return fig, ax
+
+
 def plot_log_data_model_residual(
     data,
     model,
@@ -119,7 +231,30 @@ def plot_log_data_model_residual(
     cmap: str = BAYMORPH_IMAGE_CMAP,
     show: bool = False,
 ):
-    """Plot data, model, residual, and optionally residual/noise."""
+    """Plot data, model, residual, and optionally residual divided by noise.
+
+    Parameters
+    ----------
+    data : array-like
+        Observed image.
+    model : array-like
+        Model image.
+    noise : array-like, optional
+        Noise map. If provided, a normalized residual panel is added.
+    title : str, default=""
+        Optional figure title.
+    cmap : str, default=BAYMORPH_IMAGE_CMAP
+        Matplotlib colormap used for data and model panels.
+    show : bool, default=False
+        If True, call :func:`matplotlib.pyplot.show`.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Output figure.
+    axes : ndarray
+        Array of Matplotlib axes.
+    """
     set_plot_style()
 
     data = np.asarray(
@@ -321,11 +456,27 @@ def plot_fit_summary(
 ):
     """Plot a standard BayMorph fit summary.
 
-    This is a user-facing wrapper around
-    :func:`plot_log_data_model_residual`.
+    Parameters
+    ----------
+    data : array-like
+        Observed image.
+    model : array-like
+        Model image.
+    noise : array-like, optional
+        Noise map used to compute normalized residuals.
+    title : str, default=""
+        Optional figure title.
+    cmap : str, default=BAYMORPH_IMAGE_CMAP
+        Matplotlib colormap used for data and model panels.
+    show : bool, default=False
+        If True, call :func:`matplotlib.pyplot.show`.
 
-    It shows the data, model, residual, and, when a noise map is provided,
-    the normalized residual.
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Output figure.
+    axes : ndarray
+        Array of Matplotlib axes.
     """
     return plot_log_data_model_residual(
         data=data,
