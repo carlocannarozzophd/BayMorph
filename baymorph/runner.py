@@ -160,3 +160,25 @@ class BayMorphRunner:
 
         if return_result:
             return self.fit_result
+
+
+    def corner(self):
+        """Generate corner plots."""
+
+        if self.fit_result is None:
+            raise RuntimeError(
+                "Run fit() before corner()."
+            )
+
+        from baymorph.pipeline import (
+            run_corner_diagnostics,
+        )
+
+        run_corner_diagnostics(
+            self.config,
+            self.fit_result,
+        )
+
+        self._status(
+            "Corner plots generated"
+        )
