@@ -10,7 +10,35 @@ def gaussian_log_likelihood(
     mask: np.ndarray | None = None,
     include_normalization: bool = True,
 ) -> float:
-    """Compute Gaussian log-likelihood for image data."""
+    """Compute the Gaussian log-likelihood for image data.
+
+    Parameters
+    ----------
+    data : ndarray
+        Observed image.
+    model : ndarray
+        Model image evaluated on the same pixel grid as ``data``.
+    noise : ndarray
+        Per-pixel Gaussian standard deviation. All values must be strictly
+        positive.
+    mask : ndarray of bool, optional
+        Boolean mask identifying pixels to exclude from the likelihood
+        evaluation.
+    include_normalization : bool, default=True
+        If True, include the Gaussian normalization term in the
+        log-likelihood. If False, only the chi-squared term is evaluated.
+
+    Returns
+    -------
+    float
+        Gaussian log-likelihood.
+
+    Raises
+    ------
+    ValueError
+        If the input arrays do not have matching shapes, if any noise value is
+        non-positive, or if the mask has an incompatible shape.
+    """
     data = np.asarray(data, dtype=float)
     model = np.asarray(model, dtype=float)
     noise = np.asarray(noise, dtype=float)
