@@ -1,0 +1,91 @@
+# BayMorph simulated-galaxy example
+
+object:
+  name: simulated_galaxy
+
+data:
+  image_path: runs/simulated_galaxy/input/simulated_galaxy.fits
+  mask_path: null
+  noise_map_path: null
+  psf_path: null
+  pixel_scale: 1.0
+  target_position:
+    x: 50
+    y: 50
+  cutout:
+    mode: fixed
+    size: 101
+
+outputs:
+  root: runs
+  overwrite: true
+
+simulation:
+  shape: [101, 101]
+  sky: 5.0
+  psf_fwhm: 3.0
+  psf_kernel_size: 25
+  read_noise_sigma: 3.0
+  poisson_noise: true
+  seed: 18
+  truth:
+    flux: 123456.0
+    re: 25.0
+    n: 4.0
+    q: 0.65
+    theta_deg: 30.0
+    x0: 50.0
+    y0: 50.0
+
+preparation:
+  background:
+    method: empirical
+    box_size: 30
+    filter_size: 3
+  noise:
+    method: empirical
+  detection:
+    n_sigma: 3.0
+    n_levels: 32
+    n_pixels: 5
+
+masking:
+  connected_source:
+    enabled: false
+  star_halo:
+    enabled: false
+  interactive_refinement:
+    enabled: false
+
+psf:
+  type: gaussian
+  gaussian:
+    fwhm: 3.0
+
+fit:
+  models:
+    - single_sersic
+  sampler:
+    name: dynesty
+    nlive: 200
+    sample: rslice
+    bound: multi
+    dlogz: 0.01
+    seed: 53
+    n_processes: 10
+    queue_size: 10
+  comparison:
+    enabled: false
+
+diagnostics:
+  format: pdf
+  corner: true
+  residual: true
+  radial_profile: true
+  posterior_profile_bands: true
+
+metadata:
+  telescope: simulated
+  instrument: BayMorph
+  photometric_system: arbitrary
+  bunit: counts
