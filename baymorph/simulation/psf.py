@@ -8,29 +8,42 @@ from scipy.signal import fftconvolve
 
 @dataclass
 class GaussianPSF:
-    """
-    Circular Gaussian PSF.
+    """Circular Gaussian point-spread function.
 
     Parameters
     ----------
     fwhm : float
-        Full width at half maximum in pixels.
+        Full width at half maximum, in pixels.
     """
 
     fwhm: float
 
     @property
     def sigma(self) -> float:
+        """float : Gaussian standard deviation, in pixels."""
         return self.fwhm / 2.354820045
 
     def kernel(
         self,
         size: int = 25,
     ) -> np.ndarray:
-        """
-        Generate a normalized PSF kernel.
-        """
+        """Generate a normalized Gaussian PSF kernel.
 
+        Parameters
+        ----------
+        size : int, default=25
+            Width and height of the square kernel. Must be odd.
+
+        Returns
+        -------
+        ndarray
+            Unit-normalized PSF kernel.
+
+        Raises
+        ------
+        ValueError
+            If ``size`` is even.
+        """
         if size % 2 == 0:
             raise ValueError(
                 "Kernel size must be odd."
@@ -56,8 +69,7 @@ class GaussianPSF:
 
 @dataclass
 class EmpiricalPSF:
-    """
-    Empirical PSF represented by a 2D kernel.
+    """Empirical point-spread function represented by a 2D kernel.
 
     Parameters
     ----------
@@ -71,10 +83,25 @@ class EmpiricalPSF:
         self,
         size: int | None = None,
     ) -> np.ndarray:
-        """
-        Return a normalized empirical PSF kernel.
-        """
+        """Return a normalized empirical PSF kernel.
 
+        Parameters
+        ----------
+        size : int, optional
+            Reserved for API compatibility with analytic PSF models. The value
+            is currently ignored.
+
+        Returns
+        -------
+        ndarray
+            Unit-normalized empirical PSF kernel.
+
+        Raises
+        ------
+        ValueError
+            If the kernel is not two-dimensional or has non-positive total
+            flux.
+        """
         kernel = np.asarray(
             self.kernel_array,
             dtype=float,
@@ -109,8 +136,28 @@ def convolve_with_psf(
     psf,
     kernel_size: int = 25,
 ) -> np.ndarray:
-    """
-    Convolve image with PSF using edge padding to avoid zero-boundary artefacts.
+    """Convolve an image with a PSF using edge padding.
+
+    Parameters
+    ----------
+    image : ndarray
+        Input image.
+    psf : object
+        PSF object exposing a ``kernel()`` method. For ``GaussianPSF``,
+        ``kernel_size`` is passed to ``kernel(size=...)``.
+    kernel_size : int, default=25
+        Kernel size used for Gaussian PSF models.
+
+    Returns
+    -------
+    ndarray
+        PSF-convolved image with the same shape as ``image``.
+
+    Raises
+    ------
+    ValueError
+        If the PSF kernel is not two-dimensional, contains non-finite values,
+        or has non-positive total flux.
     """
     image = np.asarray(
         image,
