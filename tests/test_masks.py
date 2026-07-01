@@ -1,9 +1,11 @@
 import numpy as np
+import pytest
 
 from baymorph import (
     connected_source_mask,
     star_halo_mask,
 )
+
 
 def test_connected_source_mask_detects_source():
 
@@ -11,8 +13,8 @@ def test_connected_source_mask_detects_source():
 
     image = np.exp(
         -(
-            (xx - 50) ** 2 +
-            (yy - 50) ** 2
+            (xx - 50) ** 2
+            + (yy - 50) ** 2
         ) / (2 * 5**2)
     )
 
@@ -26,6 +28,9 @@ def test_connected_source_mask_detects_source():
     assert mask[50, 50]
 
 
+@pytest.mark.filterwarnings(
+    "ignore::photutils.segmentation.detect.NoDetectionsWarning"
+)
 def test_connected_source_mask_background_click():
 
     image = np.zeros((100, 100))
@@ -39,6 +44,9 @@ def test_connected_source_mask_background_click():
     assert mask.sum() == 0
 
 
+@pytest.mark.filterwarnings(
+    "ignore::photutils.segmentation.detect.NoDetectionsWarning"
+)
 def test_connected_source_mask_preserves_shape():
 
     image = np.random.random((87, 113))
@@ -58,8 +66,8 @@ def test_connected_source_mask_dilation():
 
     image = np.exp(
         -(
-            (xx - 50) ** 2 +
-            (yy - 50) ** 2
+            (xx - 50) ** 2
+            + (yy - 50) ** 2
         ) / (2 * 5**2)
     )
 
@@ -86,8 +94,8 @@ def test_connected_source_mask_near_border():
 
     image = np.exp(
         -(
-            (xx - 5) ** 2 +
-            (yy - 5) ** 2
+            (xx - 5) ** 2
+            + (yy - 5) ** 2
         ) / (2 * 3**2)
     )
 
@@ -106,8 +114,8 @@ def test_star_halo_mask_contains_click():
 
     image = np.exp(
         -(
-            (xx - 50) ** 2 +
-            (yy - 50) ** 2
+            (xx - 50) ** 2
+            + (yy - 50) ** 2
         ) / (2 * 5**2)
     )
 
@@ -127,8 +135,8 @@ def test_star_halo_mask_larger_than_source_mask():
 
     image = np.exp(
         -(
-            (xx - 50) ** 2 +
-            (yy - 50) ** 2
+            (xx - 50) ** 2
+            + (yy - 50) ** 2
         ) / (2 * 5**2)
     )
 
@@ -148,6 +156,9 @@ def test_star_halo_mask_larger_than_source_mask():
     assert star_mask.sum() > source_mask.sum()
 
 
+@pytest.mark.filterwarnings(
+    "ignore::photutils.segmentation.detect.NoDetectionsWarning"
+)
 def test_star_halo_mask_preserves_shape():
 
     image = np.random.random(
