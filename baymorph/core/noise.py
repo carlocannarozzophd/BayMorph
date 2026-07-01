@@ -3,11 +3,30 @@
 import numpy as np
 from astropy.stats import sigma_clip
 
+
 def make_constant_noise_map(
     shape,
     sigma: float,
 ) -> np.ndarray:
-    """Create a constant noise map."""
+    """Create a constant noise map.
+
+    Parameters
+    ----------
+    shape : tuple of int
+        Shape of the output noise map.
+    sigma : float
+        Constant noise level assigned to every pixel.
+
+    Returns
+    -------
+    ndarray
+        Constant noise map with the requested shape.
+
+    Raises
+    ------
+    ValueError
+        If ``sigma`` is not strictly positive.
+    """
     if sigma <= 0:
         raise ValueError("sigma must be positive.")
 
@@ -25,8 +44,31 @@ def estimate_noise_map(
     maxiters: int = 5,
     sigma: float | None = None,
 ) -> np.ndarray:
-    """Estimate a constant noise map from source-masked, sigma-clipped pixels."""
+    """Estimate a constant noise map from an image.
 
+    The noise level is estimated from finite, optionally masked pixels using
+    iterative sigma clipping. The resulting scalar estimate is returned as a
+    constant-valued noise map with the same shape as the input image.
+
+    Parameters
+    ----------
+    image : ndarray
+        Input image.
+    mask : ndarray of bool, optional
+        Boolean mask identifying pixels to exclude from the noise estimate.
+    clip_sigma : float, default=3.0
+        Sigma-clipping threshold.
+    maxiters : int, default=5
+        Maximum number of sigma-clipping iterations.
+    sigma : float, optional
+        Backward-compatible alias for ``clip_sigma``. If provided, it takes
+        precedence over ``clip_sigma``.
+
+    Returns
+    -------
+    ndarray
+        Constant noise map with the same shape as ``image``.
+    """
     if sigma is not None:
         clip_sigma = sigma
 
