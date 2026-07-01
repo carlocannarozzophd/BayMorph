@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Configuration loading, validation, and resolution for BayMorph pipelines."""
+
+from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
