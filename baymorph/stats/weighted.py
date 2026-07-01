@@ -7,7 +7,20 @@ def dynesty_weights(
     logwt: np.ndarray,
     logz: np.ndarray,
 ) -> np.ndarray:
-    """Convert Dynesty weights to normalized posterior weights."""
+    """Convert Dynesty log-weights to normalized posterior weights.
+
+    Parameters
+    ----------
+    logwt : ndarray
+        Logarithmic sample weights returned by Dynesty.
+    logz : ndarray
+        Cumulative logarithmic Bayesian evidence.
+
+    Returns
+    -------
+    ndarray
+        Normalized posterior weights.
+    """
     weights = np.exp(
         logwt - logz[-1]
     )
@@ -22,7 +35,29 @@ def weighted_quantile(
     quantile: float,
     weights: np.ndarray,
 ) -> float:
-    """Compute weighted quantiles."""
+    """Compute a weighted quantile.
+
+    Parameters
+    ----------
+    values : ndarray
+        Sample values.
+    quantile : float
+        Desired quantile in the interval ``[0, 1]``.
+    weights : ndarray
+        Non-negative sample weights.
+
+    Returns
+    -------
+    float
+        Weighted quantile.
+
+    Raises
+    ------
+    ValueError
+        If the value and weight arrays have different shapes, if the quantile
+        lies outside ``[0, 1]``, if any weight is negative, or if the total
+        weight is not positive.
+    """
     values = np.asarray(values, dtype=float)
     weights = np.asarray(weights, dtype=float)
 
@@ -61,7 +96,21 @@ def posterior_summary(
     values: np.ndarray,
     weights: np.ndarray,
 ):
-    """Return median, q16 and q84."""
+    """Compute standard posterior summary statistics.
+
+    Parameters
+    ----------
+    values : ndarray
+        Posterior samples.
+    weights : ndarray
+        Normalized or unnormalized posterior weights.
+
+    Returns
+    -------
+    dict
+        Dictionary containing the 16th percentile (``q16``), median
+        (``median``), and 84th percentile (``q84``).
+    """
     return {
         "q16": weighted_quantile(
             values,

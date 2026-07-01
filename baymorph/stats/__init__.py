@@ -1,3 +1,5 @@
+"""Statistical utilities for BayMorph."""
+
 from .robust import (
     robust_mad,
     robust_rms,

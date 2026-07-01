@@ -6,7 +6,19 @@ import numpy as np
 
 
 def robust_rms(values):
-    """Return the RMS after discarding non-finite values."""
+    """Compute the root-mean-square of finite values.
+
+    Parameters
+    ----------
+    values : array-like
+        Input values.
+
+    Returns
+    -------
+    float
+        Root-mean-square computed after discarding non-finite values. Returns
+        ``NaN`` if no finite values are available.
+    """
     values = np.asarray(values, dtype=float)
     values = values[np.isfinite(values)]
 
@@ -19,7 +31,19 @@ def robust_rms(values):
 
 
 def robust_mad(values):
-    """Return the median absolute deviation after discarding non-finite values."""
+    """Compute the median absolute deviation of finite values.
+
+    Parameters
+    ----------
+    values : array-like
+        Input values.
+
+    Returns
+    -------
+    float
+        Median absolute deviation computed after discarding non-finite values.
+        Returns ``NaN`` if no finite values are available.
+    """
     values = np.asarray(values, dtype=float)
     values = values[np.isfinite(values)]
 
