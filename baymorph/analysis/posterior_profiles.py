@@ -15,6 +15,35 @@ def _render_components_from_values(
     psf=None,
     include_sky=False,
 ):
+    """Render inner, outer, and total model images from one posterior sample.
+
+    Parameters
+    ----------
+    values : array-like
+        One posterior sample with eleven parameters ordered as
+        ``flux_bulge, re_bulge, n_bulge, flux_disk, re_disk, n_disk,
+        q, theta, x0, y0, sky``.
+    shape : tuple of int
+        Output image shape as ``(ny, nx)``.
+    psf : array-like, optional
+        Point-spread function used to convolve each Sérsic component.
+    include_sky : bool, default=False
+        If True, add the fitted sky level to the total image.
+
+    Returns
+    -------
+    inner : ndarray
+        Rendered inner Sérsic component.
+    outer : ndarray
+        Rendered outer Sérsic component.
+    total : ndarray
+        Sum of the rendered components, optionally including sky.
+
+    Raises
+    ------
+    ValueError
+        If ``values`` does not contain exactly eleven parameters.
+    """
     values = np.asarray(values, dtype=float)
 
     if values.size != 11:
@@ -82,6 +111,42 @@ def compute_posterior_profile_bands(
     include_sky=False,
     profile_center=None,
 ):
+    """Compute posterior radial-profile bands for a two-component Sérsic model.
+
+    Parameters
+    ----------
+    posterior_samples : array-like
+        Posterior samples with shape ``(n_samples, 11)``. Parameters must be
+        ordered as ``flux_bulge, re_bulge, n_bulge, flux_disk, re_disk,
+        n_disk, q, theta, x0, y0, sky``.
+    shape : tuple of int
+        Shape of the rendered model images as ``(ny, nx)``.
+    radii : array-like
+        Radial bin edges used to compute radial profiles.
+    mask : array-like of bool, optional
+        Boolean mask passed to ``radial_profile_from_image``.
+    psf : array-like, optional
+        Point-spread function used to convolve each rendered component.
+    percentiles : sequence of float, default=(16.0, 50.0, 84.0)
+        Three percentiles used to summarize the posterior profiles.
+    include_sky : bool, default=False
+        If True, include the fitted sky level in the total model profile.
+    profile_center : tuple of float, optional
+        Fixed profile center ``(center_x, center_y)``. If None, the center
+        is taken from each posterior sample.
+
+    Returns
+    -------
+    dict
+        Dictionary containing the input bin edges, bin centers, and percentile
+        bands for the ``inner``, ``outer``, and ``total`` components. Each
+        component stores ``p16``, ``p50``, and ``p84`` arrays.
+
+    Raises
+    ------
+    ValueError
+        If the posterior samples, radii, shape, or percentiles are invalid.
+    """
     posterior_samples = _validate_posterior_samples(posterior_samples)
     radii = _validate_radii(radii)
     _validate_shape(shape)
@@ -128,10 +193,7 @@ def compute_posterior_profile_bands(
                 )
             )
 
-    radius = 0.5 * (
-        radii[:-1]
-        + radii[1:]
-    )
+    radius = 0.5 * (radii[:-1] + radii[1:])
 
     return {
         "radii": radii,
@@ -151,6 +213,20 @@ def _profile_percentile_bands(
     *,
     percentiles,
 ):
+    """Compute percentile bands from a stack of radial profiles.
+
+    Parameters
+    ----------
+    profiles : array-like
+        Collection of radial profiles with shape ``(n_samples, n_bins)``.
+    percentiles : array-like
+        Three percentiles to compute along the sample axis.
+
+    Returns
+    -------
+    dict
+        Dictionary with ``p16``, ``p50``, and ``p84`` percentile arrays.
+    """
     profiles = np.asarray(profiles, dtype=float)
 
     p16, p50, p84 = np.nanpercentile(
@@ -167,6 +243,7 @@ def _profile_percentile_bands(
 
 
 def _validate_posterior_samples(posterior_samples):
+    """Validate posterior samples for two-component Sérsic profile bands."""
     posterior_samples = np.asarray(posterior_samples, dtype=float)
 
     if posterior_samples.ndim != 2:
@@ -184,11 +261,13 @@ def _validate_posterior_samples(posterior_samples):
 
 
 def _validate_shape(shape):
+    """Validate an image shape tuple."""
     if len(shape) != 2:
         raise ValueError("shape must be a 2-element tuple.")
 
 
 def _validate_radii(radii):
+    """Validate radial-bin edges."""
     radii = np.asarray(radii, dtype=float)
 
     if radii.ndim != 1:
