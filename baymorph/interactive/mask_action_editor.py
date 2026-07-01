@@ -6,7 +6,21 @@ from baymorph.pipeline import refine_mask
 
 
 class MaskActionEditor:
-    """Interactive editor for reproducible mask-refinement actions."""
+    """Interactive editor for reproducible mask-refinement actions.
+
+    Parameters
+    ----------
+    image : array-like
+        Image displayed in the editor.
+    initial_mask : array-like of bool
+        Initial mask used as the starting point for all refinements.
+    target_x : float, optional
+        X-coordinate of the target galaxy, displayed as a marker.
+    target_y : float, optional
+        Y-coordinate of the target galaxy, displayed as a marker.
+    display_floor : float, default=1e-3
+        Positive floor applied before logarithmic image display.
+    """
 
     def __init__(
         self,
@@ -27,7 +41,6 @@ class MaskActionEditor:
         )
 
         self.mask = self.initial_mask.copy()
-
         self.actions = []
 
         self.target_x = target_x
@@ -39,6 +52,19 @@ class MaskActionEditor:
     def _require_widgets(
         self,
     ):
+        """Import optional notebook-interaction dependencies.
+
+        Returns
+        -------
+        tuple
+            Imported ``ipywidgets`` module, ``plotly.graph_objects`` module,
+            and IPython ``display`` function.
+
+        Raises
+        ------
+        ImportError
+            If Plotly, ipywidgets, or IPython is not available.
+        """
         try:
             import ipywidgets as widgets
             import plotly.graph_objects as go
@@ -56,6 +82,7 @@ class MaskActionEditor:
     def _build_controls(
         self,
     ):
+        """Create the interactive widget controls."""
         widgets, go, display = self._require_widgets()
 
         self.mode_widget = widgets.Dropdown(
@@ -116,6 +143,7 @@ class MaskActionEditor:
     def _build_figure(
         self,
     ):
+        """Create the interactive Plotly figure."""
         z = np.log10(
             np.maximum(
                 self.image,
@@ -170,10 +198,7 @@ class MaskActionEditor:
             )
         )
 
-        if (
-            self.target_x is not None
-            and self.target_y is not None
-        ):
+        if self.target_x is not None and self.target_y is not None:
             self.fig.add_trace(
                 self._go.Scatter(
                     x=[
@@ -205,6 +230,7 @@ class MaskActionEditor:
     def _connect_callbacks(
         self,
     ):
+        """Connect widget and figure callbacks."""
         for trace in self.fig.data:
             trace.on_click(
                 self._on_click,
@@ -221,6 +247,7 @@ class MaskActionEditor:
     def _build(
         self,
     ):
+        """Build the complete interactive editor."""
         self._build_controls()
         self._build_figure()
         self._connect_callbacks()
@@ -231,6 +258,21 @@ class MaskActionEditor:
         x,
         y,
     ):
+        """Build a mask-refinement action from the current widget state.
+
+        Parameters
+        ----------
+        x : float
+            X-coordinate of the clicked position.
+        y : float
+            Y-coordinate of the clicked position.
+
+        Returns
+        -------
+        dict
+            Serializable mask-refinement action compatible with
+            :func:`baymorph.pipeline.refine_mask`.
+        """
         action = {
             "type": self.mode_widget.value,
             "x": float(x),
@@ -258,6 +300,7 @@ class MaskActionEditor:
     def _recompute_mask(
         self,
     ):
+        """Recompute the refined mask from the current action list."""
         self.mask = refine_mask(
             image=self.image,
             mask=self.initial_mask,
@@ -272,6 +315,17 @@ class MaskActionEditor:
         points,
         state,
     ):
+        """Append a mask-refinement action from a figure click.
+
+        Parameters
+        ----------
+        trace : object
+            Plotly trace that received the click event.
+        points : object
+            Plotly point collection containing clicked coordinates.
+        state : object
+            Plotly callback state.
+        """
         if len(points.xs) == 0:
             return
 
@@ -296,6 +350,13 @@ class MaskActionEditor:
         self,
         button,
     ):
+        """Remove the most recent mask-refinement action.
+
+        Parameters
+        ----------
+        button : object
+            Widget button that triggered the callback.
+        """
         if len(self.actions) == 0:
             return
 
@@ -313,6 +374,13 @@ class MaskActionEditor:
         self,
         button,
     ):
+        """Remove all mask-refinement actions and restore the initial mask.
+
+        Parameters
+        ----------
+        button : object
+            Widget button that triggered the callback.
+        """
         self.actions = []
 
         self._recompute_mask()
@@ -325,7 +393,13 @@ class MaskActionEditor:
     def show(
         self,
     ):
-        """Display the interactive editor."""
+        """Display the interactive mask editor.
+
+        Returns
+        -------
+        None
+            The editor is displayed in the active IPython notebook output cell.
+        """
         if not self._built:
             self._build()
 
