@@ -3,8 +3,8 @@
 ```{=html}
 <p align="center">
 ```
-`<strong>`{=html}Bayesian morphological modelling of astronomical galaxy
-images`</strong>`{=html}
+`<strong>`{=html}Bayesian galaxy morphology from image to
+evidence`</strong>`{=html}
 ```{=html}
 </p>
 ```
@@ -13,34 +13,69 @@ images`</strong>`{=html}
 ```
 `<img alt="version" src="https://img.shields.io/badge/version-v0.1.0-blue">`{=html}
 `<img alt="python" src="https://img.shields.io/badge/python-3.11%2B-green">`{=html}
-`<img alt="tests" src="https://img.shields.io/badge/tests-159%20passed-brightgreen">`{=html}
+`<img alt="tests" src="https://img.shields.io/badge/tests-159%2F159%20passed-brightgreen">`{=html}
 `<img alt="license" src="https://img.shields.io/badge/license-MIT-lightgrey">`{=html}
 `<img alt="status" src="https://img.shields.io/badge/status-active%20development-orange">`{=html}
 ```{=html}
 </p>
 ```
-
-------------------------------------------------------------------------
-
-## What is BayMorph?
-
 **BayMorph** is an open-source Python framework for **Bayesian
 structural decomposition of galaxies** from astronomical imaging.
 
-It provides a reproducible workflow from FITS images to image
-preparation, PSF handling, Sérsic modelling, Bayesian inference, model
-comparison, and diagnostic plots.
+It takes a galaxy image through a complete, reproducible workflow: image
+preparation, background and noise estimation, masking, PSF handling,
+Sérsic modelling, Bayesian inference, model comparison, and diagnostic
+plots.
 
-> \[!IMPORTANT\] BayMorph is currently at **v0.1.0**. The core workflow,
-> public API, notebooks, documentation, and automated tests are in
-> place, but the project is still under active scientific validation.
+> \[!IMPORTANT\] BayMorph is currently at **v0.1.0**. The public
+> workflow, notebooks, documentation, and automated tests are in place.
+> Scientific validation on larger real-galaxy samples is ongoing.
+
+------------------------------------------------------------------------
+
+## Why BayMorph?
+
+Whether you are validating a new morphological model, analysing a single
+galaxy, or processing an entire sample, BayMorph provides a single,
+reproducible workflow.
+
+BayMorph is designed for cases where galaxy fitting is not just a single
+optimization call, but a full scientific workflow.
+
+  -----------------------------------------------------------------------
+  Need                                Use BayMorph to
+  ----------------------------------- -----------------------------------
+  Too many manual steps from image to Run a complete workflow from FITS
+  final fit?                          image to diagnostics with one
+                                      high-level runner.
+
+  Need a controlled mock galaxy?      Generate and fit simulated Sérsic
+                                      galaxies with known input
+                                      parameters.
+
+  Working with real observations?     Prepare real FITS images, estimate
+                                      background/noise, build or load a
+                                      PSF, and fit galaxy models.
+
+  Need to compare models?             Use Bayesian evidence and Bayes
+                                      factors to compare single- and
+                                      double-Sérsic models.
+
+  Want reproducible analyses?         Control the workflow with YAML
+                                      configuration templates and store
+                                      resolved run products.
+
+  Need publication-quality            Produce residual maps, corner
+  diagnostics?                        plots, radial profiles, posterior
+                                      summaries, and fit reports.
+  -----------------------------------------------------------------------
 
 ------------------------------------------------------------------------
 
 ## Workflow-first galaxy modelling
 
-BayMorph is designed as a **complete scientific workflow**, not just a
-fitting routine.
+BayMorph treats galaxy structural decomposition as a complete scientific
+workflow rather than an isolated fitting problem.
 
 ``` text
 FITS image
@@ -71,9 +106,9 @@ observations.
   -----------------------------------------------------------------------
   Area                                Current support
   ----------------------------------- -----------------------------------
-  **Image preparation**               FITS loading, cutouts, background
-                                      subtraction, noise maps, source
-                                      detection, segmentation,
+  **Image preparation**               FITS loading, target cutouts,
+                                      background subtraction, noise maps,
+                                      source detection, segmentation,
                                       contaminant masking
 
   **PSF handling**                    Gaussian PSFs, empirical PSFs from
@@ -155,7 +190,7 @@ are exposed through high-level objects such as `RealFitProducts` and
 
 ## Configuration templates
 
-Standard configuration templates are stored in `configs/`:
+Standard configuration templates are stored in [`configs/`](configs/):
 
 ``` text
 configs/
@@ -183,7 +218,7 @@ All other workflow choices are controlled by the YAML configuration.
 BayMorph includes three public notebooks.
 
   --------------------------------------------------------------------------------------------------------------------------
-  Notebook                                                                               Description
+  Notebook                                                                               Purpose
   -------------------------------------------------------------------------------------- -----------------------------------
   [`01_Simulated_Galaxy_Analysis.ipynb`](notebooks/01_Simulated_Galaxy_Analysis.ipynb)   Demonstrates the complete workflow
                                                                                          on a simulated galaxy with known
@@ -200,13 +235,9 @@ BayMorph includes three public notebooks.
 
 Recommended order:
 
-``` text
-01_Simulated_Galaxy_Analysis.ipynb
-        ↓
-02_Real_Galaxy_Analysis.ipynb
-        ↓
-03_Multi_Galaxy_Analysis.ipynb
-```
+1.  [`01_Simulated_Galaxy_Analysis.ipynb`](notebooks/01_Simulated_Galaxy_Analysis.ipynb)
+2.  [`02_Real_Galaxy_Analysis.ipynb`](notebooks/02_Real_Galaxy_Analysis.ipynb)
+3.  [`03_Multi_Galaxy_Analysis.ipynb`](notebooks/03_Multi_Galaxy_Analysis.ipynb)
 
 ------------------------------------------------------------------------
 
@@ -256,7 +287,7 @@ Run the test suite with:
 pytest
 ```
 
-Current development status:
+Current status:
 
 ``` text
 159 / 159 tests passed
@@ -264,9 +295,15 @@ Current development status:
 
 ------------------------------------------------------------------------
 
-## Documentation
+## Learn more
 
-Additional documentation is available in:
+### Tutorials
+
+-   [`01_Simulated_Galaxy_Analysis.ipynb`](notebooks/01_Simulated_Galaxy_Analysis.ipynb)
+-   [`02_Real_Galaxy_Analysis.ipynb`](notebooks/02_Real_Galaxy_Analysis.ipynb)
+-   [`03_Multi_Galaxy_Analysis.ipynb`](notebooks/03_Multi_Galaxy_Analysis.ipynb)
+
+### Documentation
 
   ------------------------------------------------------------------------------------
   Document                                         Purpose
@@ -274,15 +311,20 @@ Additional documentation is available in:
   [`docs/README.md`](docs/README.md)               Documentation index and recommended
                                                    reading order
 
-  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)   Internal architecture and public
-                                                   API
+  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)   Internal architecture, public API,
+                                                   and workflow organization
 
-  [`docs/VALIDATION.md`](docs/VALIDATION.md)       Validation strategy and current
-                                                   limitations
+  [`docs/VALIDATION.md`](docs/VALIDATION.md)       Validation strategy, current
+                                                   validation status, and limitations
 
-  [`ROADMAP.md`](ROADMAP.md)                       Development roadmap
+  [`ROADMAP.md`](ROADMAP.md)                       Near-term, medium-term, and
+                                                   long-term development roadmap
 
   [`DECISIONS.md`](DECISIONS.md)                   Accepted architectural decisions
+                                                   for BayMorph
+
+  [`README.md`](README.md)                         Repository homepage and quick-start
+                                                   guide
   ------------------------------------------------------------------------------------
 
 ------------------------------------------------------------------------
