@@ -11,7 +11,7 @@ evidence`</strong>`{=html}
 ```{=html}
 <p align="center">
 ```
-`<img alt="version" src="https://img.shields.io/badge/version-v0.1.0-blue">`{=html}
+`<img alt="version" src="https://img.shields.io/badge/version-v0.2.0-blue">`{=html}
 `<img alt="python" src="https://img.shields.io/badge/python-3.11%2B-green">`{=html}
 `<img alt="tests" src="https://img.shields.io/badge/tests-159%2F159%20passed-brightgreen">`{=html}
 `<img alt="license" src="https://img.shields.io/badge/license-MIT-lightgrey">`{=html}
@@ -27,7 +27,7 @@ preparation, background and noise estimation, masking, PSF handling,
 Sérsic modelling, Bayesian inference, model comparison, and diagnostic
 plots.
 
-> \[!IMPORTANT\] BayMorph is currently at **v0.1.0**. The public
+> \[!IMPORTANT\] BayMorph is currently at **v0.2.0**. The public
 > workflow, notebooks, documentation, and automated tests are in place.
 > Scientific validation on larger real-galaxy samples is ongoing.
 
@@ -272,7 +272,7 @@ Git except for `.gitkeep`.
 
 ## Validation status
 
-BayMorph v0.1.0 has been validated through:
+BayMorph v0.2.0 has been validated through:
 
 -   synthetic single-Sérsic recovery tests;
 -   PSF-convolved forward-modelling tests;
