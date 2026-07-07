@@ -79,4 +79,4 @@ outputs/
 *.csv
 
 # Logs
-*.log
+*.logbaymorph.egg-info/
