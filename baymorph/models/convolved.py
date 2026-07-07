@@ -1,5 +1,7 @@
 """Model wrappers."""
 
+from __future__ import annotations
+
 from baymorph.simulation.psf import convolve_with_psf
 
 
@@ -9,7 +11,8 @@ class ConvolvedModel:
     Parameters
     ----------
     model : object
-        Model object exposing a ``render(shape=...)`` method.
+        Model object exposing ``render(shape=...)`` and optionally
+        ``render_components(shape=...)``.
     psf : array-like
         Point-spread function used to convolve the rendered model image.
     """
@@ -46,3 +49,33 @@ class ConvolvedModel:
             image,
             self.psf,
         )
+
+    def render_components(
+        self,
+        shape,
+    ):
+        """Render and PSF-convolve every model component.
+
+        Parameters
+        ----------
+        shape : tuple of int
+            Output image shape as ``(ny, nx)``.
+
+        Returns
+        -------
+        dict of str, ndarray
+            Dictionary containing the PSF-convolved model components.
+
+        Raises
+        ------
+        AttributeError
+            If the wrapped model does not expose ``render_components``.
+        """
+        components = self.model.render_components(
+            shape=shape,
+        )
+
+        return {
+            name: convolve_with_psf(image, self.psf)
+            for name, image in components.items()
+        }

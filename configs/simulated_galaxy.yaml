@@ -67,7 +67,7 @@ fit:
     - single_sersic
   sampler:
     name: dynesty
-    nlive: 200
+    nlive: 50
     sample: rslice
     bound: multi
     dlogz: 0.01

@@ -205,7 +205,8 @@ class DynestyFitter:
         ``parameter_names`` and ``prior_bounds``.
     psf : array-like, optional
         Point-spread function used to convolve the rendered model image before
-        likelihood evaluation.
+        likelihood evaluation. This is kept for backwards-compatible workflows;
+        model factories may also return already-convolved models.
     mask : array-like of bool, optional
         Boolean mask identifying pixels excluded from the likelihood.
     """

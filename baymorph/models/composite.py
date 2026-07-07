@@ -1,52 +1,61 @@
 """Composite morphological models."""
 
+from __future__ import annotations
+
 import numpy as np
 
 
 class CompositeModel:
-    """Composite model formed by the sum of multiple renderable components.
-
-    Parameters
-    ----------
-    components : iterable
-        Collection of model objects exposing a ``render(shape=...)`` method.
-        The rendered image is obtained by summing the contribution of every
-        component.
-    """
+    """Composite model formed by the sum of multiple renderable components."""
 
     def __init__(
         self,
         components,
+        *,
+        sky: float = 0.0,
     ):
-        self.components = list(
-            components
-        )
+        if hasattr(components, "items"):
+            self.components = dict(components)
+        else:
+            self.components = {}
+
+            for index, component in enumerate(components):
+                name = getattr(
+                    component,
+                    "name",
+                    f"component_{index}",
+                )
+
+                if name in self.components:
+                    raise ValueError(
+                        f"duplicate component name '{name}'"
+                    )
+
+                self.components[name] = component
+
+        self.sky = float(sky)
+
+    def render_components(
+        self,
+        shape: tuple[int, int],
+    ) -> dict[str, np.ndarray]:
+        """Render every model component."""
+        return {
+            name: component.render(shape=shape)
+            for name, component in self.components.items()
+        }
 
     def render(
         self,
-        shape,
-    ):
-        """Render the composite model.
+        shape: tuple[int, int],
+    ) -> np.ndarray:
+        """Render the composite model."""
+        image = np.zeros(shape, dtype=float)
 
-        Parameters
-        ----------
-        shape : tuple of int
-            Output image shape as ``(ny, nx)``.
+        for component_image in self.render_components(shape).values():
+            image += component_image
 
-        Returns
-        -------
-        ndarray
-            Image obtained by summing the rendered contribution of every
-            component.
-        """
-        image = np.zeros(
-            shape,
-            dtype=float,
-        )
-
-        for component in self.components:
-            image += component.render(
-                shape=shape,
-            )
+        if self.sky != 0.0:
+            image += self.sky
 
         return image

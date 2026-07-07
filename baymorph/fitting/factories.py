@@ -10,15 +10,7 @@ from baymorph.models import (
 
 
 class SkyModelWrapper:
-    """Add a constant sky level to a rendered model.
-
-    Parameters
-    ----------
-    model : object
-        Model object exposing a ``render(shape=...)`` method.
-    sky : float
-        Constant sky level added to the rendered model image.
-    """
+    """Add a constant sky level to a rendered model."""
 
     def __init__(
         self,
@@ -32,19 +24,15 @@ class SkyModelWrapper:
         self,
         shape,
     ):
-        """Render the wrapped model and add the constant sky level.
-
-        Parameters
-        ----------
-        shape : tuple of int
-            Output image shape as ``(ny, nx)``.
-
-        Returns
-        -------
-        ndarray
-            Rendered model image including the constant sky level.
-        """
+        """Render the wrapped model and add the constant sky level."""
         return self.model.render(shape) + self.sky
+
+    def render_components(
+        self,
+        shape,
+    ):
+        """Render the wrapped model components without sky."""
+        return self.model.render_components(shape)
 
 
 def make_single_sersic_psf_sky_model(
@@ -59,22 +47,7 @@ def make_single_sersic_psf_sky_model(
     *,
     psf,
 ):
-    """Build a PSF-convolved single-Sérsic model with constant sky.
-
-    Parameters
-    ----------
-    flux, re, n, q, theta, x0, y0 : float
-        Parameters of the Sérsic galaxy model.
-    sky : float
-        Constant sky level added after model rendering.
-    psf : array-like
-        Point-spread function used to convolve the Sérsic model.
-
-    Returns
-    -------
-    SkyModelWrapper
-        Wrapped convolved model including the constant sky level.
-    """
+    """Build a PSF-convolved single-Sérsic model with constant sky."""
     galaxy = SersicModel(
         flux=flux,
         re=re,
@@ -96,53 +69,75 @@ def make_single_sersic_psf_sky_model(
     )
 
 
+def _parse_double_sersic_arguments(args):
+    """Parse old and new double-Sérsic positional argument conventions."""
+    if len(args) == 13:
+        return args
+
+    if len(args) == 11:
+        (
+            flux_bulge,
+            re_bulge,
+            n_bulge,
+            flux_disk,
+            re_disk,
+            n_disk,
+            q,
+            theta,
+            x0,
+            y0,
+            sky,
+        ) = args
+
+        return (
+            flux_bulge,
+            re_bulge,
+            n_bulge,
+            q,
+            theta,
+            flux_disk,
+            re_disk,
+            n_disk,
+            q,
+            theta,
+            x0,
+            y0,
+            sky,
+        )
+
+    raise TypeError(
+        "make_double_sersic_psf_sky_model expects either 11 old-style "
+        "or 13 new-style positional parameters before psf"
+    )
+
+
 def make_double_sersic_psf_sky_model(
-    flux_bulge,
-    re_bulge,
-    n_bulge,
-    flux_disk,
-    re_disk,
-    n_disk,
-    q,
-    theta,
-    x0,
-    y0,
-    sky,
-    *,
+    *args,
     psf,
 ):
-    """Build a PSF-convolved double-Sérsic model with constant sky.
+    """Build a PSF-convolved double-Sérsic model with constant sky."""
+    (
+        flux_bulge,
+        re_bulge,
+        n_bulge,
+        q_bulge,
+        theta_bulge,
+        flux_disk,
+        re_disk,
+        n_disk,
+        q_disk,
+        theta_disk,
+        x0,
+        y0,
+        sky,
+    ) = _parse_double_sersic_arguments(args)
 
-    Parameters
-    ----------
-    flux_bulge, re_bulge, n_bulge : float
-        Sérsic parameters of the inner component.
-    flux_disk, re_disk, n_disk : float
-        Sérsic parameters of the outer component.
-    q : float
-        Shared axis ratio.
-    theta : float
-        Shared position angle, in radians.
-    x0 : float
-        Shared model center x-coordinate, in pixels.
-    y0 : float
-        Shared model center y-coordinate, in pixels.
-    sky : float
-        Constant sky level added after model rendering.
-    psf : array-like
-        Point-spread function used to convolve the double-Sérsic model.
-
-    Returns
-    -------
-    SkyModelWrapper
-        Wrapped convolved model including the constant sky level.
-    """
     bulge = SersicModel(
         flux=flux_bulge,
         re=re_bulge,
         n=n_bulge,
-        q=q,
-        theta=theta,
+        q=q_bulge,
+        theta=theta_bulge,
         x0=x0,
         y0=y0,
     )
@@ -151,8 +146,8 @@ def make_double_sersic_psf_sky_model(
         flux=flux_disk,
         re=re_disk,
         n=n_disk,
-        q=q,
-        theta=theta,
+        q=q_disk,
+        theta=theta_disk,
         x0=x0,
         y0=y0,
     )

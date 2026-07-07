@@ -16,12 +16,12 @@ from .registry import (
 from .sersic import SersicModel
 
 __all__ = [
-    "SersicModel",
-    "ConvolvedModel",
     "CompositeModel",
+    "ConvolvedModel",
     "DoubleSersicModel",
-    "parameter_names",
-    "parameter_labels",
+    "SersicModel",
     "get_model",
+    "parameter_labels",
+    "parameter_names",
     "registered_models",
 ]

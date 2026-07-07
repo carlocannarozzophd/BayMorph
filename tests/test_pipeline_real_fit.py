@@ -136,9 +136,25 @@ def test_build_parameter_set_double_sersic():
         )
     )
 
-    assert len(parameter_names) == 11
-    assert parameter_names[0] == "flux_bulge"
-    assert parameters.names[0] == "flux_bulge"
+    assert len(parameter_names) == 13
+
+    assert parameter_names == [
+        "flux_bulge",
+        "re_bulge",
+        "n_bulge",
+        "q_bulge",
+        "theta_bulge",
+        "flux_disk",
+        "re_disk",
+        "n_disk",
+        "q_disk",
+        "theta_disk",
+        "x0",
+        "y0",
+        "sky",
+    ]
+
+    assert parameters.names == parameter_names
 
 
 def test_make_model_factory_single_sersic():
@@ -171,17 +187,19 @@ def test_make_model_factory_double_sersic():
     )
 
     model = factory(
-        100.0,
-        3.0,
-        2.0,
-        50.0,
-        8.0,
-        1.0,
-        0.8,
-        0.0,
-        15.0,
-        15.0,
-        1.0,
+        100.0,   # flux_bulge
+        3.0,     # re_bulge
+        2.0,     # n_bulge
+        0.9,     # q_bulge
+        0.1,     # theta_bulge
+        50.0,    # flux_disk
+        8.0,     # re_disk
+        1.0,     # n_disk
+        0.8,     # q_disk
+        0.0,     # theta_disk
+        15.0,    # x0
+        15.0,    # y0
+        1.0,     # sky
     )
 
     image = model.render((31, 31))

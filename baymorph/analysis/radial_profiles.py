@@ -60,8 +60,10 @@ def radial_profile_from_image(
 
     if mask is not None:
         mask = np.asarray(mask, dtype=bool)
+
         if mask.shape != image.shape:
             raise ValueError("mask must have the same shape as image.")
+
         valid &= ~mask
 
     profile = np.full(radii.size - 1, np.nan)

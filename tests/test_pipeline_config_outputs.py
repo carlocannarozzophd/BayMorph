@@ -105,7 +105,7 @@ outputs:
 
 
 def test_example_config_loads():
-    config = load_resolved_config("configs/target.yaml")
+    config = load_resolved_config("configs/real_galaxy.yaml")
 
     assert "name" in config["object"]
     assert isinstance(config["object"]["name"], str)

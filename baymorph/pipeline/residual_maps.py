@@ -6,35 +6,58 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from baymorph.plotting.images import plot_log_data_model_residual
+from baymorph.plotting.images import (
+    plot_pipeline_fit_maps,
+)
 
 from .config import (
     load_resolved_config,
     resolve_config,
 )
-from .image_preparation import load_image_preparation_products
-from .outputs import pipeline_paths
-from .real_fit import _diagnostic_title
+from .image_preparation import (
+    load_image_preparation_products,
+)
+from .outputs import (
+    pipeline_paths,
+)
+from .real_fit import (
+    _diagnostic_title,
+)
+
+from .psf_construction import (
+    load_empirical_psf,
+)
 
 
 def run_residual_map_diagnostics(
     config,
     fit_results,
 ):
-    """Generate and save residual-map diagnostics for fitted models.
+    """Generate and save pipeline residual-map diagnostics.
+
+    For each fitted model, this routine creates the standard BayMorph
+    residual-map summary, including the original and prepared cutouts,
+    best-fit model, residual maps, segmentation products, masks, PSF,
+    and noise-normalized residuals.
 
     Parameters
     ----------
     config : dict, str, or pathlib.Path
-        Pipeline configuration dictionary or path to a YAML configuration file.
-    fit_results : object or dict
-        Single fit result or mapping from model name to fit result. Each fit
-        result must expose ``model_name`` and ``best_model_image`` attributes.
+        Pipeline configuration dictionary or path to a YAML configuration
+        file.
+
+    fit_results : RealFitProducts or dict
+        Single fit result or mapping from model name to fit result. Each
+        fit result must expose at least
+
+        - ``model_name``
+        - ``best_model_image``
 
     Returns
     -------
     None
-        Residual-map figures are written to the configured fitting output paths.
+        Residual-map figures are written to the configured fitting-output
+        directories.
     """
     if isinstance(config, (str, Path)):
         config = load_resolved_config(config)
@@ -45,18 +68,35 @@ def run_residual_map_diagnostics(
         config,
     )
 
-    paths = pipeline_paths(config)["fits"]
+    paths = pipeline_paths(
+        config,
+    )["fits"]
 
-    if not isinstance(fit_results, dict):
+    try:
+        psf = load_empirical_psf(
+            config,
+        )
+    except FileNotFoundError:
+        psf = None
+
+    if not isinstance(
+        fit_results,
+        dict,
+    ):
         fit_results = {
             fit_results.model_name: fit_results,
         }
 
     for model_name, fit in fit_results.items():
-        fig, _ = plot_log_data_model_residual(
-            image_products.prepared_data,
-            fit.best_model_image,
+        fig, _ = plot_pipeline_fit_maps(
+            original_cutout=image_products.cutout,
+            prepared_cutout=image_products.prepared_data,
+            model=fit.best_model_image,
             noise=image_products.noise,
+            segmentation=image_products.segmentation,
+            psf=psf,
+            contaminant_mask=image_products.contaminant_mask,
+            target_mask=image_products.target_segment,
             title=_diagnostic_title(
                 config,
                 model_name,
@@ -69,4 +109,6 @@ def run_residual_map_diagnostics(
             bbox_inches="tight",
         )
 
-        plt.close(fig)
+        plt.close(
+            fig,
+        )

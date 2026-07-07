@@ -217,6 +217,8 @@ class BayMorphRunner:
             self.config,
         )
 
+        self.profile_bands = None
+
         self._status("Bayesian fitting completed")
 
         if return_result:
@@ -276,8 +278,23 @@ class BayMorphRunner:
             "Residual maps generated"
         )
 
-    def radial_profile(self):
+    def radial_profile(
+        self,
+        *,
+        return_result: bool = False,
+    ):
         """Generate radial-profile diagnostics.
+
+        Parameters
+        ----------
+        return_result : bool, default=False
+            If True, return posterior radial-profile bands when available.
+
+        Returns
+        -------
+        object or None
+            Posterior radial-profile bands if generated and
+            ``return_result`` is True, otherwise None.
 
         Raises
         ------
@@ -293,7 +310,7 @@ class BayMorphRunner:
             run_radial_profile_diagnostics,
         )
 
-        run_radial_profile_diagnostics(
+        self.profile_bands = run_radial_profile_diagnostics(
             self.config,
             self.fit_result,
         )
@@ -301,6 +318,11 @@ class BayMorphRunner:
         self._status(
             "Radial profiles generated"
         )
+
+        if return_result:
+            return self.profile_bands
+
+        return None
 
     def diagnostics(self):
         """Generate all available fit diagnostics.

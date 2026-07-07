@@ -31,20 +31,7 @@ from .psf_construction import load_empirical_psf
 def run_real_fit_from_config(
     config: str | Path | dict[str, Any],
 ):
-    """Run real-galaxy model fitting from a pipeline configuration.
-
-    Parameters
-    ----------
-    config : dict, str, or pathlib.Path
-        Resolved configuration dictionary or path to a YAML configuration file.
-
-    Returns
-    -------
-    RealFitProducts, dict, or dict
-        Fit products for a single model, a mapping from model name to products
-        for multiple models, or the resolved configuration if prerequisite
-        products are not available.
-    """
+    """Run real-galaxy model fitting from a pipeline configuration."""
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
     else:
@@ -65,8 +52,7 @@ def run_real_fit_from_config(
     except FileNotFoundError:
         return resolved
 
-    fit_cfg = resolved["fit"]
-    sampler_cfg = fit_cfg["sampler"]
+    sampler_cfg = resolved["fit"]["sampler"]
 
     all_products = {}
 
@@ -196,34 +182,16 @@ def save_real_fit_products(
                 products.posterior is None
                 or products.posterior.logzerr is None
             )
-            else float(
-                products.posterior.logzerr[-1]
-            )
+            else float(products.posterior.logzerr[-1])
         ),
         "sampler": {
-            "name": sampler_cfg.get(
-                "name",
-                "dynesty",
-            ),
-            "nlive": sampler_cfg.get(
-                "nlive",
-            ),
-            "sample": sampler_cfg.get(
-                "sample",
-            ),
-            "dlogz": sampler_cfg.get(
-                "dlogz",
-            ),
-            "seed": sampler_cfg.get(
-                "seed",
-            ),
-            "n_processes": sampler_cfg.get(
-                "n_processes",
-                1,
-            ),
-            "queue_size": sampler_cfg.get(
-                "queue_size",
-            ),
+            "name": sampler_cfg.get("name", "dynesty"),
+            "nlive": sampler_cfg.get("nlive"),
+            "sample": sampler_cfg.get("sample"),
+            "dlogz": sampler_cfg.get("dlogz"),
+            "seed": sampler_cfg.get("seed"),
+            "n_processes": sampler_cfg.get("n_processes", 1),
+            "queue_size": sampler_cfg.get("queue_size"),
         },
     }
 
@@ -438,16 +406,49 @@ def _bounds_from_prior(
     )
 
 
+def _prior_entry_for_parameter(
+    name: str,
+    prior_cfg: dict,
+) -> dict:
+    """Return prior configuration for a parameter, including legacy aliases."""
+    if name in prior_cfg:
+        return prior_cfg[name]
+
+    aliases = {
+        "q_bulge": "q",
+        "q_disk": "q",
+        "theta_bulge": "theta",
+        "theta_disk": "theta",
+    }
+
+    alias = aliases.get(name)
+
+    if alias is not None and alias in prior_cfg:
+        return prior_cfg[alias]
+
+    raise ValueError(
+        f"Missing prior configuration for parameter: {name}"
+    )
+
+
 def _build_parameter_list(
+    parameter_names: list[str],
     prior_cfg: dict,
     *,
     flux_total: float,
     target_x: float,
     target_y: float,
 ) -> ParameterSet:
-    """Build a ParameterSet from model prior configuration."""
-    return ParameterSet(
-        [
+    """Build a ParameterSet from ordered model parameter names."""
+    parameters = []
+
+    for name in parameter_names:
+        cfg = _prior_entry_for_parameter(
+            name,
+            prior_cfg,
+        )
+
+        parameters.append(
             Parameter(
                 name,
                 *_bounds_from_prior(
@@ -458,9 +459,9 @@ def _build_parameter_list(
                     target_y=target_y,
                 ),
             )
-            for name, cfg in prior_cfg.items()
-        ]
-    )
+        )
+
+    return ParameterSet(parameters)
 
 
 def _build_parameter_set(
@@ -498,9 +499,10 @@ def _build_parameter_set(
     model_prior_cfg = prior_cfg[model_name]
 
     model_definition = get_model(model_name)
-    parameter_names = model_definition.parameter_names
+    parameter_names = list(model_definition.parameter_names)
 
     parameters = _build_parameter_list(
+        parameter_names,
         model_prior_cfg,
         flux_total=flux_total,
         target_x=target_x,
@@ -549,36 +551,45 @@ class SingleSersicModelFactory:
 class DoubleSersicModelFactory:
     """Factory for PSF-convolved double-Sérsic plus sky models."""
 
-    def __init__(self, psf):
+    def __init__(
+        self,
+        psf,
+    ):
         self.psf = psf
 
     def __call__(
         self,
-        flux_bulge,
-        re_bulge,
-        n_bulge,
-        flux_disk,
-        re_disk,
-        n_disk,
-        q,
-        theta,
-        x0,
-        y0,
-        sky,
+        *args,
+        **kwargs,
     ):
         """Create a double-Sérsic model instance."""
+        if kwargs:
+            ordered = [
+                kwargs[name]
+                for name in (
+                    "flux_bulge",
+                    "re_bulge",
+                    "n_bulge",
+                    "q_bulge",
+                    "theta_bulge",
+                    "flux_disk",
+                    "re_disk",
+                    "n_disk",
+                    "q_disk",
+                    "theta_disk",
+                    "x0",
+                    "y0",
+                    "sky",
+                )
+            ]
+
+            return make_double_sersic_psf_sky_model(
+                *ordered,
+                psf=self.psf,
+            )
+
         return make_double_sersic_psf_sky_model(
-            flux_bulge,
-            re_bulge,
-            n_bulge,
-            flux_disk,
-            re_disk,
-            n_disk,
-            q,
-            theta,
-            x0,
-            y0,
-            sky,
+            *args,
             psf=self.psf,
         )
 
@@ -617,14 +628,13 @@ def _compute_best_model(
         for name in parameter_names
     }
 
-    best_values = [
-        best_parameters[name]
-        for name in parameter_names
-    ]
+    best_model = model_factory(
+        **best_parameters,
+    )
 
-    best_model = model_factory(*best_values)
-
-    best_model_image = best_model.render(image_shape)
+    best_model_image = best_model.render(
+        image_shape,
+    )
 
     return best_model_image, best_parameters
 
