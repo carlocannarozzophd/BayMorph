@@ -5,15 +5,15 @@
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-v0.1.0-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-v0.2.0-blue">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-green">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-159%2F159%20passed-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-157%2F157%20passed-brightgreen">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-active%20development-orange">
 </p>
 
 > [!IMPORTANT]
-> **Status:** BayMorph **v0.1.0**. The public workflow, notebooks, documentation, and automated tests are available. Scientific validation on larger real-galaxy samples is ongoing.
+> **Status:** BayMorph **v0.2.0**. BayMorph now provides a model-agnostic Bayesian morphology framework supporting composite galaxy models through a common rendering interface. Scientific validation on large observational samples is ongoing.
 
 BayMorph is an open-source Python framework for **Bayesian structural decomposition of galaxies**. It provides a complete, reproducible workflow from astronomical FITS images to structural modelling, Bayesian model comparison, and publication-quality diagnostics.
 
@@ -31,6 +31,22 @@ BayMorph is designed around a **workflow-first philosophy**: instead of providin
 | Compare competing models | Use Bayesian evidence and Bayes factors for principled model selection. |
 | Analyse many galaxies | Process entire directories of FITS images using the same configuration template. |
 | Produce publication-quality figures | Automatically generate residual maps, corner plots, radial profiles, and summary reports. |
+| Develop new galaxy models | Implement `render()` and `render_components()` and reuse the existing Bayesian inference, diagnostics, and plotting pipeline. |
+
+---
+
+## Features
+
+- Bayesian nested sampling using Dynesty
+- Bayesian model comparison through evidence and Bayes factors
+- Composite morphological models
+- Model-agnostic rendering interface
+- Automatic posterior-profile computation
+- Publication-quality diagnostics
+- Simulated and real-galaxy workflows
+- Batch processing
+- Reproducible configuration-driven pipeline
+- Configuration-driven workflows through YAML templates
 
 ---
 
@@ -49,10 +65,56 @@ PSF construction / loading
     ↓
 Bayesian fitting
     ↓
+Posterior profiles
+    ↓
 Model comparison
     ↓
 Diagnostics & reports
 ```
+
+---
+
+## Model architecture
+
+BayMorph is built around a model-agnostic rendering interface.
+
+Every morphological model implements the common rendering interface
+
+- `render(shape)`
+- `render_components(shape)`
+
+where
+
+```python
+model.render(shape)
+```
+
+returns the complete galaxy model image, while
+
+```python
+model.render_components(shape)
+```
+
+returns a dictionary of named structural components, for example
+
+```python
+{
+    "bulge": ...,
+    "disk": ...,
+}
+```
+
+or
+
+```python
+{
+    "bulge": ...,
+    "bar": ...,
+    "disk": ...,
+}
+```
+
+This interface allows the Bayesian inference pipeline, posterior-profile computation, diagnostics, and plotting routines to work with arbitrary composite galaxy models without model-specific logic.
 
 ---
 
@@ -81,10 +143,19 @@ pip install -e ".[dev]"
 ```python
 from baymorph import BayMorphRunner, load_resolved_config
 
-config = load_resolved_config("configs/simulated_galaxy.yaml")
+config = load_resolved_config(
+    "configs/simulated_galaxy.yaml"
+)
 
-runner = BayMorphRunner(config)
-results = runner.run()
+runner = BayMorphRunner.from_config(config)
+
+runner.prepare_image()
+runner.select_psf_candidates()
+runner.build_psf()
+
+results = runner.fit(return_result=True)
+
+runner.diagnostics()
 ```
 
 ---
@@ -122,7 +193,10 @@ results = runner.run()
 
 ## Current status
 
-- Version **0.1.0**
-- **159 / 159** automated tests passing
+- Version **0.2.0**
+- Composite-model architecture
+- Model-agnostic posterior-profile pipeline
+- Independent component geometry for Double Sérsic models
+- **157 / 157** automated tests passing
 - Active development
 - MIT License
