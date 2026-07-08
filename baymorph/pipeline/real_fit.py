@@ -804,5 +804,5 @@ def _diagnostic_title(
         model_name
         .replace("_", " ")
         .title()
-        .replace("Sersic", "Sersic")
+        .replace("Sersic", "Sérsic")
     )

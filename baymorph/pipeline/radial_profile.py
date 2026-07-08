@@ -12,6 +12,7 @@ from baymorph.analysis import (
     radial_profile_from_image,
 )
 from baymorph.plotting.radial import plot_radial_profile_diagnostics
+from baymorph.simulation.psf import GaussianPSF
 
 from .config import (
     load_resolved_config,
@@ -33,11 +34,36 @@ from .real_fit import (
 
 
 def _load_psf_from_config(config):
-    """Load the empirical PSF for radial-profile posterior diagnostics."""
-    try:
-        return load_empirical_psf(config)
-    except FileNotFoundError:
-        return None
+    """Load the configured PSF for radial-profile posterior diagnostics."""
+    psf_cfg = config.get(
+        "psf",
+        {},
+    )
+
+    psf_type = psf_cfg.get(
+        "type",
+        "empirical",
+    )
+
+    if psf_type == "gaussian":
+        gaussian_cfg = psf_cfg.get(
+            "gaussian",
+            {},
+        )
+
+        return GaussianPSF(
+            fwhm=float(
+                gaussian_cfg["fwhm"]
+            )
+        )
+
+    if psf_type == "empirical":
+        try:
+            return load_empirical_psf(config)
+        except FileNotFoundError:
+            return None
+
+    return None
 
 
 def _posterior_samples(posterior):
@@ -190,11 +216,11 @@ def run_radial_profile_diagnostics(config, fit_results):
             profile_data=profile_data,
             profile_model=profile_model,
             posterior_profiles=profile_bands,
-        )
-
-        axes[0].set_title(
-            _diagnostic_title(config, model_name),
-            fontsize=24,
+            legend_title=_diagnostic_title(
+                
+                config,
+                model_name,
+            ),
         )
 
         fig.savefig(

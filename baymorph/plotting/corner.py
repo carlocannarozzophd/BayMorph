@@ -41,6 +41,44 @@ def _as_cmap(
     return colormaps.get_cmap(cmap)
 
 
+_PARAMETER_LABELS_LATEX = {
+    "flux": r"$F$",
+    "re": r"$R_{\rm e}$",
+    "n": r"$n$",
+    "q": r"$q$",
+    "theta": r"$\theta$",
+    "x0": r"$x_0$",
+    "y0": r"$y_0$",
+    "sky": r"$S$",
+    "flux_bulge": r"$F_{\rm bulge}$",
+    "re_bulge": r"$R_{{\rm e},{\rm bulge}}$",
+    "n_bulge": r"$n_{\rm bulge}$",
+    "q_bulge": r"$q_{\rm bulge}$",
+    "theta_bulge": r"$\theta_{\rm bulge}$",
+    "flux_disk": r"$F_{\rm disk}$",
+    "re_disk": r"$R_{{\rm e},{\rm disk}}$",
+    "n_disk": r"$n_{\rm disk}$",
+    "q_disk": r"$q_{\rm disk}$",
+    "theta_disk": r"$\theta_{\rm disk}$",
+}
+
+
+def _latex_parameter_label(label):
+    """Return a LaTeX label for a BayMorph parameter name."""
+    if label is None:
+        return label
+
+    label = str(label)
+
+    if label.startswith("$") and label.endswith("$"):
+        return label
+
+    return _PARAMETER_LABELS_LATEX.get(
+        label,
+        label,
+    )
+
+
 def _sigma_colors(
     cmap,
     n,
@@ -360,6 +398,11 @@ def corner_plot(
             "the number of parameters."
         )
 
+    parameter_labels = [
+        _latex_parameter_label(label)
+        for label in parameter_labels
+    ]
+
     fig, ax_grid = _resolve_corner_grid(
         n_params=n_params,
         fig=fig,
@@ -425,7 +468,7 @@ def corner_plot(
                         extent=extent,
                         levels=base_levels,
                         colors=[inner_color],
-                        linewidths=1.5,
+                        linewidths=3,
                         alpha=alpha_lines,
                     )
 
@@ -436,12 +479,12 @@ def corner_plot(
                         axis.axvline(
                             xm,
                             color=inner_color,
-                            lw=1,
+                            lw=3,
                         )
                         axis.axhline(
                             ym,
                             color=inner_color,
-                            lw=1,
+                            lw=3,
                         )
                         axis.scatter(
                             xm,
@@ -449,7 +492,7 @@ def corner_plot(
                             marker="X",
                             color=inner_color,
                             s=60,
-                            lw=0.8,
+                            lw=3,
                             edgecolor="white",
                             zorder=5,
                         )
@@ -457,7 +500,7 @@ def corner_plot(
                 if j == 0:
                     axis.set_ylabel(
                         parameter_labels[i],
-                        fontsize=25,
+                        fontsize=35,
                     )
 
             if j == i:
@@ -492,7 +535,7 @@ def corner_plot(
                         axis.plot(
                             xgrid,
                             ygrid,
-                            lw=1.5,
+                            lw=3,
                             c=inner_color,
                             alpha=alpha_lines,
                         )
@@ -551,7 +594,7 @@ def corner_plot(
                         axis.plot(
                             centers,
                             counts,
-                            lw=1.5,
+                            lw=3,
                             c=line_color,
                             alpha=alpha_lines,
                         )
@@ -620,7 +663,7 @@ def corner_plot(
                         axis.axvline(
                             med,
                             color=inner_color,
-                            lw=1.2,
+                            lw=3,
                             ls="--",
                         )
 
@@ -637,7 +680,7 @@ def corner_plot(
 
                         axis.set_title(
                             f"{parameter_labels[j]} = {title}",
-                            fontsize=20,
+                            fontsize=25,
                         )
 
                 axis.set_ylim(bottom=0)
@@ -647,7 +690,7 @@ def corner_plot(
                 )
                 ax_grid[-1, j].set_xlabel(
                     parameter_labels[j],
-                    fontsize=25,
+                    fontsize=35,
                 )
 
     for k in range(n_params):

@@ -29,6 +29,22 @@ from .psf_construction import (
 )
 
 
+def _psf_to_image(psf):
+    """Return a displayable PSF image from a PSF object or array."""
+    if psf is None:
+        return None
+
+    kernel = getattr(psf, "kernel", None)
+
+    if callable(kernel):
+        return kernel()
+
+    if kernel is not None:
+        return kernel
+
+    return psf
+
+
 def run_residual_map_diagnostics(
     config,
     fit_results,
@@ -36,9 +52,9 @@ def run_residual_map_diagnostics(
     """Generate and save pipeline residual-map diagnostics.
 
     For each fitted model, this routine creates the standard BayMorph
-    residual-map summary, including the original and prepared cutouts,
-    best-fit model, residual maps, segmentation products, masks, PSF,
-    and noise-normalized residuals.
+    residual-map summary, including the original image, original and
+    prepared cutouts, best-fit model, combined masks, PSF, residual map,
+    and noise-normalized residual map.
 
     Parameters
     ----------
@@ -94,9 +110,11 @@ def run_residual_map_diagnostics(
             model=fit.best_model_image,
             noise=image_products.noise,
             segmentation=image_products.segmentation,
-            psf=psf,
+            psf=_psf_to_image(psf),
             contaminant_mask=image_products.contaminant_mask,
             target_mask=image_products.target_segment,
+            original_image=image_products.original_image,
+            cutout_bounds=image_products.cutout_bounds,
             title=_diagnostic_title(
                 config,
                 model_name,

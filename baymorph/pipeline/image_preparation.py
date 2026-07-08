@@ -141,6 +141,11 @@ class ImagePreparationProducts:
     ----------
     cutout : ndarray
         Original target cutout before background subtraction.
+    original_image : ndarray, optional
+        Full original input image before cutout extraction.
+    cutout_bounds : dict, optional
+        Pixel bounds of the cutout in the original image, with keys
+        ``xmin``, ``xmax``, ``ymin``, and ``ymax``.
     prepared_data : ndarray
         Background-subtracted cutout used for fitting.
     noise : ndarray
@@ -172,6 +177,8 @@ class ImagePreparationProducts:
     target_x: int
     target_y: int
     target_label: int
+    original_image: np.ndarray | None = None
+    cutout_bounds: dict[str, int] | None = None
 
 
 def make_target_cutout(
@@ -302,6 +309,13 @@ def prepare_real_image_from_config(
         target_x=target_x,
         target_y=target_y,
         target_label=int(target_label),
+        original_image=image.data,
+        cutout_bounds={
+            "xmin": int(cutout_definition.xmin),
+            "xmax": int(cutout_definition.xmax),
+            "ymin": int(cutout_definition.ymin),
+            "ymax": int(cutout_definition.ymax),
+        },
     )
 
     if save:
@@ -352,11 +366,15 @@ def save_image_preparation_products(
     np.save(paths["dir"] / "target_segment.npy", products.target_segment)
     np.save(paths["dir"] / "segmentation.npy", products.segmentation)
 
+    if products.original_image is not None:
+        np.save(paths["dir"] / "original_image.npy", products.original_image)
+
     metadata = {
         "background": products.background,
         "target_x": products.target_x,
         "target_y": products.target_y,
         "target_label": products.target_label,
+        "cutout_bounds": products.cutout_bounds,
     }
 
     with open(paths["dir"] / "image_preparation_metadata.json", "w") as f:
@@ -393,6 +411,13 @@ def load_image_preparation_products(
     target_segment = np.load(paths["dir"] / "target_segment.npy")
     segmentation = np.load(paths["dir"] / "segmentation.npy")
 
+    original_image_path = paths["dir"] / "original_image.npy"
+    original_image = (
+        np.load(original_image_path)
+        if original_image_path.exists()
+        else None
+    )
+
     with open(paths["dir"] / "image_preparation_metadata.json", "r") as f:
         metadata = json.load(f)
 
@@ -408,4 +433,6 @@ def load_image_preparation_products(
         target_x=int(metadata["target_x"]),
         target_y=int(metadata["target_y"]),
         target_label=int(metadata["target_label"]),
+        original_image=original_image,
+        cutout_bounds=metadata.get("cutout_bounds"),
     )

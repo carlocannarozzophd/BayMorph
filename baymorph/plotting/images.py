@@ -3,6 +3,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LogNorm
+from matplotlib.patches import Rectangle
 
 from .style import set_plot_style, style_axes
 
@@ -459,6 +460,119 @@ def plot_fit_summary(
     )
 
 
+def _apply_baymorph_axes_style(ax):
+    """Apply BayMorph image-axis styling."""
+    for spine in ax.spines.values():
+        spine.set_linewidth(3)
+
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.minorticks_off()
+
+
+def _robust_symmetric_limit(image, percentile=99.0, fallback=1.0):
+    """Return a robust symmetric display limit."""
+    values = np.asarray(image, dtype=float)
+    values = values[np.isfinite(values)]
+
+    if values.size == 0:
+        return float(fallback)
+
+    limit = np.nanpercentile(np.abs(values), percentile)
+
+    if not np.isfinite(limit) or limit <= 0:
+        return float(fallback)
+
+    return float(limit)
+
+
+def _combined_mask_rgb(contaminant_mask=None, target_mask=None):
+    """Return RGB masks: contaminants lightgray, target gold."""
+    shape = None
+
+    if contaminant_mask is not None:
+        contaminant_mask = np.asarray(contaminant_mask, dtype=bool)
+        shape = contaminant_mask.shape
+
+    if target_mask is not None:
+        target_mask = np.asarray(target_mask, dtype=bool)
+        shape = target_mask.shape if shape is None else shape
+
+    if shape is None:
+        return None
+
+    image = np.ones((*shape, 3), dtype=float)
+
+    if contaminant_mask is not None:
+        image[contaminant_mask] = (0.82, 0.82, 0.82)
+
+    if target_mask is not None:
+        image[target_mask] = (1.0, 0.84, 0.0)
+
+    return image
+
+
+def _imshow_log(ax, image, *, title, cmap):
+    """Display log-scaled image without colorbar."""
+    image = np.asarray(image, dtype=float)
+
+    vmin, vmax = _log_limits(image)
+    display = np.clip(image, vmin, vmax)
+
+    ax.imshow(
+        display,
+        origin="lower",
+        cmap=cmap,
+        norm=LogNorm(vmin=vmin, vmax=vmax),
+    )
+
+    ax.set_title(title, fontsize=35)
+    _apply_baymorph_axes_style(ax)
+
+
+def _add_inset_colorbar(fig, ax, image, label=None):
+    """Add inset colorbar without changing panel spacing."""
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+    cax = inset_axes(
+        ax,
+        width="4%",
+        height="88%",
+        loc="center right",
+        bbox_to_anchor=(0.10, 0.0, 1.0, 1.0),
+        bbox_transform=ax.transAxes,
+        borderpad=0,
+    )
+
+    cbar = fig.colorbar(
+        image,
+        cax=cax,
+    )
+
+    cbar.outline.set_linewidth(3)
+
+    cbar.ax.tick_params(
+        which="major",
+        length=10,
+        width=3,
+        labelsize=25,
+    )
+
+    cbar.ax.tick_params(
+        which="minor",
+        length=5,
+        width=3,
+    )
+
+    if label is not None:
+        cbar.set_label(
+            label,
+            fontsize=30,
+        )
+
+    return cbar
+
+
 def plot_pipeline_fit_maps(
     original_cutout,
     prepared_cutout,
@@ -468,50 +582,16 @@ def plot_pipeline_fit_maps(
     psf=None,
     contaminant_mask=None,
     target_mask=None,
+    *,
+    original_image=None,
+    cutout_bounds=None,
     title: str = "",
     cmap: str = BAYMORPH_IMAGE_CMAP,
     show: bool = False,
 ):
-    """Plot the final BayMorph pipeline map summary.
+    """Plot the final BayMorph 8-panel fit diagnostic report."""
+    del segmentation
 
-    The summary figure is organized in two rows. The first row shows
-    the original target cutout, prepared fitting cutout, best-fit model,
-    data-minus-model residual, and percent residual relative to the
-    prepared cutout. The second row shows the segmentation map, PSF,
-    contaminant mask, target segment, and noise-normalized residual map.
-
-    Parameters
-    ----------
-    original_cutout : array-like
-        Target cutout before background subtraction.
-    prepared_cutout : array-like
-        Background-subtracted cutout used for fitting.
-    model : array-like
-        Best-fit model image evaluated on the prepared cutout grid.
-    noise : array-like
-        Noise map associated with ``prepared_cutout``.
-    segmentation : array-like, optional
-        Integer segmentation map.
-    psf : array-like, optional
-        PSF image or kernel used for the fit.
-    contaminant_mask : array-like, optional
-        Boolean mask identifying contaminating sources.
-    target_mask : array-like, optional
-        Boolean mask identifying the target segment.
-    title : str, default=""
-        Optional figure title.
-    cmap : str, default=BAYMORPH_IMAGE_CMAP
-        Matplotlib colormap used for logarithmic image panels.
-    show : bool, default=False
-        If True, call :func:`matplotlib.pyplot.show`.
-
-    Returns
-    -------
-    fig : matplotlib.figure.Figure
-        Output figure.
-    axes : ndarray
-        Two-dimensional array of Matplotlib axes.
-    """
     set_plot_style()
 
     original_cutout = np.asarray(original_cutout, dtype=float)
@@ -519,154 +599,211 @@ def plot_pipeline_fit_maps(
     model = np.asarray(model, dtype=float)
     noise = np.asarray(noise, dtype=float)
 
+    if original_image is None:
+        original_image = original_cutout
+    else:
+        original_image = np.asarray(original_image, dtype=float)
+
     residual = prepared_cutout - model
 
-    percent_residual = np.full_like(residual, np.nan, dtype=float)
-
-    scale = np.nanpercentile(
-        np.abs(prepared_cutout),
-        95,
+    norm_residual = np.full_like(
+        residual,
+        np.nan,
+        dtype=float,
     )
 
-    valid_data = (
-        np.isfinite(prepared_cutout)
-        & (np.abs(prepared_cutout) > 0.01 * scale)
+    valid_noise = (
+        np.isfinite(noise)
+        & (noise > 0)
     )
 
-    percent_residual[valid_data] = (
-        100.0 * residual[valid_data] / prepared_cutout[valid_data]
-    )
-
-    norm_residual = np.full_like(residual, np.nan, dtype=float)
-    valid_noise = np.isfinite(noise) & (noise > 0)
     norm_residual[valid_noise] = residual[valid_noise] / noise[valid_noise]
 
-    vmin, vmax = _log_limits(original_cutout, prepared_cutout, model)
+    residual_limit = _robust_symmetric_limit(
+        residual,
+        fallback=1.0,
+    )
 
-    original_display = np.clip(original_cutout, vmin, vmax)
-    prepared_display = np.clip(prepared_cutout, vmin, vmax)
-    model_display = np.clip(model, vmin, vmax)
+    norm_limit = _robust_symmetric_limit(
+        norm_residual,
+        fallback=5.0,
+    )
 
-    residual_limit = np.nanpercentile(np.abs(residual), 99)
-    if not np.isfinite(residual_limit) or residual_limit == 0:
-        residual_limit = 1.0
+    norm_limit = min(
+        float(norm_limit),
+        5.0,
+    )
 
-    percent_limit = np.nanpercentile(np.abs(percent_residual), 99)
-    if not np.isfinite(percent_limit) or percent_limit == 0:
-        percent_limit = 100.0
-    percent_limit = min(float(percent_limit), 100.0)
+    mask_rgb = _combined_mask_rgb(
+        contaminant_mask=contaminant_mask,
+        target_mask=target_mask,
+    )
 
     fig, axes = plt.subplots(
         2,
-        5,
-        figsize=(30, 12),
-        constrained_layout=True,
+        4,
+        figsize=(30, 15),
+        constrained_layout=False,
     )
 
-    style_axes(axes.ravel())
-
-    panels = [
-        (
-            axes[0, 0],
-            original_display,
-            "Original cutout",
-            cmap,
-            LogNorm(vmin=vmin, vmax=vmax),
-            None,
-        ),
-        (
-            axes[0, 1],
-            prepared_display,
-            "Prepared cutout",
-            cmap,
-            LogNorm(vmin=vmin, vmax=vmax),
-            None,
-        ),
-        (
-            axes[0, 2],
-            model_display,
-            "Best-fit model",
-            cmap,
-            LogNorm(vmin=vmin, vmax=vmax),
-            None,
-        ),
-        (
-            axes[0, 3],
-            residual,
-            "Residual",
-            "RdBu_r",
-            None,
-            (-residual_limit, residual_limit),
-        ),
-        (
-            axes[0, 4],
-            percent_residual,
-            "Percent residual",
-            "RdBu_r",
-            None,
-            (-percent_limit, percent_limit),
-        ),
-    ]
-
-    for ax, image, panel_title, panel_cmap, norm, limits in panels:
-        kwargs = {"origin": "lower", "cmap": panel_cmap}
-
-        if norm is not None:
-            kwargs["norm"] = norm
-        elif limits is not None:
-            kwargs["vmin"], kwargs["vmax"] = limits
-
-        im = ax.imshow(image, **kwargs)
-        ax.set_title(panel_title)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        fig.colorbar(im, ax=ax, fraction=0.046)
-
-    row2 = [
-        (segmentation, "Segmentation", "tab20", None),
-        (psf, "PSF", cmap, None),
-        (contaminant_mask, "Contaminant mask", "gray", (0, 1)),
-        (target_mask, "Target segment", "gray", (0, 1)),
-        (norm_residual, "Residual / noise", "RdBu_r", (-5.0, 5.0)),
-    ]
-
-    for ax, (image, panel_title, panel_cmap, limits) in zip(axes[1], row2):
-        ax.set_title(panel_title)
-        ax.set_xticks([])
-        ax.set_yticks([])
-
-        if image is None:
-            ax.axis("off")
-            ax.text(
-                0.5,
-                0.5,
-                "Not available",
-                ha="center",
-                va="center",
-                transform=ax.transAxes,
-            )
-            continue
-
-        image = np.asarray(image, dtype=float)
-        kwargs = {"origin": "lower", "cmap": panel_cmap}
-
-        if panel_title == "PSF":
-            psf_vmin, psf_vmax = _log_limits(image)
-            image = np.clip(image, psf_vmin, psf_vmax)
-            kwargs["norm"] = LogNorm(vmin=psf_vmin, vmax=psf_vmax)
-
-        if limits is not None:
-            kwargs["vmin"], kwargs["vmax"] = limits
-
-        im = ax.imshow(image, **kwargs)
-
-        if panel_title == "Residual / noise":
-            fig.colorbar(im, ax=ax, fraction=0.046, label=r"$\sigma$")
-        else:
-            fig.colorbar(im, ax=ax, fraction=0.046)
+    fig.subplots_adjust(
+        left=0.035,
+        right=0.965,
+        bottom=0.06,
+        top=0.90,
+        wspace=0.10,
+        hspace=0.18,
+    )
 
     if title:
-        fig.suptitle(title, y=1.02)
+        fig.suptitle(
+            title,
+            fontsize=40,
+            y=0.985,
+        )
+
+    axes = np.asarray(axes)
+
+    _imshow_log(
+        axes[0, 0],
+        original_image,
+        title="Original image",
+        cmap=cmap,
+    )
+
+    if cutout_bounds is not None:
+        xmin = cutout_bounds.get("xmin")
+        xmax = cutout_bounds.get("xmax")
+        ymin = cutout_bounds.get("ymin")
+        ymax = cutout_bounds.get("ymax")
+
+        if None not in (xmin, xmax, ymin, ymax):
+            axes[0, 0].add_patch(
+                Rectangle(
+                    (xmin, ymin),
+                    xmax - xmin,
+                    ymax - ymin,
+                    fill=False,
+                    edgecolor="gold",
+                    linewidth=3,
+                )
+            )
+
+    _imshow_log(
+        axes[0, 1],
+        original_cutout,
+        title="Original cutout",
+        cmap=cmap,
+    )
+
+    _imshow_log(
+        axes[0, 2],
+        prepared_cutout,
+        title="Prepared cutout",
+        cmap=cmap,
+    )
+
+    _imshow_log(
+        axes[0, 3],
+        model,
+        title="Model",
+        cmap=cmap,
+    )
+
+    axes[1, 0].set_title(
+        "Target & Masks",
+        fontsize=35,
+    )
+    _apply_baymorph_axes_style(axes[1, 0])
+
+    if mask_rgb is None:
+        axes[1, 0].text(
+            0.5,
+            0.5,
+            "Masks not available",
+            ha="center",
+            va="center",
+            fontsize=25,
+            transform=axes[1, 0].transAxes,
+        )
+    else:
+        axes[1, 0].imshow(
+            mask_rgb,
+            origin="lower",
+            interpolation="nearest",
+        )
+
+    axes[1, 1].set_title(
+        "PSF",
+        fontsize=35,
+    )
+    _apply_baymorph_axes_style(axes[1, 1])
+
+    if psf is None:
+        axes[1, 1].text(
+            0.5,
+            0.5,
+            "PSF not provided",
+            ha="center",
+            va="center",
+            fontsize=25,
+            transform=axes[1, 1].transAxes,
+        )
+    else:
+        psf = np.asarray(psf, dtype=float)
+        psf_vmin, psf_vmax = _log_limits(psf)
+        psf_display = np.clip(psf, psf_vmin, psf_vmax)
+
+        axes[1, 1].imshow(
+            psf_display,
+            origin="lower",
+            cmap=cmap,
+            norm=LogNorm(
+                vmin=psf_vmin,
+                vmax=psf_vmax,
+            ),
+        )
+
+    axes[1, 2].set_title(
+        "Residual",
+        fontsize=35,
+    )
+    _apply_baymorph_axes_style(axes[1, 2])
+
+    residual_image = axes[1, 2].imshow(
+        residual,
+        origin="lower",
+        cmap="RdBu_r",
+        vmin=-residual_limit,
+        vmax=residual_limit,
+    )
+
+    _add_inset_colorbar(
+        fig,
+        axes[1, 2],
+        residual_image,
+    )
+
+    axes[1, 3].set_title(
+        "Residual / noise",
+        fontsize=35,
+    )
+    _apply_baymorph_axes_style(axes[1, 3])
+
+    norm_image = axes[1, 3].imshow(
+        norm_residual,
+        origin="lower",
+        cmap="RdBu_r",
+        vmin=-norm_limit,
+        vmax=norm_limit,
+    )
+
+    _add_inset_colorbar(
+        fig,
+        axes[1, 3],
+        norm_image,
+        label=r"$\sigma$",
+    )
 
     if show:
         plt.show()

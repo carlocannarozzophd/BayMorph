@@ -195,6 +195,36 @@ def psf_radial_profile(
     return radius_mid, profile
 
 
+
+def _style_psf_axis(ax):
+    """Apply BayMorph PSF-diagnostic styling to one axis."""
+    for spine in ax.spines.values():
+        spine.set_linewidth(3)
+
+    ax.tick_params(
+        which="both",
+        direction="out",
+        top=False,
+        right=False,
+        width=3,
+        labelsize=20,
+    )
+    ax.tick_params(which="major", length=10, width=3)
+    ax.tick_params(which="minor", length=5, width=3)
+    ax.minorticks_on()
+
+
+def _psf_grid_shape(n_items: int) -> tuple[int, int]:
+    """Return an adaptive grid shape for PSF cutout diagnostics."""
+    if n_items <= 0:
+        return 1, 1
+
+    ncols = int(np.ceil(np.sqrt(n_items)))
+    nrows = int(np.ceil(n_items / ncols))
+
+    return nrows, ncols
+
+
 def save_empirical_psf_diagnostics(
     config: dict[str, Any],
     psf: np.ndarray,
@@ -229,21 +259,17 @@ def save_empirical_psf_diagnostics(
         1,
         2,
         figsize=(30, 15),
+        constrained_layout=True,
     )
 
-    image = axes[0].imshow(
+    axes[0].imshow(
         psf,
         origin="lower",
         cmap="turbo",
     )
-
     axes[0].set_title(
-        "Empirical PSF"
-    )
-
-    fig.colorbar(
-        image,
-        ax=axes[0],
+        "Empirical PSF",
+        fontsize=35,
     )
 
     radius, profile = psf_radial_profile(
@@ -253,19 +279,25 @@ def save_empirical_psf_diagnostics(
     axes[1].plot(
         radius,
         profile,
+        color="black",
+        lw=3,
     )
 
     axes[1].set_xlabel(
-        "Radius [pix]"
+        "Radius [pix]",
+        fontsize=35,
     )
-
     axes[1].set_ylabel(
-        "Median PSF value"
+        "Median PSF value",
+        fontsize=35,
+    )
+    axes[1].set_title(
+        "PSF radial profile",
+        fontsize=35,
     )
 
-    axes[1].set_title(
-        "PSF radial profile"
-    )
+    for ax in axes:
+        _style_psf_axis(ax)
 
     fig.savefig(
         diagnostics_dir / "empirical_psf_diagnostic.pdf",
@@ -277,36 +309,35 @@ def save_empirical_psf_diagnostics(
     if len(cutouts) == 0:
         return
 
-    n_show = min(
-        len(cutouts),
-        9,
-    )
+    n_cutouts = len(cutouts)
+    nrows, ncols = _psf_grid_shape(n_cutouts)
 
     fig, axes = plt.subplots(
-        3,
-        3,
-        figsize=(45, 45),
+        nrows,
+        ncols,
+        figsize=(30, 15),
+        squeeze=False,
+        constrained_layout=True,
     )
 
-    axes = np.ravel(axes)
+    axes_flat = np.ravel(axes)
 
-    for ax in axes:
+    for ax in axes_flat:
         ax.axis("off")
 
-    for i in range(n_show):
-        ax = axes[i]
-
+    for i, cutout in enumerate(cutouts):
+        ax = axes_flat[i]
+        ax.axis("on")
         ax.imshow(
-            cutouts[i],
+            cutout,
             origin="lower",
             cmap="turbo",
         )
-
         ax.set_title(
-            f"PSF cutout {i + 1}"
+            f"PSF cutout {i + 1}",
+            fontsize=20,
         )
-
-        ax.axis("on")
+        _style_psf_axis(ax)
 
     fig.savefig(
         diagnostics_dir / "empirical_psf_cutouts.pdf",
@@ -314,7 +345,6 @@ def save_empirical_psf_diagnostics(
     )
 
     plt.close(fig)
-
 
 def run_psf_construction_from_config(
     config: str | Path | dict[str, Any],

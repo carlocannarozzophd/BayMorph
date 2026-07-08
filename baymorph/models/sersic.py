@@ -36,6 +36,28 @@ class SersicModel:
     x0: float
     y0: float
 
+    def render_components(
+        self,
+        shape: tuple[int, int],
+    ) -> dict[str, np.ndarray]:
+        """Render the Sérsic model as a named single-component model.
+
+        Parameters
+        ----------
+        shape : tuple of int
+            Output image shape as ``(ny, nx)``.
+
+        Returns
+        -------
+        dict of str, ndarray
+            Dictionary containing the rendered Sérsic component.
+        """
+        return {
+            "sersic": self.render(
+                shape=shape,
+            )
+        }
+
     def render(
         self,
         shape: tuple[int, int],
@@ -70,7 +92,12 @@ class SersicModel:
         y_rot = -dx * sin_t + dy * cos_t
 
         radius = np.sqrt(
-            x_rot**2 + (y_rot / self.q) ** 2
+            x_rot**2
+            + (
+                y_rot
+                / self.q
+            )
+            ** 2
         )
 
         bn = gammaincinv(
@@ -81,7 +108,14 @@ class SersicModel:
         intensity = np.exp(
             -bn
             * (
-                (radius / self.re) ** (1.0 / self.n)
+                (
+                    radius
+                    / self.re
+                )
+                ** (
+                    1.0
+                    / self.n
+                )
                 - 1.0
             )
         )
