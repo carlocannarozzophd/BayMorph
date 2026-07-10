@@ -10,6 +10,7 @@ from scipy.interpolate import interp1d
 from scipy.ndimage import gaussian_filter, gaussian_filter1d
 from scipy.stats import gaussian_kde
 
+from baymorph.models.labels import latex_parameter_label
 
 def erf_sigma_to_percentiles(
     sigma,
@@ -39,44 +40,6 @@ def _as_cmap(
         return cmap
 
     return colormaps.get_cmap(cmap)
-
-
-_PARAMETER_LABELS_LATEX = {
-    "flux": r"$F$",
-    "re": r"$R_{\rm e}$",
-    "n": r"$n$",
-    "q": r"$q$",
-    "theta": r"$\theta$",
-    "x0": r"$x_0$",
-    "y0": r"$y_0$",
-    "sky": r"$S$",
-    "flux_bulge": r"$F_{\rm bulge}$",
-    "re_bulge": r"$R_{{\rm e},{\rm bulge}}$",
-    "n_bulge": r"$n_{\rm bulge}$",
-    "q_bulge": r"$q_{\rm bulge}$",
-    "theta_bulge": r"$\theta_{\rm bulge}$",
-    "flux_disk": r"$F_{\rm disk}$",
-    "re_disk": r"$R_{{\rm e},{\rm disk}}$",
-    "n_disk": r"$n_{\rm disk}$",
-    "q_disk": r"$q_{\rm disk}$",
-    "theta_disk": r"$\theta_{\rm disk}$",
-}
-
-
-def _latex_parameter_label(label):
-    """Return a LaTeX label for a BayMorph parameter name."""
-    if label is None:
-        return label
-
-    label = str(label)
-
-    if label.startswith("$") and label.endswith("$"):
-        return label
-
-    return _PARAMETER_LABELS_LATEX.get(
-        label,
-        label,
-    )
 
 
 def _sigma_colors(
@@ -112,12 +75,12 @@ def _style_corner_axis(
     ax.tick_params(
         axis="x",
         rotation=45,
-        labelsize=20,
+        labelsize=30,
     )
     ax.tick_params(
         axis="y",
         rotation=45,
-        labelsize=20,
+        labelsize=30,
     )
     ax.tick_params(
         which="major",
@@ -221,7 +184,7 @@ def _resolve_corner_grid(
         fig, ax_grid = plt.subplots(
             n_params,
             n_params,
-            figsize=(15, 15),
+            figsize=(30,30),
         )
         return fig, ax_grid
 
@@ -274,7 +237,7 @@ def corner_plot(
         ``(n_sets, n_params, n_samples)``.
     sigma : sequence of float, optional
         Gaussian-equivalent sigma levels used for contours and one-dimensional
-        credible intervals. If None, ``[1, 2]`` is used.
+        credible intervals. If None, ``[1, 2, 3]`` is used.
     parameter_labels : sequence of str, optional
         Labels displayed on the plot axes.
     bins : int, default=30
@@ -337,6 +300,10 @@ def corner_plot(
         labels does not match the number of parameters, or if incompatible
         figure/axis arguments are supplied.
     """
+    from .style import set_plot_style
+
+    set_plot_style()
+
     params = np.asarray(
         parameters,
         dtype=float,
@@ -358,7 +325,7 @@ def corner_plot(
     n_sets, n_params, _ = params.shape
 
     if sigma is None:
-        sigma = [1, 2]
+        sigma = [1, 2, 3]
 
     sigma_sorted = np.sort(
         np.asarray(
@@ -399,7 +366,7 @@ def corner_plot(
         )
 
     parameter_labels = [
-        _latex_parameter_label(label)
+        latex_parameter_label(label)
         for label in parameter_labels
     ]
 
@@ -491,7 +458,7 @@ def corner_plot(
                             ym,
                             marker="X",
                             color=inner_color,
-                            s=60,
+                            s=150,
                             lw=3,
                             edgecolor="white",
                             zorder=5,
@@ -673,13 +640,13 @@ def corner_plot(
                             return f"{val:.3f}"
 
                         title = (
-                            rf"${fmt(med)}_"
-                            rf"{{-{fmt(q16)}}}"
+                            rf"${fmt(med)}"
+                            rf"_{{-{fmt(q16)}}}"
                             rf"^{{+{fmt(q84)}}}$"
                         )
 
                         axis.set_title(
-                            f"{parameter_labels[j]} = {title}",
+                            title,
                             fontsize=25,
                         )
 
@@ -704,8 +671,12 @@ def corner_plot(
 
     if ax is None:
         plt.subplots_adjust(
-            left=0.10,
-            bottom=0.10,
+            left=0.08,
+            right=0.98,
+            bottom=0.08,
+            top=0.98,
+            wspace=0.05,
+            hspace=0.05,
         )
 
     fig.align_labels(ax_grid)

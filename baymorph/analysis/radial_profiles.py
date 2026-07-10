@@ -79,3 +79,128 @@ def radial_profile_from_image(
             profile[i] = np.nanmedian(image[annulus])
 
     return profile
+
+
+def radial_bins(
+    max_radius,
+    *,
+    mode="fixed",
+    dr=1.0,
+    min_pixels=50,
+    log_n_bins=40,
+):
+    """Construct radial-bin edges for radial-profile measurements.
+
+    Parameters
+    ----------
+    max_radius : float
+        Maximum radius of the profile, in pixels.
+
+    mode : {"fixed", "adaptive", "logarithmic"}, default="fixed"
+        Strategy used to construct the radial bins.
+
+        ``"fixed"``
+            Uniform radial bins with constant width ``dr``.
+
+        ``"adaptive"``
+            Variable-width bins chosen to contain at least approximately
+            ``min_pixels`` pixels per annulus while never becoming narrower
+            than ``dr``.
+
+        ``"logarithmic"``
+            Logarithmically spaced bins between ``dr`` and
+            ``max_radius``.
+
+    dr : float, default=1.0
+        Minimum radial-bin width, in pixels. For fixed binning this is the
+        constant annulus width. For adaptive and logarithmic binning it
+        defines the smallest allowed radial spacing.
+
+    min_pixels : int, default=50
+        Approximate minimum number of pixels per annulus when using
+        adaptive binning.
+
+    log_n_bins : int, default=40
+        Number of logarithmically spaced bins when ``mode="logarithmic"``.
+
+    Returns
+    -------
+    ndarray
+        One-dimensional array containing the radial-bin edges, in pixels.
+        The returned array always starts at zero and ends at
+        ``max_radius``.
+
+    Raises
+    ------
+    ValueError
+        If an unsupported binning mode is requested.
+
+    Notes
+    -----
+    The returned bin edges are intended for use with
+    :func:`radial_profile_from_image` and the posterior-profile analysis
+    routines. Bin centres can be obtained with
+
+    ``0.5 * (radii[:-1] + radii[1:])``.
+    """
+    max_radius = float(max_radius)
+
+    if mode == "fixed":
+        edges = np.arange(
+            0.0,
+            max_radius,
+            float(dr),
+            dtype=float,
+        )
+
+        return np.unique(
+            np.concatenate(
+                (
+                    edges,
+                    [max_radius],
+                )
+            )
+        )
+
+    if mode == "logarithmic":
+        inner = max(float(dr), 1.0)
+
+        bins = np.geomspace(
+            inner,
+            max_radius,
+            int(log_n_bins),
+        )
+
+        return np.unique(
+            np.concatenate(
+                ([0.0], bins)
+            )
+        )
+
+    if mode == "adaptive":
+        edges = [0.0]
+        r = 0.0
+
+        while r < max_radius:
+            dr_current = max(
+                float(dr),
+                float(min_pixels) / max(2.0 * np.pi * max(r, 1.0), 1.0),
+            )
+
+            r = min(
+                r + dr_current,
+                max_radius,
+            )
+
+            edges.append(r)
+
+        return np.asarray(
+            edges,
+            dtype=float,
+        )
+
+    raise ValueError(
+        "Unknown radial binning mode "
+        f"'{mode}'. Expected one of "
+        "'fixed', 'adaptive', or 'logarithmic'."
+    )

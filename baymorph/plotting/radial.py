@@ -85,6 +85,7 @@ def plot_radial_profile_diagnostics(
     profile_model,
     profile_noise=None,
     posterior_profiles=None,
+    component_profiles=None,
     *,
     legend_title=None,
     ax=None,
@@ -104,6 +105,9 @@ def plot_radial_profile_diagnostics(
     posterior_profiles : PosteriorProfileResult, optional
         Posterior radial-profile summaries returned by
         ``compute_posterior_profile_bands``.
+    component_profiles : dict, optional
+        Maximum-likelihood component radial profiles. These are plotted only in
+        the upper panel and are not included in the residual panel.
     legend_title : str, optional
         Title displayed at the top of the legend. Typically corresponds to
         the fitted morphology model.
@@ -151,7 +155,6 @@ def plot_radial_profile_diagnostics(
     )
 
     posterior_total = None
-    posterior_components = None
 
     if posterior_profiles is not None:
         posterior_radius = np.asarray(
@@ -179,34 +182,6 @@ def plot_radial_profile_diagnostics(
 
         if _same_radius_grid(posterior_radius, radius):
             valid &= posterior_valid
-
-        component_items = list(
-            posterior_profiles.components.items()
-        )
-
-        if len(component_items) > 1:
-            posterior_components = []
-
-            for name, profile_band in component_items:
-                _, component_p50, _ = _profile_band_values(
-                    profile_band
-                )
-
-                component = {
-                    "name": name,
-                    "radius": posterior_radius,
-                    "p50": component_p50,
-                }
-
-                posterior_components.append(component)
-
-                component_valid = (
-                    np.isfinite(posterior_radius)
-                    & np.isfinite(component_p50)
-                )
-
-                if _same_radius_grid(posterior_radius, radius):
-                    valid &= component_valid
 
     if not np.any(valid):
         valid = (
@@ -289,22 +264,31 @@ def plot_radial_profile_diagnostics(
             label="Posterior median",
         )
 
-    if posterior_components is not None:
-        for component in posterior_components:
-            if _same_radius_grid(component["radius"], radius):
-                component_plot_valid = valid
-            else:
-                component_plot_valid = (
-                    np.isfinite(component["radius"])
-                    & np.isfinite(component["p50"])
-                )
+    if component_profiles is not None:
+        for name, component_profile in component_profiles.items():
+            component_profile = np.asarray(
+                component_profile,
+                dtype=float,
+            )
+
+            if component_profile.shape != radius.shape:
+                continue
+
+            component_log = _safe_log10(
+                component_profile,
+            )
+
+            component_valid = (
+                valid
+                & np.isfinite(component_log)
+            )
 
             ax1.plot(
-                component["radius"][component_plot_valid],
-                component["p50"][component_plot_valid],
+                radius[component_valid],
+                component_log[component_valid],
                 lw=3,
-                alpha=0.8,
-                label=component["name"],
+                alpha=0.85,
+                label=name,
             )
 
     ax1.plot(
@@ -377,47 +361,18 @@ def plot_radial_profile_diagnostics(
             ]
         )
 
-    if posterior_components is not None:
-        for component in posterior_components:
-            if _same_radius_grid(component["radius"], radius):
-                component_residual_valid = valid
-                component_model_reference = log_model[component_residual_valid]
-            else:
-                component_residual_valid = (
-                    np.isfinite(component["radius"])
-                    & np.isfinite(component["p50"])
-                )
-                component_model_reference = np.interp(
-                    component["radius"][component_residual_valid],
-                    radius_plot,
-                    log_model_plot,
-                )
-
-            component_radius_res = component["radius"][component_residual_valid]
-            component_p50_res = component["p50"][component_residual_valid]
-            component_residual = component_p50_res - component_model_reference
-
-            ax2.plot(
-                component_radius_res,
-                component_residual,
-                lw=3,
-                alpha=0.8,
-            )
-
-            residual_values.append(component_residual)
-
     ax2.plot(
-            radius_plot,
-            data_residual,
-            marker="o",
-            linestyle="none",
-            markerfacecolor="royalblue",
-            markeredgecolor="white",
-            markeredgewidth=1.5,
-            alpha=observed_alpha,
-            ms=observed_marker_size,
-            label="Observed",
-        )
+        radius_plot,
+        data_residual,
+        marker="o",
+        linestyle="none",
+        markerfacecolor="royalblue",
+        markeredgecolor="white",
+        markeredgewidth=1.5,
+        alpha=observed_alpha,
+        ms=observed_marker_size,
+        label="Observed",
+    )
 
     finite_residuals = [
         values[np.isfinite(values)]

@@ -5,7 +5,7 @@ from __future__ import annotations
 MODEL_PARAMETER_LABELS = {
     "single_sersic": {
         "flux": r"$F$",
-        "re": r"$R_{\rm e}$",
+        "re": r"$R_{e}$",
         "n": r"$n$",
         "q": r"$q$",
         "theta": r"$\theta$",
@@ -14,13 +14,13 @@ MODEL_PARAMETER_LABELS = {
         "sky": r"$S$",
     },
     "double_sersic": {
-        "flux_bulge": r"$F_{\rm bulge}$",
-        "re_bulge": r"$R_{{\rm e},b}$",
+        "flux_bulge": r"$F_{\mathrm{b}}$",
+        "re_bulge": r"$R_{e,\mathrm{b}}$",
         "n_bulge": r"$n_b$",
         "q_bulge": r"$q_b$",
         "theta_bulge": r"$\theta_b$",
-        "flux_disk": r"$F_{\rm disk}$",
-        "re_disk": r"$R_{{\rm e},d}$",
+        "flux_disk": r"$F_{\mathrm{d}}$",
+        "re_disk": r"$R_{e,\mathrm{d}}$",
         "n_disk": r"$n_d$",
         "q_disk": r"$q_d$",
         "theta_disk": r"$\theta_d$",
@@ -93,3 +93,21 @@ def parameter_labels(
             model_name
         ].values()
     )
+
+
+def latex_parameter_label(
+    name: str,
+) -> str:
+    """Return the LaTeX display label for a parameter name."""
+    name = str(name)
+
+    if name.startswith("$") and name.endswith("$"):
+        return name
+
+    for labels in MODEL_PARAMETER_LABELS.values():
+        if name in labels:
+            return labels[name]
+
+    safe_name = name.replace("_", r"\_")
+
+    return rf"$\mathrm{{{safe_name}}}$"

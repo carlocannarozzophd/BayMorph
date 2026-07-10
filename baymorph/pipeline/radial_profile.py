@@ -9,6 +9,7 @@ import numpy as np
 
 from baymorph.analysis import (
     compute_posterior_profile_bands,
+    radial_bins,
     radial_profile_from_image,
 )
 from baymorph.plotting.radial import plot_radial_profile_diagnostics
@@ -34,7 +35,7 @@ from .real_fit import (
 
 
 def _load_psf_from_config(config):
-    """Load the configured PSF for radial-profile posterior diagnostics."""
+    """Load the configured PSF for radial-profile diagnostics."""
     psf_cfg = config.get(
         "psf",
         {},
@@ -59,19 +60,29 @@ def _load_psf_from_config(config):
 
     if psf_type == "empirical":
         try:
-            return load_empirical_psf(config)
+            return load_empirical_psf(
+                config,
+            )
         except FileNotFoundError:
             return None
 
-    return None
+    raise ValueError(
+        f"Unsupported PSF type: {psf_type}"
+    )
 
 
 def _posterior_samples(posterior):
     """Return posterior samples from a posterior result."""
-    if hasattr(posterior, "samples"):
+    if hasattr(
+        posterior,
+        "samples",
+    ):
         return posterior.samples
 
-    if hasattr(posterior, "posterior_samples"):
+    if hasattr(
+        posterior,
+        "posterior_samples",
+    ):
         return posterior.posterior_samples
 
     return posterior
@@ -129,7 +140,9 @@ def _compute_posterior_profiles(
     )
 
     return compute_posterior_profile_bands(
-        posterior=_posterior_samples(fit.posterior),
+        posterior=_posterior_samples(
+            fit.posterior,
+        ),
         model_factory=sample_model_factory,
         image_shape=image_shape,
         radii=radii,
@@ -139,41 +152,169 @@ def _compute_posterior_profiles(
     )
 
 
-def run_radial_profile_diagnostics(config, fit_results):
-    """Generate and save radial-profile diagnostics for fitted models."""
-    single_input = not isinstance(fit_results, dict)
+def run_radial_profile_diagnostics(
+    config,
+    fit_results,
+):
+    """Generate and save radial-profile diagnostics for fitted models.
 
-    if isinstance(config, (str, Path)):
-        config = load_resolved_config(config)
+    Parameters
+    ----------
+    config : dict, str, or pathlib.Path
+        Pipeline configuration dictionary or path to a resolved YAML
+        configuration file.
+    fit_results : RealFitProducts or dict
+        Single fit result or mapping from model names to fit results.
+
+    Returns
+    -------
+    PosteriorProfileResult, dict, or None
+        Posterior-profile result for a single fitted model, or a mapping from
+        model names to posterior-profile results when multiple models are
+        supplied.
+    """
+    single_input = not isinstance(
+        fit_results,
+        dict,
+    )
+
+    if isinstance(
+        config,
+        (str, Path),
+    ):
+        config = load_resolved_config(
+            config,
+        )
     else:
-        config = resolve_config(config)
+        config = resolve_config(
+            config,
+        )
 
-    image_products = load_image_preparation_products(config)
-    paths = pipeline_paths(config)["fits"]
-    diagnostics_cfg = config.get("diagnostics", {})
-    psf = _load_psf_from_config(config)
+    image_products = load_image_preparation_products(
+        config,
+    )
+
+    paths = pipeline_paths(
+        config,
+    )["fits"]
+
+    diagnostics_cfg = config.get(
+        "diagnostics",
+        {},
+    )
+
+    radial_cfg = diagnostics_cfg.get(
+        "radial_profile",
+        {},
+    )
+
+    psf = _load_psf_from_config(
+        config,
+    )
 
     if single_input:
-        fit_results = {fit_results.model_name: fit_results}
+        fit_results = {
+            fit_results.model_name: fit_results,
+        }
 
     profile_results = {}
 
     for model_name, fit in fit_results.items():
-        center_x = fit.best_parameters["x0"]
-        center_y = fit.best_parameters["y0"]
-
-        max_radius = 0.5 * min(image_products.prepared_data.shape)
-
-        radii = np.arange(
-            0.0,
-            max_radius + 1.0,
-            1.0,
+        center_x = float(
+            fit.best_parameters["x0"]
+        )
+        center_y = float(
+            fit.best_parameters["y0"]
         )
 
-        radius = 0.5 * (radii[:-1] + radii[1:])
+        max_radius = 0.5 * min(
+            image_products.prepared_data.shape
+        )
+
+        radii = radial_bins(
+            max_radius,
+            mode=radial_cfg.get(
+                "binning",
+                "fixed",
+            ),
+            dr=float(
+                radial_cfg.get(
+                    "dr",
+                    1.0,
+                )
+            ),
+            min_pixels=int(
+                radial_cfg.get(
+                    "min_pixels",
+                    50,
+                )
+            ),
+            log_n_bins=int(
+                radial_cfg.get(
+                    "log_n_bins",
+                    40,
+                )
+            ),
+        )
+
+        radius = 0.5 * (
+            radii[:-1]
+            + radii[1:]
+        )
+
+        model_factory = _make_model_factory(
+            model_name,
+            psf,
+        )
+
+        best_model = model_factory(
+            **fit.best_parameters,
+        )
+
+        components = best_model.render_components(
+            image_products.prepared_data.shape,
+        )
+
+        if not components:
+            raise RuntimeError(
+                f"Model '{model_name}' returned no rendered components."
+            )
+
+        component_images = {
+            name: np.asarray(
+                image,
+                dtype=float,
+            )
+            for name, image in components.items()
+        }
+
+        galaxy_model_image = np.sum(
+            np.stack(
+                list(
+                    component_images.values()
+                ),
+                axis=0,
+            ),
+            axis=0,
+        )
+
+        best_sky = float(
+            fit.best_parameters.get(
+                "sky",
+                0.0,
+            )
+        )
+
+        sky_subtracted_data = (
+            np.asarray(
+                image_products.prepared_data,
+                dtype=float,
+            )
+            - best_sky
+        )
 
         profile_data = radial_profile_from_image(
-            image_products.prepared_data,
+            sky_subtracted_data,
             center_x=center_x,
             center_y=center_y,
             radii=radii,
@@ -181,12 +322,26 @@ def run_radial_profile_diagnostics(config, fit_results):
         )
 
         profile_model = radial_profile_from_image(
-            fit.best_model_image,
+            galaxy_model_image,
             center_x=center_x,
             center_y=center_y,
             radii=radii,
             mask=image_products.contaminant_mask,
         )
+
+        component_profiles = None
+
+        if len(component_images) > 1:
+            component_profiles = {
+                name: radial_profile_from_image(
+                    image,
+                    center_x=center_x,
+                    center_y=center_y,
+                    radii=radii,
+                    mask=image_products.contaminant_mask,
+                )
+                for name, image in component_images.items()
+            }
 
         fit.radius = radius
         fit.profile_data = profile_data
@@ -211,13 +366,13 @@ def run_radial_profile_diagnostics(config, fit_results):
 
         profile_results[model_name] = profile_bands
 
-        fig, axes = plot_radial_profile_diagnostics(
+        fig, _ = plot_radial_profile_diagnostics(
             radius=radius,
             profile_data=profile_data,
             profile_model=profile_model,
             posterior_profiles=profile_bands,
+            component_profiles=component_profiles,
             legend_title=_diagnostic_title(
-                
                 config,
                 model_name,
             ),
@@ -228,9 +383,15 @@ def run_radial_profile_diagnostics(config, fit_results):
             bbox_inches="tight",
         )
 
-        plt.close(fig)
+        plt.close(
+            fig,
+        )
 
     if single_input:
-        return next(iter(profile_results.values()))
+        return next(
+            iter(
+                profile_results.values()
+            )
+        )
 
     return profile_results

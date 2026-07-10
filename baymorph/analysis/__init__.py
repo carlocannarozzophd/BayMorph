@@ -6,12 +6,16 @@ from .posterior_profiles import (
     compute_posterior_profile_bands,
 )
 from .radial_profiles import (
+    radial_bins,
     radial_profile_from_image,
 )
 
 __all__ = [
     "ProfileBand",
     "PosteriorProfileResult",
+    "radial_profile_from_image",
+    "compute_posterior_profile_bands",
+    "radial_bins",
     "radial_profile_from_image",
     "compute_posterior_profile_bands",
 ]

@@ -10,6 +10,8 @@ from baymorph.plotting.images import (
     plot_pipeline_fit_maps,
 )
 
+from baymorph.simulation.psf import GaussianPSF
+
 from .config import (
     load_resolved_config,
     resolve_config,
@@ -29,20 +31,44 @@ from .psf_construction import (
 )
 
 
-def _psf_to_image(psf):
-    """Return a displayable PSF image from a PSF object or array."""
-    if psf is None:
+def _psf_to_image(psf, config=None):
+    """Return a displayable PSF image from a PSF object, array, or config."""
+    if psf is not None:
+        kernel = getattr(psf, "kernel", None)
+
+        if callable(kernel):
+            return kernel()
+
+        if kernel is not None:
+            return kernel
+
+        return psf
+
+    if config is None:
         return None
 
-    kernel = getattr(psf, "kernel", None)
+    psf_cfg = config.get("psf", {})
 
-    if callable(kernel):
-        return kernel()
+    if not psf_cfg:
+        psf_cfg = config.get("simulation", {}).get("psf", {})
 
-    if kernel is not None:
-        return kernel
+    psf_type = psf_cfg.get("type")
 
-    return psf
+    if psf_type == "gaussian":
+        gaussian_cfg = psf_cfg.get("gaussian", {})
+        fwhm = gaussian_cfg.get(
+            "fwhm",
+            psf_cfg.get("fwhm"),
+        )
+
+        if fwhm is None:
+            return None
+
+        return GaussianPSF(
+            fwhm=float(fwhm),
+        ).kernel()
+
+    return None
 
 
 def run_residual_map_diagnostics(
@@ -110,7 +136,7 @@ def run_residual_map_diagnostics(
             model=fit.best_model_image,
             noise=image_products.noise,
             segmentation=image_products.segmentation,
-            psf=_psf_to_image(psf),
+            psf=_psf_to_image(psf, config),
             contaminant_mask=image_products.contaminant_mask,
             target_mask=image_products.target_segment,
             original_image=image_products.original_image,

@@ -55,6 +55,7 @@ from .psf_construction import (
     save_empirical_psf_metadata,
     stack_psf_cutouts,
     subtract_outer_background,
+    save_simulated_psf_products,
 )
 from .radial_profile import run_radial_profile_diagnostics
 from .real_fit import (
@@ -71,6 +72,10 @@ from .workflows import (
     run_psf_candidate_selection,
     run_psf_construction,
     run_real_fit,
+)
+from .simulation import (
+    run_simulation_from_config,
+    save_simulation_products,
 )
 
 __all__ = [
@@ -129,5 +134,8 @@ __all__ = [
     "source_catalog_to_candidate_rows",
     "stack_psf_cutouts",
     "subtract_outer_background",
+    "save_simulated_psf_products",
     "validate_config",
+    "run_simulation_from_config",
+    "save_simulation_products",
 ]

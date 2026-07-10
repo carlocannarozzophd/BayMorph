@@ -7,7 +7,7 @@ from matplotlib.patches import Rectangle
 
 from .style import set_plot_style, style_axes
 
-BAYMORPH_IMAGE_CMAP = "gist_earth"
+BAYMORPH_IMAGE_CMAP = "gist_stern"
 
 
 def _log_limits(
@@ -512,14 +512,16 @@ def _combined_mask_rgb(contaminant_mask=None, target_mask=None):
     return image
 
 
-def _imshow_log(ax, image, *, title, cmap):
-    """Display log-scaled image without colorbar."""
+def _imshow_log(ax, image, *, title, cmap, vmin=None, vmax=None):
+    """Display log-scaled image."""
     image = np.asarray(image, dtype=float)
 
-    vmin, vmax = _log_limits(image)
+    if vmin is None or vmax is None:
+        vmin, vmax = _log_limits(image)
+
     display = np.clip(image, vmin, vmax)
 
-    ax.imshow(
+    im = ax.imshow(
         display,
         origin="lower",
         cmap=cmap,
@@ -529,19 +531,19 @@ def _imshow_log(ax, image, *, title, cmap):
     ax.set_title(title, fontsize=35)
     _apply_baymorph_axes_style(ax)
 
+    return im
+
 
 def _add_inset_colorbar(fig, ax, image, label=None):
-    """Add inset colorbar without changing panel spacing."""
-    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+    """Add a colorbar without changing the image-panel size."""
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-    cax = inset_axes(
-        ax,
-        width="4%",
-        height="88%",
-        loc="center right",
-        bbox_to_anchor=(0.10, 0.0, 1.0, 1.0),
-        bbox_transform=ax.transAxes,
-        borderpad=0,
+    divider = make_axes_locatable(ax)
+
+    cax = divider.append_axes(
+        "right",
+        size="4%",
+        pad=0.15,
     )
 
     cbar = fig.colorbar(
@@ -604,6 +606,13 @@ def plot_pipeline_fit_maps(
     else:
         original_image = np.asarray(original_image, dtype=float)
 
+    row_vmin, row_vmax = _log_limits(
+        original_image,
+        original_cutout,
+        prepared_cutout,
+        model,
+    )
+
     residual = prepared_cutout - model
 
     norm_residual = np.full_like(
@@ -642,7 +651,7 @@ def plot_pipeline_fit_maps(
     fig, axes = plt.subplots(
         2,
         4,
-        figsize=(30, 15),
+        figsize=(40, 20),
         constrained_layout=False,
     )
 
@@ -669,6 +678,8 @@ def plot_pipeline_fit_maps(
         original_image,
         title="Original image",
         cmap=cmap,
+        vmin=row_vmin,
+        vmax=row_vmax,
     )
 
     if cutout_bounds is not None:
@@ -694,21 +705,30 @@ def plot_pipeline_fit_maps(
         original_cutout,
         title="Original cutout",
         cmap=cmap,
+        vmin=row_vmin,
+        vmax=row_vmax,
     )
 
-    _imshow_log(
+    im_prepared = _imshow_log(
         axes[0, 2],
         prepared_cutout,
         title="Prepared cutout",
         cmap=cmap,
+        vmin=row_vmin,
+        vmax=row_vmax,
     )
 
-    _imshow_log(
+    im_model = _imshow_log(
         axes[0, 3],
         model,
         title="Model",
         cmap=cmap,
+        vmin=row_vmin,
+        vmax=row_vmax,
     )
+
+    _add_inset_colorbar(fig, axes[0, 2], im_prepared)
+    _add_inset_colorbar(fig, axes[0, 3], im_model)
 
     axes[1, 0].set_title(
         "Target & Masks",
@@ -738,6 +758,15 @@ def plot_pipeline_fit_maps(
         fontsize=35,
     )
     _apply_baymorph_axes_style(axes[1, 1])
+
+    axes[1, 1].set_aspect(
+        "equal",
+        adjustable="box",
+    )
+
+    axes[1, 1].set_anchor(
+        "C",
+    )
 
     if psf is None:
         axes[1, 1].text(
@@ -773,7 +802,7 @@ def plot_pipeline_fit_maps(
     residual_image = axes[1, 2].imshow(
         residual,
         origin="lower",
-        cmap="RdBu_r",
+        cmap="BrBG",
         vmin=-residual_limit,
         vmax=residual_limit,
     )
@@ -793,7 +822,7 @@ def plot_pipeline_fit_maps(
     norm_image = axes[1, 3].imshow(
         norm_residual,
         origin="lower",
-        cmap="RdBu_r",
+        cmap="PuOr",
         vmin=-norm_limit,
         vmax=norm_limit,
     )
@@ -802,7 +831,6 @@ def plot_pipeline_fit_maps(
         fig,
         axes[1, 3],
         norm_image,
-        label=r"$\sigma$",
     )
 
     if show:

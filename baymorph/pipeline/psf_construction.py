@@ -11,11 +11,19 @@ import numpy as np
 from astropy.io import fits
 
 from baymorph.core.image import ImageData
-from baymorph.simulation.psf import EmpiricalPSF
 
 from .config import load_resolved_config
 from .outputs import make_output_tree, pipeline_paths
 from .psf_candidates import load_psf_candidates
+
+from baymorph.plotting.style import (
+    set_plot_style,
+    style_axes,
+)
+from baymorph.simulation.psf import (
+    EmpiricalPSF,
+    GaussianPSF,
+)
 
 
 def save_empirical_psf(
@@ -196,8 +204,17 @@ def psf_radial_profile(
 
 
 
-def _style_psf_axis(ax):
-    """Apply BayMorph PSF-diagnostic styling to one axis."""
+def _style_psf_axis(
+    ax,
+    *,
+    fontsize: int = 35,
+) -> None:
+    """Apply the standard BayMorph style to a PSF diagnostic axis."""
+    style_axes(
+        ax,
+        fontsize=fontsize,
+    )
+
     for spine in ax.spines.values():
         spine.set_linewidth(3)
 
@@ -206,11 +223,21 @@ def _style_psf_axis(ax):
         direction="out",
         top=False,
         right=False,
-        width=3,
-        labelsize=20,
     )
-    ax.tick_params(which="major", length=10, width=3)
-    ax.tick_params(which="minor", length=5, width=3)
+
+    ax.tick_params(
+        which="major",
+        length=10,
+        width=3,
+        labelsize=fontsize * 0.8,
+    )
+
+    ax.tick_params(
+        which="minor",
+        length=5,
+        width=3,
+    )
+
     ax.minorticks_on()
 
 
@@ -225,34 +252,59 @@ def _psf_grid_shape(n_items: int) -> tuple[int, int]:
     return nrows, ncols
 
 
-def save_empirical_psf_diagnostics(
+def save_psf_diagnostics(
     config: dict[str, Any],
     psf: np.ndarray,
-    cutouts: list[np.ndarray],
+    cutouts: list[np.ndarray] | None = None,
+    *,
+    title: str = "PSF",
+    nominal_fwhm: float | None = None,
 ) -> None:
-    """Save empirical PSF diagnostic plots.
+    """Save PSF image, radial-profile, and optional cutout diagnostics.
 
     Parameters
     ----------
     config : dict
         Resolved pipeline configuration.
     psf : ndarray
-        Final empirical PSF image.
-    cutouts : list of ndarray
-        Individual PSF-star cutouts used to build the empirical PSF.
+        Final normalized PSF image.
+    cutouts : list of ndarray, optional
+        Individual source cutouts used to construct an empirical PSF.
+    title : str, default="PSF"
+        Title displayed above the PSF image.
+    nominal_fwhm : float, optional
+        Nominal PSF FWHM in pixels. When provided, it is included in the
+        radial-profile panel.
 
     Returns
     -------
     None
-        Diagnostic plots are written to disk.
+        Diagnostic figures are written to the configured PSF directory.
     """
+    set_plot_style(
+        fontsize=35,
+        usetex=False,
+    )
+
     paths = pipeline_paths(config)["psf"]
 
-    diagnostics_dir = paths["dir"] / "diagnostics"
+    diagnostics_dir = (
+        paths["dir"]
+        / "diagnostics"
+    )
 
     diagnostics_dir.mkdir(
         parents=True,
         exist_ok=True,
+    )
+
+    psf = np.asarray(
+        psf,
+        dtype=float,
+    )
+
+    measured_fwhm = estimate_psf_fwhm(
+        psf,
     )
 
     fig, axes = plt.subplots(
@@ -265,10 +317,21 @@ def save_empirical_psf_diagnostics(
     axes[0].imshow(
         psf,
         origin="lower",
-        cmap="turbo",
+        cmap="gist_stern",
     )
+
     axes[0].set_title(
-        "Empirical PSF",
+        title,
+        fontsize=35,
+    )
+
+    axes[0].set_xlabel(
+        r"$x\ [{\rm pix}]$",
+        fontsize=35,
+    )
+
+    axes[0].set_ylabel(
+        r"$y\ [{\rm pix}]$",
         fontsize=35,
     )
 
@@ -281,36 +344,80 @@ def save_empirical_psf_diagnostics(
         profile,
         color="black",
         lw=3,
+        label="Measured profile",
     )
 
+    if measured_fwhm is not None:
+        axes[1].axvline(
+            0.5 * measured_fwhm,
+            color="mediumvioletred",
+            linestyle="--",
+            lw=3,
+            label=(
+                r"$\mathrm{FWHM}_{\mathrm{measured}}"
+                rf" = {measured_fwhm:.2f}\ \mathrm{{pix}}$"
+            ),
+        )
+
+    if nominal_fwhm is not None:
+        axes[1].axvline(
+            0.5 * nominal_fwhm,
+            color="royalblue",
+            linestyle=":",
+            lw=3,
+            label=(
+                r"$\mathrm{FWHM}_{\mathrm{nominal}}"
+                rf" = {nominal_fwhm:.2f}\ \mathrm{{pix}}$"
+            ),
+        )
+
     axes[1].set_xlabel(
-        "Radius [pix]",
+        r"$R\ [{\rm pix}]$",
         fontsize=35,
     )
+
     axes[1].set_ylabel(
-        "Median PSF value",
+        r"$I_{\rm PSF}$",
         fontsize=35,
     )
+
     axes[1].set_title(
         "PSF radial profile",
         fontsize=35,
     )
 
+    axes[1].legend(
+        frameon=False,
+        fontsize=30,
+    )
+
     for ax in axes:
-        _style_psf_axis(ax)
+        _style_psf_axis(
+            ax,
+            fontsize=35,
+        )
+
+    figure_path = (
+        diagnostics_dir
+        / "empirical_psf_diagnostic.pdf"
+    )
 
     fig.savefig(
-        diagnostics_dir / "empirical_psf_diagnostic.pdf",
+        figure_path,
         bbox_inches="tight",
     )
 
-    plt.close(fig)
+    plt.close(
+        fig,
+    )
 
-    if len(cutouts) == 0:
+    if not cutouts:
         return
 
     n_cutouts = len(cutouts)
-    nrows, ncols = _psf_grid_shape(n_cutouts)
+    nrows, ncols = _psf_grid_shape(
+        n_cutouts
+    )
 
     fig, axes = plt.subplots(
         nrows,
@@ -320,7 +427,9 @@ def save_empirical_psf_diagnostics(
         constrained_layout=True,
     )
 
-    axes_flat = np.ravel(axes)
+    axes_flat = np.ravel(
+        axes
+    )
 
     for ax in axes_flat:
         ax.axis("off")
@@ -328,23 +437,106 @@ def save_empirical_psf_diagnostics(
     for i, cutout in enumerate(cutouts):
         ax = axes_flat[i]
         ax.axis("on")
+
         ax.imshow(
             cutout,
             origin="lower",
-            cmap="turbo",
+            cmap="gist_stern",
         )
+
         ax.set_title(
-            f"PSF cutout {i + 1}",
-            fontsize=20,
+            rf"$\mathrm{{PSF\ cutout}}\ {i + 1}$",
+            fontsize=25,
         )
-        _style_psf_axis(ax)
+
+        _style_psf_axis(
+            ax,
+            fontsize=25,
+        )
 
     fig.savefig(
-        diagnostics_dir / "empirical_psf_cutouts.pdf",
+        diagnostics_dir
+        / "empirical_psf_cutouts.pdf",
         bbox_inches="tight",
     )
 
-    plt.close(fig)
+    plt.close(
+        fig,
+    )
+
+
+def save_empirical_psf_diagnostics(
+    config: dict[str, Any],
+    psf: np.ndarray,
+    cutouts: list[np.ndarray],
+) -> None:
+    """Save empirical PSF diagnostics."""
+    save_psf_diagnostics(
+        config,
+        psf,
+        cutouts,
+        title="Empirical PSF",
+    )
+
+
+def save_simulated_psf_products(
+    config: dict[str, Any],
+    *,
+    fwhm: float,
+    size: int = 25,
+) -> np.ndarray:
+    """Create and save products for a simulated Gaussian PSF.
+
+    Parameters
+    ----------
+    config : dict
+        Resolved pipeline configuration.
+    fwhm : float
+        Gaussian PSF full width at half maximum in pixels.
+    size : int, default=25
+        Width and height of the square PSF kernel.
+
+    Returns
+    -------
+    ndarray
+        Unit-normalized Gaussian PSF kernel.
+    """
+    psf_model = GaussianPSF(
+        fwhm=float(fwhm),
+    )
+
+    kernel = psf_model.kernel(
+        size=int(size),
+    )
+
+    save_empirical_psf(
+        config,
+        kernel,
+    )
+
+    save_psf_diagnostics(
+        config,
+        kernel,
+        cutouts=None,
+        title="Simulated Gaussian PSF",
+        nominal_fwhm=float(fwhm),
+    )
+
+    save_empirical_psf_metadata(
+        config,
+        {
+            "type": "gaussian",
+            "source": "simulation",
+            "fwhm_pix": float(fwhm),
+            "kernel_size": int(size),
+            "psf_shape": list(kernel.shape),
+            "psf_sum": float(np.sum(kernel)),
+            "psf_peak": float(np.max(kernel)),
+        },
+    )
+
+    return kernel
+
 
 def run_psf_construction_from_config(
     config: str | Path | dict[str, Any],

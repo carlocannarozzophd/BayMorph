@@ -6,7 +6,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from baymorph.models import parameter_labels
 from baymorph.pipeline.outputs import pipeline_paths
 from baymorph.plotting import corner_plot
 
@@ -16,26 +15,22 @@ from .config import (
 )
 
 
+def _posterior_samples(posterior):
+    """Return posterior samples from a posterior result."""
+    if hasattr(posterior, "samples"):
+        return posterior.samples
+
+    if hasattr(posterior, "posterior_samples"):
+        return posterior.posterior_samples
+
+    return posterior
+
+
 def run_corner_diagnostics(
     config,
     fit_results,
 ):
-    """Generate and save corner plots for fitted BayMorph models.
-
-    Parameters
-    ----------
-    config : dict, str, or pathlib.Path
-        Pipeline configuration dictionary or path to a YAML configuration file.
-    fit_results : object or dict
-        Single fit result or mapping from model name to fit result. Each fit
-        result must expose ``model_name`` and ``posterior`` attributes.
-
-    Returns
-    -------
-    None
-        Corner plots are written to the diagnostic paths defined by the
-        resolved pipeline configuration.
-    """
+    """Generate and save corner plots for fitted BayMorph models."""
     if isinstance(config, (str, Path)):
         config = load_resolved_config(config)
     else:
@@ -52,11 +47,14 @@ def run_corner_diagnostics(
         if fit.posterior is None:
             continue
 
+        samples = _posterior_samples(
+            fit.posterior,
+        )
+
         fig, _, _ = corner_plot(
-            fit.posterior.posterior_samples.T,
-            parameter_labels=parameter_labels(
-                model_name,
-            ),
+            parameters=samples.T,
+            parameter_labels=fit.posterior.parameter_names,
+            sigma=[1, 2, 3],
         )
 
         fig.savefig(

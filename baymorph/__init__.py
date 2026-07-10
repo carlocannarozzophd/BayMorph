@@ -100,6 +100,9 @@ from .pipeline import (
     stack_psf_cutouts,
     subtract_outer_background,
     validate_config,
+    save_simulated_psf_products,
+    run_simulation_from_config,
+    save_simulation_products,
 )
 from .plotting import (
     corner_plot,
@@ -266,4 +269,7 @@ __all__ = [
     "subtract_outer_background",
     "validate_config",
     "weighted_quantile",
+    "save_simulated_psf_products",
+    "run_simulation_from_config",
+    "save_simulation_products",
 ]
