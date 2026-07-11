@@ -40,6 +40,21 @@ simulation:
     poisson_noise: true
     read_noise: 5.0
 
+# BayMorph automatically determines the target geometry, radial-profile
+# plateau, sky region, background, and robust noise estimate during image
+# preparation. The mesh settings support the preliminary detection pass.
+preparation:
+  background:
+    method: empirical
+    box_size: 30
+    filter_size: 3
+  noise:
+    method: empirical
+  detection:
+    n_sigma: 3.0
+    n_pixels: 20
+    n_levels: 32
+
 psf:
   type: gaussian
   gaussian:
