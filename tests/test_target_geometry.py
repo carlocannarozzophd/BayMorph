@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from baymorph.pipeline.image_preparation import (
+from baymorph.pipeline.preparation_steps import (
     estimate_target_geometry_from_segment,
 )
 

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from baymorph.pipeline.image_preparation import (
+from baymorph.pipeline.preparation_steps import (
     TargetGeometry,
     build_target_radial_profile,
 )

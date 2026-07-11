@@ -6,7 +6,7 @@ from baymorph import (
     SkyRegion,
     build_sky_region,
 )
-from baymorph.pipeline.image_preparation import TargetGeometry
+from baymorph.pipeline.preparation_steps import TargetGeometry
 
 
 def make_plateau(radius: float = 20.0) -> PlateauResult:

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from baymorph.pipeline.image_preparation import estimate_target_sky
+from baymorph.pipeline.preparation_steps import estimate_target_sky
 
 
 def test_estimate_target_sky():
