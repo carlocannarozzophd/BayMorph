@@ -3,39 +3,72 @@
 from dataclasses import dataclass
 
 import numpy as np
+from astropy.stats import mad_std
 from photutils.background import Background2D, MedianBackground
 
 
-@dataclass
-class BackgroundEstimate:
+@dataclass(slots=True)
+class BackgroundResult:
     """Container for background and noise estimation results.
 
     Parameters
     ----------
-    background : float
-        Estimated scalar background level.
+    background_level : float
+        Representative scalar background level.
+
     sigma : float
-        Estimated scalar background root-mean-square (RMS) noise.
+        Estimated background RMS.
+
+    mode : str, default="constant"
+        Background model used.
+
     background_map : ndarray, optional
-        Two-dimensional background model. This is available when using
-        algorithms that estimate a spatially varying background.
+        Two-dimensional background model.
+
     rms_map : ndarray, optional
-        Two-dimensional background RMS map corresponding to
-        ``background_map``.
+        Two-dimensional RMS map.
+
+    residual : ndarray, optional
+        Background-subtracted image.
+
+    mask : ndarray of bool, optional
+        Boolean mask used during the background estimation.
+
+    parameters : dict, optional
+        Parameters describing the fitted background model.
     """
 
-    background: float
+    background_level: float
     sigma: float
+
+    mode: str = "constant"
+
     background_map: np.ndarray | None = None
     rms_map: np.ndarray | None = None
 
+    residual: np.ndarray | None = None
+    mask: np.ndarray | None = None
 
-def estimate_background_sigma(
+    parameters: dict[str, float] | None = None
+
+    @property
+    def background(self) -> float:
+        """Backward-compatible alias for ``background_level``."""
+        return self.background_level
+
+    @background.setter
+    def background(self, value: float) -> None:
+        self.background_level = value
+
+
+def estimate_background_constant(
     data: np.ndarray,
+    mask: np.ndarray | None = None,
     sigma_clip: float = 3.0,
     maxiters: int = 5,
-) -> BackgroundEstimate:
-    """Estimate a scalar background and noise level using sigma clipping.
+    noise_method: str = "std",
+) -> BackgroundResult:
+    """Estimate a constant background and noise level using sigma clipping.
 
     Parameters
     ----------
@@ -48,7 +81,7 @@ def estimate_background_sigma(
 
     Returns
     -------
-    BackgroundEstimate
+    BackgroundResult
         Estimated scalar background level and RMS noise.
 
     Raises
@@ -56,7 +89,13 @@ def estimate_background_sigma(
     ValueError
         If the input image contains no finite values.
     """
-    values = np.asarray(data, dtype=float).ravel()
+    image = np.asarray(data, dtype=float)
+
+    if mask is not None:
+        values = image[~mask]
+    else:
+        values = image.ravel()
+
     values = values[np.isfinite(values)]
 
     if values.size == 0:
@@ -76,10 +115,59 @@ def estimate_background_sigma(
 
         values = values[keep]
 
-    return BackgroundEstimate(
-        background=float(np.median(values)),
-        sigma=float(np.std(values)),
+    return BackgroundResult(
+        background_level=float(np.median(values)),
+        sigma=estimate_noise(
+        values,
+        method=noise_method,
+    ),
+        mode="constant",
     )
+
+
+def estimate_background_sigma(*args, **kwargs):
+    """Backward-compatible alias."""
+    return estimate_background_constant(*args, **kwargs)
+
+
+def estimate_noise(
+    data: np.ndarray,
+    mask: np.ndarray | None = None,
+    method: str = "mad",
+) -> float:
+    """Estimate the background noise from an image.
+
+    Parameters
+    ----------
+    data : ndarray
+        Input image.
+    mask : ndarray of bool, optional
+        Boolean mask identifying pixels to ignore.
+    method : {"mad", "std"}, default="mad"
+        Noise estimator.
+
+    Returns
+    -------
+    float
+        Estimated background RMS.
+    """
+    values = np.asarray(data, dtype=float)
+
+    if mask is not None:
+        values = values[~mask]
+
+    values = values[np.isfinite(values)]
+
+    if values.size == 0:
+        raise ValueError("Input data contains no finite values.")
+
+    if method == "mad":
+        return float(mad_std(values))
+
+    if method == "std":
+        return float(np.std(values))
+
+    raise ValueError(f"Unknown noise estimation method: {method!r}")
 
 
 def estimate_background_photutils(
@@ -88,7 +176,7 @@ def estimate_background_photutils(
     filter_size: int = 3,
     mask: np.ndarray | None = None,
     exclude_percentile: float = 10.0,
-) -> BackgroundEstimate:
+) -> BackgroundResult:
     """Estimate a spatially varying background using Photutils.
 
     Parameters
@@ -109,7 +197,7 @@ def estimate_background_photutils(
 
     Returns
     -------
-    BackgroundEstimate
+    BackgroundResult
         Background estimate containing both scalar summary values and the
         full background and RMS maps.
     """
@@ -125,9 +213,10 @@ def estimate_background_photutils(
         bkg_estimator=MedianBackground(),
     )
 
-    return BackgroundEstimate(
-        background=float(np.median(bkg.background)),
+    return BackgroundResult(
+        background_level=float(np.median(bkg.background)),
         sigma=float(np.median(bkg.background_rms)),
+        mode="mesh",
         background_map=bkg.background.copy(),
         rms_map=bkg.background_rms.copy(),
     )

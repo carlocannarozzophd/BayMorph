@@ -5,7 +5,7 @@ from .analysis import (
     radial_profile_from_image,
 )
 from .core import (
-    BackgroundEstimate,
+    BackgroundResult,
     DetectionResult,
     ImageData,
     connected_source_mask,
@@ -17,6 +17,7 @@ from .core import (
     make_constant_noise_map,
     star_halo_mask,
     subtract_background,
+    build_elliptical_radius_map,
 )
 from .fitting import (
     DynestyFitter,
@@ -150,7 +151,7 @@ from .stats import (
 __version__ = "0.2.0"
 
 __all__ = [
-    "BackgroundEstimate",
+    "BackgroundResult",
     "BayMorphRunner",
     "CompositeModel",
     "ConvolvedModel",
@@ -272,4 +273,5 @@ __all__ = [
     "save_simulated_psf_products",
     "run_simulation_from_config",
     "save_simulation_products",
+    "build_elliptical_radius_map",
 ]
