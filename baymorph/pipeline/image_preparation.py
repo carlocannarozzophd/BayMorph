@@ -11,6 +11,7 @@ import numpy as np
 from astropy.io import fits
 
 from baymorph.core.background import (
+    estimate_background_constant,
     estimate_background_photutils,
     estimate_background_sigma,
     subtract_background,
@@ -20,7 +21,11 @@ from baymorph.core.detection import (
     detect_sources_segmentation,
 )
 from baymorph.core.image import ImageData
-from baymorph.core.noise import estimate_noise_map
+from baymorph.core.noise import (
+    estimate_noise_map,
+    make_constant_noise_map,
+)
+from baymorph.core.sky import build_sky_region
 from baymorph.pipeline.segmentation import select_segment_near_position
 
 from .config import load_resolved_config
@@ -30,6 +35,7 @@ from .outputs import (
     pipeline_paths,
     save_resolved_config,
 )
+from .preparation_steps import estimate_target_sky
 
 
 @dataclass
@@ -297,15 +303,50 @@ def prepare_real_image_from_config(
         & (segmentation.data != target_label)
     )
 
+    geometry, radial_profile, plateau = estimate_target_sky(
+        cutout,
+        target_segment,
+        mask=contaminant_mask,
+        min_radius=0.0,
+        window_size=5,
+        sigma_threshold=1.0,
+        outer_fraction=0.25,
+        min_coverage=0.5,
+    )
+
+    sky_region = build_sky_region(
+        shape=cutout.shape,
+        geometry=geometry,
+        plateau=plateau,
+        margin=5.0,
+        mask=contaminant_mask,
+    )
+
+    background_result = estimate_background_constant(
+        cutout,
+        mask=~sky_region.mask,
+        noise_method="mad",
+    )
+
+    prepared_data = subtract_background(
+        cutout,
+        background_result.background_level,
+    )
+
+    noise = make_constant_noise_map(
+        prepared_data.shape,
+        background_result.sigma,
+    )
+
     products = ImagePreparationProducts(
         cutout=cutout,
-        prepared_data=prepared.data,
-        noise=prepared.noise,
+        prepared_data=prepared_data,
+        noise=noise,
         automatic_mask=prepared.mask,
         target_segment=target_segment,
         contaminant_mask=contaminant_mask,
         segmentation=segmentation.data,
-        background=float(prepared.background),
+        background=float(background_result.background_level),
         target_x=target_x,
         target_y=target_y,
         target_label=int(target_label),
