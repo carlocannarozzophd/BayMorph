@@ -27,6 +27,8 @@ from .sky import (
     build_elliptical_radius_map,
     compute_elliptical_radial_profile,
     detect_profile_plateau,
+    SkyRegion,
+    build_sky_region,
 )
 
 __all__ = [
@@ -48,4 +50,6 @@ __all__ = [
     "make_constant_noise_map",
     "star_halo_mask",
     "subtract_background",
+    "SkyRegion",
+    "build_sky_region",
 ]

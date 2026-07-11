@@ -46,6 +46,37 @@ class PlateauResult:
     window_stop: int
 
 
+@dataclass(slots=True)
+class SkyRegion:
+    """Automatically identified sky region.
+
+    Parameters
+    ----------
+    mask : ndarray of bool
+        Boolean mask selecting sky pixels.
+    radius_map : ndarray
+        Elliptical radius map used to define the sky region.
+    plateau : PlateauResult
+        Plateau-detection result.
+    inner_radius : float
+        Inner elliptical radius of the sky region.
+    outer_radius : float
+        Outer elliptical radius of the sky region.
+    n_pixels : int
+        Number of selected sky pixels.
+    coverage : float
+        Fraction of geometrically available pixels retained as sky.
+    """
+
+    mask: np.ndarray
+    radius_map: np.ndarray
+    plateau: PlateauResult
+    inner_radius: float
+    outer_radius: float
+    n_pixels: int
+    coverage: float
+
+
 def build_elliptical_radius_map(
     shape: tuple[int, int],
     x0: float,
@@ -369,3 +400,96 @@ def detect_profile_plateau(
             )
 
     raise ValueError("No stable radial-profile plateau was detected.")
+
+
+def build_sky_region(
+    shape: tuple[int, int],
+    geometry,
+    plateau: PlateauResult,
+    *,
+    margin: float = 5.0,
+    outer_radius: float | None = None,
+    mask: np.ndarray | None = None,
+) -> SkyRegion:
+    """Build an elliptical sky region from a detected plateau.
+
+    Parameters
+    ----------
+    shape : tuple of int
+        Image shape as ``(ny, nx)``.
+    geometry : object
+        Object exposing ``x0``, ``y0``, ``q``, and ``theta`` attributes.
+    plateau : PlateauResult
+        Detected radial-profile plateau.
+    margin : float, default=5.0
+        Additional radial offset applied beyond the plateau radius.
+    outer_radius : float, optional
+        Maximum elliptical radius included in the sky region. If omitted,
+        all available pixels beyond ``inner_radius`` are considered.
+    mask : ndarray of bool, optional
+        Pixels excluded from the sky region.
+
+    Returns
+    -------
+    SkyRegion
+        Selected sky region and its geometric metadata.
+
+    Raises
+    ------
+    ValueError
+        If the margin is negative or the selected region contains no pixels.
+    """
+    if margin < 0.0:
+        raise ValueError("'margin' must be non-negative.")
+
+    inner_radius = float(plateau.radius + margin)
+
+    radius_map = build_elliptical_radius_map(
+        shape,
+        x0=geometry.x0,
+        y0=geometry.y0,
+        q=geometry.q,
+        theta=geometry.theta,
+    )
+
+    if outer_radius is None:
+        resolved_outer_radius = float(np.max(radius_map))
+    else:
+        resolved_outer_radius = float(outer_radius)
+
+    if resolved_outer_radius <= inner_radius:
+        raise ValueError(
+            "'outer_radius' must be greater than the inner sky radius."
+        )
+
+    geometrical_region = (
+        (radius_map >= inner_radius)
+        & (radius_map <= resolved_outer_radius)
+    )
+
+    sky_mask = geometrical_region.copy()
+
+    if mask is not None:
+        sky_mask &= ~np.asarray(mask, dtype=bool)
+
+    n_pixels = int(np.count_nonzero(sky_mask))
+    available_pixels = int(np.count_nonzero(geometrical_region))
+
+    if n_pixels == 0:
+        raise ValueError("The selected sky region contains no valid pixels.")
+
+    coverage = (
+        float(n_pixels / available_pixels)
+        if available_pixels > 0
+        else 0.0
+    )
+
+    return SkyRegion(
+        mask=sky_mask,
+        radius_map=radius_map,
+        plateau=plateau,
+        inner_radius=inner_radius,
+        outer_radius=resolved_outer_radius,
+        n_pixels=n_pixels,
+        coverage=coverage,
+    )

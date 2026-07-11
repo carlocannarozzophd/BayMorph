@@ -22,6 +22,8 @@ from .core import (
     RadialProfile,
     compute_elliptical_radial_profile,
     detect_profile_plateau,
+    SkyRegion,
+    build_sky_region,
 )
 from .fitting import (
     DynestyFitter,
@@ -282,4 +284,6 @@ __all__ = [
     "RadialProfile",
     "compute_elliptical_radial_profile",
     "detect_profile_plateau",
+    "SkyRegion",
+    "build_sky_region",
 ]
