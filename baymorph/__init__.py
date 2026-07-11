@@ -18,6 +18,10 @@ from .core import (
     star_halo_mask,
     subtract_background,
     build_elliptical_radius_map,
+    PlateauResult,
+    RadialProfile,
+    compute_elliptical_radial_profile,
+    detect_profile_plateau,
 )
 from .fitting import (
     DynestyFitter,
@@ -274,4 +278,8 @@ __all__ = [
     "run_simulation_from_config",
     "save_simulation_products",
     "build_elliptical_radius_map",
+    "PlateauResult",
+    "RadialProfile",
+    "compute_elliptical_radial_profile",
+    "detect_profile_plateau",
 ]

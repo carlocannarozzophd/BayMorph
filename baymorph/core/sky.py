@@ -18,6 +18,34 @@ class RadialProfile:
     area: np.ndarray | None = None
 
 
+@dataclass(slots=True)
+class PlateauResult:
+    """Result of the radial-profile plateau detection.
+
+    Parameters
+    ----------
+    radius : float
+        Radius at which the first stable plateau window begins.
+    index : int
+        Index of the first radial bin belonging to the plateau.
+    background_level : float
+        Median profile value within the detected plateau window.
+    noise_sigma : float
+        Robust scatter estimated from the outer radial profile.
+    window_start : int
+        First index of the accepted plateau window.
+    window_stop : int
+        Exclusive final index of the accepted plateau window.
+    """
+
+    radius: float
+    index: int
+    background_level: float
+    noise_sigma: float
+    window_start: int
+    window_stop: int
+
+
 def build_elliptical_radius_map(
     shape: tuple[int, int],
     x0: float,
@@ -182,3 +210,162 @@ def compute_elliptical_radial_profile(
         scatter=np.asarray(scatter, dtype=float),
         area=np.asarray(area, dtype=int),
     )
+
+
+def detect_profile_plateau(
+    radial_profile: RadialProfile,
+    *,
+    min_radius: float = 0.0,
+    window_size: int = 5,
+    sigma_threshold: float = 1.0,
+    outer_fraction: float = 0.25,
+    min_coverage: float = 0.5,
+) -> PlateauResult:
+    """Detect the first stable plateau in an elliptical radial profile.
+
+    The noise scale is estimated robustly from the outer part of the
+    profile. A plateau is identified as the first sequence of consecutive
+    radial bins whose values are mutually consistent within
+    ``sigma_threshold * noise_sigma``.
+
+    Parameters
+    ----------
+    radial_profile : RadialProfile
+        Elliptical radial profile to analyse.
+    min_radius : float, default=0.0
+        Minimum radius from which plateau detection is allowed.
+    window_size : int, default=5
+        Number of consecutive radial bins required for a plateau.
+    sigma_threshold : float, default=1.0
+        Maximum allowed deviation from the window median, in units of the
+        robust outer-profile scatter.
+    outer_fraction : float, default=0.25
+        Fraction of the outer valid radial bins used to estimate the noise.
+    min_coverage : float, default=0.5
+        Minimum accepted ratio between valid and geometrically available
+        pixels in each radial bin.
+
+    Returns
+    -------
+    PlateauResult
+        Detected plateau properties.
+
+    Raises
+    ------
+    ValueError
+        If the configuration is invalid or no plateau can be detected.
+    """
+    if window_size < 2:
+        raise ValueError("'window_size' must be at least 2.")
+
+    if sigma_threshold <= 0.0:
+        raise ValueError("'sigma_threshold' must be positive.")
+
+    if not (0.0 < outer_fraction <= 1.0):
+        raise ValueError("'outer_fraction' must satisfy 0 < value <= 1.")
+
+    if not (0.0 <= min_coverage <= 1.0):
+        raise ValueError("'min_coverage' must satisfy 0 <= value <= 1.")
+
+    radius = np.asarray(radial_profile.radius, dtype=float)
+    values = np.asarray(radial_profile.profile, dtype=float)
+    n_pixels = np.asarray(radial_profile.n_pixels, dtype=float)
+
+    if radial_profile.area is None:
+        coverage = np.ones_like(values, dtype=float)
+    else:
+        area = np.asarray(radial_profile.area, dtype=float)
+        coverage = np.divide(
+            n_pixels,
+            area,
+            out=np.zeros_like(n_pixels, dtype=float),
+            where=area > 0,
+        )
+
+    valid = (
+        np.isfinite(radius)
+        & np.isfinite(values)
+        & np.isfinite(coverage)
+        & (radius >= min_radius)
+        & (coverage >= min_coverage)
+    )
+
+    valid_indices = np.flatnonzero(valid)
+
+    if valid_indices.size < window_size:
+        raise ValueError(
+            "Not enough valid radial bins for plateau detection."
+        )
+
+    n_outer = max(
+        window_size,
+        int(np.ceil(outer_fraction * valid_indices.size)),
+    )
+
+    outer_indices = valid_indices[-n_outer:]
+    outer_values = values[outer_indices]
+
+    outer_median = float(np.median(outer_values))
+    noise_sigma = float(
+        np.median(np.abs(outer_values - outer_median)) * 1.4826
+    )
+
+    if not np.isfinite(noise_sigma):
+        raise ValueError(
+            "Unable to estimate a finite outer-profile noise level."
+        )
+
+    numerical_floor = (
+        10.0
+        * np.finfo(float).eps
+        * max(1.0, abs(outer_median))
+    )
+
+    tolerance = max(
+        sigma_threshold * noise_sigma,
+        numerical_floor,
+    )
+    
+    for start in range(values.size - window_size + 1):
+        stop = start + window_size
+        window_indices = np.arange(start, stop)
+
+        if not np.all(valid[window_indices]):
+            continue
+
+        window_values = values[window_indices]
+        window_median = float(np.median(window_values))
+
+        deviations = np.abs(window_values - window_median)
+
+        window_x = np.arange(window_size, dtype=float)
+        slope = float(
+            np.polyfit(
+                window_x,
+                window_values,
+                deg=1,
+            )[0]
+        )
+        total_trend = abs(slope) * (window_size - 1)
+
+        is_stable = np.all(deviations <= tolerance)
+        is_flat = total_trend <= tolerance
+        is_background_consistent = (
+            abs(window_median - outer_median) <= tolerance
+        )
+
+        if (
+            is_stable
+            and is_flat
+            and is_background_consistent
+        ):
+            return PlateauResult(
+                radius=float(radius[start]),
+                index=start,
+                background_level=window_median,
+                noise_sigma=noise_sigma,
+                window_start=start,
+                window_stop=stop,
+            )
+
+    raise ValueError("No stable radial-profile plateau was detected.")
