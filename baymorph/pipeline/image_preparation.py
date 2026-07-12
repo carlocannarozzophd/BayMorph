@@ -430,23 +430,19 @@ def prepare_real_image_from_config(
         cutout_definition,
     )
 
-    target_x = int(
-        round(
-            target_position["x"]
-            - cutout_definition.xmin
-        )
+    seed_target_x = (
+        float(target_position["x"])
+        - cutout_definition.xmin
     )
-    target_y = int(
-        round(
-            target_position["y"]
-            - cutout_definition.ymin
-        )
+    seed_target_y = (
+        float(target_position["y"])
+        - cutout_definition.ymin
     )
 
     final_detection = _detect_target_in_image(
         cutout,
-        target_x=target_x,
-        target_y=target_y,
+        target_x=seed_target_x,
+        target_y=seed_target_y,
         detection_cfg=detection_cfg,
         background_cfg=background_cfg,
         context="final-cutout detection",
@@ -468,6 +464,9 @@ def prepare_real_image_from_config(
         outer_fraction=0.25,
         min_coverage=0.5,
     )
+
+    target_x = int(round(geometry.x0))
+    target_y = int(round(geometry.y0))
 
     sky_region = build_sky_region(
         shape=cutout.shape,
