@@ -29,7 +29,12 @@ from baymorph.core.sky import build_sky_region
 from baymorph.pipeline.segmentation import select_segment_near_position
 
 from .config import load_resolved_config
-from .cutout import CutoutDefinition, resolve_cutout
+from .cutout import (
+    CutoutDefinition,
+    resolve_cutout,
+    resolve_plateau_cutout,
+    resolve_preliminary_auto_cutout,
+)
 from .outputs import (
     make_output_tree,
     pipeline_paths,
@@ -136,6 +141,145 @@ def prepare_real_fits_image(
         mask=mask,
         noise=noise,
         detection=detection,
+    )
+
+
+@dataclass(slots=True)
+class _TargetDetection:
+    """Target-selection products for one image coordinate system."""
+
+    prepared: RealFITSPreparation
+    target_label: int
+    target_segment: np.ndarray
+    contaminant_mask: np.ndarray
+
+
+def _detect_target_in_image(
+    data: np.ndarray,
+    *,
+    target_x: float,
+    target_y: float,
+    detection_cfg: dict[str, Any],
+    background_cfg: dict[str, Any],
+    context: str,
+) -> _TargetDetection:
+    """Detect sources and select the target near a requested position."""
+    detection_n_pixels = detection_cfg.get(
+        "n_pixels",
+        detection_cfg.get("npixels"),
+    )
+
+    prepared = prepare_real_fits_image(
+        data,
+        background_box_size=background_cfg["box_size"],
+        background_filter_size=background_cfg["filter_size"],
+        detection_sigma=detection_cfg["n_sigma"],
+        detection_n_pixels=detection_n_pixels,
+        detection_n_levels=detection_cfg["n_levels"],
+    )
+
+    segmentation = prepared.detection.segmentation
+    if segmentation is None:
+        raise RuntimeError(
+            f"No segmentation map was produced during {context}."
+        )
+
+    target_label = select_segment_near_position(
+        segmentation,
+        x=target_x,
+        y=target_y,
+    )
+
+    target_segment = segmentation.data == target_label
+
+    contaminant_mask = (
+        (segmentation.data > 0)
+        & (segmentation.data != target_label)
+    )
+
+    return _TargetDetection(
+        prepared=prepared,
+        target_label=int(target_label),
+        target_segment=target_segment,
+        contaminant_mask=contaminant_mask,
+    )
+
+
+def _resolve_auto_cutout(
+    image: np.ndarray,
+    *,
+    target_x: float,
+    target_y: float,
+    cutout_cfg: dict[str, Any],
+    detection_cfg: dict[str, Any],
+    background_cfg: dict[str, Any],
+) -> CutoutDefinition:
+    """Resolve a plateau-based automatic cutout for a target source."""
+    full_detection = _detect_target_in_image(
+        image,
+        target_x=target_x,
+        target_y=target_y,
+        detection_cfg=detection_cfg,
+        background_cfg=background_cfg,
+        context="full-image detection",
+    )
+
+    preliminary_definition = resolve_preliminary_auto_cutout(
+        image_shape=image.shape,
+        target_segment=full_detection.target_segment,
+        initial_factor=float(
+            cutout_cfg.get("initial_factor", 4.0)
+        ),
+        min_size=int(
+            cutout_cfg.get("min_size", 100)
+        ),
+        max_size=cutout_cfg.get("max_size"),
+    )
+
+    preliminary_cutout = make_target_cutout(
+        image,
+        preliminary_definition,
+    )
+
+    preliminary_detection = _detect_target_in_image(
+        preliminary_cutout,
+        target_x=target_x - preliminary_definition.xmin,
+        target_y=target_y - preliminary_definition.ymin,
+        detection_cfg=detection_cfg,
+        background_cfg=background_cfg,
+        context="preliminary-cutout detection",
+    )
+
+    geometry, _, plateau = estimate_target_sky(
+        preliminary_cutout,
+        preliminary_detection.target_segment,
+        mask=preliminary_detection.contaminant_mask,
+        min_radius=0.0,
+        window_size=5,
+        sigma_threshold=1.0,
+        outer_fraction=0.25,
+        min_coverage=0.5,
+    )
+
+    global_center_x = (
+        preliminary_definition.xmin
+        + geometry.x0
+    )
+    global_center_y = (
+        preliminary_definition.ymin
+        + geometry.y0
+    )
+
+    return resolve_plateau_cutout(
+        image_shape=image.shape,
+        center_x=global_center_x,
+        center_y=global_center_y,
+        plateau_radius=plateau.radius,
+        sky_margin=float(
+            cutout_cfg.get("sky_margin", 20.0)
+        ),
+        min_size=cutout_cfg.get("min_size"),
+        max_size=cutout_cfg.get("max_size"),
     )
 
 
@@ -253,57 +397,68 @@ def prepare_real_image_from_config(
         )
 
     cutout_cfg = resolved["data"]["cutout"]
+    detection_cfg = resolved["preparation"]["detection"]
+    background_cfg = resolved["preparation"]["background"]
 
-    cutout_definition = resolve_cutout(
-        image_shape=image.data.shape,
-        center_x=target_position["x"],
-        center_y=target_position["y"],
-        config=cutout_cfg,
-    )
+    cutout_mode = cutout_cfg.get("mode", "fixed")
+
+    if cutout_mode == "fixed":
+        cutout_definition = resolve_cutout(
+            image_shape=image.data.shape,
+            center_x=target_position["x"],
+            center_y=target_position["y"],
+            config=cutout_cfg,
+        )
+
+    elif cutout_mode == "auto":
+        cutout_definition = _resolve_auto_cutout(
+            image.data,
+            target_x=target_position["x"],
+            target_y=target_position["y"],
+            cutout_cfg=cutout_cfg,
+            detection_cfg=detection_cfg,
+            background_cfg=background_cfg,
+        )
+
+    else:
+        raise ValueError(
+            f"Unsupported cutout mode: {cutout_mode!r}."
+        )
 
     cutout = make_target_cutout(
         image.data,
         cutout_definition,
     )
 
-    detection_cfg = resolved["preparation"]["detection"]
-    background_cfg = resolved["preparation"]["background"]
-
-    detection_n_pixels = detection_cfg.get(
-        "n_pixels",
-        detection_cfg.get("npixels"),
+    target_x = int(
+        round(
+            target_position["x"]
+            - cutout_definition.xmin
+        )
+    )
+    target_y = int(
+        round(
+            target_position["y"]
+            - cutout_definition.ymin
+        )
     )
 
-    prepared = prepare_real_fits_image(
+    final_detection = _detect_target_in_image(
         cutout,
-        background_box_size=background_cfg["box_size"],
-        background_filter_size=background_cfg["filter_size"],
-        detection_sigma=detection_cfg["n_sigma"],
-        detection_n_pixels=detection_n_pixels,
-        detection_n_levels=detection_cfg["n_levels"],
+        target_x=target_x,
+        target_y=target_y,
+        detection_cfg=detection_cfg,
+        background_cfg=background_cfg,
+        context="final-cutout detection",
     )
 
+    prepared = final_detection.prepared
     segmentation = prepared.detection.segmentation
-    if segmentation is None:
-        raise RuntimeError("No segmentation map was produced.")
+    target_label = final_detection.target_label
+    target_segment = final_detection.target_segment
+    contaminant_mask = final_detection.contaminant_mask
 
-    target_x = int(target_position["x"]) - cutout_definition.xmin
-    target_y = int(target_position["y"]) - cutout_definition.ymin
-
-    target_label = select_segment_near_position(
-        segmentation,
-        x=target_x,
-        y=target_y,
-    )
-
-    target_segment = segmentation.data == target_label
-
-    contaminant_mask = (
-        (segmentation.data > 0)
-        & (segmentation.data != target_label)
-    )
-
-    geometry, radial_profile, plateau = estimate_target_sky(
+    geometry, _, plateau = estimate_target_sky(
         cutout,
         target_segment,
         mask=contaminant_mask,
