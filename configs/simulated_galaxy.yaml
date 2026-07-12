@@ -10,8 +10,11 @@ data:
     x: 500
     y: 500
   cutout:
-    mode: fixed
-    size: 200
+    mode: auto
+    initial_factor: 4.0
+    sky_margin: 20.0
+    min_size: 100
+    max_size: null
 
 outputs:
   root: runs
@@ -69,7 +72,7 @@ fit:
     sample: rslice
     dlogz: 0.01
     seed: 42
-    n_processes: 10
+    n_processes: 
     queue_size: 10
 
   priors:
