@@ -589,7 +589,7 @@ def plot_image_preparation_report(
                 bounds["xmax"] - bounds["xmin"],
                 bounds["ymax"] - bounds["ymin"],
                 fill=False,
-                edgecolor="red",
+                edgecolor="black",
                 linewidth=3.0,
             )
             axes[0, 0].add_patch(rectangle)
