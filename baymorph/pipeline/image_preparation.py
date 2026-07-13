@@ -36,7 +36,9 @@ from baymorph.pipeline.segmentation import (
 )
 
 from .preparation_steps import (
+    AutoCutoutResult,
     TargetGeometry,
+    estimate_target_sky,
 )
 
 from .config import load_resolved_config
@@ -51,7 +53,6 @@ from .outputs import (
     pipeline_paths,
     save_resolved_config,
 )
-from .preparation_steps import estimate_target_sky
 
 
 @dataclass
@@ -224,7 +225,7 @@ def _resolve_auto_cutout(
     cutout_cfg: dict[str, Any],
     detection_cfg: dict[str, Any],
     background_cfg: dict[str, Any],
-) -> CutoutDefinition:
+) -> AutoCutoutResult:
     """Resolve a plateau-based automatic cutout for a target source."""
     full_detection = _detect_target_in_image(
         image,
@@ -281,7 +282,7 @@ def _resolve_auto_cutout(
         + geometry.y0
     )
 
-    return resolve_plateau_cutout(
+    final_cutout = resolve_plateau_cutout(
         image_shape=image.shape,
         center_x=global_center_x,
         center_y=global_center_y,
@@ -291,6 +292,17 @@ def _resolve_auto_cutout(
         ),
         min_size=cutout_cfg.get("min_size"),
         max_size=cutout_cfg.get("max_size"),
+    )
+
+    return AutoCutoutResult(
+        cutout=final_cutout,
+        preliminary_cutout=preliminary_cutout,
+        preliminary_segmentation=(
+            preliminary_detection.prepared.detection.segmentation.data.copy()
+        ),
+        geometry=geometry,
+        radial_profile=radial_profile,
+        plateau=plateau,
     )
 
 
@@ -434,6 +446,8 @@ def prepare_real_image_from_config(
 
     cutout_mode = cutout_cfg.get("mode", "fixed")
 
+    auto_cutout_result = None
+
     if cutout_mode == "fixed":
         cutout_definition = resolve_cutout(
             image_shape=image.data.shape,
@@ -443,7 +457,7 @@ def prepare_real_image_from_config(
         )
 
     elif cutout_mode == "auto":
-        cutout_definition = _resolve_auto_cutout(
+        auto_cutout_result = _resolve_auto_cutout(
             image.data,
             target_x=target_position["x"],
             target_y=target_position["y"],
@@ -451,6 +465,7 @@ def prepare_real_image_from_config(
             detection_cfg=detection_cfg,
             background_cfg=background_cfg,
         )
+        cutout_definition = auto_cutout_result.cutout
 
     else:
         raise ValueError(
@@ -542,8 +557,16 @@ def prepare_real_image_from_config(
         plateau=plateau,
         sky_region=sky_region,
 
-        preliminary_cutout=None,
-        preliminary_segmentation=None,
+        preliminary_cutout=(
+            auto_cutout_result.preliminary_cutout
+            if auto_cutout_result is not None
+            else None
+        ),
+        preliminary_segmentation=(
+            auto_cutout_result.preliminary_segmentation
+            if auto_cutout_result is not None
+            else None
+        ),
 
         original_image=image.data,
         cutout_bounds={

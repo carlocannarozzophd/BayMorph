@@ -13,6 +13,7 @@ from baymorph.core.sky import (
     detect_profile_plateau,
 )
 
+from .cutout import CutoutDefinition
 
 @dataclass(slots=True)
 class TargetGeometry:
@@ -34,6 +35,34 @@ class TargetGeometry:
     q: float
     theta: float
 
+
+@dataclass(slots=True)
+class AutoCutoutResult:
+    """Products generated while resolving an automatic target cutout.
+
+    Parameters
+    ----------
+    cutout : CutoutDefinition
+        Final plateau-based cutout definition.
+    preliminary_cutout : ndarray
+        Preliminary adaptive cutout used to estimate the target profile.
+    preliminary_segmentation : ndarray
+        Segmentation map measured on the preliminary cutout.
+    geometry : TargetGeometry
+        Target geometry estimated on the preliminary cutout.
+    radial_profile : RadialProfile
+        Elliptical radial profile measured on the preliminary cutout.
+    plateau : PlateauResult
+        Detected sky-profile plateau.
+    """
+
+    cutout: CutoutDefinition
+    preliminary_cutout: np.ndarray
+    preliminary_segmentation: np.ndarray
+    geometry: TargetGeometry
+    radial_profile: RadialProfile
+    plateau: PlateauResult
+    
 
 def estimate_target_geometry_from_segment(
     target_segment: np.ndarray,
