@@ -1,26 +1,25 @@
-# Validation configuration: perfect noiseless single-Sérsic recovery
+# Validation configuration: near-noiseless single-Sérsic recovery
 
 object:
   name: simulated_galaxy_noiseless
 
 data:
   image_path: runs/simulated_galaxy_noiseless/input/simulated_galaxy_noiseless.fits
+
   target_position:
-    x: 500
-    y: 500
+    x: 150
+    y: 150
+
   cutout:
-    mode: auto
-    initial_factor: 4.0
-    sky_margin: 20.0
-    min_size: 100
-    max_size: null
+    mode: fixed
+    size: 160
 
 outputs:
   root: runs
   overwrite: true
 
 simulation:
-  shape: [1000, 1000]
+  shape: [300, 300]
   seed: 42
 
   truth:
@@ -29,8 +28,8 @@ simulation:
     n: 4.0
     q: 0.5
     theta_deg: 45.0
-    x0: 500.0
-    y0: 500.0
+    x0: 150.0
+    y0: 150.0
 
   psf:
     type: gaussian
@@ -40,7 +39,7 @@ simulation:
   noise:
     sky: 0.0
     poisson_noise: false
-    read_noise: 0.0
+    read_noise: 0.1
 
 preparation:
   background:
@@ -58,6 +57,7 @@ preparation:
 
 psf:
   type: gaussian
+
   gaussian:
     fwhm: 3.0
 
