@@ -1,11 +1,10 @@
-# Minimal configuration for the simulated-galaxy notebook.
-# Omitted options are filled from BayMorph defaults.
+# Validation configuration: perfect noiseless single-Sérsic recovery
 
 object:
-  name: simulated_galaxy
+  name: simulated_galaxy_noiseless
 
 data:
-  image_path: runs/simulated_galaxy/input/simulated_galaxy.fits
+  image_path: runs/simulated_galaxy_noiseless/input/simulated_galaxy_noiseless.fits
   target_position:
     x: 500
     y: 500
@@ -39,20 +38,19 @@ simulation:
     size: 25
 
   noise:
-    sky: 50.0
-    poisson_noise: true
-    read_noise: 5.0
+    sky: 0.0
+    poisson_noise: false
+    read_noise: 0.0
 
-# BayMorph automatically determines the target geometry, radial-profile
-# plateau, sky region, background, and robust noise estimate during image
-# preparation. The mesh settings support the preliminary detection pass.
 preparation:
   background:
     method: empirical
     box_size: 30
     filter_size: 3
+
   noise:
     method: empirical
+
   detection:
     n_sigma: 3.0
     n_pixels: 20
@@ -68,11 +66,11 @@ fit:
     - single_sersic
 
   sampler:
-    nlive: 500
+    nlive: 200
     sample: rslice
     dlogz: 0.01
     seed: 42
-    n_processes: 
+    n_processes: 10
     queue_size: 10
 
   priors:
@@ -86,5 +84,6 @@ diagnostics:
   radial_profile:
     binning: fixed
     dr: 1.0
+
   titles:
     single_sersic: "Single Sérsic"
