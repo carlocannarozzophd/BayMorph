@@ -5,6 +5,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LogNorm
+from matplotlib.patches import Rectangle
 
 from .images import BAYMORPH_IMAGE_CMAP, _log_limits
 
@@ -514,6 +515,244 @@ def plot_mock_fit_report(
     if output_path is not None:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(
+            output_path,
+            dpi=200,
+            bbox_inches="tight",
+        )
+
+    if show:
+        plt.show()
+
+    return fig, axes
+
+
+def plot_image_preparation_report(
+    products,
+    *,
+    output_path=None,
+    show=True,
+):
+    """Plot a diagnostic report for image-preparation products.
+
+    Parameters
+    ----------
+    products : ImagePreparationProducts
+        Products returned by ``prepare_real_image_from_config``.
+    output_path : str or pathlib.Path, optional
+        Path where the figure is saved.
+    show : bool, default=True
+        If True, display the figure.
+
+    Returns
+    -------
+    fig : matplotlib.figure.Figure
+        Output report figure.
+    axes : ndarray
+        Two-dimensional array of report axes.
+    """
+    fig, axes = plt.subplots(
+        2,
+        4,
+        figsize=(28, 14),
+        constrained_layout=False,
+    )
+
+    fig.suptitle(
+        "BayMorph Image Preparation",
+        fontsize=30,
+        y=0.98,
+    )
+
+    original_image = products.original_image
+
+    if original_image is not None:
+        im = _show_log(
+            axes[0, 0],
+            original_image,
+            "Original image",
+        )
+        fig.colorbar(
+            im,
+            ax=axes[0, 0],
+            fraction=0.046,
+        )
+
+        bounds = products.cutout_bounds
+
+        if bounds is not None:
+            rectangle = Rectangle(
+                (
+                    bounds["xmin"],
+                    bounds["ymin"],
+                ),
+                bounds["xmax"] - bounds["xmin"],
+                bounds["ymax"] - bounds["ymin"],
+                fill=False,
+                edgecolor="red",
+                linewidth=3.0,
+            )
+            axes[0, 0].add_patch(rectangle)
+    else:
+        axes[0, 0].axis("off")
+        axes[0, 0].set_title(
+            "Original image",
+            fontsize=30,
+        )
+        axes[0, 0].text(
+            0.5,
+            0.5,
+            "Not available",
+            ha="center",
+            va="center",
+            fontsize=24,
+        )
+
+    im = _show_log(
+        axes[0, 1],
+        products.cutout,
+        "Final cutout",
+    )
+    fig.colorbar(
+        im,
+        ax=axes[0, 1],
+        fraction=0.046,
+    )
+
+    axes[0, 1].plot(
+        products.target_x,
+        products.target_y,
+        marker="+",
+        color="red",
+        markersize=18,
+        markeredgewidth=3,
+    )
+
+    im = _show_log(
+        axes[0, 2],
+        products.prepared_data,
+        "Background-subtracted",
+    )
+    fig.colorbar(
+        im,
+        ax=axes[0, 2],
+        fraction=0.046,
+    )
+
+    im = _show_linear(
+        axes[0, 3],
+        products.noise,
+        "Noise map",
+        cmap="viridis",
+        symmetric=False,
+    )
+    fig.colorbar(
+        im,
+        ax=axes[0, 3],
+        fraction=0.046,
+    )
+
+    im = _show_linear(
+        axes[1, 0],
+        products.segmentation,
+        "Segmentation",
+        cmap="viridis",
+        symmetric=False,
+        vmin=0.0,
+        vmax=max(
+            1.0,
+            float(np.nanmax(products.segmentation)),
+        ),
+    )
+    fig.colorbar(
+        im,
+        ax=axes[1, 0],
+        fraction=0.046,
+    )
+
+    im = _show_optional_mask(
+        axes[1, 1],
+        products.target_segment,
+        "Target segment",
+    )
+    if im is not None:
+        fig.colorbar(
+            im,
+            ax=axes[1, 1],
+            fraction=0.046,
+        )
+
+    im = _show_optional_mask(
+        axes[1, 2],
+        products.contaminant_mask,
+        "Contaminants",
+    )
+    if im is not None:
+        fig.colorbar(
+            im,
+            ax=axes[1, 2],
+            fraction=0.046,
+        )
+
+    axes[1, 3].axis("off")
+
+    bounds = products.cutout_bounds or {}
+
+    lines = [
+        "Preparation summary",
+        "",
+        f"Cutout shape: {products.cutout.shape}",
+        (
+            "Bounds: "
+            f"x=[{bounds.get('xmin', '?')}, {bounds.get('xmax', '?')}) "
+            f"y=[{bounds.get('ymin', '?')}, {bounds.get('ymax', '?')})"
+        ),
+        (
+            "Measured center: "
+            f"({products.target_x}, {products.target_y})"
+        ),
+        f"Target label: {products.target_label}",
+        f"Background: {products.background:.6g}",
+        (
+            "Median noise: "
+            f"{float(np.nanmedian(products.noise)):.6g}"
+        ),
+        (
+            "Target pixels: "
+            f"{int(np.count_nonzero(products.target_segment))}"
+        ),
+        (
+            "Contaminant pixels: "
+            f"{int(np.count_nonzero(products.contaminant_mask))}"
+        ),
+    ]
+
+    axes[1, 3].text(
+        0.02,
+        0.98,
+        "\n".join(lines),
+        transform=axes[1, 3].transAxes,
+        ha="left",
+        va="top",
+        fontsize=22,
+        linespacing=1.4,
+    )
+
+    fig.subplots_adjust(
+        left=0.04,
+        right=0.98,
+        bottom=0.05,
+        top=0.91,
+        wspace=0.35,
+        hspace=0.28,
+    )
+
+    if output_path is not None:
+        output_path = Path(output_path)
+        output_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
         fig.savefig(
             output_path,
             dpi=200,
