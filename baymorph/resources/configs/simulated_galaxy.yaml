@@ -1,0 +1,89 @@
+# Validation configuration: near-noiseless single-Sérsic recovery
+
+object:
+  name: simulated_galaxy_noiseless
+
+data:
+  image_path: runs/simulated_galaxy_noiseless/input/simulated_galaxy_noiseless.fits
+
+  target_position:
+    x: 150
+    y: 150
+
+  cutout:
+    mode: fixed
+    size: 160
+
+outputs:
+  root: runs
+  overwrite: true
+
+simulation:
+  shape: [300, 300]
+  seed: 42
+
+  truth:
+    flux: 100000.0
+    re: 30.0
+    n: 4.0
+    q: 0.5
+    theta_deg: 45.0
+    x0: 150.0
+    y0: 150.0
+
+  psf:
+    type: gaussian
+    fwhm: 3.0
+    size: 25
+
+  noise:
+    sky: 0.0
+    poisson_noise: false
+    read_noise: 0.1
+
+preparation:
+  background:
+    method: empirical
+    box_size: 30
+    filter_size: 3
+
+  noise:
+    method: empirical
+
+  detection:
+    n_sigma: 3.0
+    n_pixels: 20
+    n_levels: 32
+
+psf:
+  type: gaussian
+
+  gaussian:
+    fwhm: 3.0
+
+fit:
+  models:
+    - single_sersic
+
+  sampler:
+    nlive: 200
+    sample: rslice
+    dlogz: 0.01
+    seed: 42
+    n_processes: 10
+    queue_size: 10
+
+  priors:
+    single_sersic:
+      x0:
+        offset: 10.0
+      y0:
+        offset: 10.0
+
+diagnostics:
+  radial_profile:
+    binning: fixed
+    dr: 1.0
+
+  titles:
+    single_sersic: "Single Sérsic"
