@@ -25,8 +25,19 @@ from baymorph.core.noise import (
     estimate_noise_map,
     make_constant_noise_map,
 )
-from baymorph.core.sky import build_sky_region
-from baymorph.pipeline.segmentation import select_segment_near_position
+from baymorph.core.sky import (
+    PlateauResult,
+    RadialProfile,
+    SkyRegion,
+    build_sky_region,
+)
+from baymorph.pipeline.segmentation import (
+    select_segment_near_position,
+)
+
+from .preparation_steps import (
+    TargetGeometry,
+)
 
 from .config import load_resolved_config
 from .cutout import (
@@ -250,7 +261,7 @@ def _resolve_auto_cutout(
         context="preliminary-cutout detection",
     )
 
-    geometry, _, plateau = estimate_target_sky(
+    geometry, radial_profile, plateau = estimate_target_sky(
         preliminary_cutout,
         preliminary_detection.target_segment,
         mask=preliminary_detection.contaminant_mask,
@@ -311,9 +322,21 @@ class ImagePreparationProducts:
     background : float
         Estimated scalar background level.
     target_x, target_y : int
-        Target position in cutout pixel coordinates.
+        Measured target centre in cutout pixel coordinates.
     target_label : int
         Segmentation label assigned to the target source.
+    geometry : TargetGeometry, optional
+        Measured target geometry.
+    radial_profile : RadialProfile, optional
+        Elliptical radial profile.
+    plateau : PlateauResult, optional
+        Plateau detection result.
+    sky_region : SkyRegion, optional
+        Final sky region used for background estimation.
+    preliminary_cutout : ndarray, optional
+        Preliminary adaptive cutout.
+    preliminary_segmentation : ndarray, optional
+        Segmentation map measured on the preliminary cutout.
     """
 
     cutout: np.ndarray
@@ -327,8 +350,17 @@ class ImagePreparationProducts:
     target_x: int
     target_y: int
     target_label: int
+
     original_image: np.ndarray | None = None
     cutout_bounds: dict[str, int] | None = None
+
+    geometry: TargetGeometry | None = None
+    radial_profile: RadialProfile | None = None
+    plateau: PlateauResult | None = None
+    sky_region: SkyRegion | None = None
+
+    preliminary_cutout: np.ndarray | None = None
+    preliminary_segmentation: np.ndarray | None = None
 
 
 def make_target_cutout(
@@ -454,7 +486,7 @@ def prepare_real_image_from_config(
     target_segment = final_detection.target_segment
     contaminant_mask = final_detection.contaminant_mask
 
-    geometry, _, plateau = estimate_target_sky(
+    geometry, radial_profile, plateau = estimate_target_sky(
         cutout,
         target_segment,
         mask=contaminant_mask,
@@ -504,6 +536,15 @@ def prepare_real_image_from_config(
         target_x=target_x,
         target_y=target_y,
         target_label=int(target_label),
+
+        geometry=geometry,
+        radial_profile=radial_profile,
+        plateau=plateau,
+        sky_region=sky_region,
+
+        preliminary_cutout=None,
+        preliminary_segmentation=None,
+
         original_image=image.data,
         cutout_bounds={
             "xmin": int(cutout_definition.xmin),
