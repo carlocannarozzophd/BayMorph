@@ -337,18 +337,27 @@ class ImagePreparationProducts:
         Measured target centre in cutout pixel coordinates.
     target_label : int
         Segmentation label assigned to the target source.
+    cutout_mode : {"fixed", "auto"}, default="fixed"
+        Cutout strategy used during image preparation.
+    original_image : ndarray, optional
+        Full original input image before cutout extraction.
+    cutout_bounds : dict of str, int, optional
+        Pixel bounds of the final cutout in the original image, with keys
+        ``xmin``, ``xmax``, ``ymin``, and ``ymax``.
     geometry : TargetGeometry, optional
-        Measured target geometry.
+        Target geometry measured on the final cutout.
     radial_profile : RadialProfile, optional
-        Elliptical radial profile.
+        Elliptical radial profile measured on the final cutout.
     plateau : PlateauResult, optional
-        Plateau detection result.
+        Plateau detected in the final target radial profile.
     sky_region : SkyRegion, optional
-        Final sky region used for background estimation.
+        Final sky region used for background and noise estimation.
     preliminary_cutout : ndarray, optional
-        Preliminary adaptive cutout.
+        Preliminary adaptive cutout used while resolving an automatic cutout.
+        It is None when ``cutout_mode`` is ``"fixed"``.
     preliminary_segmentation : ndarray, optional
-        Segmentation map measured on the preliminary cutout.
+        Segmentation map measured on the preliminary adaptive cutout. It is
+        None when ``cutout_mode`` is ``"fixed"``.
     """
 
     cutout: np.ndarray
@@ -363,6 +372,7 @@ class ImagePreparationProducts:
     target_y: int
     target_label: int
 
+    cutout_mode: str = "fixed"
     original_image: np.ndarray | None = None
     cutout_bounds: dict[str, int] | None = None
 
@@ -551,6 +561,7 @@ def prepare_real_image_from_config(
         target_x=target_x,
         target_y=target_y,
         target_label=int(target_label),
+        cutout_mode=cutout_mode,
 
         geometry=geometry,
         radial_profile=radial_profile,
@@ -588,19 +599,25 @@ def save_image_preparation_products(
     config: dict[str, Any],
     products: ImagePreparationProducts,
 ) -> None:
-    """Save image-preparation products to disk.
+    """Save image-preparation products and diagnostics to disk.
 
     Parameters
     ----------
     config : dict
-        Resolved pipeline configuration.
+        Resolved BayMorph configuration.
     products : ImagePreparationProducts
         Image-preparation products to save.
+
+    Notes
+    -----
+    The saved products include the prepared image, noise map, masks,
+    segmentation maps, cutouts, target geometry, radial profile, plateau,
+    sky region, and scalar metadata when available.
 
     Returns
     -------
     None
-        Products are written to the configured output directory.
+        Products are written to the configured image-preparation directory.
     """
     paths = pipeline_paths(config)["image_preparation"]
     overwrite = bool(config["outputs"].get("overwrite", False))
@@ -625,6 +642,44 @@ def save_image_preparation_products(
     np.save(paths["dir"] / "target_segment.npy", products.target_segment)
     np.save(paths["dir"] / "segmentation.npy", products.segmentation)
 
+    np.save(
+        paths["dir"] / "automatic_mask.npy",
+        products.automatic_mask,
+    )
+
+    if products.preliminary_cutout is not None:
+        np.save(
+            paths["dir"] / "preliminary_cutout.npy",
+            products.preliminary_cutout,
+        )
+
+    if products.preliminary_segmentation is not None:
+        np.save(
+            paths["dir"] / "preliminary_segmentation.npy",
+            products.preliminary_segmentation,
+        )
+
+    if products.radial_profile is not None:
+        np.savez(
+            paths["dir"] / "radial_profile.npz",
+            radius=products.radial_profile.radius,
+            profile=products.radial_profile.profile,
+            n_pixels=products.radial_profile.n_pixels,
+            scatter=products.radial_profile.scatter,
+            area=products.radial_profile.area,
+        )
+
+    if products.sky_region is not None:
+        np.savez(
+            paths["dir"] / "sky_region.npz",
+            mask=products.sky_region.mask,
+            radius_map=products.sky_region.radius_map,
+            inner_radius=products.sky_region.inner_radius,
+            outer_radius=products.sky_region.outer_radius,
+            n_pixels=products.sky_region.n_pixels,
+            coverage=products.sky_region.coverage,
+        )
+
     if products.original_image is not None:
         np.save(paths["dir"] / "original_image.npy", products.original_image)
 
@@ -633,7 +688,30 @@ def save_image_preparation_products(
         "target_x": products.target_x,
         "target_y": products.target_y,
         "target_label": products.target_label,
+        "cutout_mode": products.cutout_mode,
         "cutout_bounds": products.cutout_bounds,
+        "geometry": (
+            {
+                "x0": products.geometry.x0,
+                "y0": products.geometry.y0,
+                "q": products.geometry.q,
+                "theta": products.geometry.theta,
+            }
+            if products.geometry is not None
+            else None
+        ),
+        "plateau": (
+            {
+                "radius": products.plateau.radius,
+                "index": products.plateau.index,
+                "background_level": products.plateau.background_level,
+                "noise_sigma": products.plateau.noise_sigma,
+                "window_start": products.plateau.window_start,
+                "window_stop": products.plateau.window_stop,
+            }
+            if products.plateau is not None
+            else None
+        ),
     }
 
     with open(paths["dir"] / "image_preparation_metadata.json", "w") as f:
@@ -643,17 +721,27 @@ def save_image_preparation_products(
 def load_image_preparation_products(
     config: str | Path | dict[str, Any],
 ) -> ImagePreparationProducts:
-    """Load saved image-preparation products from disk.
+    """Load saved image-preparation products and diagnostics.
 
     Parameters
     ----------
     config : dict, str, or pathlib.Path
-        Resolved configuration dictionary or path to a YAML configuration file.
+        Resolved configuration dictionary or path to a YAML configuration
+        file.
 
     Returns
     -------
     ImagePreparationProducts
-        Image-preparation products reconstructed from saved files.
+        Reconstructed image-preparation products, including optional target
+        geometry, radial profile, plateau, sky region, preliminary cutout,
+        and preliminary segmentation when these were saved.
+
+    Notes
+    -----
+    Outputs produced by older BayMorph versions remain supported. Optional
+    diagnostic products that are not present on disk are returned as None.
+    If the separately saved automatic mask is unavailable, the contaminant
+    mask is used as a backward-compatible fallback.
     """
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
@@ -670,6 +758,31 @@ def load_image_preparation_products(
     target_segment = np.load(paths["dir"] / "target_segment.npy")
     segmentation = np.load(paths["dir"] / "segmentation.npy")
 
+    automatic_mask_path = paths["dir"] / "automatic_mask.npy"
+    automatic_mask = (
+        np.load(automatic_mask_path).astype(bool)
+        if automatic_mask_path.exists()
+        else contaminant_mask.copy()
+    )
+
+    preliminary_cutout_path = (
+        paths["dir"] / "preliminary_cutout.npy"
+    )
+    preliminary_cutout = (
+        np.load(preliminary_cutout_path)
+        if preliminary_cutout_path.exists()
+        else None
+    )
+
+    preliminary_segmentation_path = (
+        paths["dir"] / "preliminary_segmentation.npy"
+    )
+    preliminary_segmentation = (
+        np.load(preliminary_segmentation_path)
+        if preliminary_segmentation_path.exists()
+        else None
+    )
+
     original_image_path = paths["dir"] / "original_image.npy"
     original_image = (
         np.load(original_image_path)
@@ -680,11 +793,67 @@ def load_image_preparation_products(
     with open(paths["dir"] / "image_preparation_metadata.json", "r") as f:
         metadata = json.load(f)
 
+    geometry_data = metadata.get("geometry")
+    geometry = (
+        TargetGeometry(
+            x0=float(geometry_data["x0"]),
+            y0=float(geometry_data["y0"]),
+            q=float(geometry_data["q"]),
+            theta=float(geometry_data["theta"]),
+        )
+        if geometry_data is not None
+        else None
+    )
+
+    plateau_data = metadata.get("plateau")
+    plateau = (
+        PlateauResult(
+            radius=float(plateau_data["radius"]),
+            index=int(plateau_data["index"]),
+            background_level=float(
+                plateau_data["background_level"]
+            ),
+            noise_sigma=float(plateau_data["noise_sigma"]),
+            window_start=int(plateau_data["window_start"]),
+            window_stop=int(plateau_data["window_stop"]),
+        )
+        if plateau_data is not None
+        else None
+    )
+
+    radial_profile_path = paths["dir"] / "radial_profile.npz"
+    if radial_profile_path.exists():
+        with np.load(radial_profile_path) as profile_data:
+            radial_profile = RadialProfile(
+                radius=profile_data["radius"],
+                profile=profile_data["profile"],
+                n_pixels=profile_data["n_pixels"],
+                scatter=profile_data["scatter"],
+                area=profile_data["area"],
+            )
+    else:
+        radial_profile = None
+
+    sky_region_path = paths["dir"] / "sky_region.npz"
+    if sky_region_path.exists() and plateau is not None:
+        with np.load(sky_region_path) as sky_data:
+            sky_region = SkyRegion(
+                mask=sky_data["mask"].astype(bool),
+                radius_map=sky_data["radius_map"],
+                plateau=plateau,
+                inner_radius=float(sky_data["inner_radius"]),
+                outer_radius=float(sky_data["outer_radius"]),
+                n_pixels=int(sky_data["n_pixels"]),
+                coverage=float(sky_data["coverage"]),
+            )
+    else:
+        sky_region = None
+
     return ImagePreparationProducts(
         cutout=cutout,
         prepared_data=prepared_data,
         noise=noise,
-        automatic_mask=contaminant_mask,
+        automatic_mask=automatic_mask,
         target_segment=target_segment,
         contaminant_mask=contaminant_mask,
         segmentation=segmentation,
@@ -692,6 +861,13 @@ def load_image_preparation_products(
         target_x=int(metadata["target_x"]),
         target_y=int(metadata["target_y"]),
         target_label=int(metadata["target_label"]),
+        cutout_mode=metadata.get("cutout_mode", "fixed"),
         original_image=original_image,
         cutout_bounds=metadata.get("cutout_bounds"),
+        geometry=geometry,
+        radial_profile=radial_profile,
+        plateau=plateau,
+        sky_region=sky_region,
+        preliminary_cutout=preliminary_cutout,
+        preliminary_segmentation=preliminary_segmentation,
     )
