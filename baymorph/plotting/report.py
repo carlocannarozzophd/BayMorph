@@ -4,8 +4,8 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import LogNorm
-from matplotlib.patches import Rectangle
+from matplotlib.colors import BoundaryNorm, ListedColormap, LogNorm
+from matplotlib.patches import Patch, Rectangle
 
 from .images import BAYMORPH_IMAGE_CMAP, _log_limits
 
@@ -527,20 +527,281 @@ def plot_mock_fit_report(
     return fig, axes
 
 
+def _show_unavailable(
+    ax,
+    title,
+    message="Not available",
+):
+    """Display an unavailable report panel."""
+    ax.axis("off")
+    ax.set_title(
+        title,
+        fontsize=26,
+    )
+    ax.text(
+        0.5,
+        0.5,
+        message,
+        transform=ax.transAxes,
+        ha="center",
+        va="center",
+        fontsize=22,
+    )
+
+
+def _plot_preparation_profile(
+    ax,
+    radial_profile,
+    plateau,
+):
+    """Plot the target radial profile and detected plateau."""
+    if radial_profile is None:
+        _show_unavailable(
+            ax,
+            "Radial profile",
+        )
+        return
+
+    radius = np.asarray(
+        radial_profile.radius,
+        dtype=float,
+    )
+    profile = np.asarray(
+        radial_profile.profile,
+        dtype=float,
+    )
+
+    valid = (
+        np.isfinite(radius)
+        & np.isfinite(profile)
+    )
+
+    ax.plot(
+        radius[valid],
+        profile[valid],
+        linewidth=2.5,
+        label="Elliptical profile",
+    )
+
+    if plateau is not None:
+        ax.axvline(
+            plateau.radius,
+            linestyle="--",
+            linewidth=2.5,
+            label=(
+                "Plateau "
+                f"({plateau.radius:.2f} pix)"
+            ),
+        )
+
+        ax.axhline(
+            plateau.background_level,
+            linestyle=":",
+            linewidth=2.0,
+            label="Outer background",
+        )
+
+    ax.set_title(
+        "Radial profile and plateau",
+        fontsize=26,
+    )
+    ax.set_xlabel(
+        "Elliptical radius [pix]",
+        fontsize=20,
+    )
+    ax.set_ylabel(
+        "Intensity",
+        fontsize=20,
+    )
+
+    ax.legend(
+        fontsize=16,
+        loc="best",
+    )
+
+    _style_axes(
+        ax,
+        spine_width=2.0,
+        major_length=8,
+        minor_length=4,
+    )
+
+
+def _show_preparation_segmentation(
+    ax,
+    target_segment,
+    contaminant_mask,
+):
+    """Display target and contaminant segmentation classes."""
+    target_segment = np.asarray(
+        target_segment,
+        dtype=bool,
+    )
+    contaminant_mask = np.asarray(
+        contaminant_mask,
+        dtype=bool,
+    )
+
+    labels = np.zeros(
+        target_segment.shape,
+        dtype=np.uint8,
+    )
+    labels[target_segment] = 1
+    labels[contaminant_mask] = 2
+
+    cmap = ListedColormap(
+        [
+            "black",
+            "gold",
+            "crimson",
+        ]
+    )
+    norm = BoundaryNorm(
+        [-0.5, 0.5, 1.5, 2.5],
+        cmap.N,
+    )
+
+    ax.imshow(
+        labels,
+        origin="lower",
+        cmap=cmap,
+        norm=norm,
+    )
+
+    ax.set_title(
+        "Final segmentation",
+        fontsize=30,
+    )
+    ax.set_xticks([])
+    ax.set_yticks([])
+    _style_axes(ax)
+
+    ax.legend(
+        handles=[
+            Patch(
+                facecolor="black",
+                label="Background",
+            ),
+            Patch(
+                facecolor="gold",
+                label="Target",
+            ),
+            Patch(
+                facecolor="crimson",
+                label="Contaminants",
+            ),
+        ],
+        loc="upper right",
+        fontsize=14,
+        framealpha=0.9,
+    )
+
+
+def _show_sky_context(
+    ax,
+    target_segment,
+    contaminant_mask,
+    sky_region,
+):
+    """Display target, usable sky, and excluded pixels."""
+    if sky_region is None:
+        _show_unavailable(
+            ax,
+            "Sky region",
+        )
+        return
+
+    target_segment = np.asarray(
+        target_segment,
+        dtype=bool,
+    )
+    contaminant_mask = np.asarray(
+        contaminant_mask,
+        dtype=bool,
+    )
+    sky_mask = np.asarray(
+        sky_region.mask,
+        dtype=bool,
+    )
+
+    labels = np.zeros(
+        target_segment.shape,
+        dtype=np.uint8,
+    )
+    labels[sky_mask] = 1
+    labels[target_segment] = 2
+    labels[contaminant_mask] = 3
+
+    cmap = ListedColormap(
+        [
+            "black",
+            "lightskyblue",
+            "gold",
+            "crimson",
+        ]
+    )
+    norm = BoundaryNorm(
+        [-0.5, 0.5, 1.5, 2.5, 3.5],
+        cmap.N,
+    )
+
+    ax.imshow(
+        labels,
+        origin="lower",
+        cmap=cmap,
+        norm=norm,
+    )
+
+    ax.set_title(
+        "Target and sky region",
+        fontsize=30,
+    )
+    ax.set_xticks([])
+    ax.set_yticks([])
+    _style_axes(ax)
+
+    ax.legend(
+        handles=[
+            Patch(
+                facecolor="gold",
+                label="Target",
+            ),
+            Patch(
+                facecolor="lightskyblue",
+                label="Usable sky",
+            ),
+            Patch(
+                facecolor="crimson",
+                label="Contaminants",
+            ),
+            Patch(
+                facecolor="black",
+                label="Excluded",
+            ),
+        ],
+        loc="upper right",
+        fontsize=13,
+        framealpha=0.9,
+    )
+
+
 def plot_image_preparation_report(
     products,
     *,
     output_path=None,
     show=True,
 ):
-    """Plot a diagnostic report for image-preparation products.
+    """Plot a complete BayMorph image-preparation report.
 
     Parameters
     ----------
     products : ImagePreparationProducts
-        Products returned by ``prepare_real_image_from_config``.
+        Products returned by
+        :func:`baymorph.pipeline.image_preparation.
+        prepare_real_image_from_config`.
     output_path : str or pathlib.Path, optional
-        Path where the figure is saved.
+        Path where the figure is saved. If None, the figure is not written
+        to disk.
     show : bool, default=True
         If True, display the figure.
 
@@ -549,22 +810,23 @@ def plot_image_preparation_report(
     fig : matplotlib.figure.Figure
         Output report figure.
     axes : ndarray
-        Two-dimensional array of report axes.
+        Array of report axes with shape ``(3, 4)``.
     """
     fig, axes = plt.subplots(
-        2,
+        3,
         4,
-        figsize=(28, 14),
+        figsize=(30, 22),
         constrained_layout=False,
     )
 
     fig.suptitle(
         "BayMorph Image Preparation",
-        fontsize=30,
-        y=0.98,
+        fontsize=32,
+        y=0.985,
     )
 
     original_image = products.original_image
+    bounds = products.cutout_bounds
 
     if original_image is not None:
         im = _show_log(
@@ -578,8 +840,6 @@ def plot_image_preparation_report(
             fraction=0.046,
         )
 
-        bounds = products.cutout_bounds
-
         if bounds is not None:
             rectangle = Rectangle(
                 (
@@ -590,61 +850,79 @@ def plot_image_preparation_report(
                 bounds["ymax"] - bounds["ymin"],
                 fill=False,
                 edgecolor="black",
-                linewidth=3.0,
+                linewidth=4.0,
+                zorder=100,
             )
             axes[0, 0].add_patch(rectangle)
     else:
-        axes[0, 0].axis("off")
-        axes[0, 0].set_title(
+        _show_unavailable(
+            axes[0, 0],
             "Original image",
-            fontsize=30,
         )
-        axes[0, 0].text(
-            0.5,
-            0.5,
-            "Not available",
-            ha="center",
-            va="center",
-            fontsize=24,
+
+    if products.preliminary_cutout is not None:
+        im = _show_log(
+            axes[0, 1],
+            products.preliminary_cutout,
+            "Preliminary cutout",
+        )
+        fig.colorbar(
+            im,
+            ax=axes[0, 1],
+            fraction=0.046,
+        )
+    else:
+        message = (
+            "Not used\n(fixed cutout mode)"
+            if products.cutout_mode == "fixed"
+            else "Not available"
+        )
+        _show_unavailable(
+            axes[0, 1],
+            "Preliminary cutout",
+            message,
+        )
+
+    if products.preliminary_segmentation is not None:
+        preliminary_max = max(
+            1.0,
+            float(
+                np.nanmax(
+                    products.preliminary_segmentation
+                )
+            ),
+        )
+
+        im = _show_linear(
+            axes[0, 2],
+            products.preliminary_segmentation,
+            "Preliminary segmentation",
+            cmap="viridis",
+            symmetric=False,
+            vmin=0.0,
+            vmax=preliminary_max,
+        )
+        fig.colorbar(
+            im,
+            ax=axes[0, 2],
+            fraction=0.046,
+        )
+    else:
+        message = (
+            "Not used\n(fixed cutout mode)"
+            if products.cutout_mode == "fixed"
+            else "Not available"
+        )
+        _show_unavailable(
+            axes[0, 2],
+            "Preliminary segmentation",
+            message,
         )
 
     im = _show_log(
-        axes[0, 1],
+        axes[0, 3],
         products.cutout,
         "Final cutout",
-    )
-    fig.colorbar(
-        im,
-        ax=axes[0, 1],
-        fraction=0.046,
-    )
-
-    axes[0, 1].plot(
-        products.target_x,
-        products.target_y,
-        marker="+",
-        color="red",
-        markersize=18,
-        markeredgewidth=3,
-    )
-
-    im = _show_log(
-        axes[0, 2],
-        products.prepared_data,
-        "Background-subtracted",
-    )
-    fig.colorbar(
-        im,
-        ax=axes[0, 2],
-        fraction=0.046,
-    )
-
-    im = _show_linear(
-        axes[0, 3],
-        products.noise,
-        "Noise map",
-        cmap="viridis",
-        symmetric=False,
     )
     fig.colorbar(
         im,
@@ -652,22 +930,20 @@ def plot_image_preparation_report(
         fraction=0.046,
     )
 
-    im = _show_linear(
-        axes[1, 0],
-        products.segmentation,
-        "Segmentation",
-        cmap="viridis",
-        symmetric=False,
-        vmin=0.0,
-        vmax=max(
-            1.0,
-            float(np.nanmax(products.segmentation)),
-        ),
+    axes[0, 3].plot(
+        products.target_x,
+        products.target_y,
+        marker="+",
+        color="red",
+        markersize=18,
+        markeredgewidth=3.0,
+        zorder=100,
     )
-    fig.colorbar(
-        im,
-        ax=axes[1, 0],
-        fraction=0.046,
+
+    _show_preparation_segmentation(
+        axes[1, 0],
+        products.target_segment,
+        products.contaminant_mask,
     )
 
     im = _show_optional_mask(
@@ -685,7 +961,7 @@ def plot_image_preparation_report(
     im = _show_optional_mask(
         axes[1, 2],
         products.contaminant_mask,
-        "Contaminants",
+        "Contaminant mask",
     )
     if im is not None:
         fig.colorbar(
@@ -694,57 +970,208 @@ def plot_image_preparation_report(
             fraction=0.046,
         )
 
-    axes[1, 3].axis("off")
+    _show_sky_context(
+    axes[1, 3],
+    products.target_segment,
+    products.contaminant_mask,
+    products.sky_region,
+)
 
-    bounds = products.cutout_bounds or {}
+    _plot_preparation_profile(
+        axes[2, 0],
+        products.radial_profile,
+        products.plateau,
+    )
 
-    lines = [
-        "Preparation summary",
-        "",
-        f"Cutout shape: {products.cutout.shape}",
-        (
-            "Bounds: "
-            f"x=[{bounds.get('xmin', '?')}, {bounds.get('xmax', '?')}) "
-            f"y=[{bounds.get('ymin', '?')}, {bounds.get('ymax', '?')})"
-        ),
-        (
-            "Measured center: "
-            f"({products.target_x}, {products.target_y})"
-        ),
-        f"Target label: {products.target_label}",
-        f"Background: {products.background:.6g}",
-        (
-            "Median noise: "
-            f"{float(np.nanmedian(products.noise)):.6g}"
-        ),
-        (
-            "Target pixels: "
-            f"{int(np.count_nonzero(products.target_segment))}"
-        ),
-        (
-            "Contaminant pixels: "
-            f"{int(np.count_nonzero(products.contaminant_mask))}"
-        ),
+    im = _show_log(
+        axes[2, 1],
+        products.prepared_data,
+        "Background-subtracted",
+    )
+    fig.colorbar(
+        im,
+        ax=axes[2, 1],
+        fraction=0.046,
+    )
+
+    noise_values = np.asarray(
+        products.noise,
+        dtype=float,
+    )
+    finite_noise = noise_values[
+        np.isfinite(noise_values)
     ]
 
-    axes[1, 3].text(
+    if finite_noise.size > 0:
+        noise_min = float(np.min(finite_noise))
+        noise_max = float(np.max(finite_noise))
+
+        if noise_min == noise_max:
+            noise_min -= 0.5
+            noise_max += 0.5
+    else:
+        noise_min = 0.0
+        noise_max = 1.0
+
+    im = _show_linear(
+        axes[2, 2],
+        products.noise,
+        "Noise map",
+        cmap="viridis",
+        symmetric=False,
+        vmin=noise_min,
+        vmax=noise_max,
+    )
+    fig.colorbar(
+        im,
+        ax=axes[2, 2],
+        fraction=0.046,
+    )
+
+    axes[2, 3].axis("off")
+
+    geometry = products.geometry
+    plateau = products.plateau
+    sky_region = products.sky_region
+
+    summary_lines = [
+        "Preparation summary",
+        "",
+        f"Cutout mode: {products.cutout_mode}",
+        f"Final shape: {products.cutout.shape}",
+    ]
+
+    if products.original_image is not None:
+        original_pixels = int(
+            np.prod(products.original_image.shape)
+        )
+        cutout_pixels = int(
+            np.prod(products.cutout.shape)
+        )
+
+        reduction_factor = (
+            original_pixels
+            / cutout_pixels
+        )
+        retained_fraction = (
+            100.0
+            * cutout_pixels
+            / original_pixels
+        )
+
+        summary_lines.extend(
+            [
+                (
+                    "Original shape: "
+                    f"{products.original_image.shape}"
+                ),
+                (
+                    "Pixel reduction: "
+                    f"{reduction_factor:.2f}x"
+                ),
+                (
+                    "Pixels retained: "
+                    f"{retained_fraction:.1f}%"
+                ),
+            ]
+        )
+
+    if bounds is not None:
+        summary_lines.append(
+            "Bounds: "
+            f"x=[{bounds['xmin']}, {bounds['xmax']}) "
+            f"y=[{bounds['ymin']}, {bounds['ymax']})"
+        )
+
+    summary_lines.extend(
+        [
+            (
+                "Measured centre: "
+                f"({products.target_x}, "
+                f"{products.target_y})"
+            ),
+            f"Target label: {products.target_label}",
+            f"Background: {products.background:.6g}",
+            (
+                "Median noise: "
+                f"{float(np.nanmedian(products.noise)):.6g}"
+            ),
+            (
+                "Target pixels: "
+                f"{int(np.count_nonzero(products.target_segment))}"
+            ),
+            (
+                "Contaminant pixels: "
+                f"{int(np.count_nonzero(products.contaminant_mask))}"
+            ),
+        ]
+    )
+
+    if geometry is not None:
+        summary_lines.extend(
+            [
+                "",
+                "Final geometry",
+                f"x0: {geometry.x0:.3f}",
+                f"y0: {geometry.y0:.3f}",
+                f"q: {geometry.q:.4f}",
+                f"theta: {geometry.theta:.4f} rad",
+            ]
+        )
+
+    if plateau is not None:
+        summary_lines.extend(
+            [
+                "",
+                "Plateau",
+                f"radius: {plateau.radius:.3f} pix",
+                (
+                    "background level: "
+                    f"{plateau.background_level:.6g}"
+                ),
+                (
+                    "profile noise: "
+                    f"{plateau.noise_sigma:.6g}"
+                ),
+            ]
+        )
+
+    if sky_region is not None:
+        summary_lines.extend(
+            [
+                "",
+                "Sky region",
+                (
+                    "inner radius: "
+                    f"{sky_region.inner_radius:.3f} pix"
+                ),
+                (
+                    "outer radius: "
+                    f"{sky_region.outer_radius:.3f} pix"
+                ),
+                f"pixels: {sky_region.n_pixels}",
+                f"coverage: {sky_region.coverage:.3f}",
+            ]
+        )
+
+    axes[2, 3].text(
         0.02,
         0.98,
-        "\n".join(lines),
-        transform=axes[1, 3].transAxes,
+        "\n".join(summary_lines),
+        transform=axes[2, 3].transAxes,
         ha="left",
         va="top",
-        fontsize=22,
-        linespacing=1.4,
+        fontsize=18,
+        linespacing=1.25,
     )
 
     fig.subplots_adjust(
         left=0.04,
         right=0.98,
         bottom=0.05,
-        top=0.91,
-        wspace=0.35,
-        hspace=0.28,
+        top=0.93,
+        wspace=0.34,
+        hspace=0.32,
     )
 
     if output_path is not None:
@@ -763,3 +1190,5 @@ def plot_image_preparation_report(
         plt.show()
 
     return fig, axes
+
+

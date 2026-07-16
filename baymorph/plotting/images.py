@@ -487,7 +487,7 @@ def _robust_symmetric_limit(image, percentile=99.0, fallback=1.0):
 
 
 def _combined_mask_rgb(contaminant_mask=None, target_mask=None):
-    """Return RGB masks: contaminants lightgray, target gold."""
+    """Return RGB masks: contaminants lightgray, target black."""
     shape = None
 
     if contaminant_mask is not None:
@@ -695,7 +695,7 @@ def plot_pipeline_fit_maps(
                     xmax - xmin,
                     ymax - ymin,
                     fill=False,
-                    edgecolor="gold",
+                    edgecolor="black",
                     linewidth=3,
                 )
             )
