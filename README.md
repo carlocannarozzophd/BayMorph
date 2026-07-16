@@ -126,35 +126,41 @@ data:
 
 ## Installation
 
-### Install as a user
+BayMorph is designed to be installed inside a dedicated Conda environment.
 
-From a published package index:
+Conda creates and manages an isolated Python environment, while `pip`
+installs BayMorph and its Python dependencies inside that environment.
 
-```bash
-python -m pip install baymorph
-```
-
-Upgrade an existing installation with:
+### 1. Create a Conda environment
 
 ```bash
-python -m pip install --upgrade baymorph
+conda create -n baymorph -c conda-forge python=3.11 -y
+conda activate baymorph
 ```
 
-### Install from the repository
+### 2. Upgrade pip
 
 ```bash
-git clone https://github.com/carlocannarozzophd/BayMorph.git
-cd BayMorph
-python -m pip install .
+python -m pip install --upgrade pip
 ```
 
-### Development installation
+### 3. Install BayMorph
+
+Install the latest development version directly from GitHub:
 
 ```bash
-python -m pip install -e ".[dev]"
+python -m pip install \
+"git+https://github.com/carlocannarozzophd/BayMorph.git@main"
 ```
 
-BayMorph supports Python **3.10 and later**.
+### 4. Verify the installation
+
+```bash
+baymorph --version
+baymorph --help
+```
+
+BayMorph supports **Python 3.10 and later**.
 
 ## Command-line interface
 
@@ -193,6 +199,44 @@ baymorph examples BayMorphExamples --force
 ```
 
 The copied files live outside the installed package, so users can edit them freely and update BayMorph without losing their work.
+
+## Updating BayMorph
+
+To update BayMorph to the latest version available on GitHub:
+
+```bash
+conda activate baymorph
+
+python -m pip install \
+    --upgrade \
+    --force-reinstall \
+    "git+https://github.com/carlocannarozzophd/BayMorph.git@main"
+```
+
+If you already have an existing BayMorph project, update the packaged
+configuration files and notebooks with:
+
+```bash
+cd MyBayMorphProject
+
+baymorph examples . --force
+```
+
+This updates only:
+
+```text
+configs/
+notebooks/
+```
+
+while preserving your own:
+
+```text
+data/
+runs/
+```
+
+and any scientific results already produced.
 
 ## Python quick start
 
