@@ -30,6 +30,10 @@ from .sky import (
     SkyRegion,
     build_sky_region,
 )
+from .observation import (
+    Observation,
+    ObservationMetadata,
+)
 
 __all__ = [
     "BackgroundResult",
@@ -52,4 +56,6 @@ __all__ = [
     "subtract_background",
     "SkyRegion",
     "build_sky_region",
+    "Observation",
+    "ObservationMetadata",
 ]
