@@ -14,6 +14,7 @@ PSF construction, fitting, diagnostics, or configuration resolution.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -245,6 +246,35 @@ class Observation:
             image=image,
             metadata=ObservationMetadata.from_image(image),
         )
+
+    @classmethod
+    def from_fits(
+        cls,
+        filename: str | Path,
+    ) -> Observation:
+        """Load an astronomical observation from a FITS file.
+
+        The primary HDU is loaded through :meth:`ImageData.from_fits`.
+        Observational metadata are then extracted from the copied FITS header
+        and validated against the loaded image-array shape.
+
+        Missing optional metadata do not prevent the observation from being
+        created. Required image dimensions can always be recovered from the
+        loaded array.
+
+        Parameters
+        ----------
+        filename : str or pathlib.Path
+            Path to the FITS file.
+
+        Returns
+        -------
+        Observation
+            Observation containing the image and normalized metadata.
+        """
+        image = ImageData.from_fits(filename)
+
+        return cls.from_image(image)
 
 
 def _resolve_image_dimensions(

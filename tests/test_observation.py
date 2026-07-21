@@ -296,3 +296,82 @@ def test_observation_rejects_inconsistent_metadata() -> None:
             image=image,
             metadata=metadata,
         )
+
+
+def test_observation_from_fits_loads_image_and_metadata(
+    tmp_path,
+) -> None:
+    """Observation.from_fits should load data, header, and metadata."""
+    filename = tmp_path / "observation.fits"
+
+    data = np.arange(
+        60,
+        dtype=np.float32,
+    ).reshape(6, 10)
+
+    header = fits.Header()
+    header["CTYPE1"] = "RA---TAN"
+    header["CTYPE2"] = "DEC--TAN"
+    header["CUNIT1"] = "deg"
+    header["CUNIT2"] = "deg"
+    header["CRVAL1"] = 201.015
+    header["CRVAL2"] = -31.60394444
+    header["CRPIX1"] = 5.0
+    header["CRPIX2"] = 3.0
+    header["CD1_1"] = -5.833333151e-05
+    header["CD1_2"] = 0.0
+    header["CD2_1"] = 0.0
+    header["CD2_2"] = 5.833333151e-05
+    header["FILTER"] = "i_SDSS"
+    header["GAIN"] = 9.155573901
+
+    fits.PrimaryHDU(
+        data=data,
+        header=header,
+    ).writeto(filename)
+
+    observation = Observation.from_fits(filename)
+
+    assert observation.image.shape == (6, 10)
+    assert np.array_equal(observation.image.data, data)
+
+    assert observation.metadata.width == 10
+    assert observation.metadata.height == 6
+    assert observation.metadata.center_x == pytest.approx(4.5)
+    assert observation.metadata.center_y == pytest.approx(2.5)
+
+    assert observation.metadata.pixel_scale == pytest.approx(0.21)
+    assert observation.metadata.filter_name == "i_SDSS"
+    assert observation.metadata.gain == pytest.approx(9.155573901)
+
+
+def test_observation_from_fits_accepts_string_path(
+    tmp_path,
+) -> None:
+    """Observation.from_fits should accept ordinary string paths."""
+    filename = tmp_path / "string_path.fits"
+
+    data = np.ones(
+        (5, 7),
+        dtype=np.float32,
+    )
+
+    fits.PrimaryHDU(data=data).writeto(filename)
+
+    observation = Observation.from_fits(str(filename))
+
+    assert observation.image.shape == (5, 7)
+    assert observation.metadata.width == 7
+    assert observation.metadata.height == 5
+
+
+def test_observation_from_fits_missing_file_raises(
+    tmp_path,
+) -> None:
+    """Missing FITS files should preserve the loader's file error."""
+    filename = tmp_path / "missing.fits"
+
+    with pytest.raises(
+        FileNotFoundError,
+    ):
+        Observation.from_fits(filename)
