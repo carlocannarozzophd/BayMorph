@@ -1,76 +1,87 @@
 """Gaussian image likelihood."""
 
+from __future__ import annotations
+
 import numpy as np
 
+from baymorph.likelihood.base import ImageLikelihood
 
-def gaussian_log_likelihood(
-    data: np.ndarray,
-    model: np.ndarray,
-    noise: np.ndarray,
-    mask: np.ndarray | None = None,
-    include_normalization: bool = True,
-) -> float:
-    """Compute the Gaussian log-likelihood for image data.
+
+class GaussianImageLikelihood(ImageLikelihood):
+    """Gaussian likelihood for pixel-based image data.
+
+    The likelihood assumes statistically independent Gaussian uncertainties
+    in all evaluated pixels.
 
     Parameters
     ----------
-    data : ndarray
+    data : array-like
         Observed image.
-    model : ndarray
-        Model image evaluated on the same pixel grid as ``data``.
-    noise : ndarray
-        Per-pixel Gaussian standard deviation. All values must be strictly
-        positive.
-    mask : ndarray of bool, optional
-        Boolean mask identifying pixels to exclude from the likelihood
-        evaluation.
+    noise : array-like or float
+        Gaussian standard deviation. It may be a scalar or an array
+        broadcastable to the observed image shape. All evaluated values must
+        be strictly positive.
+    mask : array-like of bool, optional
+        Boolean mask identifying pixels excluded from likelihood evaluation.
     include_normalization : bool, default=True
-        If True, include the Gaussian normalization term in the
-        log-likelihood. If False, only the chi-squared term is evaluated.
-
-    Returns
-    -------
-    float
-        Gaussian log-likelihood.
-
-    Raises
-    ------
-    ValueError
-        If the input arrays do not have matching shapes, if any noise value is
-        non-positive, or if the mask has an incompatible shape.
+        If True, include the Gaussian normalization term. If False, evaluate
+        only the chi-squared contribution.
     """
-    data = np.asarray(data, dtype=float)
-    model = np.asarray(model, dtype=float)
-    noise = np.asarray(noise, dtype=float)
 
-    if data.shape != model.shape:
-        raise ValueError("Data and model must have the same shape.")
-
-    if data.shape != noise.shape:
-        raise ValueError("Data and noise must have the same shape.")
-
-    if np.any(noise <= 0):
-        raise ValueError("Noise values must be positive.")
-
-    residual = data - model
-
-    if mask is not None:
-        mask = np.asarray(mask, dtype=bool)
-
-        if mask.shape != data.shape:
-            raise ValueError("Mask must have the same shape as data.")
-
-        valid = ~mask
-        residual = residual[valid]
-        noise = noise[valid]
-
-    chi2 = np.sum((residual / noise) ** 2)
-
-    loglike = -0.5 * chi2
-
-    if include_normalization:
-        loglike -= 0.5 * np.sum(
-            np.log(2.0 * np.pi * noise**2)
+    def __init__(
+        self,
+        data: np.ndarray,
+        noise: np.ndarray | float,
+        mask: np.ndarray | None = None,
+        include_normalization: bool = True,
+    ) -> None:
+        super().__init__(
+            data=data,
+            mask=mask,
         )
 
-    return float(loglike)
+        self.noise_values = self.prepare_fixed_array(
+            noise,
+            name="Noise",
+            require_positive=True,
+        )
+        self.include_normalization = bool(
+            include_normalization
+        )
+
+        self._inverse_variance = 1.0 / self.noise_values**2
+
+        if self.include_normalization:
+            self._normalization = -0.5 * np.sum(
+                np.log(
+                    2.0 * np.pi * self.noise_values**2
+                )
+            )
+        else:
+            self._normalization = 0.0
+
+    def _log_likelihood(
+        self,
+        model_values: np.ndarray,
+    ) -> float:
+        """Evaluate the Gaussian image log-likelihood.
+
+        Parameters
+        ----------
+        model_values : ndarray
+            Model values in the unmasked pixels.
+
+        Returns
+        -------
+        float
+            Gaussian log-likelihood.
+        """
+        residual = self.data_values - model_values
+
+        chi2 = np.sum(
+            residual**2 * self._inverse_variance
+        )
+
+        return float(
+            -0.5 * chi2 + self._normalization
+        )
