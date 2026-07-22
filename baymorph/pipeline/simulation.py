@@ -6,21 +6,20 @@ import json
 from pathlib import Path
 from typing import Any
 
-from baymorph.simulation import (
-    SyntheticObservation,
-    make_observation_from_config,
-)
-
-from .config import (
+from baymorph.pipeline.config import (
     load_resolved_config,
     resolve_config,
 )
-from .outputs import (
+from baymorph.pipeline.outputs import (
     make_output_tree,
     save_resolved_config,
 )
-from .psf_construction import (
+from baymorph.pipeline.psf_construction import (
     save_simulated_psf_products,
+)
+from baymorph.simulation import (
+    SyntheticObservation,
+    make_observation_from_config,
 )
 
 

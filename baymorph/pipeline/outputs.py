@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from .config import resolve_config
+from baymorph.pipeline.config import resolve_config
 
 
 def object_output_dir(config: dict[str, Any]) -> Path:

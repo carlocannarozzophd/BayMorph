@@ -12,26 +12,25 @@ from baymorph.analysis import (
     radial_bins,
     radial_profile_from_image,
 )
-from baymorph.plotting.radial import plot_radial_profile_diagnostics
-from baymorph.simulation.psf import GaussianPSF
-
-from .config import (
+from baymorph.pipeline.config import (
     load_resolved_config,
     resolve_config,
 )
-from .image_preparation import (
+from baymorph.pipeline.image_preparation import (
     load_image_preparation_products,
 )
-from .outputs import (
+from baymorph.pipeline.outputs import (
     pipeline_paths,
 )
-from .psf_construction import (
+from baymorph.pipeline.psf_construction import (
     load_empirical_psf,
 )
-from .real_fit import (
+from baymorph.pipeline.real_fit import (
     _diagnostic_title,
     _make_model_factory,
 )
+from baymorph.plotting.radial import plot_radial_profile_diagnostics
+from baymorph.simulation.psf import GaussianPSF
 
 
 def _load_psf_from_config(config):

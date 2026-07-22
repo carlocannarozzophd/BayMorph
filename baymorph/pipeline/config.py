@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
+import math
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
-import math
-
-from baymorph.core.observation import Observation
 
 import yaml
 
+from baymorph.core.observation import Observation
 
 REQUIRED_TOP_LEVEL_KEYS = ("object", "data", "outputs")
 

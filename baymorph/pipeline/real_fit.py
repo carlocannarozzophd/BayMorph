@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 
+from baymorph.core.observation import Observation
 from baymorph.fitting import DynestyFitter
 from baymorph.fitting.factories import (
     make_double_sersic_psf_sky_model,
@@ -15,19 +16,21 @@ from baymorph.fitting.factories import (
 )
 from baymorph.fitting.parameters import Parameter, ParameterSet
 from baymorph.models import get_model
-from baymorph.results import RealFitProducts
-from baymorph.simulation.psf import GaussianPSF
-
-from .config import (
+from baymorph.pipeline.config import (
     DEFAULT_CONFIG,
     load_resolved_config,
     resolve_config,
 )
-from .image_preparation import load_image_preparation_products
-from .outputs import make_output_tree, pipeline_paths, save_resolved_config
-from .psf_construction import load_empirical_psf
-from baymorph.core.observation import Observation
-from .observation_metadata import observation_metadata_dict
+from baymorph.pipeline.image_preparation import load_image_preparation_products
+from baymorph.pipeline.observation_metadata import observation_metadata_dict
+from baymorph.pipeline.outputs import (
+    make_output_tree,
+    pipeline_paths,
+    save_resolved_config,
+)
+from baymorph.pipeline.psf_construction import load_empirical_psf
+from baymorph.results import RealFitProducts
+from baymorph.simulation.psf import GaussianPSF
 
 
 def run_real_fit_from_config(

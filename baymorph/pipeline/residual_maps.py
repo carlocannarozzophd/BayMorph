@@ -6,29 +6,26 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from baymorph.plotting.images import (
-    plot_pipeline_fit_maps,
-)
-
-from baymorph.simulation.psf import GaussianPSF
-
-from .config import (
+from baymorph.pipeline.config import (
     load_resolved_config,
     resolve_config,
 )
-from .image_preparation import (
+from baymorph.pipeline.image_preparation import (
     load_image_preparation_products,
 )
-from .outputs import (
+from baymorph.pipeline.outputs import (
     pipeline_paths,
 )
-from .real_fit import (
-    _diagnostic_title,
-)
-
-from .psf_construction import (
+from baymorph.pipeline.psf_construction import (
     load_empirical_psf,
 )
+from baymorph.pipeline.real_fit import (
+    _diagnostic_title,
+)
+from baymorph.plotting.images import (
+    plot_pipeline_fit_maps,
+)
+from baymorph.simulation.psf import GaussianPSF
 
 
 def _psf_to_image(psf, config=None):

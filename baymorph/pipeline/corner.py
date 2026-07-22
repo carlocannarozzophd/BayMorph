@@ -6,13 +6,12 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from baymorph.pipeline.outputs import pipeline_paths
-from baymorph.plotting import corner_plot
-
-from .config import (
+from baymorph.pipeline.config import (
     load_resolved_config,
     resolve_config,
 )
+from baymorph.pipeline.outputs import pipeline_paths
+from baymorph.plotting import corner_plot
 
 
 def _posterior_samples(posterior):

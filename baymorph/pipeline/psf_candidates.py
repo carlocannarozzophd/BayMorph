@@ -10,10 +10,9 @@ from typing import Any
 import numpy as np
 
 from baymorph.core.image import ImageData
+from baymorph.pipeline.config import load_resolved_config
 from baymorph.pipeline.image_preparation import prepare_real_fits_image
-
-from .config import load_resolved_config
-from .outputs import make_output_tree, pipeline_paths
+from baymorph.pipeline.outputs import make_output_tree, pipeline_paths
 
 
 @dataclass

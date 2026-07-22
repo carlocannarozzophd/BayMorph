@@ -5,18 +5,18 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .config import (
+from baymorph.pipeline.config import (
     load_resolved_config,
     resolve_config,
 )
-from .image_preparation import prepare_real_image_from_config
-from .outputs import (
+from baymorph.pipeline.image_preparation import prepare_real_image_from_config
+from baymorph.pipeline.outputs import (
     make_output_tree,
     save_resolved_config,
 )
-from .psf_candidates import run_psf_candidate_selection_from_config
-from .psf_construction import run_psf_construction_from_config
-from .real_fit import run_real_fit_from_config
+from baymorph.pipeline.psf_candidates import run_psf_candidate_selection_from_config
+from baymorph.pipeline.psf_construction import run_psf_construction_from_config
+from baymorph.pipeline.real_fit import run_real_fit_from_config
 
 
 def _coerce_config(

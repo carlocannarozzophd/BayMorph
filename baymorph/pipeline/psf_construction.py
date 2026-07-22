@@ -11,12 +11,10 @@ import numpy as np
 from astropy.io import fits
 
 from baymorph.core.observation import Observation
-
-from .config import load_resolved_config
-from .outputs import make_output_tree, pipeline_paths
-from .psf_candidates import load_psf_candidates
-from .observation_metadata import observation_metadata_dict
-
+from baymorph.pipeline.config import load_resolved_config
+from baymorph.pipeline.observation_metadata import observation_metadata_dict
+from baymorph.pipeline.outputs import make_output_tree, pipeline_paths
+from baymorph.pipeline.psf_candidates import load_psf_candidates
 from baymorph.plotting.style import (
     set_plot_style,
     style_axes,

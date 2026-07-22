@@ -12,8 +12,8 @@ from baymorph.core.sky import (
     compute_elliptical_radial_profile,
     detect_profile_plateau,
 )
+from baymorph.pipeline.cutout import CutoutDefinition
 
-from .cutout import CutoutDefinition
 
 @dataclass(slots=True)
 class TargetGeometry:
