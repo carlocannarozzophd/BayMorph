@@ -17,7 +17,7 @@ dependencies = [
     "numpy",
     "scipy",
     "astropy",
-    "photutils",
+    "photutils>=3.0",
     "matplotlib",
     "pyyaml",
     "dynesty",
