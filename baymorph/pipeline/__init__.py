@@ -78,6 +78,9 @@ from .simulation import (
     run_simulation_from_config,
     save_simulation_products,
 )
+from .observation_metadata import (
+    observation_metadata_dict,
+)
 
 __all__ = [
     "CutoutDefinition",
@@ -139,5 +142,6 @@ __all__ = [
     "validate_config",
     "run_simulation_from_config",
     "save_simulation_products",
-    "resolve_runtime_config"
+    "resolve_runtime_config",
+    "observation_metadata_dict",
 ]

@@ -113,6 +113,7 @@ from .pipeline import (
     run_simulation_from_config,
     save_simulation_products,
     resolve_runtime_config,
+    observation_metadata_dict,
 )
 from .plotting import (
     corner_plot,
@@ -291,5 +292,6 @@ __all__ = [
     "detect_profile_plateau",
     "SkyRegion",
     "build_sky_region",
-    "resolve_runtime_config"
+    "resolve_runtime_config",
+    "observation_metadata_dict",
 ]
