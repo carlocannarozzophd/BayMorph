@@ -6,7 +6,7 @@
 
 <p align="center">
   <img alt="Version" src="https://img.shields.io/badge/version-v0.2.0-blue">
-  <img alt="Python" src="https://img.shields.io/badge/python-%E2%89%A53.10-green">
+  <img alt="Python" src="https://img.shields.io/badge/python-%E2%89%A53.11-green">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-active%20development-orange">
   <a href="https://github.com/carlocannarozzophd/BayMorph/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/carlocannarozzophd/BayMorph/actions/workflows/ci.yml/badge.svg"></a>
