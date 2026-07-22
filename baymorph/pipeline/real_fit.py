@@ -26,6 +26,8 @@ from .config import (
 from .image_preparation import load_image_preparation_products
 from .outputs import make_output_tree, pipeline_paths, save_resolved_config
 from .psf_construction import load_empirical_psf
+from baymorph.core.observation import Observation
+from .observation_metadata import observation_metadata_dict
 
 
 def run_real_fit_from_config(
@@ -51,6 +53,13 @@ def run_real_fit_from_config(
 
     except FileNotFoundError:
         return resolved
+
+    try:
+        observation = Observation.from_fits(
+            resolved["data"]["image_path"]
+        )
+    except FileNotFoundError:
+        observation = None
 
     sampler_cfg = resolved["fit"]["sampler"]
 
@@ -119,6 +128,7 @@ def run_real_fit_from_config(
             resolved,
             model_name,
             products,
+            observation=observation,
         )
 
         all_products[model_name] = products
@@ -142,6 +152,8 @@ def save_real_fit_products(
     config: dict[str, Any],
     model_name: str,
     products: RealFitProducts,
+    *,
+    observation: Observation | None = None,
 ) -> None:
     """Save real-galaxy fit products to disk."""
     paths = pipeline_paths(config)["fits"][model_name]
@@ -168,6 +180,11 @@ def save_real_fit_products(
     sampler_cfg = config["fit"]["sampler"]
 
     summary = {
+        "observation": (
+            observation_metadata_dict(observation)
+            if observation is not None
+            else None
+        ),
         "chi2": float(products.chi2),
         "ndof": int(products.ndof),
         "reduced_chi2": float(products.reduced_chi2),
