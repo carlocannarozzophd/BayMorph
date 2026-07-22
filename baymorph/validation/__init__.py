@@ -1,6 +1,10 @@
 """Scientific validation infrastructure for BayMorph."""
 
 from baymorph.validation.benchmark import BenchmarkResult, benchmark_call
+from baymorph.validation.experiment import (
+    RecoveryExperiment,
+    RecoveryFit,
+)
 from baymorph.validation.metrics import (
     bias,
     coverage_fraction,
@@ -18,6 +22,8 @@ __all__ = [
     "BenchmarkResult",
     "GroundTruth",
     "ParameterRecovery",
+    "RecoveryExperiment",
+    "RecoveryFit",
     "RecoveryResult",
     "SimulationCase",
     "SimulationGrid",
