@@ -331,6 +331,14 @@ def resolve_runtime_config(
             "y": observation.metadata.center_y,
         }
 
+    pixel_scale = resolved["data"].get("pixel_scale")
+
+    if pixel_scale is None or pixel_scale == "auto":
+        metadata_pixel_scale = observation.metadata.pixel_scale
+
+        if metadata_pixel_scale is not None:
+            resolved["data"]["pixel_scale"] = metadata_pixel_scale
+
     return resolved
 
 

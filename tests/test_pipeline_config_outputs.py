@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import yaml
+from astropy.io import fits
 
 from baymorph import (
     load_resolved_config,
@@ -300,3 +301,104 @@ def test_resolve_runtime_config_resolves_center_target_position():
     assert config["data"]["target_position"] == "center"
 
 
+def test_resolve_runtime_config_resolves_auto_pixel_scale():
+    header = fits.Header()
+    header["CTYPE1"] = "RA---TAN"
+    header["CTYPE2"] = "DEC--TAN"
+    header["CRPIX1"] = 16.0
+    header["CRPIX2"] = 11.0
+    header["CRVAL1"] = 150.0
+    header["CRVAL2"] = 2.0
+    header["CDELT1"] = -0.21 / 3600.0
+    header["CDELT2"] = 0.21 / 3600.0
+
+    image = ImageData(
+        data=np.zeros((21, 31), dtype=float),
+        header=header,
+    )
+    observation = Observation.from_image(image)
+
+    config = {
+        "data": {
+            "pixel_scale": "auto",
+        },
+    }
+
+    resolved = resolve_runtime_config(
+        config,
+        observation,
+    )
+
+    assert resolved["data"]["pixel_scale"] == pytest.approx(0.21)
+    assert config["data"]["pixel_scale"] == "auto"
+
+
+def test_resolve_runtime_config_resolves_missing_pixel_scale():
+    header = fits.Header()
+    header["CTYPE1"] = "RA---TAN"
+    header["CTYPE2"] = "DEC--TAN"
+    header["CRPIX1"] = 16.0
+    header["CRPIX2"] = 11.0
+    header["CRVAL1"] = 150.0
+    header["CRVAL2"] = 2.0
+    header["CDELT1"] = -0.21 / 3600.0
+    header["CDELT2"] = 0.21 / 3600.0
+
+    image = ImageData(
+        data=np.zeros((21, 31), dtype=float),
+        header=header,
+    )
+    observation = Observation.from_image(image)
+
+    config = {
+        "data": {
+            "pixel_scale": None,
+        },
+    }
+
+    resolved = resolve_runtime_config(
+        config,
+        observation,
+    )
+
+    assert resolved["data"]["pixel_scale"] == pytest.approx(0.21)
+
+
+def test_resolve_runtime_config_preserves_explicit_pixel_scale():
+    image = ImageData(
+        data=np.zeros((21, 31), dtype=float),
+    )
+    observation = Observation.from_image(image)
+
+    config = {
+        "data": {
+            "pixel_scale": 0.4,
+        },
+    }
+
+    resolved = resolve_runtime_config(
+        config,
+        observation,
+    )
+
+    assert resolved["data"]["pixel_scale"] == 0.4
+
+
+def test_resolve_runtime_config_keeps_auto_without_metadata_pixel_scale():
+    image = ImageData(
+        data=np.zeros((21, 31), dtype=float),
+    )
+    observation = Observation.from_image(image)
+
+    config = {
+        "data": {
+            "pixel_scale": "auto",
+        },
+    }
+
+    resolved = resolve_runtime_config(
+        config,
+        observation,
+    )
+
+    assert resolved["data"]["pixel_scale"] == "auto"
