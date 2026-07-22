@@ -1,6 +1,6 @@
 """Likelihood functions for BayMorph."""
 
-from .gaussian import (
+from baymorph.likelihood.gaussian import (
     gaussian_log_likelihood,
 )
 

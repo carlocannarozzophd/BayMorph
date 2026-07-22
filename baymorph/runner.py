@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .pipeline import (
+from baymorph.pipeline import (
     run_image_preparation,
     run_psf_candidate_selection,
     run_psf_construction,

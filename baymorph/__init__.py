@@ -1,16 +1,23 @@
 """Top-level public API for BayMorph."""
 
-from .analysis import (
+from baymorph.analysis import (
     compute_posterior_profile_bands,
     radial_profile_from_image,
 )
-from .core import (
+from baymorph.core import (
     BackgroundResult,
     DetectionResult,
     ImageData,
     Observation,
     ObservationMetadata,
+    PlateauResult,
+    RadialProfile,
+    SkyRegion,
+    build_elliptical_radius_map,
+    build_sky_region,
+    compute_elliptical_radial_profile,
     connected_source_mask,
+    detect_profile_plateau,
     detect_sources_mask,
     detect_sources_segmentation,
     estimate_background_photutils,
@@ -19,15 +26,8 @@ from .core import (
     make_constant_noise_map,
     star_halo_mask,
     subtract_background,
-    build_elliptical_radius_map,
-    PlateauResult,
-    RadialProfile,
-    compute_elliptical_radial_profile,
-    detect_profile_plateau,
-    SkyRegion,
-    build_sky_region,
 )
-from .fitting import (
+from baymorph.fitting import (
     DynestyFitter,
     DynestyFluxFitter,
     DynestyFluxReFitter,
@@ -44,19 +44,19 @@ from .fitting import (
     make_double_sersic_psf_sky_model,
     make_single_sersic_psf_sky_model,
 )
-from .interactive import (
+from baymorph.interactive import (
     MaskActionEditor,
 )
-from .likelihood import (
+from baymorph.likelihood import (
     gaussian_log_likelihood,
 )
-from .models import (
+from baymorph.models import (
     CompositeModel,
     ConvolvedModel,
     DoubleSersicModel,
     SersicModel,
 )
-from .pipeline import (
+from baymorph.pipeline import (
     CutoutDefinition,
     ImagePreparationProducts,
     PSFCandidate,
@@ -82,6 +82,7 @@ from .pipeline import (
     make_target_cutout,
     normalize_psf,
     object_output_dir,
+    observation_metadata_dict,
     pipeline_paths,
     prepare_real_fits_image,
     prepare_real_image_from_config,
@@ -90,6 +91,7 @@ from .pipeline import (
     resolve_config,
     resolve_cutout,
     resolve_fixed_cutout,
+    resolve_runtime_config,
     run_image_preparation,
     run_psf_candidate_selection,
     run_psf_candidate_selection_from_config,
@@ -97,25 +99,23 @@ from .pipeline import (
     run_psf_construction_from_config,
     run_real_fit,
     run_real_fit_from_config,
+    run_simulation_from_config,
     save_empirical_psf,
     save_empirical_psf_metadata,
     save_image_preparation_products,
     save_psf_candidates,
     save_real_fit_products,
     save_resolved_config,
+    save_simulated_psf_products,
+    save_simulation_products,
     select_psf_candidates_from_rows,
     select_segment_near_position,
     source_catalog_to_candidate_rows,
     stack_psf_cutouts,
     subtract_outer_background,
     validate_config,
-    save_simulated_psf_products,
-    run_simulation_from_config,
-    save_simulation_products,
-    resolve_runtime_config,
-    observation_metadata_dict,
 )
-from .plotting import (
+from baymorph.plotting import (
     corner_plot,
     erf_sigma_to_percentiles,
     finalize_figure,
@@ -132,14 +132,14 @@ from .plotting import (
     show_log_image,
     style_axes,
 )
-from .results import (
+from baymorph.results import (
     PosteriorResult,
     RealFitProducts,
 )
-from .runner import (
+from baymorph.runner import (
     BayMorphRunner,
 )
-from .simulation import (
+from baymorph.simulation import (
     EmpiricalPSF,
     GaussianPSF,
     SyntheticObservation,
@@ -150,7 +150,7 @@ from .simulation import (
     make_observation,
     make_observation_from_config,
 )
-from .stats import (
+from baymorph.stats import (
     dynesty_weights,
     posterior_summary,
     robust_mad,
