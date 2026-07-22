@@ -6,15 +6,15 @@ from pathlib import Path
 import numpy as np
 from astropy.io import fits
 
-from .noise import (
+from baymorph.simulation.noise import (
     add_gaussian_noise,
     add_poisson_noise,
 )
-from .psf import (
+from baymorph.simulation.psf import (
     GaussianPSF,
     convolve_with_psf,
 )
-from .sersic import SyntheticSersic
+from baymorph.simulation.sersic import SyntheticSersic
 
 
 @dataclass

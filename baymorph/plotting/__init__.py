@@ -1,29 +1,29 @@
 """Plotting utilities for BayMorph."""
 
-from .corner import (
+from baymorph.plotting.corner import (
     corner_plot,
     erf_sigma_to_percentiles,
 )
-from .images import (
+from baymorph.plotting.images import (
     plot_fit_summary,
     plot_log_data_model_residual,
     plot_log_image,
     show_log_image,
 )
-from .posterior import (
+from baymorph.plotting.posterior import (
     plot_1d_posterior,
     plot_2d_samples,
 )
-from .radial import (
+from baymorph.plotting.radial import (
     plot_radial_profile_diagnostics,
 )
-from .report import (
+from baymorph.plotting.report import (
     plot_mock_fit_report,
 )
-from .residual import (
+from baymorph.plotting.residual import (
     plot_data_model_residual,
 )
-from .style import (
+from baymorph.plotting.style import (
     finalize_figure,
     make_plot,
     set_plot_style,

@@ -1,13 +1,13 @@
 """Generic Dynesty fitter."""
 
-from multiprocessing import Pool
 import sys
+from multiprocessing import Pool
 
 import dynesty
 import numpy as np
 
 try:
-    from IPython.display import DisplayHandle, HTML
+    from IPython.display import HTML, DisplayHandle
 except ImportError:
     DisplayHandle = None
     HTML = None

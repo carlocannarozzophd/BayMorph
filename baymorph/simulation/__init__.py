@@ -1,20 +1,20 @@
 """Simulation tools for BayMorph."""
 
-from .noise import (
+from baymorph.simulation.noise import (
     add_gaussian_noise,
     add_poisson_noise,
 )
-from .observation import (
+from baymorph.simulation.observation import (
     SyntheticObservation,
     make_observation,
     make_observation_from_config,
 )
-from .psf import (
+from baymorph.simulation.psf import (
     EmpiricalPSF,
     GaussianPSF,
     convolve_with_psf,
 )
-from .sersic import SyntheticSersic
+from baymorph.simulation.sersic import SyntheticSersic
 
 __all__ = [
     "SyntheticSersic",

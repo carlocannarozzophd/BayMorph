@@ -7,7 +7,7 @@ import numpy as np
 from matplotlib.colors import BoundaryNorm, ListedColormap, LogNorm
 from matplotlib.patches import Patch, Rectangle
 
-from .images import BAYMORPH_IMAGE_CMAP, _log_limits
+from baymorph.plotting.images import BAYMORPH_IMAGE_CMAP, _log_limits
 
 
 def _style_axes(

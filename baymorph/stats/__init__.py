@@ -1,10 +1,10 @@
 """Statistical utilities for BayMorph."""
 
-from .robust import (
+from baymorph.stats.robust import (
     robust_mad,
     robust_rms,
 )
-from .weighted import (
+from baymorph.stats.weighted import (
     dynesty_weights,
     posterior_summary,
     weighted_quantile,

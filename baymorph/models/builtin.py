@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from .definition import ModelDefinition
-from .labels import parameter_labels, parameter_names
-from .registry import register_model
-
+from baymorph.models.definition import ModelDefinition
+from baymorph.models.labels import parameter_labels, parameter_names
+from baymorph.models.registry import register_model
 
 _BUILTIN_FACTORY_NAMES = {
     "single_sersic": "SingleSersicModelFactory",

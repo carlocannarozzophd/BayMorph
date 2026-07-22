@@ -1,31 +1,31 @@
 """Fitting utilities for BayMorph."""
 
-from .dynesty_flux import (
+from baymorph.fitting.dynesty_flux import (
     DynestyFluxFitter,
     DynestyFluxResult,
 )
-from .dynesty_flux_re import (
+from baymorph.fitting.dynesty_flux_re import (
     DynestyFluxReFitter,
     DynestyFluxReResult,
 )
-from .dynesty_flux_re_n import (
+from baymorph.fitting.dynesty_flux_re_n import (
     DynestyFluxReNFitter,
     DynestyFluxReNResult,
 )
-from .dynesty_generic import (
+from baymorph.fitting.dynesty_generic import (
     DynestyFitter,
     DynestyResult,
 )
-from .factories import (
+from baymorph.fitting.factories import (
     SkyModelWrapper,
     make_double_sersic_psf_sky_model,
     make_single_sersic_psf_sky_model,
 )
-from .grid import (
+from baymorph.fitting.grid import (
     GridSearchResult,
     grid_search_1d,
 )
-from .parameters import (
+from baymorph.fitting.parameters import (
     Parameter,
     ParameterSet,
 )

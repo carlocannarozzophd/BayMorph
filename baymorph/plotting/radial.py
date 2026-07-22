@@ -5,7 +5,7 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 
-from .style import style_axes
+from baymorph.plotting.style import style_axes
 
 
 def _safe_log10(values):

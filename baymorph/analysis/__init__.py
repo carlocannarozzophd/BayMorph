@@ -1,11 +1,11 @@
 """Analysis utilities for BayMorph."""
 
-from .posterior_profiles import (
+from baymorph.analysis.posterior_profiles import (
     PosteriorProfileResult,
     ProfileBand,
     compute_posterior_profile_bands,
 )
-from .radial_profiles import (
+from baymorph.analysis.radial_profiles import (
     radial_bins,
     radial_profile_from_image,
 )

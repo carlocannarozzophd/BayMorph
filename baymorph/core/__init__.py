@@ -1,38 +1,38 @@
 """Core data structures and utilities for BayMorph."""
 
-from .background import (
+from baymorph.core.background import (
     BackgroundResult,
     estimate_background_photutils,
     estimate_background_sigma,
     estimate_noise,
     subtract_background,
 )
-from .detection import (
+from baymorph.core.detection import (
     DetectionResult,
     detect_sources_mask,
     detect_sources_segmentation,
 )
-from .image import ImageData
-from .mask import (
+from baymorph.core.image import ImageData
+from baymorph.core.mask import (
     connected_source_mask,
     star_halo_mask,
 )
-from .noise import (
+from baymorph.core.noise import (
     estimate_noise_map,
     make_constant_noise_map,
 )
-from .sky import (
-    PlateauResult,
-    RadialProfile,
-    build_elliptical_radius_map,
-    compute_elliptical_radial_profile,
-    detect_profile_plateau,
-    SkyRegion,
-    build_sky_region,
-)
-from .observation import (
+from baymorph.core.observation import (
     Observation,
     ObservationMetadata,
+)
+from baymorph.core.sky import (
+    PlateauResult,
+    RadialProfile,
+    SkyRegion,
+    build_elliptical_radius_map,
+    build_sky_region,
+    compute_elliptical_radial_profile,
+    detect_profile_plateau,
 )
 
 __all__ = [

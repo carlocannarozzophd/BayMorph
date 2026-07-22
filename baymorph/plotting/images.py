@@ -5,7 +5,7 @@ import numpy as np
 from matplotlib.colors import LogNorm
 from matplotlib.patches import Rectangle
 
-from .style import set_plot_style, style_axes
+from baymorph.plotting.style import set_plot_style, style_axes
 
 BAYMORPH_IMAGE_CMAP = "gist_stern"
 

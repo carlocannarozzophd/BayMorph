@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from .style import finalize_figure, make_plot
+from baymorph.plotting.style import finalize_figure, make_plot
 
 
 def plot_data_model_residual(

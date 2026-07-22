@@ -22,7 +22,7 @@ from astropy.io import fits
 from astropy.wcs import WCS
 from astropy.wcs.utils import proj_plane_pixel_scales
 
-from .image import ImageData
+from baymorph.core.image import ImageData
 
 
 @dataclass(frozen=True)

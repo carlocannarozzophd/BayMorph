@@ -12,6 +12,7 @@ from scipy.stats import gaussian_kde
 
 from baymorph.models.labels import latex_parameter_label
 
+
 def erf_sigma_to_percentiles(
     sigma,
 ):

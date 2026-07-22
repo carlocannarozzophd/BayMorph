@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from .definition import ModelDefinition
-
+from baymorph.models.definition import ModelDefinition
 
 _MODEL_REGISTRY: dict[str, ModelDefinition] = {}
 
