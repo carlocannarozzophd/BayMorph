@@ -10,11 +10,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy.io import fits
 
-from baymorph.core.image import ImageData
+from baymorph.core.observation import Observation
 
 from .config import load_resolved_config
 from .outputs import make_output_tree, pipeline_paths
 from .psf_candidates import load_psf_candidates
+from .observation_metadata import observation_metadata_dict
 
 from baymorph.plotting.style import (
     set_plot_style,
@@ -564,9 +565,10 @@ def run_psf_construction_from_config(
     else:
         resolved = config
 
-    image = ImageData.from_fits(
+    observation = Observation.from_fits(
         resolved["data"]["image_path"]
     )
+    image = observation.image
 
     candidates = load_psf_candidates(resolved)
 
@@ -623,6 +625,9 @@ def run_psf_construction_from_config(
     save_empirical_psf_metadata(
         resolved,
         {
+            "observation": observation_metadata_dict(
+                observation
+            ),
             "n_candidates_input": len(candidates),
             "n_candidates_used": len(cutouts),
             "psf_shape": list(psf.shape),
