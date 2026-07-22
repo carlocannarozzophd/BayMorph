@@ -8,9 +8,9 @@ version = "0.2.0"
 description = "Bayesian morphological modelling of astronomical images."
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
+license = {file = "LICENSE"}
 authors = [
-    {name = "BayMorph developers"}
+    {name = "Carlo Cannarozzo"}
 ]
 dependencies = [
     "numpy",
@@ -22,6 +22,32 @@ dependencies = [
     "dynesty",
 ]
 
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+keywords = [
+    "astronomy",
+    "galaxy morphology",
+    "Bayesian inference",
+    "nested sampling",
+    "Sersic",
+]
+
+[project.urls]
+Homepage = "https://github.com/carlocannarozzophd/BayMorph"
+Repository = "https://github.com/carlocannarozzophd/BayMorph"
+Documentation = "https://github.com/carlocannarozzophd/BayMorph/tree/main/docs"
+Issues = "https://github.com/carlocannarozzophd/BayMorph/issues"
+Changelog = "https://github.com/carlocannarozzophd/BayMorph/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
 dev = [
     "pytest",
@@ -29,6 +55,8 @@ dev = [
     "ipykernel",
     "black",
     "ruff",
+    "build",
+    "twine",
 ]
 
 [project.scripts]
