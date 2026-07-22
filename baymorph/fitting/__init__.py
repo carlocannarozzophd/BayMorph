@@ -31,19 +31,19 @@ from baymorph.fitting.parameters import (
 )
 
 __all__ = [
-    "GridSearchResult",
-    "grid_search_1d",
+    "DynestyFitter",
     "DynestyFluxFitter",
-    "DynestyFluxResult",
     "DynestyFluxReFitter",
-    "DynestyFluxReResult",
     "DynestyFluxReNFitter",
     "DynestyFluxReNResult",
-    "DynestyFitter",
+    "DynestyFluxReResult",
+    "DynestyFluxResult",
     "DynestyResult",
+    "GridSearchResult",
     "Parameter",
     "ParameterSet",
     "SkyModelWrapper",
-    "make_single_sersic_psf_sky_model",
+    "grid_search_1d",
     "make_double_sersic_psf_sky_model",
+    "make_single_sersic_psf_sky_model",
 ]

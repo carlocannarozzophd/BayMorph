@@ -17,13 +17,13 @@ from baymorph.simulation.psf import (
 from baymorph.simulation.sersic import SyntheticSersic
 
 __all__ = [
-    "SyntheticSersic",
-    "SyntheticObservation",
-    "GaussianPSF",
     "EmpiricalPSF",
+    "GaussianPSF",
+    "SyntheticObservation",
+    "SyntheticSersic",
+    "add_gaussian_noise",
+    "add_poisson_noise",
     "convolve_with_psf",
     "make_observation",
     "make_observation_from_config",
-    "add_gaussian_noise",
-    "add_poisson_noise",
 ]

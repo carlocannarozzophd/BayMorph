@@ -31,19 +31,19 @@ from baymorph.plotting.style import (
 )
 
 __all__ = [
-    "set_plot_style",
-    "style_axes",
-    "make_plot",
-    "finalize_figure",
     "corner_plot",
     "erf_sigma_to_percentiles",
+    "finalize_figure",
+    "make_plot",
     "plot_1d_posterior",
     "plot_2d_samples",
     "plot_data_model_residual",
-    "show_log_image",
-    "plot_log_data_model_residual",
     "plot_fit_summary",
+    "plot_log_data_model_residual",
     "plot_log_image",
     "plot_mock_fit_report",
     "plot_radial_profile_diagnostics",
+    "set_plot_style",
+    "show_log_image",
+    "style_axes",
 ]

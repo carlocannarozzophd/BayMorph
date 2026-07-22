@@ -11,11 +11,9 @@ from baymorph.analysis.radial_profiles import (
 )
 
 __all__ = [
-    "ProfileBand",
     "PosteriorProfileResult",
-    "radial_profile_from_image",
+    "ProfileBand",
     "compute_posterior_profile_bands",
     "radial_bins",
     "radial_profile_from_image",
-    "compute_posterior_profile_bands",
 ]
