@@ -314,30 +314,59 @@ def resolve_runtime_config(
     -------
     dict
         Runtime-resolved configuration dictionary.
-
-    Notes
-    -----
-    This function resolves configuration options that cannot be determined
-    from the YAML file alone because they require information contained in the
-    loaded observation.
     """
     resolved = deepcopy(config)
 
-    target = resolved["data"].get("target_position")
+    # ------------------------------------------------------------------
+    # Target geometry
+    # ------------------------------------------------------------------
 
-    if target == "center":
-        resolved["data"]["target_position"] = {
-            "x": observation.metadata.center_x,
-            "y": observation.metadata.center_y,
-        }
+    data_cfg = resolved.get("data")
 
-    pixel_scale = resolved["data"].get("pixel_scale")
+    if data_cfg is not None:
+        if data_cfg.get("target_position") == "center":
+            data_cfg["target_position"] = {
+                "x": observation.metadata.center_x,
+                "y": observation.metadata.center_y,
+            }
 
-    if pixel_scale is None or pixel_scale == "auto":
-        metadata_pixel_scale = observation.metadata.pixel_scale
+    # ------------------------------------------------------------------
+    # Image calibration
+    # ------------------------------------------------------------------
 
-        if metadata_pixel_scale is not None:
-            resolved["data"]["pixel_scale"] = metadata_pixel_scale
+    if data_cfg is not None:
+        pixel_scale = data_cfg.get("pixel_scale")
+
+        if pixel_scale in (None, "auto"):
+            metadata_pixel_scale = observation.metadata.pixel_scale
+
+            if metadata_pixel_scale is not None:
+                data_cfg["pixel_scale"] = metadata_pixel_scale
+
+    # ------------------------------------------------------------------
+    # PSF candidate selection
+    # ------------------------------------------------------------------
+
+    candidate_cfg = (
+        resolved
+        .get("psf", {})
+        .get("empirical", {})
+        .get("candidate_selection")
+    )
+
+    if (
+        candidate_cfg is not None
+        and candidate_cfg.get("max_peak") == "auto"
+    ):
+        saturation = observation.metadata.saturation
+
+        if saturation is not None:
+            candidate_cfg["max_peak"] = saturation
+        else:
+            candidate_cfg["max_peak"] = (
+                DEFAULT_CONFIG["psf"]["empirical"]
+                ["candidate_selection"]["max_peak"]
+            )
 
     return resolved
 

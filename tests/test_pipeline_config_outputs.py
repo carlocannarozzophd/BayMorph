@@ -402,3 +402,91 @@ def test_resolve_runtime_config_keeps_auto_without_metadata_pixel_scale():
     )
 
     assert resolved["data"]["pixel_scale"] == "auto"
+
+
+def test_resolve_runtime_config_resolves_auto_max_peak():
+    image = ImageData(
+        data=np.zeros((21, 31), dtype=float),
+        header=fits.Header({"SATLEVEL": 54321.0}),
+    )
+
+    observation = Observation.from_image(image)
+
+    config = {
+        "psf": {
+            "empirical": {
+                "candidate_selection": {
+                    "max_peak": "auto",
+                }
+            }
+        }
+    }
+
+    resolved = resolve_runtime_config(
+        config,
+        observation,
+    )
+
+    assert (
+        resolved["psf"]["empirical"]
+        ["candidate_selection"]["max_peak"]
+        == 54321.0
+    )
+
+
+def test_resolve_runtime_config_keeps_default_max_peak_without_metadata():
+    image = ImageData(
+        data=np.zeros((21, 31), dtype=float),
+    )
+
+    observation = Observation.from_image(image)
+
+    config = {
+        "psf": {
+            "empirical": {
+                "candidate_selection": {
+                    "max_peak": "auto",
+                }
+            }
+        }
+    }
+
+    resolved = resolve_runtime_config(
+        config,
+        observation,
+    )
+
+    assert (
+        resolved["psf"]["empirical"]
+        ["candidate_selection"]["max_peak"]
+        == 80000
+    )
+
+
+def test_resolve_runtime_config_preserves_explicit_max_peak():
+    image = ImageData(
+        data=np.zeros((21, 31), dtype=float),
+    )
+
+    observation = Observation.from_image(image)
+
+    config = {
+        "psf": {
+            "empirical": {
+                "candidate_selection": {
+                    "max_peak": 12000,
+                }
+            }
+        }
+    }
+
+    resolved = resolve_runtime_config(
+        config,
+        observation,
+    )
+
+    assert (
+        resolved["psf"]["empirical"]
+        ["candidate_selection"]["max_peak"]
+        == 12000
+    )
