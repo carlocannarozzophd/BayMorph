@@ -18,6 +18,7 @@ from baymorph.validation.report import summarize_recovery
 from baymorph.validation.simulation_grid import SimulationCase, SimulationGrid
 from baymorph.validation.truth import GroundTruth
 from baymorph.validation.baymorph_adapter import recovery_fit_from_baymorph
+from baymorph.validation.simulation import build_synthetic_observation
 
 __all__ = [
     "BenchmarkResult",
@@ -37,4 +38,5 @@ __all__ = [
     "scatter",
     "summarize_recovery",
     "recovery_fit_from_baymorph",
+    "build_synthetic_observation",
 ]
