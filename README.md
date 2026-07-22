@@ -361,6 +361,7 @@ Simulation and fitting therefore remain internally consistent. A future renderer
 | Document               | Purpose                          |
 | ---------------------- | -------------------------------- |
 | `README.md`            | Project overview and quick start |
+| `docs/API.md`          | API stability and compatibility policy |
 | `docs/ARCHITECTURE.md` | Software architecture            |
 | `docs/README.md`       | Documentation index              |
 | `docs/VALIDATION.md`   | Scientific validation            |
@@ -393,7 +394,7 @@ Until then, please cite the GitHub repository.
 
 Contributions, bug reports, and feature requests are welcome.
 
-Contribution guidelines will be provided in a future `CONTRIBUTING.md`.
+Contribution guidelines are available in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 

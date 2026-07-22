@@ -52,9 +52,9 @@ Describes the scientific and software validation strategy, including
 
 ---
 
-## API Guide *(future)*
+## API Guide
 
-**`API.md`**
+**[`API.md`](API.md)**
 
 Describes the public, advanced, and internal APIs.
 
@@ -129,6 +129,8 @@ baymorph init PROJECT_DIRECTORY
 ---
 
 # Development
+
+See [`../CONTRIBUTING.md`](../CONTRIBUTING.md) for the complete contribution guide.
 
 Contributors should run
 
