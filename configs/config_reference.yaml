@@ -1,6 +1,6 @@
 # BayMorph full configuration reference.
-# This file documents currently supported configurable fields.
-# Remove sections that are not needed for a specific analysis.
+# This file documents the currently supported configuration surface.
+# Remove optional sections that are not needed for a specific analysis.
 
 object:
   name: example_galaxy
@@ -15,8 +15,12 @@ data:
     x: 500
     y: 500
   cutout:
-    mode: fixed                  # currently supported: fixed
-    size: 200
+    mode: auto                   # auto or fixed
+    initial_factor: 4.0          # auto mode only
+    sky_margin: 20.0             # auto mode only, in pixels
+    min_size: 100                # auto mode only
+    max_size: null               # auto mode only; null means unconstrained
+    # size: 200                  # required instead when mode: fixed
 
 outputs:
   root: runs
@@ -45,17 +49,15 @@ simulation:
 
 # Image preparation first performs source detection. It then identifies the
 # target, estimates its elliptical geometry and radial profile, detects the
-# outer plateau, constructs a contaminant-clean sky region, and estimates a
-# constant background and MAD-based noise level from that region. Plateau and
-# sky-margin controls are currently internal defaults and are not yet exposed
-# as YAML options.
+# outer plateau, builds a contaminant-clean sky region, and estimates the
+# target-specific background and robust noise level from those sky pixels.
 preparation:
   background:
-    method: empirical            # preliminary mesh estimate for detection
+    method: empirical
     box_size: 30
     filter_size: 3
   noise:
-    method: empirical            # preliminary detection-stage noise estimate
+    method: empirical
   detection:
     n_sigma: 3.0
     n_pixels: 20
