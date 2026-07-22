@@ -33,13 +33,11 @@ from baymorph.core.sky import (
 from baymorph.pipeline.segmentation import (
     select_segment_near_position,
 )
-
 from .preparation_steps import (
     AutoCutoutResult,
     TargetGeometry,
     estimate_target_sky,
 )
-
 from .config import (
     load_resolved_config,
     resolve_runtime_config,
@@ -56,7 +54,7 @@ from .outputs import (
     save_resolved_config,
 )
 from baymorph.core.observation import Observation
-
+from .observation_metadata import observation_metadata_dict
 
 @dataclass
 class RealFITSPreparation:
@@ -601,7 +599,11 @@ def prepare_real_image_from_config(
     )
 
     if save:
-        save_image_preparation_products(resolved, products)
+        save_image_preparation_products(
+            resolved,
+            products,
+            observation=observation,
+        )
         save_resolved_config(resolved)
 
     return products
@@ -610,6 +612,8 @@ def prepare_real_image_from_config(
 def save_image_preparation_products(
     config: dict[str, Any],
     products: ImagePreparationProducts,
+    *,
+    observation: Observation | None = None,
 ) -> None:
     """Save image-preparation products and diagnostics to disk.
 
@@ -619,6 +623,8 @@ def save_image_preparation_products(
         Resolved BayMorph configuration.
     products : ImagePreparationProducts
         Image-preparation products to save.
+    observation : Observation, optional
+        Original observation providing normalized observational metadata.
 
     Notes
     -----
@@ -696,6 +702,11 @@ def save_image_preparation_products(
         np.save(paths["dir"] / "original_image.npy", products.original_image)
 
     metadata = {
+        "observation": (
+            observation_metadata_dict(observation)
+            if observation is not None
+            else None
+        ),
         "background": products.background,
         "target_x": products.target_x,
         "target_y": products.target_y,
