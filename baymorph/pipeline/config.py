@@ -6,6 +6,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from baymorph.core.observation import Observation
+
 import yaml
 
 
@@ -290,6 +292,43 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
         data_cfg["cutout"] = {
             "mode": "fixed",
             "size": data_cfg["cutout_size"],
+        }
+
+    return resolved
+
+
+def resolve_runtime_config(
+    config: dict[str, Any],
+    observation: Observation,
+) -> dict[str, Any]:
+    """Resolve configuration entries that require image metadata.
+
+    Parameters
+    ----------
+    config : dict
+        Previously resolved configuration dictionary.
+    observation : Observation
+        Loaded observation providing runtime metadata.
+
+    Returns
+    -------
+    dict
+        Runtime-resolved configuration dictionary.
+
+    Notes
+    -----
+    This function resolves configuration options that cannot be determined
+    from the YAML file alone because they require information contained in the
+    loaded observation.
+    """
+    resolved = deepcopy(config)
+
+    target = resolved["data"].get("target_position")
+
+    if target == "center":
+        resolved["data"]["target_position"] = {
+            "x": observation.metadata.center_x,
+            "y": observation.metadata.center_y,
         }
 
     return resolved

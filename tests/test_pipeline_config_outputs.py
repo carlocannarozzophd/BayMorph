@@ -1,10 +1,16 @@
+import numpy as np
 import pytest
 import yaml
 
-from baymorph import load_resolved_config, resolve_config
+from baymorph import (
+    load_resolved_config,
+    resolve_config,
+    resolve_runtime_config,
+)
 from baymorph import make_output_tree, save_resolved_config
 from baymorph import pipeline_paths
-
+from baymorph.core.image import ImageData
+from baymorph.core.observation import Observation
 
 def test_resolve_minimal_config():
     config = {
@@ -240,3 +246,57 @@ def test_resolve_config_preserves_psf_candidate_selection_overrides():
     assert candidate_cfg["sigma_factor"] == 5.0
     assert candidate_cfg["min_half_size"] == 10
     assert candidate_cfg["max_half_size"] == 50
+
+
+def test_resolve_runtime_config_preserves_numeric_target_position():
+    image = ImageData(
+        data=np.zeros((20, 30), dtype=float),
+    )
+    observation = Observation.from_image(image)
+
+    config = {
+        "data": {
+            "target_position": {
+                "x": 12.5,
+                "y": 8.0,
+            },
+        },
+    }
+
+    resolved = resolve_runtime_config(
+        config,
+        observation,
+    )
+
+    assert resolved["data"]["target_position"] == {
+        "x": 12.5,
+        "y": 8.0,
+    }
+    assert resolved is not config
+    assert resolved["data"] is not config["data"]
+
+
+def test_resolve_runtime_config_resolves_center_target_position():
+    image = ImageData(
+        data=np.zeros((21, 31), dtype=float),
+    )
+    observation = Observation.from_image(image)
+
+    config = {
+        "data": {
+            "target_position": "center",
+        },
+    }
+
+    resolved = resolve_runtime_config(
+        config,
+        observation,
+    )
+
+    assert resolved["data"]["target_position"] == {
+        "x": 15.0,
+        "y": 10.0,
+    }
+    assert config["data"]["target_position"] == "center"
+
+

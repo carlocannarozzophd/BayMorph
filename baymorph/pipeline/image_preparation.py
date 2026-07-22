@@ -20,7 +20,6 @@ from baymorph.core.detection import (
     DetectionResult,
     detect_sources_segmentation,
 )
-from baymorph.core.image import ImageData
 from baymorph.core.noise import (
     estimate_noise_map,
     make_constant_noise_map,
@@ -41,7 +40,10 @@ from .preparation_steps import (
     estimate_target_sky,
 )
 
-from .config import load_resolved_config
+from .config import (
+    load_resolved_config,
+    resolve_runtime_config,
+)
 from .cutout import (
     CutoutDefinition,
     resolve_cutout,
@@ -53,6 +55,7 @@ from .outputs import (
     pipeline_paths,
     save_resolved_config,
 )
+from baymorph.core.observation import Observation
 
 
 @dataclass
@@ -442,7 +445,16 @@ def prepare_real_image_from_config(
 
     make_output_tree(resolved)
 
-    image = ImageData.from_fits(resolved["data"]["image_path"])
+    observation = Observation.from_fits(
+        resolved["data"]["image_path"]
+    )
+
+    resolved = resolve_runtime_config(
+        resolved,
+        observation,
+    )
+
+    image = observation.image
 
     target_position = resolved["data"]["target_position"]
     if target_position is None:

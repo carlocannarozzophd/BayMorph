@@ -6,6 +6,7 @@ from .config import (
     load_resolved_config,
     resolve_config,
     validate_config,
+    resolve_runtime_config
 )
 from .corner import run_corner_diagnostics
 from .cutout import (
@@ -138,4 +139,5 @@ __all__ = [
     "validate_config",
     "run_simulation_from_config",
     "save_simulation_products",
+    "resolve_runtime_config"
 ]

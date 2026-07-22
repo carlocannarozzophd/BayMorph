@@ -112,6 +112,7 @@ from .pipeline import (
     save_simulated_psf_products,
     run_simulation_from_config,
     save_simulation_products,
+    resolve_runtime_config,
 )
 from .plotting import (
     corner_plot,
@@ -290,4 +291,5 @@ __all__ = [
     "detect_profile_plateau",
     "SkyRegion",
     "build_sky_region",
+    "resolve_runtime_config"
 ]
