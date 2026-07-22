@@ -10,7 +10,7 @@ import numpy as np
 
 from baymorph.core.observation import Observation
 from baymorph.fitting import DynestyFitter
-from baymorph.fitting.factories import (
+from baymorph.fitting.model_factories import (
     make_double_sersic_psf_sky_model,
     make_single_sersic_psf_sky_model,
 )
@@ -556,17 +556,16 @@ class SingleSersicModelFactory:
     ):
         """Create a single-Sérsic model instance."""
         return make_single_sersic_psf_sky_model(
-            flux,
-            re,
-            n,
-            q,
-            theta,
-            x0,
-            y0,
-            sky,
+            flux=flux,
+            re=re,
+            n=n,
+            q=q,
+            theta=theta,
+            x0=x0,
+            y0=y0,
+            sky=sky,
             psf=self.psf,
         )
-
 
 class DoubleSersicModelFactory:
     """Factory for PSF-convolved double-Sérsic plus sky models."""
@@ -579,40 +578,37 @@ class DoubleSersicModelFactory:
 
     def __call__(
         self,
-        *args,
-        **kwargs,
+        flux_bulge,
+        re_bulge,
+        n_bulge,
+        q_bulge,
+        theta_bulge,
+        flux_disk,
+        re_disk,
+        n_disk,
+        q_disk,
+        theta_disk,
+        x0,
+        y0,
+        sky,
     ):
         """Create a double-Sérsic model instance."""
-        if kwargs:
-            ordered = [
-                kwargs[name]
-                for name in (
-                    "flux_bulge",
-                    "re_bulge",
-                    "n_bulge",
-                    "q_bulge",
-                    "theta_bulge",
-                    "flux_disk",
-                    "re_disk",
-                    "n_disk",
-                    "q_disk",
-                    "theta_disk",
-                    "x0",
-                    "y0",
-                    "sky",
-                )
-            ]
-
-            return make_double_sersic_psf_sky_model(
-                *ordered,
-                psf=self.psf,
-            )
-
         return make_double_sersic_psf_sky_model(
-            *args,
+            flux_bulge=flux_bulge,
+            re_bulge=re_bulge,
+            n_bulge=n_bulge,
+            q_bulge=q_bulge,
+            theta_bulge=theta_bulge,
+            flux_disk=flux_disk,
+            re_disk=re_disk,
+            n_disk=n_disk,
+            q_disk=q_disk,
+            theta_disk=theta_disk,
+            x0=x0,
+            y0=y0,
+            sky=sky,
             psf=self.psf,
         )
-
 
 def _make_model_factory(
     model_name,
