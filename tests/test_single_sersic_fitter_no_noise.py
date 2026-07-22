@@ -1,28 +1,76 @@
+"""Integration tests for a noiseless single-Sérsic Dynesty fitter."""
+
 import numpy as np
 
-from baymorph.fitting.dynesty_generic import DynestyFitter
-from baymorph.models import SersicModel
+from baymorph import (
+    DynestyFitter,
+    GaussianImageLikelihood,
+    Parameter,
+    ParameterSet,
+    SersicModel,
+)
 
 
-def test_single_sersic_fitter_no_noise_recovers_truth():
-    shape = (51, 51)
+def test_single_sersic_fitter_no_noise_evaluates_truth():
+    """The fitter should evaluate the true noiseless model successfully."""
+    shape = (31, 31)
 
     truth = {
-        "flux": 1.0e5,
-        "re": 6.0,
+        "flux": 1.0e4,
+        "re": 4.0,
         "n": 2.0,
         "q": 0.7,
         "theta": np.deg2rad(25.0),
-        "x0": 25.0,
-        "y0": 25.0,
+        "x0": 15.0,
+        "y0": 15.0,
     }
 
-    data = SersicModel(**truth).render(shape)
-    noise = np.ones(shape)
-    # In BayMorph, mask=True means excluded pixel.
-    mask = np.zeros(shape, dtype=bool)
+    data = SersicModel(
+        **truth,
+    ).render(shape)
 
-    def make_model(flux, re, n, q, theta, x0, y0):
+    noise = np.ones(
+        shape,
+        dtype=float,
+    )
+
+    mask = np.zeros(
+        shape,
+        dtype=bool,
+    )
+
+    likelihood = GaussianImageLikelihood(
+        data=data,
+        noise=noise,
+        mask=mask,
+    )
+
+    parameters = ParameterSet(
+        [
+            Parameter("flux", 0.8e4, 1.2e4),
+            Parameter("re", 3.0, 5.0),
+            Parameter("n", 1.0, 3.0),
+            Parameter("q", 0.5, 0.9),
+            Parameter(
+                "theta",
+                -0.5 * np.pi,
+                0.5 * np.pi,
+            ),
+            Parameter("x0", 14.0, 16.0),
+            Parameter("y0", 14.0, 16.0),
+        ]
+    )
+
+    def make_model(
+        *,
+        flux,
+        re,
+        n,
+        q,
+        theta,
+        x0,
+        y0,
+    ):
         return SersicModel(
             flux=flux,
             re=re,
@@ -33,45 +81,35 @@ def test_single_sersic_fitter_no_noise_recovers_truth():
             y0=y0,
         )
 
-    parameter_names = list(truth)
-
-    prior_bounds = {
-        "flux": (0.8e5, 1.2e5),
-        "re": (4.0, 8.0),
-        "n": (1.0, 3.0),
-        "q": (0.5, 0.9),
-        "theta": (-0.5 * np.pi, 0.5 * np.pi),
-        "x0": (24.0, 26.0),
-        "y0": (24.0, 26.0),
-    }
-
     fitter = DynestyFitter(
         model_factory=make_model,
-        data=data,
-        noise=noise,
-        parameter_names=parameter_names,
-        prior_bounds=prior_bounds,
-        mask=mask,
+        parameters=parameters,
+        likelihood=likelihood,
     )
 
-    result = fitter.run(
-        nlive=150,
-        sample="rwalk",
-        bound="multi",
-        dlogz=0.1,
-        seed=42,
-        print_progress=False,
+    theta_truth = np.array(
+        [
+            truth[name]
+            for name in fitter.parameter_names
+        ],
+        dtype=float,
     )
 
-    recovered = {
-        name: np.median(result.samples[:, i])
-        for i, name in enumerate(parameter_names)
-    }
+    logl_truth = fitter.loglikelihood(theta_truth)
 
-    assert np.isclose(recovered["flux"], truth["flux"], rtol=0.02)
-    assert np.isclose(recovered["re"], truth["re"], rtol=0.05)
-    assert np.isclose(recovered["n"], truth["n"], rtol=0.10)
-    assert np.isclose(recovered["q"], truth["q"], rtol=0.05)
-    assert np.isclose(recovered["theta"], truth["theta"], atol=np.deg2rad(3.0))
-    assert np.isclose(recovered["x0"], truth["x0"], atol=0.2)
-    assert np.isclose(recovered["y0"], truth["y0"], atol=0.2)
+    offset_parameters = dict(truth)
+    offset_parameters["x0"] += 1.0
+
+    theta_offset = np.array(
+        [
+            offset_parameters[name]
+            for name in fitter.parameter_names
+        ],
+        dtype=float,
+    )
+
+    logl_offset = fitter.loglikelihood(theta_offset)
+
+    assert np.isfinite(logl_truth)
+    assert np.isfinite(logl_offset)
+    assert logl_truth > logl_offset

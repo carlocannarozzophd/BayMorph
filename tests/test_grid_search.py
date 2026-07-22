@@ -1,6 +1,9 @@
+"""Tests for grid-search fitting utilities."""
+
 import numpy as np
 
 from baymorph import (
+    GaussianImageLikelihood,
     SersicModel,
     grid_search_1d,
     make_constant_noise_map,
@@ -8,6 +11,7 @@ from baymorph import (
 
 
 def test_grid_search_recovers_flux():
+    """The grid search should recover the true flux."""
     true_flux = 1000.0
 
     true_model = SersicModel(
@@ -29,6 +33,11 @@ def test_grid_search_recovers_flux():
         sigma=1.0,
     )
 
+    likelihood = GaussianImageLikelihood(
+        data=data,
+        noise=noise,
+    )
+
     flux_grid = np.array(
         [
             500.0,
@@ -39,7 +48,9 @@ def test_grid_search_recovers_flux():
         ]
     )
 
-    def model_factory(flux):
+    def model_factory(
+        flux,
+    ):
         return SersicModel(
             flux=flux,
             re=8.0,
@@ -53,9 +64,11 @@ def test_grid_search_recovers_flux():
     result = grid_search_1d(
         values=flux_grid,
         model_factory=model_factory,
-        data=data,
-        noise=noise,
+        likelihood=likelihood,
     )
 
     assert result.best_value == true_flux
     assert result.best_index == 2
+    assert np.isfinite(
+        result.best_loglike
+    )

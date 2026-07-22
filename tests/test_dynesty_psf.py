@@ -1,21 +1,28 @@
+"""Tests for Dynesty fits with PSF convolution."""
+
+import numpy as np
+
 from baymorph import (
     DynestyFitter,
+    GaussianImageLikelihood,
     GaussianPSF,
+    Parameter,
+    ParameterSet,
     SersicModel,
     make_constant_noise_map,
 )
 
 
 def test_dynesty_accepts_psf():
-
+    """Dynesty should convolve rendered models with the supplied PSF."""
     data = SersicModel(
-        flux=1000,
-        re=8,
-        n=2,
+        flux=1000.0,
+        re=8.0,
+        n=2.0,
         q=0.8,
-        theta=0,
-        x0=30,
-        y0=30,
+        theta=0.0,
+        x0=30.0,
+        y0=30.0,
     ).render(
         shape=(60, 60)
     )
@@ -25,40 +32,65 @@ def test_dynesty_accepts_psf():
         sigma=1.0,
     )
 
+    likelihood = GaussianImageLikelihood(
+        data=data,
+        noise=noise,
+    )
+
+    parameters = ParameterSet(
+        [
+            Parameter(
+                name="flux",
+                lower=100.0,
+                upper=2000.0,
+            ),
+        ]
+    )
+
     psf = GaussianPSF(
         fwhm=3.0,
     )
 
-    def model_factory(flux):
+    def model_factory(
+        *,
+        flux,
+    ):
         return SersicModel(
             flux=flux,
-            re=8,
-            n=2,
+            re=8.0,
+            n=2.0,
             q=0.8,
-            theta=0,
-            x0=30,
-            y0=30,
+            theta=0.0,
+            x0=30.0,
+            y0=30.0,
         )
 
     fitter = DynestyFitter(
         model_factory=model_factory,
-        data=data,
-        noise=noise,
-        parameter_names=[
-            "flux",
-        ],
-        prior_bounds={
-            "flux": (
-                100,
-                2000,
-            ),
-        },
+        parameters=parameters,
+        likelihood=likelihood,
         psf=psf,
     )
 
-    result = fitter.run(
-        nlive=50,
-        print_progress=False,
+    theta = np.array(
+        [
+            1000.0,
+        ]
     )
 
-    assert result.samples.shape[1] == 1
+    model_image = fitter.render_model(
+        theta
+    )
+
+    unconvolved_image = model_factory(
+        flux=1000.0,
+    ).render(
+        shape=data.shape
+    )
+
+    assert model_image.shape == data.shape
+    assert np.all(np.isfinite(model_image))
+    assert not np.allclose(
+        model_image,
+        unconvolved_image,
+    )

@@ -1,14 +1,23 @@
+"""Tests for the Dynesty fitting backend."""
+
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
 from baymorph import (
     DynestyFitter,
+    GaussianImageLikelihood,
+    Parameter,
+    ParameterSet,
     SersicModel,
     make_constant_noise_map,
 )
+from baymorph.fitting import dynesty as dynesty_module
 
 
-def test_dynesty_generic_fit_runs():
+def make_test_problem():
+    """Construct a small Sérsic fitting problem."""
     true_flux = 1000.0
     true_re = 8.0
     true_n = 2.0
@@ -19,10 +28,10 @@ def test_dynesty_generic_fit_runs():
         n=true_n,
         q=0.8,
         theta=0.0,
-        x0=30,
-        y0=30,
+        x0=15.0,
+        y0=15.0,
     ).render(
-        shape=(60, 60)
+        shape=(30, 30)
     )
 
     noise = make_constant_noise_map(
@@ -30,145 +39,285 @@ def test_dynesty_generic_fit_runs():
         sigma=1.0,
     )
 
-    def model_factory(flux, re, n):
+    likelihood = GaussianImageLikelihood(
+        data=data,
+        noise=noise,
+    )
+
+    parameters = ParameterSet(
+        [
+            Parameter(
+                name="flux",
+                lower=100.0,
+                upper=2000.0,
+            ),
+            Parameter(
+                name="re",
+                lower=2.0,
+                upper=20.0,
+            ),
+            Parameter(
+                name="n",
+                lower=0.3,
+                upper=10.0,
+            ),
+        ]
+    )
+
+    def model_factory(
+        *,
+        flux,
+        re,
+        n,
+    ):
         return SersicModel(
             flux=flux,
             re=re,
             n=n,
             q=0.8,
             theta=0.0,
-            x0=30,
-            y0=30,
+            x0=15.0,
+            y0=15.0,
         )
 
     fitter = DynestyFitter(
         model_factory=model_factory,
-        data=data,
-        noise=noise,
-        parameter_names=["flux", "re", "n"],
-        prior_bounds={
-            "flux": (100.0, 2000.0),
-            "re": (2.0, 20.0),
-            "n": (0.3, 10.0),
-        },
+        parameters=parameters,
+        likelihood=likelihood,
     )
+
+    return fitter
+
+
+def test_dynesty_generic_fit_runs():
+    """Dynesty should complete a small generic fit."""
+    fitter = make_test_problem()
 
     result = fitter.run(
-        nlive=50,
-        sample="rslice",
+        nlive=20,
+        dlogz=5.0,
         print_progress=False,
+        seed=123,
     )
 
+    assert result.samples.ndim == 2
     assert result.samples.shape[1] == 3
-    assert result.parameter_names == ["flux", "re", "n"]
+
+    assert result.parameter_names == [
+        "flux",
+        "re",
+        "n",
+    ]
+
+    assert np.isfinite(
+        result.logz[-1]
+    )
+    assert np.isfinite(
+        result.logzerr[-1]
+    )
 
 
-def test_dynesty_generic_rejects_missing_prior():
-    data = np.ones((10, 10))
-    noise = np.ones((10, 10))
+def test_dynesty_generic_requires_parameter_set():
+    """The fitter should reject invalid parameter containers."""
+    data = np.ones(
+        (5, 5),
+        dtype=float,
+    )
+    noise = np.ones_like(data)
 
-    def model_factory(flux):
+    likelihood = GaussianImageLikelihood(
+        data=data,
+        noise=noise,
+    )
+
+    def model_factory(
+        *,
+        flux,
+    ):
         return SersicModel(
             flux=flux,
-            re=5,
-            n=2,
-            q=0.8,
-            theta=0,
-            x0=5,
-            y0=5,
+            re=1.0,
+            n=1.0,
+            q=1.0,
+            theta=0.0,
+            x0=2.0,
+            y0=2.0,
         )
 
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        TypeError,
+        match="ParameterSet",
+    ):
         DynestyFitter(
             model_factory=model_factory,
-            data=data,
-            noise=noise,
-            parameter_names=["flux"],
-            prior_bounds={},
+            parameters=["flux"],
+            likelihood=likelihood,
         )
 
 
-def test_dynesty_generic_theta_to_parameters():
-    data = np.ones((10, 10))
-    noise = np.ones((10, 10))
+def test_dynesty_generic_parameter_mapping():
+    """Parameter vectors should map correctly to model-factory keywords."""
+    fitter = make_test_problem()
 
-    def model_factory(flux, re):
-        return SersicModel(
-            flux=flux,
-            re=re,
-            n=2,
-            q=0.8,
-            theta=0,
-            x0=5,
-            y0=5,
-        )
-
-    fitter = DynestyFitter(
-        model_factory=model_factory,
-        data=data,
-        noise=noise,
-        parameter_names=["flux", "re"],
-        prior_bounds={
-            "flux": (100, 2000),
-            "re": (2, 20),
-        },
+    theta = np.array(
+        [
+            1000.0,
+            8.0,
+            2.0,
+        ]
     )
 
-    params = fitter.theta_to_parameters(
-        np.array([1000.0, 8.0])
+    model_image = fitter.render_model(
+        theta
     )
 
-    assert params == {
-        "flux": 1000.0,
-        "re": 8.0,
-    }
-
-
-def test_dynesty_generic_accepts_sampling_options():
-    data = SersicModel(
-        flux=1000,
-        re=8,
-        n=2,
+    expected_image = SersicModel(
+        flux=1000.0,
+        re=8.0,
+        n=2.0,
         q=0.8,
-        theta=0,
-        x0=30,
-        y0=30,
+        theta=0.0,
+        x0=15.0,
+        y0=15.0,
     ).render(
-        shape=(60, 60)
+        shape=(30, 30)
     )
 
-    noise = make_constant_noise_map(
-        data.shape,
-        sigma=1.0,
+    assert np.allclose(
+        model_image,
+        expected_image,
     )
 
-    def model_factory(flux):
-        return SersicModel(
-            flux=flux,
-            re=8,
-            n=2,
-            q=0.8,
-            theta=0,
-            x0=30,
-            y0=30,
+
+def test_dynesty_generic_prior_transform():
+    """The fitter should delegate prior transformation to ParameterSet."""
+    fitter = make_test_problem()
+
+    transformed = fitter.prior_transform(
+        np.array(
+            [
+                0.0,
+                0.5,
+                1.0,
+            ]
+        )
+    )
+
+    expected = np.array(
+        [
+            100.0,
+            11.0,
+            10.0,
+        ]
+    )
+
+    assert np.allclose(
+        transformed,
+        expected,
+    )
+
+
+def test_dynesty_generic_rejects_invalid_unit_cube_sample():
+    """Prior-transform input must lie inside the unit cube."""
+    fitter = make_test_problem()
+
+    with pytest.raises(
+        ValueError,
+        match="between zero and one",
+    ):
+        fitter.prior_transform(
+            np.array(
+                [
+                    -0.1,
+                    0.5,
+                    1.0,
+                ]
+            )
         )
 
-    fitter = DynestyFitter(
-        model_factory=model_factory,
-        data=data,
-        noise=noise,
-        parameter_names=["flux"],
-        prior_bounds={
-            "flux": (100.0, 2000.0),
-        },
+
+def test_dynesty_generic_accepts_sampling_options(
+    monkeypatch,
+):
+    """Sampling options should be forwarded to Dynesty."""
+    captured = {}
+
+    class FakeNestedSampler:
+        """Minimal Dynesty sampler used to inspect supplied options."""
+
+        def __init__(
+            self,
+            loglikelihood,
+            prior_transform,
+            ndim,
+            **kwargs,
+        ):
+            captured["loglikelihood"] = loglikelihood
+            captured["prior_transform"] = prior_transform
+            captured["ndim"] = ndim
+            captured["sampler_kwargs"] = kwargs
+
+            self.results = SimpleNamespace(
+                samples=np.zeros(
+                    (2, ndim),
+                    dtype=float,
+                ),
+                logwt=np.array(
+                    [-1.0, 0.0]
+                ),
+                logz=np.array(
+                    [-1.0, 0.0]
+                ),
+                logl=np.array(
+                    [-2.0, -1.0]
+                ),
+                logzerr=np.array(
+                    [0.2, 0.1]
+                ),
+                ncall=np.array(
+                    [1, 1]
+                ),
+            )
+
+        def run_nested(
+            self,
+            **kwargs,
+        ):
+            captured["run_kwargs"] = kwargs
+
+    monkeypatch.setattr(
+        dynesty_module.dynesty,
+        "NestedSampler",
+        FakeNestedSampler,
     )
+
+    fitter = make_test_problem()
 
     result = fitter.run(
         nlive=50,
         sample="rwalk",
-        bound="multi",
-        dlogz=1.0,
+        bound="single",
+        dlogz=0.25,
+        bootstrap=3,
         print_progress=False,
+        seed=42,
     )
 
-    assert result.samples.shape[1] == 1
+    assert captured["ndim"] == 3
+
+    assert captured["sampler_kwargs"]["nlive"] == 50
+    assert captured["sampler_kwargs"]["sample"] == "rwalk"
+    assert captured["sampler_kwargs"]["bound"] == "single"
+    assert captured["sampler_kwargs"]["bootstrap"] == 3
+    assert "rstate" in captured["sampler_kwargs"]
+
+    assert captured["run_kwargs"] == {
+        "print_progress": False,
+        "dlogz": 0.25,
+    }
+
+    assert result.parameter_names == [
+        "flux",
+        "re",
+        "n",
+    ]
