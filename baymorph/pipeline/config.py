@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+import math
 
 from baymorph.core.observation import Observation
 
@@ -297,6 +298,51 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
     return resolved
 
 
+def _estimate_psf_half_size_limits(
+    *,
+    seeing_fwhm_arcsec: float,
+    pixel_scale_arcsec: float,
+) -> tuple[int, int]:
+    """Estimate PSF candidate cutout limits from observational sampling.
+
+    Parameters
+    ----------
+    seeing_fwhm_arcsec : float
+        Seeing full width at half maximum in arcseconds.
+    pixel_scale_arcsec : float
+        Image pixel scale in arcseconds per pixel.
+
+    Returns
+    -------
+    tuple of int
+        Minimum and maximum PSF candidate cutout half-sizes, in pixels.
+
+    Raises
+    ------
+    ValueError
+        If either input is non-positive.
+    """
+    if seeing_fwhm_arcsec <= 0:
+        raise ValueError("seeing_fwhm_arcsec must be positive.")
+
+    if pixel_scale_arcsec <= 0:
+        raise ValueError("pixel_scale_arcsec must be positive.")
+
+    seeing_fwhm_pixels = (
+        seeing_fwhm_arcsec
+        / pixel_scale_arcsec
+    )
+
+    min_half_size = int(
+        math.ceil(4.0 * seeing_fwhm_pixels)
+    )
+    max_half_size = int(
+        math.ceil(10.0 * seeing_fwhm_pixels)
+    )
+
+    return min_half_size, max_half_size
+
+
 def resolve_runtime_config(
     config: dict[str, Any],
     observation: Observation,
@@ -354,19 +400,58 @@ def resolve_runtime_config(
         .get("candidate_selection")
     )
 
-    if (
-        candidate_cfg is not None
-        and candidate_cfg.get("max_peak") == "auto"
-    ):
-        saturation = observation.metadata.saturation
+    if candidate_cfg is not None:
+        #
+        # Automatic half-size limits from seeing
+        #
+        min_half_size = candidate_cfg.get("min_half_size")
+        max_half_size = candidate_cfg.get("max_half_size")
 
-        if saturation is not None:
-            candidate_cfg["max_peak"] = saturation
-        else:
-            candidate_cfg["max_peak"] = (
-                DEFAULT_CONFIG["psf"]["empirical"]
-                ["candidate_selection"]["max_peak"]
-            )
+        needs_min_half_size = min_half_size == "auto"
+        needs_max_half_size = max_half_size == "auto"
+
+        if needs_min_half_size or needs_max_half_size:
+            seeing_fwhm = observation.metadata.seeing_fwhm
+
+            pixel_scale = None
+            if data_cfg is not None:
+                pixel_scale = data_cfg.get("pixel_scale")
+
+            if (
+                seeing_fwhm is not None
+                and isinstance(pixel_scale, (int, float))
+            ):
+                (
+                    estimated_min_half_size,
+                    estimated_max_half_size,
+                ) = _estimate_psf_half_size_limits(
+                    seeing_fwhm_arcsec=seeing_fwhm,
+                    pixel_scale_arcsec=float(pixel_scale),
+                )
+
+                if needs_min_half_size:
+                    candidate_cfg["min_half_size"] = (
+                        estimated_min_half_size
+                    )
+
+                if needs_max_half_size:
+                    candidate_cfg["max_half_size"] = (
+                        estimated_max_half_size
+                    )
+
+        #
+        # Automatic saturation threshold
+        #
+        if candidate_cfg.get("max_peak") == "auto":
+            saturation = observation.metadata.saturation
+
+            if saturation is not None:
+                candidate_cfg["max_peak"] = saturation
+            else:
+                candidate_cfg["max_peak"] = (
+                    DEFAULT_CONFIG["psf"]["empirical"]
+                    ["candidate_selection"]["max_peak"]
+                )
 
     return resolved
 
