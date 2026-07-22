@@ -1,7 +1,7 @@
 # BayMorph
 
 <p align="center">
-  <strong>A modern Bayesian framework for Bayesian galaxy morphology modelling from astronomical imaging.</strong>
+  <strong>A modern framework for Bayesian galaxy morphology modelling from astronomical imaging.</strong>
 </p>
 
 <p align="center">
@@ -9,6 +9,7 @@
   <img alt="Python" src="https://img.shields.io/badge/python-%E2%89%A53.10-green">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-active%20development-orange">
+  <a href="https://github.com/carlocannarozzophd/BayMorph/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/carlocannarozzophd/BayMorph/actions/workflows/ci.yml/badge.svg"></a>
 </p>
 
 > [!IMPORTANT]
