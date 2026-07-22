@@ -77,8 +77,8 @@ fit:
     sample: rslice
     dlogz: 0.1
     seed: 42
-    n_processes: 1
-    queue_size: null
+    n_processes: 10
+    queue_size: 10
 
   comparison:
     enabled: false
