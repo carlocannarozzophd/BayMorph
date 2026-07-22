@@ -1,222 +1,151 @@
 # BayMorph Documentation
 
-BayMorph is a configuration-driven Python package for preparing astronomical images and fitting galaxy morphology with Bayesian models.
+Welcome to the BayMorph documentation.
 
-## Core design
+BayMorph is a modern Python library for Bayesian galaxy morphology modelling from astronomical imaging. The documentation is organized into a small number of guides covering the architecture, scientific workflows, validation strategy, and future development of the project.
 
-BayMorph follows a strict separation of responsibilities:
+---
 
-```text
-notebooks
-    ↓
-BayMorphRunner and public workflows
-    ↓
-pipeline orchestration
-    ↓
-core scientific modules
-```
+# Getting Started
 
-Notebooks should contain only configuration loading, workflow calls, inspection, and interpretation. Detection, masking, cutout resolution, background estimation, fitting, and diagnostics belong in the library.
+If you are new to BayMorph, begin with:
 
-## Installation and updates
+1. **Project overview**
+   - [`../README.md`](../README.md)
 
-### User installation
+2. **Installation**
+   - Install BayMorph inside a dedicated Conda environment.
+   - Create an external project with `baymorph init`.
+   - Copy packaged examples with `baymorph examples`.
 
-```bash
-python -m pip install baymorph
-```
+3. **Run your first analysis**
+   - Open one of the official notebooks.
+   - Load a configuration file.
+   - Create a `BayMorphRunner`.
+   - Execute the workflow.
 
-Update BayMorph with:
+---
 
-```bash
-python -m pip install --upgrade baymorph
-```
+# Documentation Guide
 
-### Repository installation
+## Architecture
 
-```bash
-git clone https://github.com/carlocannarozzophd/BayMorph.git
-cd BayMorph
-python -m pip install .
-```
+**[`ARCHITECTURE.md`](ARCHITECTURE.md)**
 
-### Development installation
+Describes the overall software architecture, package responsibilities, workflow organization, configuration philosophy, and design principles.
 
-```bash
-python -m pip install -e ".[dev]"
-```
+Read this document if you want to understand how BayMorph is internally organized.
 
-BayMorph requires Python 3.10 or newer.
+---
 
-## Creating an external project
+## Validation
 
-After installation, create a working directory outside `site-packages`:
+**[`VALIDATION.md`](VALIDATION.md)**
 
-```bash
-baymorph init MyProject
-```
+Describes the scientific and software validation strategy, including
 
-The command creates:
+- automated testing;
+- regression tests;
+- simulated galaxies;
+- real observations;
+- code-quality checks.
 
-```text
-MyProject/
-├── configs/
-├── notebooks/
-├── data/
-└── runs/
-```
+---
 
-Alternatively, copy only the packaged examples:
+## API Guide *(future)*
 
-```bash
-baymorph examples BayMorphExamples
-```
+**`API.md`**
 
-The copied notebooks and YAML files are normal user files. Updating the installed package does not overwrite them.
+Describes the public, advanced, and internal APIs.
 
-## Standard workflow
+---
 
-```python
-from baymorph import BayMorphRunner, load_resolved_config
+## Architectural Decisions
 
-config = load_resolved_config("configs/real_galaxy.yaml")
-runner = BayMorphRunner.from_config(config)
+**[`../DECISIONS.md`](../DECISIONS.md)**
 
-runner.prepare_image()
-runner.select_psf_candidates()
-runner.build_psf()
-runner.fit()
-runner.diagnostics()
-```
+Chronological record of important architectural decisions together with their rationale.
 
-For a simulated workflow with a configured analytic PSF, candidate selection and empirical PSF construction may be unnecessary:
+---
 
-```python
-runner.prepare_image()
-runner.fit()
-runner.diagnostics()
-```
+## Roadmap
 
-Products are exposed as:
+**[`../ROADMAP.md`](../ROADMAP.md)**
 
-```python
-runner.image
-runner.psf_candidates
-runner.psf
-runner.results
-```
+Current development priorities together with long-term project goals.
 
-## Image preparation
+---
 
-The main target-specific workflow is implemented by `prepare_real_image_from_config()` and exposed through `runner.prepare_image()`.
+# Typical Workflow
 
-### Fixed cutout mode
-
-```yaml
-data:
-  cutout:
-    mode: fixed
-    size: 200
-```
-
-### Automatic cutout mode
-
-```yaml
-data:
-  cutout:
-    mode: auto
-    initial_factor: 4.0
-    sky_margin: 20.0
-    min_size: 100
-    max_size: null
-```
-
-The automatic mode performs:
-
-1. detection on the full image;
-2. target selection near the configured seed position;
-3. a preliminary adaptive cutout from the target-segment bounding box;
-4. a second detection in the preliminary cutout;
-5. target-geometry estimation from second moments;
-6. elliptical radial-profile measurement;
-7. plateau detection;
-8. final cutout resolution from the plateau radius and sky margin;
-9. final detection and contaminant masking;
-10. final geometry, profile, plateau, and sky-region construction;
-11. constant-background subtraction and robust noise-map construction.
-
-### Position semantics
-
-`data.target_position` is an initial target-identification seed in full-image coordinates. The final target centre stored in `ImagePreparationProducts.target_x` and `.target_y` is the measured geometric centre in final-cutout coordinates.
-
-### Background and noise
-
-The final constant background and robust noise estimate are measured from the automatically constructed sky region outside the detected target plateau, excluding contaminant pixels. This avoids inflating the noise estimate with target-galaxy light.
-
-## Main products
-
-`ImagePreparationProducts` includes:
-
-- original image;
-- final cutout and bounds;
-- prepared background-subtracted data;
-- noise map;
-- final segmentation;
-- target segment;
-- contaminant mask;
-- measured target centre;
-- final geometry;
-- final radial profile;
-- final plateau result;
-- final sky region;
-- preliminary cutout and preliminary segmentation for automatic mode.
-
-`RealFitProducts` includes:
-
-- model name;
-- best parameters;
-- posterior result;
-- best-model image;
-- residual and normalized residual;
-- chi-square statistics;
-- radial-profile products;
-- generated diagnostic handles or paths where applicable.
-
-## Configuration
-
-Use the packaged reference configuration as the complete option catalogue:
+The standard workflow is
 
 ```text
-configs/config_reference.yaml
+Configuration
+        │
+        ▼
+Image Preparation
+        │
+        ▼
+PSF Construction
+        │
+        ▼
+Bayesian Fitting
+        │
+        ▼
+Diagnostics
 ```
 
-Minimal user configurations may omit fields filled by BayMorph defaults.
+The high-level notebook interface is provided by
 
-## CLI
+```python
+BayMorphRunner
+```
+
+which orchestrates the complete scientific workflow.
+
+---
+
+# Official Examples
+
+BayMorph includes complete notebooks covering
+
+- simulated galaxies;
+- real observations;
+- batch processing.
+
+Install them with
 
 ```bash
-baymorph --help
-baymorph --version
 baymorph examples DESTINATION
+```
+
+or
+
+```bash
 baymorph init PROJECT_DIRECTORY
 ```
 
-Both `examples` and `init` support `--force` for explicit overwriting.
+---
 
-## Testing
+# Development
 
-Run:
+Contributors should run
 
 ```bash
 ruff check .
-pytest
+
+python -m pytest
 ```
 
-The test suite covers core numerics, source detection, sky geometry, automatic cutouts, pipeline orchestration, fitting, plotting, CLI behaviour, and serialization.
+before submitting changes.
 
-## Further documentation
+---
 
-- [Architecture](ARCHITECTURE.md)
-- [Validation](VALIDATION.md)
-- [Architectural decisions](../DECISIONS.md)
-- [Roadmap](../ROADMAP.md)
+# Project Philosophy
+
+BayMorph is designed around a simple principle:
+
+> **Every architectural layer owns exactly one responsibility.**
+
+Scientific algorithms remain reusable, workflow orchestration remains reproducible, and notebooks remain lightweight user interfaces rather than implementation code.
