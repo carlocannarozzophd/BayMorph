@@ -82,6 +82,10 @@ DEFAULT_CONFIG = {
     },
     "fit": {
         "models": ["double_sersic"],
+        "likelihood": {
+            "type": "gaussian",
+            "include_normalization": True,
+        },
         "sampler": {
             "name": "dynesty",
             "nlive": 500,

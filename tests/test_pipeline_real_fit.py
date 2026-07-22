@@ -1,6 +1,11 @@
 import numpy as np
 import pytest
 
+from baymorph import (
+    GaussianImageLikelihood,
+    Parameter,
+    ParameterSet,
+)
 from baymorph.pipeline.real_fit import (
     RealFitProducts,
     _build_parameter_set,
@@ -8,6 +13,7 @@ from baymorph.pipeline.real_fit import (
     _compute_best_model,
     _compute_fit_statistics,
     _compute_bayesian_model_comparison,
+    _run_sampler,
 )
 
 
@@ -244,3 +250,97 @@ def test_compute_bayesian_model_comparison():
     assert comparison["bayes_factor"]["double_sersic_over_single_sersic"] == pytest.approx(
         np.exp(3.0)
     )
+
+def test_run_sampler_builds_likelihood_and_backend(
+    monkeypatch,
+):
+    data = np.ones((5, 5), dtype=float)
+    noise = np.full(data.shape, 2.0)
+    mask = np.zeros(data.shape, dtype=bool)
+
+    parameters = ParameterSet(
+        [
+            Parameter(
+                "flux",
+                1.0,
+                10.0,
+            )
+        ]
+    )
+
+    expected_result = object()
+    captured = {}
+
+    class DummySampler:
+        def run(self, **kwargs):
+            captured["run_kwargs"] = kwargs
+            return expected_result
+
+    def fake_make_sampler(
+        config,
+        *,
+        model_factory,
+        parameters,
+        likelihood,
+    ):
+        captured["sampler_cfg"] = config
+        captured["model_factory"] = model_factory
+        captured["parameters"] = parameters
+        captured["likelihood"] = likelihood
+        return DummySampler()
+
+    def model_factory(*, flux):
+        del flux
+        return None
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.make_sampler",
+        fake_make_sampler,
+    )
+
+    sampler_cfg = {
+        "name": "dynesty",
+        "nlive": 40,
+    }
+
+    result = _run_sampler(
+        data_fit=data,
+        noise_fit=noise,
+        mask_fit=mask,
+        parameters=parameters,
+        model_factory=model_factory,
+        likelihood_cfg={
+            "type": "gaussian",
+        },
+        sampler_cfg=sampler_cfg,
+        nlive=40,
+        sample="rwalk",
+        dlogz=0.5,
+        n_processes=1,
+        queue_size=None,
+        seed=123,
+        progress_label="single_sersic",
+    )
+
+    assert result is expected_result
+    assert captured["sampler_cfg"] is sampler_cfg
+    assert captured["model_factory"] is model_factory
+    assert captured["parameters"] is parameters
+    assert isinstance(
+        captured["likelihood"],
+        GaussianImageLikelihood,
+    )
+    assert np.array_equal(
+        captured["likelihood"].data,
+        data,
+    )
+    assert captured["run_kwargs"] == {
+        "nlive": 40,
+        "sample": "rwalk",
+        "dlogz": 0.5,
+        "print_progress": True,
+        "n_processes": 1,
+        "queue_size": None,
+        "seed": 123,
+        "progress_label": "single_sersic",
+    }

@@ -36,6 +36,7 @@ from baymorph.fitting import (
     SkyModelWrapper,
     grid_search_1d,
     make_double_sersic_psf_sky_model,
+    make_sampler,
     make_single_sersic_psf_sky_model,
 )
 from baymorph.interactive import (
@@ -231,6 +232,7 @@ __all__ = [
     "load_resolved_config",
     "make_constant_noise_map",
     "make_double_sersic_psf_sky_model",
+    "make_sampler",
     "make_likelihood",
     "make_observation",
     "make_observation_from_config",

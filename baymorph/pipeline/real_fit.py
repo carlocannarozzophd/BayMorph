@@ -9,12 +9,13 @@ from typing import Any
 import numpy as np
 
 from baymorph.core.observation import Observation
-from baymorph.fitting import DynestyFitter
+from baymorph.fitting import make_sampler
 from baymorph.fitting.model_factories import (
     make_double_sersic_psf_sky_model,
     make_single_sersic_psf_sky_model,
 )
 from baymorph.fitting.parameters import Parameter, ParameterSet
+from baymorph.likelihood import make_likelihood
 from baymorph.models import get_model
 from baymorph.pipeline.config import (
     DEFAULT_CONFIG,
@@ -64,6 +65,10 @@ def run_real_fit_from_config(
     except FileNotFoundError:
         observation = None
 
+    likelihood_cfg = resolved["fit"].get(
+        "likelihood",
+        None,
+    )
     sampler_cfg = resolved["fit"]["sampler"]
 
     all_products = {}
@@ -84,12 +89,14 @@ def run_real_fit_from_config(
             psf,
         )
 
-        result = _run_dynesty(
+        result = _run_sampler(
             data_fit=image_products.prepared_data,
             noise_fit=image_products.noise,
             mask_fit=image_products.contaminant_mask,
             parameters=parameters,
             model_factory=model_factory,
+            likelihood_cfg=likelihood_cfg,
+            sampler_cfg=sampler_cfg,
             nlive=sampler_cfg["nlive"],
             sample=sampler_cfg.get("sample", "auto"),
             dlogz=sampler_cfg.get("dlogz", None),
@@ -760,12 +767,14 @@ def _compute_bayesian_model_comparison(
     }
 
 
-def _run_dynesty(
+def _run_sampler(
     data_fit,
     noise_fit,
     mask_fit,
     parameters,
     model_factory,
+    likelihood_cfg,
+    sampler_cfg,
     *,
     nlive: int = 300,
     sample: str = "auto",
@@ -775,16 +784,22 @@ def _run_dynesty(
     seed: int | None = None,
     progress_label: str | None = None,
 ):
-    """Run Dynesty for one model and prepared dataset."""
-    fitter = DynestyFitter(
-        model_factory=model_factory,
+    """Build the configured likelihood and run one sampling backend."""
+    likelihood = make_likelihood(
+        likelihood_cfg,
         data=data_fit,
         noise=noise_fit,
-        parameters=parameters,
         mask=mask_fit,
     )
 
-    return fitter.run(
+    sampler = make_sampler(
+        sampler_cfg,
+        model_factory=model_factory,
+        parameters=parameters,
+        likelihood=likelihood,
+    )
+
+    return sampler.run(
         nlive=nlive,
         sample=sample,
         dlogz=dlogz,

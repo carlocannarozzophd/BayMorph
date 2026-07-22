@@ -17,6 +17,7 @@ from baymorph.fitting.parameters import (
     Parameter,
     ParameterSet,
 )
+from baymorph.fitting.sampler_factory import make_sampler
 
 __all__ = [
     "DynestyFitter",
@@ -27,5 +28,6 @@ __all__ = [
     "SkyModelWrapper",
     "grid_search_1d",
     "make_double_sersic_psf_sky_model",
+    "make_sampler",
     "make_single_sersic_psf_sky_model",
 ]
