@@ -22,7 +22,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
-## [0.2.0] - 2026-07-22
+## [0.3.0] - 2026-07-23
 
 ### Added
 
@@ -56,5 +56,5 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
-[Unreleased]: https://github.com/carlocannarozzophd/BayMorph/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/carlocannarozzophd/BayMorph/compare/v0.3.0...HEAD
 [0.2.0]: https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.2.0

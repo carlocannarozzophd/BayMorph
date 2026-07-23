@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.2.0"><img alt="Version" src="https://img.shields.io/badge/version-v0.2.0-blue"></a>
+  <a href="https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.3.0"><img alt="Version" src="https://img.shields.io/badge/version-v0.3.0-blue"></a>
   <img alt="Python" src="https://img.shields.io/badge/python-%E2%89%A53.11-green">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey"></a>
   <a href="https://github.com/carlocannarozzophd/BayMorph/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/carlocannarozzophd/BayMorph/actions/workflows/ci.yml/badge.svg"></a>
@@ -542,7 +542,7 @@ Current citation metadata:
 
 ```text
 Carlo Cannarozzo. BayMorph: Bayesian morphological modelling of
-astronomical images. Version 0.2.0 (2026).
+astronomical images. Version 0.3.0 (2026).
 ```
 
 Citation information will be updated when a new tagged release or archival DOI becomes available.
