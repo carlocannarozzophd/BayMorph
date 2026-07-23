@@ -25,21 +25,19 @@ from baymorph.simulation import (
 
 __version__ = "0.2.0"
 
-STABLE_API = [
+__all__ = [
     "BayMorphRunner",
-    "Observation",
-    "ObservationMetadata",
-    "ImageData",
-    "SersicModel",
-    "DoubleSersicModel",
     "CompositeModel",
     "ConvolvedModel",
-    "GaussianPSF",
+    "DoubleSersicModel",
     "EmpiricalPSF",
-    "SyntheticObservation",
-    "SyntheticSersic",
+    "GaussianPSF",
+    "ImageData",
+    "Observation",
+    "ObservationMetadata",
     "PosteriorResult",
     "RealFitProducts",
+    "SersicModel",
+    "SyntheticObservation",
+    "SyntheticSersic",
 ]
-
-__all__ = STABLE_API

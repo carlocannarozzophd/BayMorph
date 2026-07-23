@@ -88,11 +88,6 @@ class BayMorphRunner:
             self.config["outputs"]["root"]
         )
 
-        if value is None:
-            return None
-
-        return Path(value)
-
     @property
     def image(self) -> Any:
         """Return the image-preparation products."""
