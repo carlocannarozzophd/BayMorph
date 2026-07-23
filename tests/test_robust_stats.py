@@ -1,9 +1,10 @@
 import numpy as np
 
-from baymorph import (
+from baymorph.stats import (
     robust_mad,
     robust_rms,
 )
+
 
 
 def test_robust_rms_ignores_non_finite_values():

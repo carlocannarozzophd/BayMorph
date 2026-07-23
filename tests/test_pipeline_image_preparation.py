@@ -1,14 +1,15 @@
 import numpy as np
 
-from baymorph import (
+from baymorph.pipeline import (
     ImagePreparationProducts,
     load_image_preparation_products,
     make_target_cutout,
     pipeline_paths,
     resolve_config,
-    save_image_preparation_products,
     resolve_fixed_cutout,
+    save_image_preparation_products,
 )
+
 
 
 def test_make_target_cutout_returns_expected_shape():

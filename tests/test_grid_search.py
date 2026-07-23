@@ -2,12 +2,11 @@
 
 import numpy as np
 
-from baymorph import (
-    GaussianImageLikelihood,
-    SersicModel,
-    grid_search_1d,
-    make_constant_noise_map,
-)
+from baymorph.core import make_constant_noise_map
+from baymorph.fitting import grid_search_1d
+from baymorph.likelihood import GaussianImageLikelihood
+from baymorph.models import SersicModel
+
 
 
 def test_grid_search_recovers_flux():

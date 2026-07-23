@@ -3,7 +3,8 @@
 import numpy as np
 import pytest
 
-from baymorph import GaussianImageLikelihood
+from baymorph.likelihood import GaussianImageLikelihood
+
 
 
 def test_gaussian_image_likelihood_is_finite():

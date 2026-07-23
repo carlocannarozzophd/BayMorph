@@ -1,4 +1,5 @@
-from baymorph import MaskActionEditor
+from baymorph.interactive import MaskActionEditor
+
 
 
 def test_mask_action_editor_import():

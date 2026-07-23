@@ -2,13 +2,14 @@
 
 import numpy as np
 
-from baymorph import (
+from baymorph.fitting import (
     DynestyFitter,
-    GaussianImageLikelihood,
     Parameter,
     ParameterSet,
-    SersicModel,
 )
+from baymorph.likelihood import GaussianImageLikelihood
+from baymorph.models import SersicModel
+
 
 
 def test_single_sersic_fitter_no_noise_evaluates_truth():

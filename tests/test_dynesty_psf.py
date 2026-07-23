@@ -2,15 +2,16 @@
 
 import numpy as np
 
-from baymorph import (
+from baymorph.core import make_constant_noise_map
+from baymorph.fitting import (
     DynestyFitter,
-    GaussianImageLikelihood,
-    GaussianPSF,
     Parameter,
     ParameterSet,
-    SersicModel,
-    make_constant_noise_map,
 )
+from baymorph.likelihood import GaussianImageLikelihood
+from baymorph.models import SersicModel
+from baymorph.simulation import GaussianPSF
+
 
 
 def test_dynesty_accepts_psf():

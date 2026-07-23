@@ -1,9 +1,8 @@
 import numpy as np
 
-from baymorph import (
-    EmpiricalPSF,
-    convolve_with_psf,
-)
+from baymorph import EmpiricalPSF
+from baymorph.simulation import convolve_with_psf
+
 
 
 def test_empirical_psf_normalization():

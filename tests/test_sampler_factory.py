@@ -3,12 +3,14 @@
 import numpy as np
 import pytest
 
-from baymorph import (
-    GaussianImageLikelihood,
+from baymorph.fitting import (
+    DynestyFitter,
+    make_sampler,
     Parameter,
     ParameterSet,
 )
-from baymorph.fitting import DynestyFitter, make_sampler
+from baymorph.likelihood import GaussianImageLikelihood
+
 
 
 def _make_inputs():

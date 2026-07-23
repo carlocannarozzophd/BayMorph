@@ -1,10 +1,11 @@
 import numpy as np
 import pytest
 
-from baymorph import (
-    RadialProfile,
+from baymorph.core import (
     detect_profile_plateau,
+    RadialProfile,
 )
+
 
 
 def make_radial_profile(

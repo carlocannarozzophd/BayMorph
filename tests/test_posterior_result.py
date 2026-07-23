@@ -4,6 +4,7 @@ import pytest
 from baymorph import PosteriorResult
 
 
+
 def test_posterior_result_summary():
     samples = np.array(
         [

@@ -1,11 +1,13 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from baymorph import plot_1d_posterior, plot_2d_samples
-from baymorph import (
+from baymorph.plotting import (
     corner_plot,
     make_plot,
+    plot_1d_posterior,
+    plot_2d_samples,
 )
+
 
 def test_plot_1d_posterior():
     samples = np.linspace(0, 1, 100)

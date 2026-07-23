@@ -1,17 +1,18 @@
 import numpy as np
 import pytest
 
-from baymorph import (
-    PSFCandidate,
+from baymorph.pipeline import (
     estimate_candidate_half_size,
     is_isolated_candidate,
     load_psf_candidates,
     pipeline_paths,
+    PSFCandidate,
     resolve_config,
     save_psf_candidates,
     select_psf_candidates_from_rows,
-    source_catalog_to_candidate_rows
+    source_catalog_to_candidate_rows,
 )
+
 
 
 def make_candidate_row(

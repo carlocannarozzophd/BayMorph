@@ -1,8 +1,7 @@
 
-from baymorph import (
-    SyntheticSersic,
-    detect_sources_mask,
-)
+from baymorph import SyntheticSersic
+from baymorph.core import detect_sources_mask
+
 
 
 def test_detect_sources_mask():

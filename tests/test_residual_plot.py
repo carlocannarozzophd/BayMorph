@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from baymorph import plot_data_model_residual
+from baymorph.plotting import plot_data_model_residual
+
 
 
 def test_residual_plot():

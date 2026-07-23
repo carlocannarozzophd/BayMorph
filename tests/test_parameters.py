@@ -1,9 +1,10 @@
 import numpy as np
 
-from baymorph import (
+from baymorph.fitting import (
     Parameter,
     ParameterSet,
 )
+
 
 
 def test_parameter_transform():

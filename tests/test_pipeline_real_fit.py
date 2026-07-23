@@ -1,11 +1,12 @@
 import numpy as np
 import pytest
 
-from baymorph import (
-    GaussianImageLikelihood,
+from baymorph.fitting import (
     Parameter,
     ParameterSet,
 )
+from baymorph.likelihood import GaussianImageLikelihood
+
 from baymorph.pipeline.real_fit import (
     RealFitProducts,
     _build_parameter_set,

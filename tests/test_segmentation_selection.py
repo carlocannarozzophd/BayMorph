@@ -1,8 +1,7 @@
 import numpy as np
 
-from baymorph import (
-    select_segment_near_position,
-)
+from baymorph.pipeline import select_segment_near_position
+
 
 
 class MockSegmentation:

@@ -3,8 +3,9 @@ import numpy as np
 from baymorph import (
     GaussianPSF,
     SyntheticSersic,
-    convolve_with_psf,
 )
+from baymorph.simulation import convolve_with_psf
+
 
 
 def test_psf_kernel_normalization():

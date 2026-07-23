@@ -1,7 +1,11 @@
 import numpy as np
 import pytest
 
-from baymorph import robust_rms, robust_mad
+from baymorph.stats import (
+    robust_mad,
+    robust_rms,
+)
+
 
 
 def test_robust_mad_uses_median_absolute_deviation():

@@ -5,10 +5,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from baymorph import (
+from baymorph.plotting import (
     plot_log_data_model_residual,
     show_log_image,
 )
+
 
 
 def test_show_log_image_runs():

@@ -1,9 +1,8 @@
 import numpy as np
 
-from baymorph import (
-    SyntheticSersic,
-    prepare_real_fits_image,
-)
+from baymorph import SyntheticSersic
+from baymorph.pipeline import prepare_real_fits_image
+
 
 
 def test_prepare_real_fits_image():

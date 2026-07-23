@@ -1,6 +1,10 @@
 import numpy as np
 
-from baymorph import add_gaussian_noise, add_poisson_noise
+from baymorph.simulation import (
+    add_gaussian_noise,
+    add_poisson_noise,
+)
+
 
 
 def test_gaussian_noise_shape():

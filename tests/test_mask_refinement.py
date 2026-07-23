@@ -1,6 +1,7 @@
 import numpy as np
 
-from baymorph import refine_mask
+from baymorph.pipeline import refine_mask
+
 
 
 def test_refine_mask_source_action():

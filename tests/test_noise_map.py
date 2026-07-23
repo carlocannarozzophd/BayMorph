@@ -1,7 +1,11 @@
 import numpy as np
 import pytest
 
-from baymorph import estimate_noise_map, make_constant_noise_map
+from baymorph.core import (
+    estimate_noise_map,
+    make_constant_noise_map,
+)
+
 
 
 def test_make_constant_noise_map_shape():

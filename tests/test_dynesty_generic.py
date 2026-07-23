@@ -5,15 +5,16 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from baymorph import (
+from baymorph.core import make_constant_noise_map
+from baymorph.fitting import (
+    dynesty as dynesty_module,
     DynestyFitter,
-    GaussianImageLikelihood,
     Parameter,
     ParameterSet,
-    SersicModel,
-    make_constant_noise_map,
 )
-from baymorph.fitting import dynesty as dynesty_module
+from baymorph.likelihood import GaussianImageLikelihood
+from baymorph.models import SersicModel
+
 
 
 def make_test_problem():

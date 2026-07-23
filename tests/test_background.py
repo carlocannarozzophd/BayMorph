@@ -1,6 +1,10 @@
 import numpy as np
 
-from baymorph import estimate_background_sigma, subtract_background
+from baymorph.core import (
+    estimate_background_sigma,
+    subtract_background,
+)
+
 
 
 def test_estimate_background_sigma_constant_image():

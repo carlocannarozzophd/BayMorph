@@ -1,6 +1,7 @@
 import numpy as np
 
-from baymorph import estimate_background_photutils
+from baymorph.core import estimate_background_photutils
+
 
 
 def test_photutils_background_flat_image():

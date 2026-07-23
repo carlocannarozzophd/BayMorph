@@ -3,6 +3,7 @@ import numpy as np
 from baymorph import SyntheticSersic
 
 
+
 def test_synthetic_sersic_shape():
     model = SyntheticSersic(
         flux=1000.0,

@@ -4,21 +4,22 @@ import pytest
 
 import json
 
-from baymorph import (
-    load_empirical_psf,
-    pipeline_paths,
-    resolve_config,
-    save_empirical_psf,
-    extract_centered_cutout,
-    normalize_psf,
-    stack_psf_cutouts,
-    subtract_outer_background,
+from baymorph.pipeline import (
     centroid_from_flux,
-    recenter_cutout,
-    save_empirical_psf_metadata,
     crop_center,
     estimate_psf_half_size,
+    extract_centered_cutout,
+    load_empirical_psf,
+    normalize_psf,
+    pipeline_paths,
+    recenter_cutout,
+    resolve_config,
+    save_empirical_psf,
+    save_empirical_psf_metadata,
+    stack_psf_cutouts,
+    subtract_outer_background,
 )
+
 
 
 def test_save_and_load_empirical_psf_roundtrip(tmp_path):
@@ -159,7 +160,7 @@ def test_save_empirical_psf_metadata(tmp_path):
 
 
 def test_estimate_psf_half_size_uses_candidate_maximum():
-    from baymorph import PSFCandidate
+    from baymorph.pipeline import PSFCandidate
 
     candidates = [
         PSFCandidate(x=1, y=1, half_size=8),
@@ -170,7 +171,7 @@ def test_estimate_psf_half_size_uses_candidate_maximum():
 
 
 def test_estimate_psf_half_size_uses_fallback_without_sizes():
-    from baymorph import PSFCandidate
+    from baymorph.pipeline import PSFCandidate
 
     candidates = [
         PSFCandidate(x=1, y=1),

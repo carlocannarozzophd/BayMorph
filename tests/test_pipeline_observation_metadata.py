@@ -4,7 +4,8 @@ import numpy as np
 
 from astropy.io import fits
 
-from baymorph import observation_metadata_dict
+from baymorph.pipeline import observation_metadata_dict
+
 from baymorph.core.image import ImageData
 from baymorph.core.observation import Observation
 

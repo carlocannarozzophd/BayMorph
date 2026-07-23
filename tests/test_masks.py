@@ -1,10 +1,11 @@
 import numpy as np
 import pytest
 
-from baymorph import (
+from baymorph.core import (
     connected_source_mask,
     star_halo_mask,
 )
+
 
 
 def test_connected_source_mask_detects_source():

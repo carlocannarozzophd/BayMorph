@@ -7,6 +7,7 @@ from baymorph import (
 )
 
 
+
 def test_convolved_model_preserves_flux():
 
     model = SersicModel(

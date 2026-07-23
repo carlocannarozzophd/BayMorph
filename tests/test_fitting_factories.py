@@ -2,10 +2,11 @@
 
 import numpy as np
 
-from baymorph import (
+from baymorph.fitting import (
     make_double_sersic_psf_sky_model,
     make_single_sersic_psf_sky_model,
 )
+
 
 
 class DeltaPSF:

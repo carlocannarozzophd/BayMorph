@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from baymorph import radial_profile_from_image
+from baymorph.analysis import radial_profile_from_image
+
 
 
 def test_radial_profile_from_image_returns_annular_medians():

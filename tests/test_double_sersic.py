@@ -7,6 +7,7 @@ from baymorph import (
 )
 
 
+
 def test_double_sersic_matches_composite():
 
     bulge = SersicModel(

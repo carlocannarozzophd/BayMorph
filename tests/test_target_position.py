@@ -1,8 +1,7 @@
 import numpy as np
 
-from baymorph import (
-    estimate_target_position,
-)
+from baymorph.pipeline import estimate_target_position
+
 
 
 def test_estimate_target_position():

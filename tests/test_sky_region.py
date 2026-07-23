@@ -1,11 +1,12 @@
 import numpy as np
 import pytest
 
-from baymorph import (
+from baymorph.core import (
+    build_sky_region,
     PlateauResult,
     SkyRegion,
-    build_sky_region,
 )
+
 from baymorph.pipeline.preparation_steps import TargetGeometry
 
 

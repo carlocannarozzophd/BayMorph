@@ -2,15 +2,16 @@ from pathlib import Path
 
 import pytest
 
-from baymorph import (
+from baymorph.pipeline import (
     initialize_pipeline_run,
+    load_empirical_psf,
+    resolve_config,
     run_image_preparation,
     run_psf_candidate_selection,
     run_psf_construction,
     run_real_fit,
-    resolve_config,
-    load_empirical_psf,
 )
+
 
 
 def minimal_config(tmp_path):

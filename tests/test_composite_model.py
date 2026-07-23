@@ -6,6 +6,7 @@ from baymorph import (
 )
 
 
+
 def test_composite_model_sums_components():
 
     component_1 = SersicModel(

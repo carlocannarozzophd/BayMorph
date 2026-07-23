@@ -1,0 +1,33 @@
+"""Tests for the stable BayMorph public API."""
+
+import baymorph
+
+
+EXPECTED_PUBLIC_API = {
+    "BayMorphRunner",
+    "Observation",
+    "ObservationMetadata",
+    "ImageData",
+    "SersicModel",
+    "DoubleSersicModel",
+    "CompositeModel",
+    "ConvolvedModel",
+    "GaussianPSF",
+    "EmpiricalPSF",
+    "SyntheticObservation",
+    "SyntheticSersic",
+    "PosteriorResult",
+    "RealFitProducts",
+}
+
+
+def test_public_api_is_explicit_and_stable():
+    assert set(baymorph.__all__) == EXPECTED_PUBLIC_API
+
+
+def test_public_api_symbols_are_available():
+    for name in EXPECTED_PUBLIC_API:
+        assert hasattr(
+            baymorph,
+            name,
+        )

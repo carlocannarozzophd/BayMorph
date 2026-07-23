@@ -1,6 +1,11 @@
 import numpy as np
 
-from baymorph import ImageData, SyntheticSersic, make_observation
+from baymorph import (
+    ImageData,
+    SyntheticSersic,
+)
+from baymorph.simulation import make_observation
+
 
 
 def test_image_data_fits_roundtrip(tmp_path):

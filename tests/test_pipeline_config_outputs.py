@@ -3,13 +3,15 @@ import pytest
 import yaml
 from astropy.io import fits
 
-from baymorph import (
+from baymorph.pipeline import (
     load_resolved_config,
+    make_output_tree,
+    pipeline_paths,
     resolve_config,
     resolve_runtime_config,
+    save_resolved_config,
 )
-from baymorph import make_output_tree, save_resolved_config
-from baymorph import pipeline_paths
+
 from baymorph.core.image import ImageData
 from baymorph.core.observation import Observation
 
