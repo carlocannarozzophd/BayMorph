@@ -1,0 +1,265 @@
+# Generic BayMorph configuration for an observed galaxy.
+#
+# Before running:
+#   1. Set data.image_path to the science FITS file.
+#   2. Set data.target_position to a pixel located on the target galaxy.
+#   3. Choose either a fixed or automatic cutout.
+#
+# When cutout.mode is "auto", inspect the plateau diagnostic produced during
+# image preparation before launching the Sérsic fits.
+
+object:
+  name: observed_galaxy
+
+data:
+  # Path to the science image. Relative paths are resolved from the directory
+  # in which BayMorph is launched.
+  image_path: data/observed_galaxy.fits
+
+  # Optional external products.
+  mask_path: null
+  noise_map_path: null
+
+  # Set this only when the pixel scale cannot be recovered from the FITS
+  # header. Units: arcsec/pixel.
+  pixel_scale: null
+
+  # Initial target-identification seed in full-image, zero-based pixels.
+  # This is used to select the target segment; BayMorph subsequently estimates
+  # the target geometry and centre.
+  target_position:
+    x: 500
+    y: 500
+
+  # --------------------------------------------------------------------------
+  # CUTOUT
+  # --------------------------------------------------------------------------
+  # Fixed mode:
+  cutout:
+    mode: fixed
+    size: 400
+
+  # Automatic plateau-based mode:
+  #
+  # cutout:
+  #   mode: auto
+  #   initial_factor: 4.0
+  #   sky_margin: 30.0
+  #   min_size: 150
+  #   max_size: 1000
+
+outputs:
+  root: runs
+  overwrite: true
+
+# ----------------------------------------------------------------------------
+# IMAGE PREPARATION
+# ----------------------------------------------------------------------------
+
+preparation:
+  background:
+    method: empirical
+    box_size: 64
+    filter_size: 3
+
+  noise:
+    method: empirical
+
+  detection:
+    n_sigma: 2.5
+    n_pixels: 20
+    n_levels: 32
+
+# ----------------------------------------------------------------------------
+# MASKING
+# ----------------------------------------------------------------------------
+
+masking:
+  connected_source:
+    enabled: true
+
+  star_halo:
+    enabled: true
+
+  interactive_refinement:
+    enabled: true
+
+# ----------------------------------------------------------------------------
+# EMPIRICAL PSF
+# ----------------------------------------------------------------------------
+
+psf:
+  type: empirical
+
+  empirical:
+    candidate_selection:
+      auto: true
+
+      # Maximum number of selected stellar candidates.
+      target_n_candidates: 64
+
+      # Candidate quality limits.
+      min_area: 10
+      max_area: 800
+      min_peak: 20
+      max_peak: 80000
+      max_eccentricity: 0.8
+      max_elongation: 2.5
+
+      # Reject candidates too close to the image boundary.
+      edge_margin: 30
+
+      # Optional full-image exclusion region. This should normally cover the
+      # target galaxy and any other extended source that must not enter the
+      # empirical-PSF candidate catalogue.
+      #
+      # Example:
+      #
+      # galaxy_exclusion_box:
+      #   xmin: 300
+      #   xmax: 700
+      #   ymin: 300
+      #   ymax: 700
+      #
+      galaxy_exclusion_box: null
+
+      # Adaptive stellar-cutout controls.
+      sigma_factor: 4.0
+      size_margin: 4
+      min_half_size: 12
+      max_half_size: 30
+
+      # Minimum separation margin used by the isolation filtering.
+      isolation_margin: 2
+
+    construction:
+      auto_size: true
+      normalize: true
+
+# ----------------------------------------------------------------------------
+# MORPHOLOGICAL FITTING
+# ----------------------------------------------------------------------------
+
+fit:
+  models:
+    - single_sersic
+    - double_sersic
+
+  sampler:
+    name: dynesty
+    nlive: 100
+    sample: rslice
+    dlogz: 0.1
+    seed: 42
+
+    # Multiprocessing configuration.
+    n_processes: 10
+    queue_size: null
+
+  comparison:
+    enabled: true
+    metric: bayes_factor
+
+  priors:
+    # ------------------------------------------------------------------------
+    # SINGLE-SÉRSIC MODEL
+    # ------------------------------------------------------------------------
+    single_sersic:
+      flux:
+        min_factor: 0.0
+        max_factor: 2.0
+
+      re:
+        min: 1.0
+        max: 120.0
+
+      n:
+        min: 0.1
+        max: 6.0
+
+      q:
+        min: 0.1
+        max: 1.0
+
+      theta:
+        min: -pi/2
+        max: pi/2
+
+      x0:
+        offset: 15.0
+
+      y0:
+        offset: 15.0
+
+      sky:
+        min: -50.0
+        max: 50.0
+
+    # ------------------------------------------------------------------------
+    # DOUBLE-SÉRSIC MODEL
+    # ------------------------------------------------------------------------
+    double_sersic:
+      flux_bulge:
+        min_factor: 0.0
+        max_factor: 1.0
+
+      re_bulge:
+        min: 1.0
+        max: 30.0
+
+      n_bulge:
+        min: 0.1
+        max: 6.0
+
+      flux_disk:
+        min_factor: 0.0
+        max_factor: 2.0
+
+      re_disk:
+        min: 1.0
+        max: 120.0
+
+      n_disk:
+        min: 0.1
+        max: 6.0
+
+      # The current BayMorph double-Sérsic implementation uses shared
+      # geometry for the two components.
+      q:
+        min: 0.1
+        max: 1.0
+
+      theta:
+        min: -pi/2
+        max: pi/2
+
+      x0:
+        offset: 15.0
+
+      y0:
+        offset: 15.0
+
+      sky:
+        min: -50.0
+        max: 50.0
+
+# ----------------------------------------------------------------------------
+# DIAGNOSTICS
+# ----------------------------------------------------------------------------
+
+diagnostics:
+  format: pdf
+
+  corner: true
+  residual: true
+  posterior_profile_bands: true
+
+  radial_profile:
+    binning: fixed
+    dr: 2.0
+    min_pixels: 50
+    log_n_bins: 40
+
+  titles:
+    single_sersic: "Observed galaxy — Single Sérsic"
+    double_sersic: "Observed galaxy — Double Sérsic"

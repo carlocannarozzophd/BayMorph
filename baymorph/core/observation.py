@@ -13,13 +13,14 @@ PSF construction, fitting, diagnostics, or configuration resolution.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 from astropy.io import fits
-from astropy.wcs import WCS
+from astropy.wcs import FITSFixedWarning, WCS
 from astropy.wcs.utils import proj_plane_pixel_scales
 
 from baymorph.core.image import ImageData
@@ -421,7 +422,12 @@ def _read_celestial_wcs(
         return None
 
     try:
-        wcs = WCS(header)
+        with warnings.catch_warnings():
+            warnings.simplefilter(
+                "ignore",
+                category=FITSFixedWarning,
+            )
+            wcs = WCS(header)
     except Exception:
         return None
 
