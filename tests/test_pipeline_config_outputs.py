@@ -1,3 +1,4 @@
+from pathlib import Path
 import numpy as np
 import pytest
 import yaml
@@ -113,15 +114,20 @@ outputs:
     assert "diagnostics" in config
 
 
-def test_example_config_loads():
-    config = load_resolved_config("configs/real_galaxy.yaml")
+def test_official_learn_config_loads():
+    config = load_resolved_config(
+        "configs/learn_baymorph.yaml"
+    )
 
-    assert "name" in config["object"]
-    assert isinstance(config["object"]["name"], str)
-    assert len(config["object"]["name"]) > 0
-    assert config["psf"]["type"] == "empirical"
-    assert "single_sersic" in config["fit"]["models"]
-    assert "double_sersic" in config["fit"]["models"]
+    assert config["object"]["name"] == "learn_baymorph"
+    assert config["psf"]["type"] == "gaussian"
+    assert config["fit"]["models"] == [
+        "single_sersic",
+    ]
+    assert (
+        config["fit"]["sampler"]["name"]
+        == "dynesty"
+    )
 
 
 def test_pipeline_paths_are_canonical(tmp_path):
@@ -492,3 +498,27 @@ def test_resolve_runtime_config_preserves_explicit_max_peak():
         ["candidate_selection"]["max_peak"]
         == 12000
     )
+
+
+def test_learn_baymorph_config_is_mirrored_and_resolves_diagnostics():
+    public_path = Path(
+        "configs/learn_baymorph.yaml"
+    )
+    resource_path = Path(
+        "baymorph/resources/configs/learn_baymorph.yaml"
+    )
+
+    assert public_path.read_bytes() == resource_path.read_bytes()
+
+    resolved = load_resolved_config(
+        public_path
+    )
+    diagnostics = resolved["diagnostics"]
+
+    assert diagnostics["posterior_profile_bands"] is True
+    assert diagnostics["radial_profile"] == {
+        "binning": "fixed",
+        "dr": 1.0,
+        "min_pixels": 50,
+        "log_n_bins": 40,
+    }

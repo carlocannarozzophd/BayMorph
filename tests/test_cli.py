@@ -13,7 +13,7 @@ def test_examples_command_copies_resources(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The examples command copies packaged notebooks and configurations."""
+    """The examples command copies official notebooks and configurations."""
     destination = tmp_path / "examples"
 
     monkeypatch.setattr(
@@ -30,13 +30,13 @@ def test_examples_command_copies_resources(
     assert (
         destination
         / "configs"
-        / "simulated_galaxy.yaml"
+        / "learn_baymorph.yaml"
     ).is_file()
 
     assert (
         destination
         / "notebooks"
-        / "01_Learn_BayMorph.ipynb"
+        / "01_learn_baymorph.ipynb"
     ).is_file()
 
 
@@ -66,13 +66,13 @@ def test_init_command_creates_project_tree(
     assert (
         project
         / "configs"
-        / "real_galaxy.yaml"
+        / "learn_baymorph.yaml"
     ).is_file()
 
     assert (
         project
         / "notebooks"
-        / "02_Real_Galaxy_Analysis.ipynb"
+        / "01_learn_baymorph.ipynb"
     ).is_file()
 
 
