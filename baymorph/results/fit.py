@@ -72,6 +72,38 @@ class RealFitProducts:
             "ndof": self.ndof,
         }
 
+    def summary(self) -> dict[str, Any]:
+        """Return a concise summary of the fitted model.
+
+        Returns
+        -------
+        dict
+            Model name, fit statistics, Bayesian evidence, and best-fitting
+            parameter values.
+        """
+        logz = None
+        logzerr = None
+
+        if self.posterior is not None:
+            logz = float(
+                self.posterior.logz[-1]
+            )
+
+            if self.posterior.logzerr is not None:
+                logzerr = float(
+                    self.posterior.logzerr[-1]
+                )
+
+        return {
+            "model": self.model_name,
+            "statistics": self.statistics,
+            "logz": logz,
+            "logzerr": logzerr,
+            "best_parameters": dict(
+                self.best_parameters
+            ),
+        }
+
     def corner(
         self,
         parameter_labels: list[str] | None = None,

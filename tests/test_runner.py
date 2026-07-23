@@ -420,3 +420,30 @@ def test_runner_verbose_false_suppresses_status_messages(
     captured = capsys.readouterr()
 
     assert captured.out == ""
+
+
+def test_runner_run_dir(tmp_path):
+    """Runner should expose the object-specific output directory."""
+    config = {
+        "object": {
+            "name": "tutorial_galaxy",
+        },
+        "data": {
+            "image_path": str(
+                tmp_path / "tutorial_galaxy.fits"
+            ),
+        },
+        "outputs": {
+            "root": str(
+                tmp_path / "runs"
+            ),
+        },
+    }
+
+    runner = BayMorphRunner(config)
+
+    assert runner.run_dir == (
+        tmp_path
+        / "runs"
+        / "tutorial_galaxy"
+    )

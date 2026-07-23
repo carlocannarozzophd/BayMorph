@@ -89,6 +89,14 @@ class BayMorphRunner:
         )
 
     @property
+    def run_dir(self) -> Path:
+        """Return the output directory for the configured object."""
+        return (
+            self.output_dir
+            / str(self.config["object"]["name"])
+        )
+
+    @property
     def image(self) -> Any:
         """Return the image-preparation products."""
         return self.image_preparation_products
