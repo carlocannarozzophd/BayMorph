@@ -15,12 +15,12 @@ from baymorph.plotting import corner_plot
 
 
 def _posterior_samples(posterior):
-    """Return posterior samples from a posterior result."""
-    if hasattr(posterior, "samples"):
-        return posterior.samples
-
+    """Return equal-weight posterior samples."""
     if hasattr(posterior, "posterior_samples"):
         return posterior.posterior_samples
+
+    if hasattr(posterior, "samples"):
+        return posterior.samples
 
     return posterior
 

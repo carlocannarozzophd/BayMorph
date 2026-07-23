@@ -148,6 +148,126 @@ def estimate_target_geometry_from_segment(
     )
 
 
+def estimate_target_geometry_from_image(
+    image: np.ndarray,
+    target_segment: np.ndarray,
+) -> TargetGeometry:
+    """Estimate target geometry using image-weighted source moments.
+
+    Parameters
+    ----------
+    image : ndarray
+        Two-dimensional source image.
+    target_segment : ndarray of bool
+        Boolean mask identifying the target source.
+
+    Returns
+    -------
+    TargetGeometry
+        Flux-weighted centre, axis ratio, and position-angle estimates.
+
+    Raises
+    ------
+    ValueError
+        If the image and segment are invalid, have different shapes, or
+        contain insufficient positive source signal.
+    """
+    data = np.asarray(image, dtype=float)
+    segment = np.asarray(target_segment, dtype=bool)
+
+    if data.ndim != 2 or segment.ndim != 2:
+        raise ValueError(
+            "'image' and 'target_segment' must be two-dimensional arrays."
+        )
+
+    if data.shape != segment.shape:
+        raise ValueError(
+            "'image' and 'target_segment' must have the same shape."
+        )
+
+    finite_source = segment & np.isfinite(data)
+
+    if np.count_nonzero(finite_source) < 3:
+        raise ValueError(
+            "At least three finite target pixels are required "
+            "to estimate the source geometry."
+        )
+
+    source_values = data[finite_source]
+    baseline = float(np.median(source_values))
+    weights = np.clip(data - baseline, 0.0, None)
+    weights = np.where(finite_source, weights, 0.0)
+
+    total_weight = float(np.sum(weights))
+
+    if not np.isfinite(total_weight) or total_weight <= 0.0:
+        return estimate_target_geometry_from_segment(segment)
+
+    y, x = np.indices(data.shape, dtype=float)
+
+    x0 = float(np.sum(weights * x) / total_weight)
+    y0 = float(np.sum(weights * y) / total_weight)
+
+    dx = x - x0
+    dy = y - y0
+
+    covariance = np.array(
+        [
+            [
+                np.sum(weights * dx * dx) / total_weight,
+                np.sum(weights * dx * dy) / total_weight,
+            ],
+            [
+                np.sum(weights * dx * dy) / total_weight,
+                np.sum(weights * dy * dy) / total_weight,
+            ],
+        ],
+        dtype=float,
+    )
+
+    eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+
+    order = np.argsort(eigenvalues)[::-1]
+    eigenvalues = eigenvalues[order]
+    eigenvectors = eigenvectors[:, order]
+
+    major_variance = float(eigenvalues[0])
+    minor_variance = float(eigenvalues[1])
+
+    if major_variance <= 0.0:
+        q = 1.0
+        theta = 0.0
+    else:
+        q = float(
+            np.sqrt(
+                max(minor_variance, 0.0)
+                / major_variance
+            )
+        )
+        q = float(
+            np.clip(
+                q,
+                np.finfo(float).eps,
+                1.0,
+            )
+        )
+
+        major_axis = eigenvectors[:, 0]
+        theta = float(
+            np.arctan2(
+                major_axis[1],
+                major_axis[0],
+            )
+        )
+
+    return TargetGeometry(
+        x0=x0,
+        y0=y0,
+        q=q,
+        theta=theta,
+    )
+
+
 def build_target_radial_profile(
     image: np.ndarray,
     geometry: TargetGeometry,
@@ -206,7 +326,8 @@ def estimate_target_sky(
     PlateauResult,
 ]:
     """Estimate target geometry, radial profile, and sky plateau."""
-    geometry = estimate_target_geometry_from_segment(
+    geometry = estimate_target_geometry_from_image(
+        image,
         target_segment,
     )
 

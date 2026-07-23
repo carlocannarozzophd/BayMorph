@@ -71,18 +71,18 @@ def _load_psf_from_config(config):
 
 
 def _posterior_samples(posterior):
-    """Return posterior samples from a posterior result."""
-    if hasattr(
-        posterior,
-        "samples",
-    ):
-        return posterior.samples
-
+    """Return equal-weight posterior samples when available."""
     if hasattr(
         posterior,
         "posterior_samples",
     ):
         return posterior.posterior_samples
+
+    if hasattr(
+        posterior,
+        "samples",
+    ):
+        return posterior.samples
 
     return posterior
 
@@ -206,6 +206,15 @@ def run_radial_profile_diagnostics(
         "radial_profile",
         {},
     )
+
+    if radial_cfg is True:
+        radial_cfg = {}
+    elif radial_cfg in (False, None):
+        return {}
+    elif not isinstance(radial_cfg, dict):
+        raise TypeError(
+            "diagnostics.radial_profile must be a boolean or mapping."
+        )
 
     psf = _load_psf_from_config(
         config,

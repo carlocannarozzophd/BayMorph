@@ -1,6 +1,7 @@
 """Posterior result containers."""
 
 from dataclasses import dataclass
+from functools import cached_property
 
 import numpy as np
 from dynesty.utils import resample_equal
@@ -46,9 +47,9 @@ class PosteriorResult:
             self.logz,
         )
 
-    @property
+    @cached_property
     def posterior_samples(self) -> np.ndarray:
-        """ndarray : Equal-weight posterior samples."""
+        """ndarray : Cached equal-weight posterior samples."""
         return resample_equal(
             self.samples,
             self.weights,
