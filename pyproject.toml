@@ -55,7 +55,7 @@ dev = [
     "jupyter",
     "ipykernel",
     "black",
-    "ruff",
+    "ruff==0.15.16",
     "build",
     "twine",
 ]
