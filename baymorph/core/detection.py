@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 from photutils.segmentation import (
     SourceCatalog,
+    deblend_sources,
     detect_sources,
     detect_threshold,
 )
@@ -37,13 +38,18 @@ def detect_sources_segmentation(
     n_sigma: float = 3.0,
     n_pixels: int = 5,
     n_levels: int = 32,
+    deblend: bool = True,
+    deblend_contrast: float = 0.001,
 ) -> DetectionResult:
-    """Detect sources in an image using Photutils.
+    """Detect and optionally deblend sources using Photutils.
 
-    The input image is first Gaussian-smoothed to improve source detection.
-    A detection threshold is then estimated with
-    :func:`photutils.segmentation.detect_threshold`, followed by source
-    segmentation using :func:`photutils.segmentation.detect_sources`.
+    The input image is Gaussian-smoothed to improve source detection. A
+    detection threshold is estimated with
+    :func:`photutils.segmentation.detect_threshold`, followed by connected
+    source detection with :func:`photutils.segmentation.detect_sources`.
+
+    When ``deblend`` is True, overlapping detections are subsequently
+    separated using multi-threshold watershed deblending.
 
     Parameters
     ----------
@@ -52,10 +58,15 @@ def detect_sources_segmentation(
     n_sigma : float, default=3.0
         Detection threshold in units of the estimated background noise.
     n_pixels : int, default=5
-        Minimum number of connected pixels required for a detection.
+        Minimum number of connected pixels required for detection and
+        deblending.
     n_levels : int, default=32
-        Reserved for future multi-threshold segmentation support. Currently
-        unused.
+        Number of multi-threshold levels used during deblending.
+    deblend : bool, default=True
+        Whether to deblend connected sources after initial detection.
+    deblend_contrast : float, default=0.001
+        Minimum fractional source flux required for a local peak to be
+        retained as a separate deblended source.
 
     Returns
     -------
@@ -96,6 +107,16 @@ def detect_sources_segmentation(
             catalog=None,
         )
 
+    if deblend:
+        segmentation = deblend_sources(
+            detection_image,
+            segmentation,
+            n_pixels=n_pixels,
+            n_levels=n_levels,
+            contrast=deblend_contrast,
+            progress_bar=False,
+        )
+
     mask = segmentation.data > 0
 
     try:
@@ -118,6 +139,8 @@ def detect_sources_mask(
     n_sigma: float = 3.0,
     n_pixels: int = 5,
     n_levels: int = 32,
+    deblend: bool = True,
+    deblend_contrast: float = 0.001,
 ):
     """Detect sources and return a boolean source mask.
 
@@ -128,10 +151,15 @@ def detect_sources_mask(
     n_sigma : float, default=3.0
         Detection threshold in units of the estimated background noise.
     n_pixels : int, default=5
-        Minimum number of connected pixels required for a detection.
+        Minimum number of connected pixels required for detection and
+        deblending.
     n_levels : int, default=32
-        Reserved for future multi-threshold segmentation support. Currently
-        unused.
+        Number of multi-threshold levels used during deblending.
+    deblend : bool, default=True
+        Whether to deblend connected sources after initial detection.
+    deblend_contrast : float, default=0.001
+        Minimum fractional source flux required for a local peak to be
+        retained as a separate deblended source.
 
     Returns
     -------
@@ -143,6 +171,8 @@ def detect_sources_mask(
         n_sigma=n_sigma,
         n_pixels=n_pixels,
         n_levels=n_levels,
+        deblend=deblend,
+        deblend_contrast=deblend_contrast,
     )
 
     return result.mask
