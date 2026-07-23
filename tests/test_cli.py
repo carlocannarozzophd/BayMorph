@@ -36,7 +36,7 @@ def test_examples_command_copies_resources(
     assert (
         destination
         / "notebooks"
-        / "01_Simulated_Galaxy_Analysis.ipynb"
+        / "01_Learn_BayMorph.ipynb"
     ).is_file()
 
 

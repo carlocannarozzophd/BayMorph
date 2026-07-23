@@ -20,7 +20,7 @@ dependencies = [
     "photutils>=3.0",
     "matplotlib",
     "pyyaml",
-    "dynesty",
+    "dynesty>=3.0,<4",
 ]
 
 classifiers = [

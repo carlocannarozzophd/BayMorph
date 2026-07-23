@@ -1,0 +1,123 @@
+# Fast, reproducible configuration for the official Learn BayMorph tutorial.
+
+object:
+  name: learn_baymorph
+
+data:
+  image_path: runs/learn_baymorph/input/learn_baymorph.fits
+  mask_path: null
+  noise_map_path: null
+  pixel_scale: null
+  target_position:
+    x: 64
+    y: 64
+  cutout:
+    mode: fixed
+    size: 96
+
+outputs:
+  root: runs
+  overwrite: true
+
+simulation:
+  shape: [128, 128]
+  seed: 42
+  truth:
+    flux: 20000.0
+    re: 8.0
+    n: 2.5
+    q: 0.7
+    theta_deg: 30.0
+    x0: 64.0
+    y0: 64.0
+  psf:
+    type: gaussian
+    fwhm: 2.5
+    size: 21
+  noise:
+    sky: 20.0
+    poisson_noise: true
+    read_noise: 3.0
+
+preparation:
+  background:
+    method: empirical
+    box_size: 24
+    filter_size: 3
+  noise:
+    method: empirical
+  detection:
+    n_sigma: 3.0
+    n_pixels: 10
+    n_levels: 32
+
+masking:
+  connected_source:
+    enabled: true
+  star_halo:
+    enabled: false
+  interactive_refinement:
+    enabled: false
+
+psf:
+  type: gaussian
+  gaussian:
+    fwhm: 2.5
+
+fit:
+  models:
+    - single_sersic
+
+  likelihood:
+    type: gaussian
+    include_normalization: true
+
+  sampler:
+    name: dynesty
+    nlive: 50
+    sample: rwalk
+    bound: multi
+    dlogz: 5.0
+    seed: 42
+    n_processes: 1
+    queue_size: null
+
+  comparison:
+    enabled: false
+    metric: bayes_factor
+
+  priors:
+    single_sersic:
+      flux:
+        min_factor: 0.25
+        max_factor: 2.0
+      re:
+        min: 2.0
+        max: 20.0
+      n:
+        min: 0.5
+        max: 5.0
+      q:
+        min: 0.4
+        max: 1.0
+      theta:
+        min: -pi/2
+        max: pi/2
+      x0:
+        offset: 3.0
+      y0:
+        offset: 3.0
+      sky:
+        min: -20.0
+        max: 20.0
+
+diagnostics:
+  format: png
+  corner: true
+  residual: true
+  posterior_profile_bands: true
+  radial_profile:
+    binning: fixed
+    dr: 2.0
+  titles:
+    single_sersic: "Single Sérsic"
