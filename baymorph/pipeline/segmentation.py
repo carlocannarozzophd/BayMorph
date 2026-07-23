@@ -8,11 +8,16 @@ def select_segment_near_position(
     x: float,
     y: float,
 ):
-    """Select the segmentation label closest to a target position.
+    """Select the segmentation label nearest to a target position.
 
-    The function first checks whether the requested position falls inside a
-    detected segment. If not, it selects the detected segment whose centroid
-    is closest to the requested position.
+    The requested position is first rounded to the nearest pixel. If that
+    pixel belongs to a detected segment, its label is returned directly.
+
+    Otherwise, the selected label is the one whose segmentation footprint
+    contains the pixel closest to the requested position. This is more robust
+    for extended or asymmetric sources than comparing segment centroids,
+    because a compact foreground source can have a closer centroid even when
+    the target galaxy footprint lies closer to the supplied seed.
 
     Parameters
     ----------
@@ -31,71 +36,58 @@ def select_segment_near_position(
     Raises
     ------
     ValueError
-        If the segmentation image is ``None`` or contains no detected labels.
+        If the segmentation image is ``None``, contains no detected labels,
+        or the supplied coordinates are non-finite.
     """
     if segmentation is None:
-        raise ValueError(
-            "Segmentation image is None."
-        )
+        raise ValueError("Segmentation image is None.")
 
-    labels = np.unique(
-        segmentation.data
-    )
+    data = np.asarray(segmentation.data)
 
-    labels = labels[
-        labels > 0
-    ]
+    labels = np.unique(data)
+    labels = labels[labels > 0]
 
-    if len(labels) == 0:
-        raise ValueError(
-            "No segmentation labels found."
-        )
+    if labels.size == 0:
+        raise ValueError("No segmentation labels found.")
 
-    x = int(
-        round(x)
-    )
+    target_x = float(x)
+    target_y = float(y)
 
-    y = int(
-        round(y)
-    )
+    if not np.isfinite(target_x) or not np.isfinite(target_y):
+        raise ValueError("Target coordinates must be finite.")
+
+    pixel_x = int(round(target_x))
+    pixel_y = int(round(target_y))
 
     if (
-        0 <= y < segmentation.data.shape[0]
-        and 0 <= x < segmentation.data.shape[1]
+        0 <= pixel_y < data.shape[0]
+        and 0 <= pixel_x < data.shape[1]
     ):
-        label = segmentation.data[
-            y,
-            x,
-        ]
+        label_at_position = int(data[pixel_y, pixel_x])
 
-        if label > 0:
-            return int(label)
+        if label_at_position > 0:
+            return label_at_position
 
-    best_label = None
-    best_distance = np.inf
+    best_label: int | None = None
+    best_squared_distance = np.inf
 
     for label in labels:
-        pixels = np.where(
-            segmentation.data == label
+        segment_y, segment_x = np.nonzero(data == label)
+
+        squared_distances = (
+            (segment_x - target_x) ** 2
+            + (segment_y - target_y) ** 2
         )
 
-        y_c = np.mean(
-            pixels[0]
+        segment_squared_distance = float(
+            np.min(squared_distances)
         )
 
-        x_c = np.mean(
-            pixels[1]
-        )
+        if segment_squared_distance < best_squared_distance:
+            best_squared_distance = segment_squared_distance
+            best_label = int(label)
 
-        distance = np.hypot(
-            x_c - x,
-            y_c - y,
-        )
+    if best_label is None:
+        raise ValueError("No valid segmentation label could be selected.")
 
-        if distance < best_distance:
-            best_distance = distance
-            best_label = label
-
-    return int(
-        best_label
-    )
+    return best_label
