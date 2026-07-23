@@ -1,5 +1,8 @@
 [build-system]
-requires = ["setuptools>=77", "wheel"]
+requires = [
+    "setuptools>=77",
+    "wheel",
+]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -10,9 +13,32 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
+
 authors = [
-    {name = "Carlo Cannarozzo"}
+    { name = "Carlo Cannarozzo" },
 ]
+
+keywords = [
+    "astronomy",
+    "bayesian inference",
+    "galaxy morphology",
+    "nested sampling",
+    "sersic",
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+
 dependencies = [
     "numpy",
     "scipy",
@@ -22,30 +48,6 @@ dependencies = [
     "pyyaml",
     "dynesty>=3.0,<4",
 ]
-
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Science/Research",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Scientific/Engineering :: Astronomy",
-]
-keywords = [
-    "astronomy",
-    "galaxy morphology",
-    "Bayesian inference",
-    "nested sampling",
-    "Sersic",
-]
-
-[project.urls]
-Homepage = "https://github.com/carlocannarozzophd/BayMorph"
-Repository = "https://github.com/carlocannarozzophd/BayMorph"
-Documentation = "https://github.com/carlocannarozzophd/BayMorph/tree/main/docs"
-Issues = "https://github.com/carlocannarozzophd/BayMorph/issues"
-Changelog = "https://github.com/carlocannarozzophd/BayMorph/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
@@ -57,6 +59,13 @@ dev = [
     "build",
     "twine",
 ]
+
+[project.urls]
+Homepage = "https://github.com/carlocannarozzophd/BayMorph"
+Repository = "https://github.com/carlocannarozzophd/BayMorph"
+Documentation = "https://github.com/carlocannarozzophd/BayMorph/tree/main/docs"
+Issues = "https://github.com/carlocannarozzophd/BayMorph/issues"
+Changelog = "https://github.com/carlocannarozzophd/BayMorph/blob/main/CHANGELOG.md"
 
 [project.scripts]
 baymorph = "baymorph.cli:main"
