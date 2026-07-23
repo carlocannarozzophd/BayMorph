@@ -1,19 +1,29 @@
 cff-version: 1.2.0
+
 message: "If you use BayMorph in your research, please cite the software using this metadata."
+
 title: "BayMorph"
 type: software
+
 authors:
   - family-names: "Cannarozzo"
     given-names: "Carlo"
-version: 0.2.0
+    # orcid: "https://orcid.org/0000-0003-3843-7366"
+
+version: "0.2.0"
 date-released: 2026-07-22
+
 license: MIT
+
+url: "https://github.com/carlocannarozzophd/BayMorph"
 repository-code: "https://github.com/carlocannarozzophd/BayMorph"
+
 abstract: >-
   BayMorph is a Python package for Bayesian morphological modelling of
-  astronomical images, with configuration-driven image preparation, empirical
-  PSF construction, Sérsic modelling, nested-sampling inference, and diagnostic
-  workflows.
+  astronomical images. It provides configuration-driven workflows for image
+  preparation, empirical PSF construction, Sérsic profile fitting, Bayesian
+  inference using nested sampling, and diagnostic visualization.
+
 keywords:
   - astronomy
   - galaxy morphology

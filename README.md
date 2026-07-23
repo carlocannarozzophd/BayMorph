@@ -1,222 +1,182 @@
 # BayMorph
 
 <p align="center">
-  <strong>A modern framework for Bayesian galaxy morphology modelling from astronomical imaging.</strong>
+  <strong>Bayesian galaxy morphology made simple.</strong>
 </p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-v0.2.0-blue">
+  <a href="https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.2.0"><img alt="Version" src="https://img.shields.io/badge/version-v0.2.0-blue"></a>
   <img alt="Python" src="https://img.shields.io/badge/python-%E2%89%A53.11-green">
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey">
-  <img alt="Status" src="https://img.shields.io/badge/status-active%20development-orange">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey"></a>
   <a href="https://github.com/carlocannarozzophd/BayMorph/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/carlocannarozzophd/BayMorph/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="Tests" src="https://img.shields.io/badge/tests-283%20passing-brightgreen">
+  <img alt="Status" src="https://img.shields.io/badge/status-active%20development-orange">
+</p>
+
+<p align="center">
+  <a href="#installation">Installation</a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="notebooks/01_learn_baymorph.ipynb">Tutorial</a> ·
+  <a href="docs/API.md">API</a> ·
+  <a href="docs/VALIDATION.md">Validation</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
 > [!IMPORTANT]
-> BayMorph is under active scientific development. Version 0.2.0 provides an end-to-end, configuration-driven workflow for image preparation, Bayesian Sérsic fitting, model comparison, and scientific diagnostics. Validation on heterogeneous observational datasets is ongoing.
+> BayMorph is under active scientific development. The current codebase provides a tested, configuration-driven framework for image preparation, Sérsic modelling, Bayesian inference, model comparison, and diagnostic generation. Validation across heterogeneous observational datasets remains ongoing.
 
-BayMorph is an open-source Python package for **Bayesian structural analysis of galaxies**.
+Measuring galaxy structure is a fundamental task in observational astronomy. Quantities such as total flux, effective radius, Sérsic index, axis ratio, and position angle provide important constraints on galaxy formation and evolution. Recovering them reliably is nevertheless a genuine inference problem: the parameters are correlated, the likelihood can contain extended degeneracies, and several models may describe the same noisy image nearly equally well.
 
-Starting from astronomical FITS images, BayMorph performs
+**BayMorph** is an open-source Python framework that approaches galaxy morphology from a Bayesian perspective. It combines reproducible image preparation, physically motivated Sérsic models, nested sampling, Bayesian evidence, and posterior diagnostics in a single configuration-driven workflow.
 
-* automatic image preparation;
-* adaptive target identification and cutout generation;
-* empirical PSF construction;
-* Bayesian Sérsic model fitting;
-* Bayesian model comparison;
-* posterior analysis;
-* publication-quality diagnostics;
+> **Galaxy morphology is fundamentally an inference problem, not merely an optimization problem.**
 
-through a **fully reproducible, configuration-driven workflow**.
-
-The project is built as a layered scientific software library in which notebooks remain lightweight while scientific algorithms, workflow orchestration, diagnostics, and output management are implemented inside reusable, tested package modules.
+Instead of reporting only one best-fitting parameter vector, BayMorph characterizes the posterior distribution supported by the data. This makes parameter uncertainties, covariances, degeneracies, and model-comparison evidence explicit parts of the scientific result.
 
 ---
 
-# Why BayMorph?
+## Why BayMorph?
 
-Traditional galaxy-fitting workflows often require combining multiple independent tools for image preparation, source detection, PSF construction, Bayesian inference, visualization, and diagnostics.
+Many morphology workflows require separate tools or notebook-specific code for image preparation, target selection, masking, PSF construction, fitting, posterior analysis, and visualization. This can make the complete analysis difficult to reproduce and scientific assumptions difficult to audit.
 
-BayMorph unifies these tasks into a single scientific framework driven by YAML configuration files rather than notebook-specific logic. This architecture improves reproducibility, minimizes boilerplate code, and keeps scientific algorithms independent of user interfaces.
+BayMorph integrates these stages while keeping them modular. Scientific algorithms live in tested package modules; YAML files define complete analyses; notebooks remain lightweight interfaces rather than hidden implementations.
 
-The project is designed around a simple principle:
+BayMorph is designed to help users:
 
-> **Scientific algorithms should be reusable, reproducible, and independent from notebook logic.**
-
----
-
-# Key Features
-
-* End-to-end Bayesian galaxy morphology workflow.
-* Reproducible YAML-based configuration.
-* Automatic target-specific image preparation.
-* Adaptive cutout sizing from galaxy light profiles.
-* Empirical PSF candidate selection and stacking.
-* Bayesian nested sampling with Dynesty.
-* Bayesian evidence and model comparison.
-* Publication-quality diagnostics and reports.
+- recover full posterior distributions rather than only point estimates;
+- quantify correlations such as the Sérsic flux–radius–index degeneracy;
+- compare competing models using Bayesian evidence;
+- reproduce an analysis from a resolved configuration;
+- inspect the exact prepared image, mask, noise map, PSF, and diagnostics used by the fit;
+- extend individual workflow stages without redesigning the entire package.
 
 ---
 
-# Architecture
+## Key features
 
-BayMorph follows a layered scientific architecture in which every package owns a single, well-defined responsibility.
+### Bayesian inference
 
-```text
-simple notebook
-        │
-        ▼
-BayMorphRunner
-        │
-        ▼
-pipeline orchestration
-        │
-        ▼
-scientific core modules
-```
+- Nested sampling with **Dynesty 3.x**.
+- Gaussian image likelihoods with optional normalization.
+- Weighted posterior summaries and equal-weight posterior samples.
+- Bayesian evidence and Bayes-factor model comparison.
+- Configurable priors, convergence criteria, random seeds, and parallel execution.
 
-A complete description of the software architecture is available in:
+### Galaxy models
 
-* [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- Single-Sérsic models.
+- Double-Sérsic models.
+- PSF-convolved rendering.
+- Model-agnostic `render()` and `render_components()` interfaces.
+- Shared result infrastructure for single- and multi-model workflows.
 
----
+### Image preparation
 
-# Current Capabilities
+- FITS loading and structured output management.
+- Target selection from a seed position.
+- Fixed and automatic cutout strategies.
+- Image-weighted target-geometry estimation.
+- Elliptical radial profiles and robust plateau detection.
+- Target-specific sky-region construction.
+- Empirical background and noise estimation.
+- Connected-source masking and optional mask refinement.
 
-## Image Preparation
+### PSF handling
 
-* FITS image preparation.
-* Automatic target identification and segmentation.
-* Fixed and adaptive cutout generation.
-* Source masking.
-* Elliptical radial-profile construction.
-* Plateau-based cutout sizing.
-* Target-specific sky-region estimation.
-* Robust constant-background estimation.
-* MAD-based noise estimation.
+- Analytic Gaussian PSFs.
+- Empirical PSF candidate selection.
+- Candidate recentering, validation, stacking, persistence, and loading.
+- PSF normalization checks before convolution and fitting.
 
-## PSF Modelling
+### Diagnostics
 
-* PSF loading.
-* Empirical PSF candidate selection.
-* Robust PSF stacking.
+- Posterior corner plots.
+- Data, model, residual, and normalized-residual maps.
+- Radial profiles.
+- Posterior radial-profile bands.
+- Image-preparation and reconstruction reports.
+- PDF and image outputs suitable for scientific inspection.
 
-## Galaxy Models
+### Software design
 
-* Single Sérsic models.
-* Double Sérsic models.
-* PSF-convolved rendering.
-* Model-agnostic rendering interface.
-
-## Bayesian Inference
-
-* Gaussian image likelihoods.
-* Dynesty nested sampling.
-* Configurable convergence criteria.
-* Parallel execution.
-* Bayesian evidence computation.
-* Bayes-factor model comparison.
-
-## Diagnostics
-
-* Corner plots.
-* Residual maps.
-* Posterior radial-profile bands.
-* Reconstruction reports.
-* Image-preparation reports.
+- Stable top-level public API.
+- High-level `BayMorphRunner` orchestration.
+- YAML-driven reproducibility.
+- Packaged tutorial configuration and notebook.
+- Command-line project initialization and example installation.
+- Automated tests for scientific logic, workflows, packaging, CLI behavior, and resource consistency.
 
 ---
 
-# Automatic Image Preparation
+## Installation
 
-For `data.cutout.mode: auto`, BayMorph performs the following workflow:
+BayMorph currently supports **Python 3.11 and later**. A dedicated Conda environment is recommended.
 
-```text
-full image
-      ↓
-target detection
-      ↓
-adaptive cutout
-      ↓
-target geometry
-      ↓
-radial profile
-      ↓
-plateau detection
-      ↓
-sky estimation
-      ↓
-background and noise
-      ↓
-Bayesian fitting
-      ↓
-diagnostics
-```
-
-The configured `target_position` is used only as an initial seed for identifying the target. Once the final segmentation has been completed, all subsequent measurements use the measured target geometry.
-
-The legacy fixed-size workflow remains available when required.
-
-Complete implementation details are documented in
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-
----
-
-# Installation
-
-BayMorph is designed to be installed inside a dedicated Conda environment.
-
-## 1. Create a Conda environment
+### Install from GitHub
 
 ```bash
 conda create -n baymorph -c conda-forge python=3.11 -y
 conda activate baymorph
-```
 
-## 2. Upgrade pip
-
-```bash
 python -m pip install --upgrade pip
-```
-
-## 3. Install BayMorph
-
-```bash
 python -m pip install \
-"git+https://github.com/carlocannarozzophd/BayMorph.git@main"
+  "git+https://github.com/carlocannarozzophd/BayMorph.git@main"
 ```
 
-## 4. Verify the installation
+Verify the installation:
 
 ```bash
 baymorph --version
 baymorph --help
 ```
 
-BayMorph supports **Python 3.10 and later**.
+### Editable development install
+
+```bash
+git clone https://github.com/carlocannarozzophd/BayMorph.git
+cd BayMorph
+
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+```
+
+Run the test suite:
+
+```bash
+ruff check .
+python -m pytest -q
+```
+
+> [!NOTE]
+> A PyPI installation command will be added once the first public distribution is published. Until then, install BayMorph directly from the GitHub repository.
 
 ---
 
-# Quick Start
+## Quick start
+
+BayMorph analyses are defined through YAML configuration files and executed through `BayMorphRunner`.
 
 ```python
-from baymorph import BayMorphRunner, load_resolved_config
+from baymorph import BayMorphRunner
 
-config = load_resolved_config("configs/simulated_galaxy.yaml")
-
-runner = BayMorphRunner.from_config(config)
+runner = BayMorphRunner(
+    "configs/learn_baymorph.yaml",
+)
 
 runner.prepare_image()
 runner.fit()
 runner.diagnostics()
-
-result = runner.results
-
-print(result.best_parameters)
-print(result.statistics)
 ```
 
-Workflows requiring an empirical PSF simply extend the pipeline:
+The main products remain available on the runner:
+
+```python
+prepared = runner.image
+fit_result = runner.results
+profile_bands = runner.profile_bands
+```
+
+For workflows using an empirical PSF:
 
 ```python
 runner.prepare_image()
@@ -226,39 +186,238 @@ runner.fit()
 runner.diagnostics()
 ```
 
-Pipeline products are exposed through
+Each stage returns its products directly and stores them on the runner for later inspection.
 
-```python
-runner.image
-runner.psf_candidates
-runner.psf
-runner.results
+> [!IMPORTANT]
+> The `baymorph` command-line interface currently manages projects and packaged examples. Scientific workflows are executed through the Python API.
+
+---
+
+## Learn BayMorph
+
+New users should begin with the official tutorial:
+
+**[`notebooks/01_learn_baymorph.ipynb`](notebooks/01_learn_baymorph.ipynb)**
+
+The notebook introduces a complete, fast, synthetic workflow:
+
+1. inspect the official YAML configuration;
+2. generate a reproducible Sérsic observation;
+3. prepare the image and estimate the background and noise;
+4. build the Gaussian PSF used by the model;
+5. run a single-Sérsic Dynesty fit;
+6. inspect posterior summaries and parameter degeneracies;
+7. generate corner, residual, and radial-profile diagnostics;
+8. compare recovered parameters with the injected truth without overinterpreting one noisy realization.
+
+The mirrored configuration is available at:
+
+```text
+configs/learn_baymorph.yaml
+baymorph/resources/configs/learn_baymorph.yaml
 ```
 
-Each workflow stage can optionally return its products directly:
+The mirrored notebook is available at:
+
+```text
+notebooks/01_learn_baymorph.ipynb
+baymorph/resources/notebooks/01_learn_baymorph.ipynb
+```
+
+Repository and packaged resources are tested for byte-level consistency.
+
+---
+
+## Scientific workflow
+
+A typical BayMorph analysis follows this sequence:
+
+```text
+FITS observation
+       │
+       ▼
+Target identification and cutout
+       │
+       ▼
+Background, noise, and masking
+       │
+       ▼
+PSF loading or construction
+       │
+       ▼
+Sérsic model and likelihood
+       │
+       ▼
+Dynesty nested sampling
+       │
+       ▼
+Posterior summaries and evidence
+       │
+       ▼
+Corner, residual, and radial diagnostics
+```
+
+The configuration resolves all runtime choices before execution, including input paths, target position, cutout strategy, background and noise methods, masking, PSF type, models, priors, likelihood, sampler settings, model comparison, and diagnostics.
+
+Resolved configurations and generated products are written to a structured run directory so that the complete analysis can be inspected after execution.
+
+---
+
+## Configuration
+
+The official tutorial demonstrates the main configuration sections:
+
+```yaml
+object:
+  name: learn_baymorph
+
+data:
+  image_path: runs/learn_baymorph/input/learn_baymorph.fits
+  target_position:
+    x: 80
+    y: 80
+  cutout:
+    mode: fixed
+    size: 161
+
+outputs:
+  root: runs
+  overwrite: true
+
+preparation:
+  background:
+    method: empirical
+  noise:
+    method: empirical
+
+psf:
+  type: gaussian
+
+fit:
+  models:
+    - single_sersic
+  likelihood:
+    type: gaussian
+  sampler:
+    name: dynesty
+
+diagnostics:
+  corner: true
+  residual: true
+  radial_profile:
+    binning: fixed
+```
+
+The complete validated configuration is available at [`configs/learn_baymorph.yaml`](configs/learn_baymorph.yaml).
+
+---
+
+## Public API
+
+The stable top-level API currently exposes:
 
 ```python
-products = runner.prepare_image(return_result=True)
-fit_result = runner.fit(return_result=True)
+from baymorph import (
+    BayMorphRunner,
+    CompositeModel,
+    ConvolvedModel,
+    DoubleSersicModel,
+    EmpiricalPSF,
+    GaussianPSF,
+    ImageData,
+    Observation,
+    ObservationMetadata,
+    PosteriorResult,
+    RealFitProducts,
+    SersicModel,
+    SyntheticObservation,
+    SyntheticSersic,
+)
+```
+
+The complete API guide distinguishes stable, advanced, and internal interfaces:
+
+**[`docs/API.md`](docs/API.md)**
+
+---
+
+## Architecture
+
+BayMorph follows a layered architecture in which each package owns a focused responsibility:
+
+```text
+User code / notebook
+        │
+        ▼
+BayMorphRunner
+        │
+        ▼
+Pipeline orchestration
+        │
+        ├── image preparation
+        ├── PSF workflows
+        ├── fitting
+        └── diagnostics
+        │
+        ▼
+Scientific modules
+        ├── core data abstractions
+        ├── models and rendering
+        ├── likelihoods and samplers
+        ├── simulations
+        ├── plotting
+        └── result objects
+```
+
+This design separates scientific algorithms from orchestration and user interfaces. It allows low-level components to be tested independently while preserving a concise high-level workflow.
+
+See **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** for the full design description and **[`DECISIONS.md`](DECISIONS.md)** for the rationale behind major architectural choices.
+
+---
+
+## Repository layout
+
+```text
+BayMorph/
+├── baymorph/                  # Python package
+│   ├── core/                  # observations and image abstractions
+│   ├── fitting/               # likelihoods, priors, samplers, factories
+│   ├── models/                # Sérsic and composite models
+│   ├── pipeline/              # workflow orchestration
+│   ├── plotting/              # diagnostic visualization
+│   ├── resources/             # packaged YAML and notebook resources
+│   ├── results/               # posterior and fit products
+│   ├── simulation/            # synthetic sources, PSFs, and observations
+│   └── runner.py              # high-level user interface
+├── configs/                   # official YAML configurations
+├── notebooks/                 # official tutorials
+├── docs/                      # API, architecture, and validation guides
+├── tests/                     # automated scientific and software tests
+├── CHANGELOG.md
+├── CITATION.cff
+├── CONTRIBUTING.md
+├── DECISIONS.md
+├── ROADMAP.md
+└── pyproject.toml
 ```
 
 ---
 
-# Command-Line Interface
+## Command-line interface
 
-Check the installed version:
+Copy the packaged tutorial resources:
 
 ```bash
-baymorph --version
+baymorph examples baymorph_examples
 ```
 
-Create a new external project:
+Create a standalone project directory:
 
 ```bash
 baymorph init MyBayMorphProject
 ```
 
-This creates
+The generated project contains:
 
 ```text
 MyBayMorphProject/
@@ -268,137 +427,160 @@ MyBayMorphProject/
 └── runs/
 ```
 
-Copy only the packaged examples:
+Use `--force` only when intentionally writing into an existing destination:
 
 ```bash
-baymorph examples BayMorphExamples
+baymorph examples baymorph_examples --force
+baymorph init MyBayMorphProject --force
 ```
-
-Use
-
-```bash
---force
-```
-
-to overwrite existing files.
 
 ---
 
-# Updating BayMorph
+## Diagnostics and posterior interpretation
 
-Update to the latest development version:
+BayMorph diagnostics are designed to expose the statistical structure of the fit rather than only its visual reconstruction.
 
-```bash
-conda activate baymorph
+### Corner plots
 
-python -m pip install \
-    --upgrade \
-    --force-reinstall \
-    "git+https://github.com/carlocannarozzophd/BayMorph.git@main"
-```
+Corner plots use equal-weight posterior samples when available. They show marginal credible regions and correlations among parameters such as flux, effective radius, Sérsic index, axis ratio, orientation, centroid, and residual sky.
 
-Refresh packaged notebooks and configuration files:
+### Residual maps
 
-```bash
-cd MyBayMorphProject
+Residual diagnostics compare the prepared data and posterior model on the same pixel grid. Normalized residuals use the same uncertainty map and mask supplied to the likelihood.
 
-baymorph examples . --force
-```
+### Radial profiles
 
-This updates
+Radial diagnostics compare observed and model surface-brightness profiles and can include bands derived from equal-weight posterior realizations.
 
-```text
-configs/
-notebooks/
-```
-
-while preserving
-
-```text
-data/
-runs/
-```
-
-and all scientific outputs.
+A visually excellent residual map does not imply that every parameter is independently well constrained. Sérsic flux, radius, and index can remain strongly degenerate even when the pixel-level fit is statistically acceptable. BayMorph therefore treats posterior structure as part of the result, not as a secondary visualization.
 
 ---
 
-# Official Notebooks
+## Validation
 
-| Notebook                             | Purpose                                      |
-| ------------------------------------ | -------------------------------------------- |
-| `01_Simulated_Galaxy_Analysis.ipynb` | End-to-end validation on simulated galaxies. |
-| `02_Real_Galaxy_Analysis.ipynb`      | Bayesian analysis of a real galaxy.          |
-| `03_Multi_Galaxy_Analysis.ipynb`     | Batch processing workflow.                   |
+BayMorph validation combines automated testing, controlled simulations, workflow regression tests, and targeted scientific experiments.
 
----
+The test suite covers:
 
-# Model Architecture
+- configuration loading and resolution;
+- FITS and observation abstractions;
+- source detection, segmentation, and target selection;
+- fixed and automatic cutouts;
+- target geometry and radial profiles;
+- background, sky-region, and noise estimation;
+- masks and optional refinement;
+- analytic and empirical PSFs;
+- Sérsic, double-Sérsic, composite, and convolved models;
+- likelihoods, priors, Dynesty integration, and sampler factories;
+- posterior summaries and weighted statistics;
+- residual, corner, and radial-profile diagnostics;
+- high-level runner workflows;
+- packaged resources, CLI behavior, builds, and public imports.
 
-Every morphology model implements
+Dedicated preparation experiments over multiple noise seeds and subpixel centers showed subpixel centroid recovery and small background errors for the official synthetic setup. Controlled fits also demonstrated that shifts in flux, effective radius, and Sérsic index follow the expected posterior degeneracy rather than an obvious simulation–renderer inconsistency.
 
-```python
-model.render(shape)
+An external pySersic cross-check recovered broadly consistent source geometry, centroid, residual sky, flux, and effective radius, while showing renderer-dependent differences in Sérsic index and fit quality. This comparison is treated as a qualitative independent check, not as proof that distinct numerical renderers must return identical parameters.
 
-model.render_components(shape)
-```
-
-This common interface keeps fitting, diagnostics, plotting, and posterior analysis independent of individual morphology models.
-
----
-
-# Flux Convention
-
-The current discrete Sérsic renderer normalizes the requested flux over the finite rendered image.
-
-Consequently, the `flux` parameter corresponds to the total flux represented inside the rendered array rather than the analytic infinite-radius Sérsic integral.
-
-Simulation and fitting therefore remain internally consistent. A future renderer may introduce validated analytic pixel-integrated normalization as an optional alternative.
+See **[`docs/VALIDATION.md`](docs/VALIDATION.md)** for the validation framework and current limitations.
 
 ---
 
-# Documentation
+## Current scope and limitations
 
-| Document               | Purpose                          |
-| ---------------------- | -------------------------------- |
-| `README.md`            | Project overview and quick start |
-| `docs/API.md`          | API stability and compatibility policy |
-| `docs/ARCHITECTURE.md` | Software architecture            |
-| `docs/README.md`       | Documentation index              |
-| `docs/VALIDATION.md`   | Scientific validation            |
-| `DECISIONS.md`         | Architectural decisions          |
-| `ROADMAP.md`           | Planned developments             |
+BayMorph is a research software project under active development. Current users should keep the following scope in mind:
+
+- The public tutorial currently covers a single synthetic single-Sérsic workflow.
+- Single- and double-Sérsic infrastructure exists, but broad real-galaxy validation is still expanding.
+- The standard background model is currently constant after empirical preparation; spatially varying backgrounds remain future work.
+- The primary sampling backend is Dynesty.
+- Sérsic parameters can be strongly correlated, and one noisy realization should not be expected to place every injected truth inside a 68% credible interval.
+- Results from different fitting packages may differ because of pixel integration, Sérsic normalization, PSF convolution, renderer approximations, likelihood details, priors, and point-estimate versus posterior summaries.
+
+Scientific conclusions should therefore be based on posterior distributions, residual diagnostics, model checks, and validation appropriate to the dataset being analyzed.
 
 ---
 
-# Development
+## Documentation
 
-Run the standard development checks:
+- [Project overview](README.md)
+- [Learn BayMorph notebook](notebooks/01_learn_baymorph.ipynb)
+- [Documentation index](docs/README.md)
+- [Public API guide](docs/API.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Validation](docs/VALIDATION.md)
+- [Architectural decisions](DECISIONS.md)
+- [Roadmap](ROADMAP.md)
+- [Changelog](CHANGELOG.md)
+- [Contribution guide](CONTRIBUTING.md)
+
+---
+
+## Contributing
+
+Contributions, bug reports, validation datasets, documentation improvements, and scientific discussions are welcome.
+
+Before submitting a pull request, install the development dependencies and run:
 
 ```bash
 ruff check .
-
-python -m pytest
+python -m pytest -q
+python -m build
+python -m twine check dist/*
 ```
 
----
-
-# Citation
-
-If BayMorph contributes to published scientific work, please cite the corresponding software paper when available.
-
-Until then, please cite the GitHub repository.
+Please read **[`CONTRIBUTING.md`](CONTRIBUTING.md)** for development conventions, testing expectations, and pull-request guidance.
 
 ---
 
-# Contributing
+## Citation
 
-Contributions, bug reports, and feature requests are welcome.
+If BayMorph contributes to your research, please cite the software using the metadata in **[`CITATION.cff`](CITATION.cff)**.
 
-Contribution guidelines are available in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+GitHub can export this metadata directly through the repository's **Cite this repository** interface.
+
+Current citation metadata:
+
+```text
+Carlo Cannarozzo. BayMorph: Bayesian morphological modelling of
+astronomical images. Version 0.2.0 (2026).
+```
+
+Citation information will be updated when a new tagged release or archival DOI becomes available.
 
 ---
 
-# License
+## Roadmap
 
-BayMorph is distributed under the MIT License.
+Current development priorities include:
+
+- validation on heterogeneous real observations;
+- broader single- and double-Sérsic recovery experiments;
+- validation of automatic cutouts, backgrounds, noise maps, and empirical PSFs;
+- improved evidence and model-comparison summaries;
+- synchronized release documentation and reproducible tutorial products.
+
+Longer-term directions include:
+
+- non-constant background models;
+- correlated-noise likelihoods;
+- additional morphology components;
+- alternative sampling backends;
+- spatially varying PSFs;
+- multi-band joint fitting;
+- survey-scale processing and catalogue production.
+
+See **[`ROADMAP.md`](ROADMAP.md)** for the complete development plan.
+
+---
+
+## License
+
+BayMorph is distributed under the **MIT License**. See **[`LICENSE`](LICENSE)** for the full text.
+
+---
+
+## Acknowledgements
+
+BayMorph is built on the scientific Python ecosystem, including NumPy, SciPy, Astropy, Photutils, Matplotlib, PyYAML, and Dynesty.
+
+The project is developed with an emphasis on scientific transparency, reproducibility, modular software design, and rigorous Bayesian interpretation of galaxy morphology.
