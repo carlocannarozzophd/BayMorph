@@ -241,6 +241,8 @@ def _resolve_auto_cutout(
     preliminary_definition = resolve_preliminary_auto_cutout(
         image_shape=image.shape,
         target_segment=full_detection.target_segment,
+        center_x=target_x,
+        center_y=target_y,
         initial_factor=float(
             cutout_cfg.get("initial_factor", 4.0)
         ),

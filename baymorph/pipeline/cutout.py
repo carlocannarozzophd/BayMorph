@@ -179,14 +179,22 @@ def resolve_preliminary_auto_cutout(
     *,
     image_shape: tuple[int, int],
     target_segment: np.ndarray,
+    center_x: float,
+    center_y: float,
     initial_factor: float = 4.0,
     min_size: int = 100,
     max_size: int | None = None,
 ) -> CutoutDefinition:
-    """Resolve a preliminary adaptive cutout from a target segment.
+    """Resolve a preliminary adaptive cutout anchored to a target position.
 
     The preliminary cutout size is derived from the largest dimension of
-    the target-segment bounding box multiplied by ``initial_factor``.
+    the target-segment bounding box multiplied by ``initial_factor``. Its
+    centre remains fixed at the user-supplied target position rather than
+    being inferred from the segment centroid.
+
+    Anchoring the cutout to the supplied position prevents a bright nearby
+    contaminant, or a blended target-contaminant segment, from displacing
+    the preliminary cutout away from the intended source.
 
     Parameters
     ----------
@@ -194,6 +202,8 @@ def resolve_preliminary_auto_cutout(
         Shape of the parent image as ``(ny, nx)``.
     target_segment : ndarray of bool
         Boolean target-segment mask in parent-image coordinates.
+    center_x, center_y : float
+        User-supplied target position in parent-image coordinates.
     initial_factor : float, default=4.0
         Multiplicative expansion of the target bounding-box size.
     min_size : int, default=100
@@ -204,15 +214,18 @@ def resolve_preliminary_auto_cutout(
     Returns
     -------
     CutoutDefinition
-        Preliminary adaptive cutout.
+        Preliminary adaptive cutout centred on the supplied target position.
 
     Raises
     ------
     ValueError
-        If the segment is invalid or contains no target pixels.
+        If the segment, coordinates, or configuration are invalid.
     """
     if initial_factor <= 1.0:
         raise ValueError("'initial_factor' must be greater than 1.")
+
+    if not np.isfinite(center_x) or not np.isfinite(center_y):
+        raise ValueError("Target coordinates must be finite.")
 
     segment = np.asarray(
         target_segment,
@@ -252,13 +265,10 @@ def resolve_preliminary_auto_cutout(
         max_size=max_size,
     )
 
-    center_x = float(np.mean(x))
-    center_y = float(np.mean(y))
-
     return _resolve_centered_cutout(
         image_shape=image_shape,
-        center_x=center_x,
-        center_y=center_y,
+        center_x=float(center_x),
+        center_y=float(center_y),
         size=requested_size,
         mode="auto_preliminary",
     )
