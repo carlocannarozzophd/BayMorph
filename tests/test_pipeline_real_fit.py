@@ -345,3 +345,114 @@ def test_run_sampler_builds_likelihood_and_backend(
         "seed": 123,
         "progress_label": "single_sersic",
     }
+
+
+def test_run_sampler_executes_native_backend_end_to_end():
+    class ConstantFluxModel:
+        def __init__(
+            self,
+            flux: float,
+        ) -> None:
+            self.flux = float(flux)
+
+        def render(
+            self,
+            shape,
+        ):
+            return np.full(
+                shape,
+                self.flux,
+                dtype=float,
+            )
+
+    def model_factory(
+        *,
+        flux,
+    ):
+        return ConstantFluxModel(
+            flux
+        )
+
+    data = np.full(
+        (3, 3),
+        1.5,
+        dtype=float,
+    )
+    noise = np.ones_like(
+        data
+    )
+    mask = np.zeros(
+        data.shape,
+        dtype=bool,
+    )
+
+    parameters = ParameterSet(
+        [
+            Parameter(
+                "flux",
+                1.0,
+                2.0,
+            )
+        ]
+    )
+
+    result = _run_sampler(
+        data_fit=data,
+        noise_fit=noise,
+        mask_fit=mask,
+        parameters=parameters,
+        model_factory=model_factory,
+        likelihood_cfg={
+            "type": "gaussian",
+            "include_normalization": False,
+        },
+        sampler_cfg={
+            "name": "native",
+            "nlive": 8,
+            "sample": "prior",
+            "max_iterations": 2,
+            "seed": 123,
+        },
+        nlive=8,
+        sample="prior",
+        dlogz=1.0e-12,
+        n_processes=1,
+        queue_size=None,
+        seed=123,
+        progress_label="native_test",
+    )
+
+    assert result.parameter_names == [
+        "flux"
+    ]
+    assert result.samples.shape == (
+        10,
+        1,
+    )
+    assert result.logl.shape == (
+        10,
+    )
+    assert result.logwt.shape == (
+        10,
+    )
+    assert result.logz.shape == (
+        10,
+    )
+    assert np.all(
+        np.isfinite(
+            result.samples
+        )
+    )
+    assert np.all(
+        np.isfinite(
+            result.logl
+        )
+    )
+    assert np.isfinite(
+        result.final_logz
+    )
+    assert np.sum(
+        result.weights
+    ) == pytest.approx(
+        1.0
+    )

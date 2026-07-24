@@ -93,6 +93,8 @@ DEFAULT_CONFIG = {
             "seed": None,
             "n_processes": 1,
             "queue_size": None,
+            "max_iterations": None,
+            "max_likelihood_calls": None,
         },
         "comparison": {
             "enabled": False,

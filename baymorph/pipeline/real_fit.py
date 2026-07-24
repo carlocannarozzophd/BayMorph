@@ -219,6 +219,10 @@ def save_real_fit_products(
             "seed": sampler_cfg.get("seed"),
             "n_processes": sampler_cfg.get("n_processes", 1),
             "queue_size": sampler_cfg.get("queue_size"),
+            "max_iterations": sampler_cfg.get("max_iterations"),
+            "max_likelihood_calls": sampler_cfg.get(
+                "max_likelihood_calls"
+            ),
         },
     }
 

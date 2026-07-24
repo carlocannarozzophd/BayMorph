@@ -522,3 +522,34 @@ def test_learn_baymorph_config_is_mirrored_and_resolves_diagnostics():
         "min_pixels": 50,
         "log_n_bins": 40,
     }
+
+def test_resolve_config_preserves_native_sampler_limits():
+    config = {
+        "object": {
+            "name": "NGC1234",
+        },
+        "data": {
+            "image_path": "data/image.fits",
+        },
+        "outputs": {
+            "root": "outputs",
+        },
+        "fit": {
+            "sampler": {
+                "name": "native",
+                "nlive": 80,
+                "sample": "prior",
+                "max_iterations": 25,
+                "max_likelihood_calls": 5000,
+            },
+        },
+    }
+
+    resolved = resolve_config(config)
+    sampler = resolved["fit"]["sampler"]
+
+    assert sampler["name"] == "native"
+    assert sampler["nlive"] == 80
+    assert sampler["sample"] == "prior"
+    assert sampler["max_iterations"] == 25
+    assert sampler["max_likelihood_calls"] == 5000
