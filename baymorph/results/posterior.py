@@ -206,13 +206,3 @@ class PosteriorResult:
     def final_logz(self) -> float:
         """Return the final logarithmic Bayesian evidence."""
         return float(np.asarray(self.logz)[-1])
-
-    @property
-    def final_logz(self) -> float:
-        """Return the final logarithmic Bayesian evidence."""
-        return float(np.asarray(self.logz)[-1])
-
-    @property
-    def final_logz(self) -> float:
-        """Return the final logarithmic Bayesian evidence."""
-        return float(np.asarray(self.logz)[-1])
