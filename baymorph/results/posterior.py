@@ -6,10 +6,7 @@ from functools import cached_property
 import numpy as np
 from dynesty.utils import resample_equal
 
-from baymorph.stats import (
-    dynesty_weights,
-    posterior_summary,
-)
+from baymorph.stats import posterior_summary
 
 
 @dataclass
@@ -41,11 +38,23 @@ class PosteriorResult:
 
     @property
     def weights(self) -> np.ndarray:
-        """ndarray : Normalized posterior sample weights."""
-        return dynesty_weights(
-            self.logwt,
-            self.logz,
-        )
+        """Return normalized posterior sample weights.
+
+        The weights are computed directly from ``logwt`` and the final
+        evidence, making this result container independent of the sampler
+        backend that generated the samples.
+        """
+        logz_final = float(np.asarray(self.logz)[-1])
+        weights = np.exp(np.asarray(self.logwt) - logz_final)
+
+        normalization = float(np.sum(weights))
+        if not np.isfinite(normalization) or normalization <= 0.0:
+            raise ValueError(
+                "Posterior weights cannot be normalized because their "
+                "total is not finite and positive."
+            )
+
+        return weights / normalization
 
     @cached_property
     def posterior_samples(self) -> np.ndarray:
@@ -192,3 +201,18 @@ class PosteriorResult:
         raise AttributeError(
             name
         )
+
+    @property
+    def final_logz(self) -> float:
+        """Return the final logarithmic Bayesian evidence."""
+        return float(np.asarray(self.logz)[-1])
+
+    @property
+    def final_logz(self) -> float:
+        """Return the final logarithmic Bayesian evidence."""
+        return float(np.asarray(self.logz)[-1])
+
+    @property
+    def final_logz(self) -> float:
+        """Return the final logarithmic Bayesian evidence."""
+        return float(np.asarray(self.logz)[-1])
