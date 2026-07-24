@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from baymorph.fitting.dynesty import DynestyFitter
+from baymorph.fitting.native import NativeFitter
 from baymorph.fitting.parameters import ParameterSet
 from baymorph.likelihood import ImageLikelihood
 
@@ -25,8 +26,8 @@ def make_sampler(
         Sampler configuration. A string is interpreted as the sampler name.
         If ``None``, Dynesty is selected.
     model_factory : callable
-        Callable receiving model parameters as keyword arguments and returning
-        an object exposing a ``render(shape=...)`` method.
+        Callable receiving model parameters as keyword arguments and
+        returning an object exposing a ``render(shape=...)`` method.
     parameters : ParameterSet
         Ordered fitted-parameter definitions.
     likelihood : ImageLikelihood
@@ -34,7 +35,7 @@ def make_sampler(
 
     Returns
     -------
-    DynestyFitter
+    DynestyFitter or NativeFitter
         Configured sampling backend.
 
     Raises
@@ -44,7 +45,9 @@ def make_sampler(
     ValueError
         If the requested sampler is unsupported.
     """
-    sampler_config = _normalize_config(config)
+    sampler_config = _normalize_config(
+        config
+    )
 
     sampler_name = str(
         sampler_config.get(
@@ -53,16 +56,24 @@ def make_sampler(
         )
     ).strip().lower()
 
-    if sampler_name != "dynesty":
-        raise ValueError(
-            f"Unknown sampler {sampler_name!r}. "
-            "The only currently available sampler is 'dynesty'."
+    if sampler_name == "dynesty":
+        return DynestyFitter(
+            model_factory=model_factory,
+            parameters=parameters,
+            likelihood=likelihood,
         )
 
-    return DynestyFitter(
-        model_factory=model_factory,
-        parameters=parameters,
-        likelihood=likelihood,
+    if sampler_name == "native":
+        return NativeFitter(
+            model_factory=model_factory,
+            parameters=parameters,
+            likelihood=likelihood,
+            config=sampler_config,
+        )
+
+    raise ValueError(
+        f"Unknown sampler {sampler_name!r}. "
+        "Available samplers are 'dynesty' and 'native'."
     )
 
 
@@ -75,14 +86,23 @@ def _normalize_config(
             "name": "dynesty",
         }
 
-    if isinstance(config, str):
+    if isinstance(
+        config,
+        str,
+    ):
         return {
             "name": config,
         }
 
-    if not isinstance(config, Mapping):
+    if not isinstance(
+        config,
+        Mapping,
+    ):
         raise TypeError(
-            "Sampler configuration must be a mapping, string, or None."
+            "Sampler configuration must be a mapping, "
+            "string, or None."
         )
 
-    return dict(config)
+    return dict(
+        config
+    )

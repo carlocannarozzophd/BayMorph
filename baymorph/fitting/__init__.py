@@ -4,6 +4,7 @@ from baymorph.fitting.dynesty import (
     DynestyFitter,
     DynestyResult,
 )
+from baymorph.fitting.native import NativeFitter
 from baymorph.fitting.model_factories import (
     SkyModelWrapper,
     make_double_sersic_psf_sky_model,
@@ -23,6 +24,7 @@ __all__ = [
     "DynestyFitter",
     "DynestyResult",
     "GridSearchResult",
+    "NativeFitter",
     "Parameter",
     "ParameterSet",
     "SkyModelWrapper",
