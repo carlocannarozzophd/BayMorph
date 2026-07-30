@@ -294,7 +294,7 @@ def _resolve_auto_cutout(
 
 
 @dataclass
-class ImagePreparationProducts:
+class PreparedObservation:
     """Target-specific image-preparation products.
 
     Parameters
@@ -315,7 +315,8 @@ class ImagePreparationProducts:
     target_segment : ndarray of bool
         Boolean mask identifying the target segment.
     contaminant_mask : ndarray of bool
-        Boolean mask identifying non-target detected sources.
+        Final exclusion mask combining non-target detected sources with the
+        optional external mask.
     segmentation : ndarray
         Integer segmentation map.
     background : float
@@ -331,6 +332,8 @@ class ImagePreparationProducts:
     cutout_bounds : dict of str, int, optional
         Pixel bounds of the final cutout in the original image, with keys
         ``xmin``, ``xmax``, ``ymin``, and ``ymax``.
+    external_mask : ndarray of bool, optional
+        User-provided exclusion mask extracted onto the final cutout.
     geometry : TargetGeometry, optional
         Target geometry measured on the final cutout.
     radial_profile : RadialProfile, optional
@@ -362,6 +365,7 @@ class ImagePreparationProducts:
     cutout_mode: str = "fixed"
     original_image: np.ndarray | None = None
     cutout_bounds: dict[str, int] | None = None
+    external_mask: np.ndarray | None = None
 
     geometry: TargetGeometry | None = None
     radial_profile: RadialProfile | None = None
@@ -370,6 +374,10 @@ class ImagePreparationProducts:
 
     preliminary_cutout: np.ndarray | None = None
     preliminary_segmentation: np.ndarray | None = None
+
+
+# Backward compatibility for the v0.4 series.
+ImagePreparationProducts = PreparedObservation
 
 
 def make_target_cutout(

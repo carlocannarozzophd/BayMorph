@@ -11,7 +11,6 @@ from baymorph.pipeline import (
 )
 
 
-
 def test_make_target_cutout_returns_expected_shape():
     data = np.zeros((100, 100))
 
