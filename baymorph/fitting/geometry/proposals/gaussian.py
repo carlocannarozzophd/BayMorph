@@ -74,6 +74,8 @@ class GaussianProposalEngine(ProposalEngine):
         rng: np.random.Generator,
     ) -> ProposalResult:
         """Draw Gaussian candidates until the strict constraint is satisfied."""
+
+        print(">>> USING GAUSSIAN PROPOSAL <<<")
         if not callable(likelihood):
             raise TypeError("likelihood must be callable.")
 
