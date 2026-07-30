@@ -55,6 +55,8 @@ from baymorph.pipeline.preparation_steps import (
 from baymorph.pipeline.segmentation import (
     select_segment_near_position,
 )
+from baymorph.core import load_external_mask
+from baymorph.core import union
 
 
 @dataclass
@@ -487,6 +489,19 @@ def prepare_real_image_from_config(
         cutout_definition,
     )
 
+    external_mask = None
+    external_mask_path = resolved["data"].get("external_mask_path")
+
+    if external_mask_path is not None:
+        full_external_mask = load_external_mask(
+            external_mask_path,
+            expected_shape=image.data.shape,
+        )
+        external_mask = make_target_cutout(
+            full_external_mask,
+            cutout_definition,
+        ).astype(bool)
+
     seed_target_x = float(target_position["x"]) - cutout_definition.xmin
     seed_target_y = float(target_position["y"]) - cutout_definition.ymin
 
@@ -503,7 +518,16 @@ def prepare_real_image_from_config(
     segmentation = prepared.detection.segmentation
     target_label = final_detection.target_label
     target_segment = final_detection.target_segment
-    contaminant_mask = final_detection.contaminant_mask
+    automatic_contaminant_mask = final_detection.contaminant_mask
+
+    contaminant_mask = (
+        automatic_contaminant_mask
+        if external_mask is None
+        else union(
+            automatic_contaminant_mask,
+            external_mask,
+        )
+    )
 
     geometry, radial_profile, plateau = estimate_target_sky(
         cutout,
@@ -571,6 +595,7 @@ def prepare_real_image_from_config(
             else None
         ),
         original_image=image.data,
+        external_mask=external_mask,
         cutout_bounds={
             "xmin": int(cutout_definition.xmin),
             "xmax": int(cutout_definition.xmax),
@@ -645,6 +670,12 @@ def save_image_preparation_products(
         paths["dir"] / "automatic_mask.npy",
         products.automatic_mask,
     )
+
+    if products.external_mask is not None:
+        np.save(
+            paths["dir"] / "external_mask.npy",
+            products.external_mask,
+        )
 
     if products.preliminary_cutout is not None:
         np.save(
@@ -784,6 +815,13 @@ def load_image_preparation_products(
         np.load(original_image_path) if original_image_path.exists() else None
     )
 
+    external_mask_path = paths["dir"] / "external_mask.npy"
+    external_mask = (
+        np.load(external_mask_path).astype(bool)
+        if external_mask_path.exists()
+        else None
+    )
+
     with open(paths["dir"] / "image_preparation_metadata.json", "r") as f:
         metadata = json.load(f)
 
@@ -855,6 +893,7 @@ def load_image_preparation_products(
         target_label=int(metadata["target_label"]),
         cutout_mode=metadata.get("cutout_mode", "fixed"),
         original_image=original_image,
+        external_mask=external_mask,
         cutout_bounds=metadata.get("cutout_bounds"),
         geometry=geometry,
         radial_profile=radial_profile,
