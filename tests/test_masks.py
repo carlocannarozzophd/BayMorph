@@ -4,6 +4,8 @@ import pytest
 from baymorph.core import (
     connected_source_mask,
     star_halo_mask,
+    intersection,
+    union,
 )
 
 
@@ -141,3 +143,141 @@ def test_star_halo_mask_preserves_shape():
     )
 
     assert mask.shape == image.shape
+
+
+def test_union_combines_masks_without_mutating_inputs():
+    first = np.array(
+        [
+            [True, False],
+            [False, False],
+        ],
+        dtype=bool,
+    )
+    second = np.array(
+        [
+            [False, True],
+            [False, False],
+        ],
+        dtype=bool,
+    )
+
+    first_before = first.copy()
+    second_before = second.copy()
+
+    result = union(first, second)
+
+    expected = np.array(
+        [
+            [True, True],
+            [False, False],
+        ],
+        dtype=bool,
+    )
+
+    assert result.dtype == bool
+    assert np.array_equal(result, expected)
+    assert np.array_equal(first, first_before)
+    assert np.array_equal(second, second_before)
+    assert not np.shares_memory(result, first)
+    assert not np.shares_memory(result, second)
+
+
+def test_union_accepts_multiple_masks():
+    first = np.eye(3, dtype=bool)
+    second = np.fliplr(first)
+    third = np.zeros((3, 3), dtype=bool)
+
+    result = union(
+        first,
+        second,
+        third,
+    )
+
+    assert result.sum() == 5
+
+
+def test_intersection_combines_masks_without_mutating_inputs():
+    first = np.array(
+        [
+            [True, True],
+            [False, True],
+        ],
+        dtype=bool,
+    )
+    second = np.array(
+        [
+            [True, False],
+            [False, True],
+        ],
+        dtype=bool,
+    )
+
+    first_before = first.copy()
+    second_before = second.copy()
+
+    result = intersection(first, second)
+
+    expected = np.array(
+        [
+            [True, False],
+            [False, True],
+        ],
+        dtype=bool,
+    )
+
+    assert result.dtype == bool
+    assert np.array_equal(result, expected)
+    assert np.array_equal(first, first_before)
+    assert np.array_equal(second, second_before)
+    assert not np.shares_memory(result, first)
+    assert not np.shares_memory(result, second)
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [union, intersection],
+)
+def test_mask_collection_operations_require_two_masks(
+    operation,
+):
+    with pytest.raises(
+        ValueError,
+        match="At least two masks",
+    ):
+        operation(
+            np.zeros((2, 2), dtype=bool),
+        )
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [union, intersection],
+)
+def test_mask_collection_operations_reject_shape_mismatch(
+    operation,
+):
+    with pytest.raises(
+        ValueError,
+        match="same shape",
+    ):
+        operation(
+            np.zeros((2, 2), dtype=bool),
+            np.zeros((3, 3), dtype=bool),
+        )
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [union, intersection],
+)
+def test_mask_collection_operations_reject_non_2d_input(
+    operation,
+):
+    with pytest.raises(
+        ValueError,
+        match="two-dimensional",
+    ):
+        operation(
+            np.zeros((2, 2), dtype=bool),
+            np.zeros((2, 2, 2), dtype=bool),
+        )

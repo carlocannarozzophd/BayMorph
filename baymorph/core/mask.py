@@ -174,29 +174,14 @@ def union(*masks) -> np.ndarray:
 
 def intersection(*masks) -> np.ndarray:
     """Return the logical intersection of two or more masks."""
-    if len(masks) < 2:
-        raise ValueError("At least two masks are required.")
+    validated = _validate_mask_collection(
+        *masks,
+    )
 
-    validated = [
-        _as_boolean_mask(
-            mask,
-            name=f"masks[{index}]",
-        )
-        for index, mask in enumerate(masks)
-    ]
-
-    shape = validated[0].shape
-
-    for mask in validated[1:]:
-        if mask.shape != shape:
-            raise ValueError("All masks must have the same shape.")
-
-    result = validated[0]
-
-    for mask in validated[1:]:
-        result &= mask
-
-    return result
+    return reduce(
+        np.logical_and,
+        validated,
+    )
 
 
 def connected_source_mask(
