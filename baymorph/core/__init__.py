@@ -14,7 +14,11 @@ from baymorph.core.detection import (
 )
 from baymorph.core.image import ImageData
 from baymorph.core.mask import (
+    build_automatic_mask,
     connected_source_mask,
+    intersection,
+    union,
+    load_external_mask,
     star_halo_mask,
 )
 from baymorph.core.noise import (
@@ -47,7 +51,10 @@ __all__ = [
     "build_elliptical_radius_map",
     "build_sky_region",
     "compute_elliptical_radial_profile",
+    "build_automatic_mask",
     "connected_source_mask",
+    "intersection",
+    "union",
     "detect_profile_plateau",
     "detect_sources_mask",
     "detect_sources_segmentation",
@@ -56,6 +63,7 @@ __all__ = [
     "estimate_noise",
     "estimate_noise_map",
     "make_constant_noise_map",
+    "load_external_mask",
     "star_halo_mask",
     "subtract_background",
 ]
