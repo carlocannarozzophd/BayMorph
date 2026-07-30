@@ -69,6 +69,7 @@ def test_save_and_load_image_preparation_products_roundtrip(tmp_path):
         prepared_data=np.ones((10, 10)) * 2,
         noise=np.ones((10, 10)) * 3,
         automatic_mask=np.zeros((10, 10), dtype=bool),
+        fitting_mask=np.eye(10, dtype=bool),
         external_mask=np.eye(10, dtype=bool),
         target_segment=np.zeros((10, 10), dtype=bool),
         contaminant_mask=np.ones((10, 10), dtype=bool),
@@ -87,6 +88,7 @@ def test_save_and_load_image_preparation_products_roundtrip(tmp_path):
     assert np.allclose(loaded.prepared_data, products.prepared_data)
     assert np.allclose(loaded.noise, products.noise)
     assert np.array_equal(loaded.contaminant_mask, products.contaminant_mask)
+    assert np.array_equal(loaded.fitting_mask, products.fitting_mask)
     assert np.array_equal(loaded.external_mask, products.external_mask)
     assert np.array_equal(loaded.target_segment, products.target_segment)
     assert np.array_equal(loaded.segmentation, products.segmentation)

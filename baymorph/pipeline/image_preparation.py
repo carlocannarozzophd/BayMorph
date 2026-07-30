@@ -314,6 +314,10 @@ class PreparedObservation:
         Noise map associated with ``prepared_data``.
     automatic_mask : ndarray of bool
         Automatic source-detection mask.
+
+    fitting_mask : ndarray of bool
+        Canonical mask used during likelihood evaluation.
+
     target_segment : ndarray of bool
         Boolean mask identifying the target segment.
     contaminant_mask : ndarray of bool
@@ -356,6 +360,7 @@ class PreparedObservation:
     prepared_data: np.ndarray
     noise: np.ndarray
     automatic_mask: np.ndarray
+    fitting_mask: np.ndarray
     target_segment: np.ndarray
     contaminant_mask: np.ndarray
     segmentation: np.ndarray
@@ -567,11 +572,14 @@ def prepare_real_image_from_config(
         background_result.sigma,
     )
 
+    fitting_mask = contaminant_mask.copy()
+
     products = ImagePreparationProducts(
         cutout=cutout,
         prepared_data=prepared_data,
         noise=noise,
         automatic_mask=prepared.mask,
+        fitting_mask=fitting_mask,
         target_segment=target_segment,
         contaminant_mask=contaminant_mask,
         segmentation=segmentation.data,
@@ -669,6 +677,11 @@ def save_image_preparation_products(
     np.save(
         paths["dir"] / "automatic_mask.npy",
         products.automatic_mask,
+    )
+
+    np.save(
+        paths["dir"] / "fitting_mask.npy",
+        products.fitting_mask,
     )
 
     if products.external_mask is not None:
@@ -798,6 +811,14 @@ def load_image_preparation_products(
         else contaminant_mask.copy()
     )
 
+    fitting_mask_path = paths["dir"] / "fitting_mask.npy"
+
+    fitting_mask = (
+        np.load(fitting_mask_path).astype(bool)
+        if fitting_mask_path.exists()
+        else contaminant_mask.copy()
+    )
+
     preliminary_cutout_path = paths["dir"] / "preliminary_cutout.npy"
     preliminary_cutout = (
         np.load(preliminary_cutout_path) if preliminary_cutout_path.exists() else None
@@ -884,6 +905,7 @@ def load_image_preparation_products(
         prepared_data=prepared_data,
         noise=noise,
         automatic_mask=automatic_mask,
+        fitting_mask=fitting_mask,
         target_segment=target_segment,
         contaminant_mask=contaminant_mask,
         segmentation=segmentation,
