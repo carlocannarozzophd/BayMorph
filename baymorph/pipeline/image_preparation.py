@@ -194,9 +194,7 @@ def _detect_target_in_image(
 
     segmentation = prepared.detection.segmentation
     if segmentation is None:
-        raise RuntimeError(
-            f"No segmentation map was produced during {context}."
-        )
+        raise RuntimeError(f"No segmentation map was produced during {context}.")
 
     target_label = select_segment_near_position(
         segmentation,
@@ -206,10 +204,7 @@ def _detect_target_in_image(
 
     target_segment = segmentation.data == target_label
 
-    contaminant_mask = (
-        (segmentation.data > 0)
-        & (segmentation.data != target_label)
-    )
+    contaminant_mask = (segmentation.data > 0) & (segmentation.data != target_label)
 
     return _TargetDetection(
         prepared=prepared,
@@ -243,12 +238,8 @@ def _resolve_auto_cutout(
         target_segment=full_detection.target_segment,
         center_x=target_x,
         center_y=target_y,
-        initial_factor=float(
-            cutout_cfg.get("initial_factor", 4.0)
-        ),
-        min_size=int(
-            cutout_cfg.get("min_size", 100)
-        ),
+        initial_factor=float(cutout_cfg.get("initial_factor", 4.0)),
+        min_size=int(cutout_cfg.get("min_size", 100)),
         max_size=cutout_cfg.get("max_size"),
     )
 
@@ -277,23 +268,15 @@ def _resolve_auto_cutout(
         min_coverage=0.5,
     )
 
-    global_center_x = (
-        preliminary_definition.xmin
-        + geometry.x0
-    )
-    global_center_y = (
-        preliminary_definition.ymin
-        + geometry.y0
-    )
+    global_center_x = preliminary_definition.xmin + geometry.x0
+    global_center_y = preliminary_definition.ymin + geometry.y0
 
     final_cutout = resolve_plateau_cutout(
         image_shape=image.shape,
         center_x=global_center_x,
         center_y=global_center_y,
         plateau_radius=plateau.radius,
-        sky_margin=float(
-            cutout_cfg.get("sky_margin", 20.0)
-        ),
+        sky_margin=float(cutout_cfg.get("sky_margin", 20.0)),
         min_size=cutout_cfg.get("min_size"),
         max_size=cutout_cfg.get("max_size"),
     )
@@ -408,8 +391,8 @@ def make_target_cutout(
         Extracted image cutout.
     """
     return data[
-        cutout.ymin:cutout.ymax,
-        cutout.xmin:cutout.xmax,
+        cutout.ymin : cutout.ymax,
+        cutout.xmin : cutout.xmax,
     ]
 
 
@@ -446,9 +429,7 @@ def prepare_real_image_from_config(
 
     make_output_tree(resolved)
 
-    observation = Observation.from_fits(
-        resolved["data"]["image_path"]
-    )
+    observation = Observation.from_fits(resolved["data"]["image_path"])
 
     resolved = resolve_runtime_config(
         resolved,
@@ -491,23 +472,15 @@ def prepare_real_image_from_config(
         cutout_definition = auto_cutout_result.cutout
 
     else:
-        raise ValueError(
-            f"Unsupported cutout mode: {cutout_mode!r}."
-        )
+        raise ValueError(f"Unsupported cutout mode: {cutout_mode!r}.")
 
     cutout = make_target_cutout(
         image.data,
         cutout_definition,
     )
 
-    seed_target_x = (
-        float(target_position["x"])
-        - cutout_definition.xmin
-    )
-    seed_target_y = (
-        float(target_position["y"])
-        - cutout_definition.ymin
-    )
+    seed_target_x = float(target_position["x"]) - cutout_definition.xmin
+    seed_target_y = float(target_position["y"]) - cutout_definition.ymin
 
     final_detection = _detect_target_in_image(
         cutout,
@@ -575,12 +548,10 @@ def prepare_real_image_from_config(
         target_y=target_y,
         target_label=int(target_label),
         cutout_mode=cutout_mode,
-
         geometry=geometry,
         radial_profile=radial_profile,
         plateau=plateau,
         sky_region=sky_region,
-
         preliminary_cutout=(
             auto_cutout_result.preliminary_cutout
             if auto_cutout_result is not None
@@ -591,7 +562,6 @@ def prepare_real_image_from_config(
             if auto_cutout_result is not None
             else None
         ),
-
         original_image=image.data,
         cutout_bounds={
             "xmin": int(cutout_definition.xmin),
@@ -706,9 +676,7 @@ def save_image_preparation_products(
 
     metadata = {
         "observation": (
-            observation_metadata_dict(observation)
-            if observation is not None
-            else None
+            observation_metadata_dict(observation) if observation is not None else None
         ),
         "background": products.background,
         "target_x": products.target_x,
@@ -791,18 +759,12 @@ def load_image_preparation_products(
         else contaminant_mask.copy()
     )
 
-    preliminary_cutout_path = (
-        paths["dir"] / "preliminary_cutout.npy"
-    )
+    preliminary_cutout_path = paths["dir"] / "preliminary_cutout.npy"
     preliminary_cutout = (
-        np.load(preliminary_cutout_path)
-        if preliminary_cutout_path.exists()
-        else None
+        np.load(preliminary_cutout_path) if preliminary_cutout_path.exists() else None
     )
 
-    preliminary_segmentation_path = (
-        paths["dir"] / "preliminary_segmentation.npy"
-    )
+    preliminary_segmentation_path = paths["dir"] / "preliminary_segmentation.npy"
     preliminary_segmentation = (
         np.load(preliminary_segmentation_path)
         if preliminary_segmentation_path.exists()
@@ -811,9 +773,7 @@ def load_image_preparation_products(
 
     original_image_path = paths["dir"] / "original_image.npy"
     original_image = (
-        np.load(original_image_path)
-        if original_image_path.exists()
-        else None
+        np.load(original_image_path) if original_image_path.exists() else None
     )
 
     with open(paths["dir"] / "image_preparation_metadata.json", "r") as f:
@@ -836,9 +796,7 @@ def load_image_preparation_products(
         PlateauResult(
             radius=float(plateau_data["radius"]),
             index=int(plateau_data["index"]),
-            background_level=float(
-                plateau_data["background_level"]
-            ),
+            background_level=float(plateau_data["background_level"]),
             noise_sigma=float(plateau_data["noise_sigma"]),
             window_start=int(plateau_data["window_start"]),
             window_stop=int(plateau_data["window_stop"]),

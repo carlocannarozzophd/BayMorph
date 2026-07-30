@@ -7,17 +7,11 @@ from baymorph.core import (
 )
 
 
-
 def test_connected_source_mask_detects_source():
 
     yy, xx = np.indices((101, 101))
 
-    image = np.exp(
-        -(
-            (xx - 50) ** 2
-            + (yy - 50) ** 2
-        ) / (2 * 5**2)
-    )
+    image = np.exp(-((xx - 50) ** 2 + (yy - 50) ** 2) / (2 * 5**2))
 
     mask = connected_source_mask(
         image,
@@ -29,9 +23,7 @@ def test_connected_source_mask_detects_source():
     assert mask[50, 50]
 
 
-@pytest.mark.filterwarnings(
-    "ignore::photutils.segmentation.detect.NoDetectionsWarning"
-)
+@pytest.mark.filterwarnings("ignore::photutils.segmentation.detect.NoDetectionsWarning")
 def test_connected_source_mask_background_click():
 
     image = np.zeros((100, 100))
@@ -45,9 +37,7 @@ def test_connected_source_mask_background_click():
     assert mask.sum() == 0
 
 
-@pytest.mark.filterwarnings(
-    "ignore::photutils.segmentation.detect.NoDetectionsWarning"
-)
+@pytest.mark.filterwarnings("ignore::photutils.segmentation.detect.NoDetectionsWarning")
 def test_connected_source_mask_preserves_shape():
 
     image = np.random.random((87, 113))
@@ -65,12 +55,7 @@ def test_connected_source_mask_dilation():
 
     yy, xx = np.indices((101, 101))
 
-    image = np.exp(
-        -(
-            (xx - 50) ** 2
-            + (yy - 50) ** 2
-        ) / (2 * 5**2)
-    )
+    image = np.exp(-((xx - 50) ** 2 + (yy - 50) ** 2) / (2 * 5**2))
 
     mask1 = connected_source_mask(
         image,
@@ -93,12 +78,7 @@ def test_connected_source_mask_near_border():
 
     yy, xx = np.indices((101, 101))
 
-    image = np.exp(
-        -(
-            (xx - 5) ** 2
-            + (yy - 5) ** 2
-        ) / (2 * 3**2)
-    )
+    image = np.exp(-((xx - 5) ** 2 + (yy - 5) ** 2) / (2 * 3**2))
 
     mask = connected_source_mask(
         image,
@@ -113,12 +93,7 @@ def test_star_halo_mask_contains_click():
 
     yy, xx = np.indices((101, 101))
 
-    image = np.exp(
-        -(
-            (xx - 50) ** 2
-            + (yy - 50) ** 2
-        ) / (2 * 5**2)
-    )
+    image = np.exp(-((xx - 50) ** 2 + (yy - 50) ** 2) / (2 * 5**2))
 
     mask = star_halo_mask(
         image,
@@ -134,12 +109,7 @@ def test_star_halo_mask_larger_than_source_mask():
 
     yy, xx = np.indices((101, 101))
 
-    image = np.exp(
-        -(
-            (xx - 50) ** 2
-            + (yy - 50) ** 2
-        ) / (2 * 5**2)
-    )
+    image = np.exp(-((xx - 50) ** 2 + (yy - 50) ** 2) / (2 * 5**2))
 
     source_mask = connected_source_mask(
         image,
@@ -157,9 +127,7 @@ def test_star_halo_mask_larger_than_source_mask():
     assert star_mask.sum() > source_mask.sum()
 
 
-@pytest.mark.filterwarnings(
-    "ignore::photutils.segmentation.detect.NoDetectionsWarning"
-)
+@pytest.mark.filterwarnings("ignore::photutils.segmentation.detect.NoDetectionsWarning")
 def test_star_halo_mask_preserves_shape():
 
     image = np.random.random(
