@@ -1,11 +1,15 @@
 import numpy as np
 import pytest
+from astropy.io import fits
+
 
 from baymorph.core import (
     connected_source_mask,
     star_halo_mask,
     intersection,
     union,
+    load_external_mask,
+    build_automatic_mask,
 )
 
 
@@ -280,4 +284,230 @@ def test_mask_collection_operations_reject_non_2d_input(
         operation(
             np.zeros((2, 2), dtype=bool),
             np.zeros((2, 2, 2), dtype=bool),
+        )
+
+
+def test_load_external_mask_converts_nonzero_pixels_to_bool(
+    tmp_path,
+):
+    path = tmp_path / "mask.fits"
+
+    data = np.array(
+        [
+            [0, 1, 0],
+            [2, 0, -1],
+        ],
+        dtype=np.int16,
+    )
+
+    fits.writeto(
+        path,
+        data,
+    )
+
+    mask = load_external_mask(
+        path,
+        expected_shape=(2, 3),
+    )
+
+    expected = np.array(
+        [
+            [False, True, False],
+            [True, False, True],
+        ],
+        dtype=bool,
+    )
+
+    assert mask.dtype == bool
+    assert np.array_equal(
+        mask,
+        expected,
+    )
+
+
+def test_load_external_mask_rejects_missing_file(
+    tmp_path,
+):
+    path = tmp_path / "missing.fits"
+
+    with pytest.raises(
+        FileNotFoundError,
+        match="External mask file not found",
+    ):
+        load_external_mask(path)
+
+
+def test_load_external_mask_rejects_non_2d_data(
+    tmp_path,
+):
+    path = tmp_path / "mask.fits"
+
+    fits.writeto(
+        path,
+        np.zeros((2, 3, 4)),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="two-dimensional",
+    ):
+        load_external_mask(path)
+
+
+def test_load_external_mask_rejects_non_finite_values(
+    tmp_path,
+):
+    path = tmp_path / "mask.fits"
+
+    data = np.zeros((4, 5))
+    data[1, 2] = np.nan
+
+    fits.writeto(
+        path,
+        data,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="non-finite",
+    ):
+        load_external_mask(path)
+
+
+def test_load_external_mask_rejects_shape_mismatch(
+    tmp_path,
+):
+    path = tmp_path / "mask.fits"
+
+    fits.writeto(
+        path,
+        np.zeros((4, 5)),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="does not match the science image",
+    ):
+        load_external_mask(
+            path,
+            expected_shape=(5, 4),
+        )
+
+
+def test_build_automatic_mask_excludes_only_non_target_sources():
+    segmentation = np.array(
+        [
+            [0, 1, 1, 0],
+            [0, 1, 0, 2],
+            [3, 0, 2, 2],
+        ],
+        dtype=int,
+    )
+
+    mask = build_automatic_mask(
+        segmentation,
+        target_label=2,
+    )
+
+    expected = np.array(
+        [
+            [False, True, True, False],
+            [False, True, False, False],
+            [True, False, False, False],
+        ],
+        dtype=bool,
+    )
+
+    assert mask.dtype == bool
+    assert np.array_equal(mask, expected)
+
+
+def test_build_automatic_mask_accepts_segmentation_object():
+    class SegmentationStub:
+        def __init__(self, data):
+            self.data = data
+
+    segmentation = SegmentationStub(
+        np.array(
+            [
+                [0, 1, 0],
+                [2, 2, 0],
+            ],
+            dtype=int,
+        )
+    )
+
+    mask = build_automatic_mask(
+        segmentation,
+        target_label=1,
+    )
+
+    expected = np.array(
+        [
+            [False, False, False],
+            [True, True, False],
+        ],
+        dtype=bool,
+    )
+
+    assert np.array_equal(mask, expected)
+
+
+def test_build_automatic_mask_rejects_non_2d_segmentation():
+    segmentation = np.zeros(
+        (2, 3, 4),
+        dtype=int,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="two-dimensional",
+    ):
+        build_automatic_mask(
+            segmentation,
+            target_label=1,
+        )
+
+
+@pytest.mark.parametrize(
+    "target_label",
+    [0, -1],
+)
+def test_build_automatic_mask_rejects_non_positive_target_label(
+    target_label,
+):
+    segmentation = np.array(
+        [
+            [0, 1],
+            [0, 0],
+        ],
+        dtype=int,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="must be a positive",
+    ):
+        build_automatic_mask(
+            segmentation,
+            target_label=target_label,
+        )
+
+
+def test_build_automatic_mask_rejects_missing_target_label():
+    segmentation = np.array(
+        [
+            [0, 1],
+            [2, 0],
+        ],
+        dtype=int,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="absent from the segmentation",
+    ):
+        build_automatic_mask(
+            segmentation,
+            target_label=3,
         )

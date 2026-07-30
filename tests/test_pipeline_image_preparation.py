@@ -9,6 +9,7 @@ from baymorph.pipeline import (
     resolve_fixed_cutout,
     save_image_preparation_products,
 )
+from baymorph.pipeline import PreparedObservation
 
 
 def test_make_target_cutout_returns_expected_shape():
@@ -91,3 +92,9 @@ def test_save_and_load_image_preparation_products_roundtrip(tmp_path):
     assert loaded.target_x == products.target_x
     assert loaded.target_y == products.target_y
     assert loaded.target_label == products.target_label
+
+
+def test_prepared_observation_alias():
+    """The legacy public name must remain available during v0.4."""
+
+    assert PreparedObservation is ImagePreparationProducts

@@ -81,6 +81,7 @@ from baymorph.pipeline.workflows import (
     run_real_fit,
 )
 from baymorph.results import RealFitProducts
+from .image_preparation import PreparedObservation
 
 __all__ = [
     "CutoutDefinition",
@@ -144,4 +145,5 @@ __all__ = [
     "stack_psf_cutouts",
     "subtract_outer_background",
     "validate_config",
+    "PreparedObservation",
 ]
