@@ -28,6 +28,7 @@ from baymorph.core.mask import (
     invert,
     opening,
 )
+from baymorph.core.multiband import MultiBandObservation
 from baymorph.core.noise import (
     estimate_noise_map,
     make_constant_noise_map,
@@ -50,6 +51,7 @@ __all__ = [
     "BackgroundResult",
     "DetectionResult",
     "ImageData",
+    "MultiBandObservation",
     "Observation",
     "ObservationMetadata",
     "PlateauResult",
