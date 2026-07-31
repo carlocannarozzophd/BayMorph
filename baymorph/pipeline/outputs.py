@@ -147,6 +147,7 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
         fit_paths[model_name] = {
             "dir": fit_dir,
             "fit_results": fit_dir / "fit_results.json",
+            "posterior": fit_dir / "posterior.npz",
             "corner": fit_dir / f"corner.{plot_format}",
             "residual": fit_dir / f"data_model_residual.{plot_format}",
             "radial_profile": fit_dir / f"radial_profile.{plot_format}",
