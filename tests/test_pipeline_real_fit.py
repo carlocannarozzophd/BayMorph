@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -5,7 +7,9 @@ from baymorph.fitting import (
     Parameter,
     ParameterSet,
 )
+from baymorph import PosteriorResult
 from baymorph.likelihood import GaussianImageLikelihood
+from baymorph.pipeline.config import resolve_config
 
 from baymorph.pipeline.real_fit import (
     RealFitProducts,
@@ -15,7 +19,9 @@ from baymorph.pipeline.real_fit import (
     _compute_fit_statistics,
     _compute_bayesian_model_comparison,
     _run_sampler,
+    load_real_fit_products,
     run_real_fit_from_config,
+    save_real_fit_products,
 )
 
 
@@ -94,6 +100,108 @@ def test_run_real_fit_requires_psf_products(
         match="PSF products are required before fitting",
     ):
         run_real_fit_from_config({})
+
+
+
+def test_real_fit_products_preserve_posterior_round_trip(
+    tmp_path,
+    monkeypatch,
+):
+    config = resolve_config(
+        {
+            "object": {
+                "name": "NGC1234",
+            },
+            "data": {
+                "image_path": "data/image.fits",
+            },
+            "outputs": {
+                "root": str(tmp_path / "outputs"),
+            },
+            "fit": {
+                "models": [
+                    "single_sersic",
+                ],
+            },
+        }
+    )
+
+    posterior = PosteriorResult(
+        samples=np.array(
+            [
+                [1.0, 10.0],
+                [2.0, 20.0],
+            ]
+        ),
+        logwt=np.array([-2.0, -1.0]),
+        logz=np.array([-3.0, -0.5]),
+        parameter_names=[
+            "flux",
+            "re",
+        ],
+        logl=np.array([-10.0, -5.0]),
+        logzerr=np.array([0.4, 0.2]),
+    )
+
+    products = RealFitProducts(
+        model_name="single_sersic",
+        posterior=posterior,
+        best_parameters={
+            "flux": 2.0,
+            "re": 20.0,
+        },
+        best_model_image=np.ones((2, 2)),
+        residual=np.zeros((2, 2)),
+        norm_residual=np.zeros((2, 2)),
+        chi2=1.0,
+        ndof=2,
+        reduced_chi2=0.5,
+        noise=np.ones((2, 2)),
+    )
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.load_image_preparation_products",
+        lambda config: SimpleNamespace(
+            noise=np.ones((2, 2)),
+        ),
+    )
+
+    save_real_fit_products(
+        config,
+        "single_sersic",
+        products,
+    )
+
+    loaded = load_real_fit_products(
+        config,
+        "single_sersic",
+    )
+
+    assert loaded.posterior is not None
+    assert np.array_equal(
+        loaded.posterior.samples,
+        posterior.samples,
+    )
+    assert np.array_equal(
+        loaded.posterior.logwt,
+        posterior.logwt,
+    )
+    assert np.array_equal(
+        loaded.posterior.logz,
+        posterior.logz,
+    )
+    assert np.array_equal(
+        loaded.posterior.logl,
+        posterior.logl,
+    )
+    assert np.array_equal(
+        loaded.posterior.logzerr,
+        posterior.logzerr,
+    )
+    assert (
+        loaded.posterior.parameter_names
+        == posterior.parameter_names
+    )
 
 
 class DummyResult:

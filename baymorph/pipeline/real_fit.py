@@ -30,7 +30,7 @@ from baymorph.pipeline.outputs import (
     save_resolved_config,
 )
 from baymorph.pipeline.psf_construction import load_empirical_psf
-from baymorph.results import RealFitProducts
+from baymorph.results import PosteriorResult, RealFitProducts
 from baymorph.simulation.psf import GaussianPSF
 
 
@@ -182,6 +182,9 @@ def save_real_fit_products(
     np.save(paths["dir"] / "best_model_image.npy", products.best_model_image)
     np.save(paths["dir"] / "residual.npy", products.residual)
     np.save(paths["dir"] / "norm_residual.npy", products.norm_residual)
+
+    if products.posterior is not None:
+        products.posterior.save(paths["posterior"])
 
     with open(paths["dir"] / "best_parameters.json", "w") as f:
         json.dump(
@@ -338,9 +341,16 @@ def load_real_fit_products(
 
     image_products = load_image_preparation_products(resolved)
 
+    posterior = None
+
+    if paths["posterior"].exists():
+        posterior = PosteriorResult.load(
+            paths["posterior"]
+        )
+
     return RealFitProducts(
         model_name=model_name,
-        posterior=None,
+        posterior=posterior,
         best_parameters={
             key: float(value)
             for key, value in best_parameters.items()

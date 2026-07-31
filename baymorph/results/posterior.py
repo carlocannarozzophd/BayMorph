@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from functools import cached_property
+from pathlib import Path
 
 import numpy as np
 from dynesty.utils import resample_equal
@@ -206,3 +207,93 @@ class PosteriorResult:
     def final_logz(self) -> float:
         """Return the final logarithmic Bayesian evidence."""
         return float(np.asarray(self.logz)[-1])
+
+    def save(
+        self,
+        path: str | Path,
+    ) -> Path:
+        """Serialize the posterior to a compressed NumPy archive.
+
+        Parameters
+        ----------
+        path : str or pathlib.Path
+            Destination ``.npz`` file.
+
+        Returns
+        -------
+        pathlib.Path
+            Path to the serialized posterior.
+        """
+        output_path = Path(path)
+        output_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        arrays = {
+            "samples": np.asarray(self.samples),
+            "logwt": np.asarray(self.logwt),
+            "logz": np.asarray(self.logz),
+            "parameter_names": np.asarray(
+                self.parameter_names,
+                dtype=str,
+            ),
+        }
+
+        if self.logl is not None:
+            arrays["logl"] = np.asarray(self.logl)
+
+        if self.logzerr is not None:
+            arrays["logzerr"] = np.asarray(self.logzerr)
+
+        np.savez_compressed(
+            output_path,
+            **arrays,
+        )
+
+        return output_path
+
+    @classmethod
+    def load(
+        cls,
+        path: str | Path,
+    ) -> "PosteriorResult":
+        """Load a posterior from a compressed NumPy archive.
+
+        Parameters
+        ----------
+        path : str or pathlib.Path
+            Existing posterior ``.npz`` file.
+
+        Returns
+        -------
+        PosteriorResult
+            Reconstructed posterior result.
+        """
+        input_path = Path(path)
+
+        with np.load(
+            input_path,
+            allow_pickle=False,
+        ) as archive:
+            files = set(archive.files)
+
+            return cls(
+                samples=np.asarray(archive["samples"]),
+                logwt=np.asarray(archive["logwt"]),
+                logz=np.asarray(archive["logz"]),
+                parameter_names=[
+                    str(name)
+                    for name in archive["parameter_names"]
+                ],
+                logl=(
+                    np.asarray(archive["logl"])
+                    if "logl" in files
+                    else None
+                ),
+                logzerr=(
+                    np.asarray(archive["logzerr"])
+                    if "logzerr" in files
+                    else None
+                ),
+            )
