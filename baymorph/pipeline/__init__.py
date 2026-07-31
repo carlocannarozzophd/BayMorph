@@ -67,6 +67,11 @@ from baymorph.pipeline.real_fit import (
     save_real_fit_products,
 )
 from baymorph.pipeline.residual_maps import run_residual_map_diagnostics
+from baymorph.pipeline.runtime_report import (
+    build_runtime_report,
+    load_runtime_report,
+    save_runtime_report,
+)
 from baymorph.pipeline.segmentation import select_segment_near_position
 from baymorph.pipeline.simulation import (
     run_simulation_from_config,
@@ -84,6 +89,9 @@ from baymorph.results import RealFitProducts
 from .image_preparation import PreparedObservation
 
 __all__ = [
+    "save_runtime_report",
+    "load_runtime_report",
+    "build_runtime_report",
     "CutoutDefinition",
     "ImagePreparationProducts",
     "PSFCandidate",

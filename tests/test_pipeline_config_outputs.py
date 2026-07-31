@@ -553,3 +553,77 @@ def test_resolve_config_preserves_native_sampler_limits():
     assert sampler["sample"] == "prior"
     assert sampler["max_iterations"] == 25
     assert sampler["max_likelihood_calls"] == 5000
+
+
+def test_runtime_report_path_is_canonical(tmp_path):
+    from baymorph.pipeline import pipeline_paths
+
+    config = {
+        "object": {"name": "NGC1234"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": str(tmp_path)},
+    }
+
+    path = pipeline_paths(config)["runtime_report"]
+
+    assert path == tmp_path / "NGC1234" / "runtime_report.yaml"
+
+
+def test_build_runtime_report_returns_independent_data(tmp_path):
+    from baymorph.pipeline import build_runtime_report
+
+    config = {
+        "object": {"name": "NGC1234"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": str(tmp_path)},
+    }
+    runtime = {
+        "image_preparation": {
+            "background": 1.5,
+        },
+    }
+
+    report = build_runtime_report(
+        config,
+        runtime=runtime,
+    )
+
+    config["object"]["name"] = "modified"
+    runtime["image_preparation"]["background"] = 9.0
+
+    assert report["config"]["object"]["name"] == "NGC1234"
+    assert report["runtime"]["image_preparation"]["background"] == 1.5
+    assert report["config"]["fit"]["sampler"]["name"] == "dynesty"
+
+
+def test_runtime_report_roundtrip(tmp_path):
+    from baymorph.pipeline import (
+        build_runtime_report,
+        load_runtime_report,
+        save_runtime_report,
+    )
+
+    config = {
+        "object": {"name": "NGC1234"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": str(tmp_path)},
+    }
+
+    report = build_runtime_report(
+        config,
+        runtime={
+            "image_preparation": {
+                "cutout_shape": [51, 51],
+                "masked_fraction": 0.12,
+            },
+        },
+    )
+
+    path = save_runtime_report(
+        config,
+        report,
+    )
+    loaded = load_runtime_report(config)
+
+    assert path == tmp_path / "NGC1234" / "runtime_report.yaml"
+    assert loaded == report

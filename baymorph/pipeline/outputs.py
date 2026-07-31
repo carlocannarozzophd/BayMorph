@@ -155,6 +155,7 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
     return {
         "base": base,
         "config_resolved": base / "config_resolved.yaml",
+        "runtime_report": base / "runtime_report.yaml",
         "input": {
             "dir": base / "input",
             "image": input_image,
