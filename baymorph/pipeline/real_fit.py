@@ -59,7 +59,9 @@ def run_real_fit_from_config(
         return resolved
 
     try:
-        observation = Observation.from_fits(resolved["data"]["image_path"])
+        observation = Observation.from_fits(
+            resolved["data"]["image_path"]
+        )
     except FileNotFoundError:
         observation = None
 
@@ -177,7 +179,10 @@ def save_real_fit_products(
 
     with open(paths["dir"] / "best_parameters.json", "w") as f:
         json.dump(
-            {key: float(value) for key, value in products.best_parameters.items()},
+            {
+                key: float(value)
+                for key, value in products.best_parameters.items()
+            },
             f,
             indent=2,
         )
@@ -186,17 +191,24 @@ def save_real_fit_products(
 
     summary = {
         "observation": (
-            observation_metadata_dict(observation) if observation is not None else None
+            observation_metadata_dict(observation)
+            if observation is not None
+            else None
         ),
         "chi2": float(products.chi2),
         "ndof": int(products.ndof),
         "reduced_chi2": float(products.reduced_chi2),
         "logz": (
-            None if products.posterior is None else float(products.posterior.logz[-1])
+            None
+            if products.posterior is None
+            else float(products.posterior.logz[-1])
         ),
         "logzerr": (
             None
-            if (products.posterior is None or products.posterior.logzerr is None)
+            if (
+                products.posterior is None
+                or products.posterior.logzerr is None
+            )
             else float(products.posterior.logzerr[-1])
         ),
         "sampler": {
@@ -208,7 +220,9 @@ def save_real_fit_products(
             "n_processes": sampler_cfg.get("n_processes", 1),
             "queue_size": sampler_cfg.get("queue_size"),
             "max_iterations": sampler_cfg.get("max_iterations"),
-            "max_likelihood_calls": sampler_cfg.get("max_likelihood_calls"),
+            "max_likelihood_calls": sampler_cfg.get(
+                "max_likelihood_calls"
+            ),
         },
     }
 
@@ -236,11 +250,18 @@ def save_fit_summary_text(
     products: RealFitProducts,
 ) -> None:
     """Save a human-readable text summary of a fit."""
-    logz = None if products.posterior is None else float(products.posterior.logz[-1])
+    logz = (
+        None
+        if products.posterior is None
+        else float(products.posterior.logz[-1])
+    )
 
     logzerr = (
         None
-        if (products.posterior is None or products.posterior.logzerr is None)
+        if (
+            products.posterior is None
+            or products.posterior.logzerr is None
+        )
         else float(products.posterior.logzerr[-1])
     )
 
@@ -258,9 +279,13 @@ def save_fit_summary_text(
     ]
 
     for key, value in products.best_parameters.items():
-        lines.append(f"{key} = {float(value):.8g}")
+        lines.append(
+            f"{key} = {float(value):.8g}"
+        )
 
-    path.write_text("\n".join(lines) + "\n")
+    path.write_text(
+        "\n".join(lines) + "\n"
+    )
 
 
 def save_bayesian_model_comparison(
@@ -310,7 +335,10 @@ def load_real_fit_products(
     return RealFitProducts(
         model_name=model_name,
         posterior=None,
-        best_parameters={key: float(value) for key, value in best_parameters.items()},
+        best_parameters={
+            key: float(value)
+            for key, value in best_parameters.items()
+        },
         best_model_image=best_model_image,
         residual=residual,
         norm_residual=norm_residual,
@@ -346,9 +374,15 @@ def _load_psf_from_config(
             {},
         )
 
-        return GaussianPSF(fwhm=float(gaussian_cfg["fwhm"]))
+        return GaussianPSF(
+            fwhm=float(
+                gaussian_cfg["fwhm"]
+            )
+        )
 
-    raise ValueError(f"Unsupported PSF type: {psf_type}")
+    raise ValueError(
+        f"Unsupported PSF type: {psf_type}"
+    )
 
 
 def _parse_prior_value(value):
@@ -393,7 +427,9 @@ def _bounds_from_prior(
                 float(target_y + offset),
             )
 
-        raise ValueError(f"Offset prior is only supported for x0/y0, got {name}.")
+        raise ValueError(
+            f"Offset prior is only supported for x0/y0, got {name}."
+        )
 
     return (
         _parse_prior_value(cfg["min"]),
@@ -421,7 +457,9 @@ def _prior_entry_for_parameter(
     if alias is not None and alias in prior_cfg:
         return prior_cfg[alias]
 
-    raise ValueError(f"Missing prior configuration for parameter: {name}")
+    raise ValueError(
+        f"Missing prior configuration for parameter: {name}"
+    )
 
 
 def _build_parameter_list(
@@ -471,7 +509,10 @@ def _build_parameter_set(
         prior_cfg = DEFAULT_CONFIG["fit"]["priors"]
 
     valid_for_flux = (
-        (~mask_fit) & np.isfinite(data_fit) & np.isfinite(noise_fit) & (noise_fit > 0)
+        (~mask_fit)
+        & np.isfinite(data_fit)
+        & np.isfinite(noise_fit)
+        & (noise_fit > 0)
     )
 
     flux_total = np.nansum(
@@ -537,7 +578,6 @@ class SingleSersicModelFactory:
             psf=self.psf,
         )
 
-
 class DoubleSersicModelFactory:
     """Factory for PSF-convolved double-Sérsic plus sky models."""
 
@@ -581,7 +621,6 @@ class DoubleSersicModelFactory:
             psf=self.psf,
         )
 
-
 def _make_model_factory(
     model_name,
     psf,
@@ -611,7 +650,10 @@ def _compute_best_model(
     image_shape,
 ):
     """Render the best-fit model image from a posterior result."""
-    best_parameters = {name: result.best_parameters[name] for name in parameter_names}
+    best_parameters = {
+        name: result.best_parameters[name]
+        for name in parameter_names
+    }
 
     best_model = model_factory(
         **best_parameters,
@@ -648,13 +690,27 @@ def _compute_fit_statistics(
         dtype=float,
     )
 
-    norm_residual[valid] = residual[valid] / noise[valid]
+    norm_residual[valid] = (
+        residual[valid]
+        / noise[valid]
+    )
 
-    chi2 = float(np.sum(norm_residual[valid] ** 2))
+    chi2 = float(
+        np.sum(
+            norm_residual[valid] ** 2
+        )
+    )
 
-    ndof = int(np.sum(valid) - n_parameters)
+    ndof = int(
+        np.sum(valid)
+        - n_parameters
+    )
 
-    reduced_chi2 = float(chi2 / ndof) if ndof > 0 else np.nan
+    reduced_chi2 = (
+        float(chi2 / ndof)
+        if ndof > 0
+        else np.nan
+    )
 
     return {
         "residual": residual,
@@ -670,11 +726,16 @@ def _compute_bayesian_model_comparison(
 ):
     """Compute Bayesian model-comparison quantities from model evidences."""
     logz = {
-        model_name: float(products.posterior.logz[-1])
+        model_name: float(
+            products.posterior.logz[-1]
+        )
         for model_name, products in products_by_model.items()
     }
 
-    if "single_sersic" not in logz or "double_sersic" not in logz:
+    if (
+        "single_sersic" not in logz
+        or "double_sersic" not in logz
+    ):
         return {
             "logz": logz,
             "delta_logz": {},
@@ -682,12 +743,17 @@ def _compute_bayesian_model_comparison(
             "bayes_factor": {},
         }
 
-    delta_logz = logz["double_sersic"] - logz["single_sersic"]
+    delta_logz = (
+        logz["double_sersic"]
+        - logz["single_sersic"]
+    )
 
     log_bayes_factor = float(delta_logz)
 
     if log_bayes_factor < 700:
-        bayes_factor = float(np.exp(log_bayes_factor))
+        bayes_factor = float(
+            np.exp(log_bayes_factor)
+        )
     else:
         bayes_factor = None
 
@@ -765,6 +831,13 @@ def _diagnostic_title(
     )
 
     if model_name in titles:
-        return str(titles[model_name])
+        return str(
+            titles[model_name]
+        )
 
-    return model_name.replace("_", " ").title().replace("Sersic", "Sérsic")
+    return (
+        model_name
+        .replace("_", " ")
+        .title()
+        .replace("Sersic", "Sérsic")
+    )

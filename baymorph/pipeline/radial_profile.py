@@ -51,7 +51,11 @@ def _load_psf_from_config(config):
             {},
         )
 
-        return GaussianPSF(fwhm=float(gaussian_cfg["fwhm"]))
+        return GaussianPSF(
+            fwhm=float(
+                gaussian_cfg["fwhm"]
+            )
+        )
 
     if psf_type == "empirical":
         try:
@@ -61,7 +65,9 @@ def _load_psf_from_config(config):
         except FileNotFoundError:
             return None
 
-    raise ValueError(f"Unsupported PSF type: {psf_type}")
+    raise ValueError(
+        f"Unsupported PSF type: {psf_type}"
+    )
 
 
 def _posterior_samples(posterior):
@@ -118,7 +124,9 @@ def _compute_posterior_profiles(
     if fit.posterior is None:
         return None
 
-    parameter_names = list(fit.posterior.parameter_names)
+    parameter_names = list(
+        fit.posterior.parameter_names
+    )
 
     model_factory = _make_model_factory(
         model_name,
@@ -204,7 +212,9 @@ def run_radial_profile_diagnostics(
     elif radial_cfg in (False, None):
         return {}
     elif not isinstance(radial_cfg, dict):
-        raise TypeError("diagnostics.radial_profile must be a boolean or mapping.")
+        raise TypeError(
+            "diagnostics.radial_profile must be a boolean or mapping."
+        )
 
     psf = _load_psf_from_config(
         config,
@@ -218,10 +228,16 @@ def run_radial_profile_diagnostics(
     profile_results = {}
 
     for model_name, fit in fit_results.items():
-        center_x = float(fit.best_parameters["x0"])
-        center_y = float(fit.best_parameters["y0"])
+        center_x = float(
+            fit.best_parameters["x0"]
+        )
+        center_y = float(
+            fit.best_parameters["y0"]
+        )
 
-        max_radius = 0.5 * min(image_products.prepared_data.shape)
+        max_radius = 0.5 * min(
+            image_products.prepared_data.shape
+        )
 
         radii = radial_bins(
             max_radius,
@@ -249,7 +265,10 @@ def run_radial_profile_diagnostics(
             ),
         )
 
-        radius = 0.5 * (radii[:-1] + radii[1:])
+        radius = 0.5 * (
+            radii[:-1]
+            + radii[1:]
+        )
 
         model_factory = _make_model_factory(
             model_name,
@@ -265,7 +284,9 @@ def run_radial_profile_diagnostics(
         )
 
         if not components:
-            raise RuntimeError(f"Model '{model_name}' returned no rendered components.")
+            raise RuntimeError(
+                f"Model '{model_name}' returned no rendered components."
+            )
 
         component_images = {
             name: np.asarray(
@@ -277,7 +298,9 @@ def run_radial_profile_diagnostics(
 
         galaxy_model_image = np.sum(
             np.stack(
-                list(component_images.values()),
+                list(
+                    component_images.values()
+                ),
                 axis=0,
             ),
             axis=0,
@@ -373,6 +396,10 @@ def run_radial_profile_diagnostics(
         )
 
     if single_input:
-        return next(iter(profile_results.values()))
+        return next(
+            iter(
+                profile_results.values()
+            )
+        )
 
     return profile_results
