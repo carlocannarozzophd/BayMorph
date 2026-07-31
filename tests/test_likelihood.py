@@ -3,7 +3,10 @@
 import numpy as np
 import pytest
 
-from baymorph.likelihood import GaussianImageLikelihood
+from baymorph.likelihood import (
+    GaussianImageLikelihood,
+    PoissonGaussianImageLikelihood,
+)
 
 
 
@@ -150,3 +153,29 @@ def test_gaussian_image_likelihood_rejects_wrong_model_shape():
                 dtype=float,
             )
         )
+
+def test_poisson_gaussian_image_likelihood_implements_public_contract():
+    """Poisson-Gaussian likelihood should support both public interfaces."""
+    data = np.array(
+        [
+            [0.0, 1.0],
+            [2.0, 3.0],
+        ]
+    )
+    model = np.array(
+        [
+            [0.2, 1.1],
+            [1.9, 3.2],
+        ]
+    )
+
+    likelihood = PoissonGaussianImageLikelihood(
+        data=data,
+        read_noise=1.0,
+    )
+
+    callable_value = likelihood(model)
+    named_value = likelihood.log_likelihood(model)
+
+    assert np.isfinite(callable_value)
+    assert callable_value == pytest.approx(named_value)

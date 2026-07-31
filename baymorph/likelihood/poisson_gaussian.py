@@ -123,7 +123,7 @@ class PoissonGaussianImageLikelihood(ImageLikelihood):
             * self.read_noise_values
         )
 
-    def log_likelihood(
+    def _log_likelihood(
         self,
         model_values: np.ndarray,
     ) -> float:
