@@ -180,4 +180,4 @@ def test_prepare_real_image_from_config_combines_external_mask(
         products.external_mask,
         expected_external_mask,
     )
-    assert np.all(products.contaminant_mask[products.external_mask])
+    assert np.all(products.fitting_mask[products.external_mask])

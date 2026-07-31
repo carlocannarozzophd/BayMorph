@@ -15,6 +15,7 @@ from baymorph.core.detection import (
 from baymorph.core.image import ImageData
 from baymorph.core.mask import (
     build_automatic_mask,
+    build_fitting_mask,
     connected_source_mask,
     intersection,
     union,
@@ -58,6 +59,7 @@ __all__ = [
     "build_sky_region",
     "compute_elliptical_radial_profile",
     "build_automatic_mask",
+    "build_fitting_mask",
     "connected_source_mask",
     "opening",
     "invert",

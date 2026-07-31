@@ -301,6 +301,28 @@ def fill_holes(mask) -> np.ndarray:
     )
 
 
+
+def build_fitting_mask(
+    automatic_mask,
+    *,
+    external_mask=None,
+):
+    """Construct the canonical fitting mask."""
+
+    mask = _as_boolean_mask(
+        automatic_mask,
+        name="automatic_mask",
+    )
+
+    if external_mask is None:
+        return mask
+
+    return union(
+        mask,
+        external_mask,
+    )
+
+
 def connected_source_mask(
     image,
     x,

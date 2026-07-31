@@ -24,6 +24,10 @@ from baymorph.core.noise import (
     estimate_noise_map,
     make_constant_noise_map,
 )
+from baymorph.core import (
+    build_fitting_mask,
+    load_external_mask,
+)
 from baymorph.core.observation import Observation
 from baymorph.core.sky import (
     PlateauResult,
@@ -55,8 +59,6 @@ from baymorph.pipeline.preparation_steps import (
 from baymorph.pipeline.segmentation import (
     select_segment_near_position,
 )
-from baymorph.core import load_external_mask
-from baymorph.core import union
 
 
 @dataclass
@@ -523,21 +525,17 @@ def prepare_real_image_from_config(
     segmentation = prepared.detection.segmentation
     target_label = final_detection.target_label
     target_segment = final_detection.target_segment
-    automatic_contaminant_mask = final_detection.contaminant_mask
+    contaminant_mask = final_detection.contaminant_mask
 
-    contaminant_mask = (
-        automatic_contaminant_mask
-        if external_mask is None
-        else union(
-            automatic_contaminant_mask,
-            external_mask,
-        )
+    fitting_mask = build_fitting_mask(
+        contaminant_mask,
+        external_mask=external_mask,
     )
 
     geometry, radial_profile, plateau = estimate_target_sky(
         cutout,
         target_segment,
-        mask=contaminant_mask,
+        mask=fitting_mask,
         min_radius=0.0,
         window_size=5,
         sigma_threshold=1.0,
@@ -553,7 +551,7 @@ def prepare_real_image_from_config(
         geometry=geometry,
         plateau=plateau,
         margin=5.0,
-        mask=contaminant_mask,
+        mask=fitting_mask,
     )
 
     background_result = estimate_background_constant(
@@ -571,8 +569,6 @@ def prepare_real_image_from_config(
         prepared_data.shape,
         background_result.sigma,
     )
-
-    fitting_mask = contaminant_mask.copy()
 
     products = ImagePreparationProducts(
         cutout=cutout,
