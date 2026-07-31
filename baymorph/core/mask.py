@@ -9,7 +9,13 @@ from photutils.segmentation import (
     detect_sources,
     detect_threshold,
 )
-from scipy.ndimage import binary_dilation
+from scipy.ndimage import (
+    binary_closing,
+    binary_dilation,
+    binary_erosion,
+    binary_fill_holes,
+    binary_opening,
+)
 
 
 def load_external_mask(
@@ -181,6 +187,117 @@ def intersection(*masks) -> np.ndarray:
     return reduce(
         np.logical_and,
         validated,
+    )
+
+
+def _validate_iterations(iterations: int) -> int:
+    """Validate a binary-morphology iteration count."""
+    iterations = int(iterations)
+
+    if iterations < 0:
+        raise ValueError("'iterations' must be non-negative.")
+
+    return iterations
+
+
+def invert(mask) -> np.ndarray:
+    """Return the logical complement of a mask."""
+    return np.logical_not(
+        _as_boolean_mask(mask),
+    )
+
+
+def dilate(
+    mask,
+    *,
+    iterations: int = 1,
+) -> np.ndarray:
+    """Dilate a boolean mask."""
+    array = _as_boolean_mask(mask)
+    iterations = _validate_iterations(iterations)
+
+    if iterations == 0:
+        return array
+
+    return np.asarray(
+        binary_dilation(
+            array,
+            iterations=iterations,
+        ),
+        dtype=bool,
+    )
+
+
+def erode(
+    mask,
+    *,
+    iterations: int = 1,
+) -> np.ndarray:
+    """Erode a boolean mask."""
+    array = _as_boolean_mask(mask)
+    iterations = _validate_iterations(iterations)
+
+    if iterations == 0:
+        return array
+
+    return np.asarray(
+        binary_erosion(
+            array,
+            iterations=iterations,
+        ),
+        dtype=bool,
+    )
+
+
+def opening(
+    mask,
+    *,
+    iterations: int = 1,
+) -> np.ndarray:
+    """Apply binary opening to a mask."""
+    array = _as_boolean_mask(mask)
+    iterations = _validate_iterations(iterations)
+
+    if iterations == 0:
+        return array
+
+    return np.asarray(
+        binary_opening(
+            array,
+            iterations=iterations,
+        ),
+        dtype=bool,
+    )
+
+
+def closing(
+    mask,
+    *,
+    iterations: int = 1,
+) -> np.ndarray:
+    """Apply binary closing to a mask."""
+    array = _as_boolean_mask(mask)
+    iterations = _validate_iterations(iterations)
+
+    if iterations == 0:
+        return array
+
+    return np.asarray(
+        binary_closing(
+            array,
+            iterations=iterations,
+        ),
+        dtype=bool,
+    )
+
+
+def fill_holes(mask) -> np.ndarray:
+    """Fill enclosed holes in a boolean mask."""
+    return np.asarray(
+        binary_fill_holes(
+            _as_boolean_mask(mask),
+        ),
+        dtype=bool,
     )
 
 

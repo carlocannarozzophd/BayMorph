@@ -10,6 +10,12 @@ from baymorph.core import (
     union,
     load_external_mask,
     build_automatic_mask,
+    closing,
+    dilate,
+    erode,
+    fill_holes,
+    invert,
+    opening,
 )
 
 
@@ -510,4 +516,136 @@ def test_build_automatic_mask_rejects_missing_target_label():
         build_automatic_mask(
             segmentation,
             target_label=3,
+        )
+
+
+def test_invert_returns_boolean_complement():
+    mask = np.array(
+        [
+            [True, False],
+            [False, True],
+        ],
+        dtype=bool,
+    )
+
+    result = invert(mask)
+
+    assert np.array_equal(
+        result,
+        np.array(
+            [
+                [False, True],
+                [True, False],
+            ],
+            dtype=bool,
+        ),
+    )
+    assert not np.shares_memory(result, mask)
+
+
+def test_dilate_expands_single_pixel():
+    mask = np.zeros((5, 5), dtype=bool)
+    mask[2, 2] = True
+
+    result = dilate(mask)
+
+    assert result.sum() == 5
+    assert mask.sum() == 1
+
+
+def test_erode_removes_boundary_pixels():
+    mask = np.ones((5, 5), dtype=bool)
+
+    result = erode(mask)
+
+    assert result.sum() == 9
+    assert mask.all()
+
+
+def test_opening_removes_isolated_pixel():
+    mask = np.zeros((7, 7), dtype=bool)
+    mask[2:5, 2:5] = True
+    mask[0, 0] = True
+
+    result = opening(mask)
+
+    assert not result[0, 0]
+    assert result.any()
+
+
+def test_closing_fills_small_internal_gap():
+    mask = np.zeros((7, 7), dtype=bool)
+    mask[2:5, 2:5] = True
+    mask[3, 3] = False
+
+    result = closing(mask)
+
+    assert result[3, 3]
+
+
+def test_fill_holes_fills_enclosed_region():
+    mask = np.ones((5, 5), dtype=bool)
+    mask[2, 2] = False
+
+    result = fill_holes(mask)
+
+    assert result.all()
+    assert not mask[2, 2]
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [dilate, erode, opening, closing],
+)
+def test_morphology_zero_iterations_returns_independent_copy(
+    operation,
+):
+    mask = np.eye(4, dtype=bool)
+
+    result = operation(
+        mask,
+        iterations=0,
+    )
+
+    assert np.array_equal(result, mask)
+    assert not np.shares_memory(result, mask)
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [dilate, erode, opening, closing],
+)
+def test_morphology_rejects_negative_iterations(
+    operation,
+):
+    with pytest.raises(
+        ValueError,
+        match="non-negative",
+    ):
+        operation(
+            np.zeros((4, 4), dtype=bool),
+            iterations=-1,
+        )
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        invert,
+        dilate,
+        erode,
+        opening,
+        closing,
+        fill_holes,
+    ],
+)
+def test_unary_mask_operations_reject_non_2d_input(
+    operation,
+):
+    with pytest.raises(
+        ValueError,
+        match="two-dimensional",
+    ):
+        operation(
+            np.zeros((3, 3, 3), dtype=bool),
         )
