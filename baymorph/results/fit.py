@@ -8,6 +8,7 @@ from matplotlib.axes import Axes
 
 from baymorph.models import parameter_labels as model_parameter_labels
 from baymorph.plotting import corner_plot
+from baymorph.results.posterior import PosteriorResult
 
 
 @dataclass
@@ -16,7 +17,7 @@ class RealFitProducts:
 
     Parameters
     ----------
-    posterior : object or None
+    posterior : PosteriorResult or None
         Posterior result returned by the sampler.
     best_parameters : dict of str to float
         Best-fit parameter values.
@@ -46,7 +47,7 @@ class RealFitProducts:
         Radial noise profile.
     """
 
-    posterior: Any | None
+    posterior: PosteriorResult | None
     best_parameters: dict[str, float]
     best_model_image: np.ndarray
     residual: np.ndarray
