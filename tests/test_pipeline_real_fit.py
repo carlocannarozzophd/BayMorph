@@ -15,7 +15,85 @@ from baymorph.pipeline.real_fit import (
     _compute_fit_statistics,
     _compute_bayesian_model_comparison,
     _run_sampler,
+    run_real_fit_from_config,
 )
+
+
+
+def test_run_real_fit_requires_image_preparation_products(
+    monkeypatch,
+):
+    resolved = {
+        "data": {},
+    }
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.resolve_config",
+        lambda config: resolved,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.make_output_tree",
+        lambda config: None,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.save_resolved_config",
+        lambda config: None,
+    )
+
+    def raise_missing_products(config):
+        del config
+        raise FileNotFoundError("missing prepared image")
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.load_image_preparation_products",
+        raise_missing_products,
+    )
+
+    with pytest.raises(
+        FileNotFoundError,
+        match="Image-preparation products are required before fitting",
+    ):
+        run_real_fit_from_config({})
+
+
+def test_run_real_fit_requires_psf_products(
+    monkeypatch,
+):
+    resolved = {
+        "data": {},
+    }
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.resolve_config",
+        lambda config: resolved,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.make_output_tree",
+        lambda config: None,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.save_resolved_config",
+        lambda config: None,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.load_image_preparation_products",
+        lambda config: object(),
+    )
+
+    def raise_missing_psf(config):
+        del config
+        raise FileNotFoundError("missing PSF")
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit._load_psf_from_config",
+        raise_missing_psf,
+    )
+
+    with pytest.raises(
+        FileNotFoundError,
+        match="PSF products are required before fitting",
+    ):
+        run_real_fit_from_config({})
 
 
 class DummyResult:

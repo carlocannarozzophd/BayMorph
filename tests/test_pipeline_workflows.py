@@ -45,12 +45,16 @@ def test_initialize_pipeline_run_creates_output_tree(tmp_path):
     for model_name in resolved["fit"]["models"]:
         assert (base / "fits" / model_name).is_dir()
 
-def test_workflow_entrypoints_accept_dict_config(tmp_path):
+def test_run_real_fit_accepts_dict_config_and_requires_preparation(
+    tmp_path,
+):
     config = minimal_config(tmp_path)
 
-    resolved = run_real_fit(config)
-
-    assert resolved["object"]["name"] == "NGC1234"
+    with pytest.raises(
+        FileNotFoundError,
+        match="Image-preparation products are required before fitting",
+    ):
+        run_real_fit(config)
 
 
 def test_run_image_preparation_requires_existing_fits_file(tmp_path):

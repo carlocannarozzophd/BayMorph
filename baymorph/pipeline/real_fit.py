@@ -50,13 +50,19 @@ def run_real_fit_from_config(
         image_products = load_image_preparation_products(
             resolved,
         )
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            "Image-preparation products are required before fitting."
+        ) from exc
 
+    try:
         psf = _load_psf_from_config(
             resolved,
         )
-
-    except FileNotFoundError:
-        return resolved
+    except FileNotFoundError as exc:
+        raise FileNotFoundError(
+            "PSF products are required before fitting."
+        ) from exc
 
     try:
         observation = Observation.from_fits(
