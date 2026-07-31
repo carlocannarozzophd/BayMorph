@@ -68,6 +68,7 @@ from baymorph.pipeline.real_fit import (
 )
 from baymorph.pipeline.residual_maps import run_residual_map_diagnostics
 from baymorph.pipeline.runtime_report import (
+    build_image_preparation_runtime,
     build_runtime_report,
     load_runtime_report,
     save_runtime_report,
@@ -89,6 +90,7 @@ from baymorph.results import RealFitProducts
 from .image_preparation import PreparedObservation
 
 __all__ = [
+    "build_image_preparation_runtime",
     "save_runtime_report",
     "load_runtime_report",
     "build_runtime_report",

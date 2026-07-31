@@ -56,6 +56,11 @@ from baymorph.pipeline.preparation_steps import (
     TargetGeometry,
     estimate_target_sky,
 )
+from baymorph.pipeline.runtime_report import (
+    build_image_preparation_runtime,
+    build_runtime_report,
+    save_runtime_report,
+)
 from baymorph.pipeline.segmentation import (
     select_segment_near_position,
 )
@@ -615,6 +620,23 @@ def prepare_real_image_from_config(
             observation=observation,
         )
         save_resolved_config(resolved)
+
+        runtime = build_image_preparation_runtime(
+            products,
+            observation=observation_metadata_dict(
+                observation,
+            ),
+        )
+
+        report = build_runtime_report(
+            resolved,
+            runtime=runtime,
+        )
+
+        save_runtime_report(
+            resolved,
+            report,
+        )
 
     return products
 
