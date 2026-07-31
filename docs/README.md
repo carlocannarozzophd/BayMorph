@@ -68,6 +68,14 @@ Chronological record of important architectural decisions together with their ra
 
 ---
 
+## Research Notes
+
+**[`research/MULTIBAND_PROBABILISTIC_INFERENCE.md`](research/MULTIBAND_PROBABILISTIC_INFERENCE.md)**
+
+Statistical foundation and validation strategy for probabilistic multi-band morphological inference using explicit band-specific parameters and configurable joint priors.
+
+---
+
 ## Roadmap
 
 **[`../ROADMAP.md`](../ROADMAP.md)**
