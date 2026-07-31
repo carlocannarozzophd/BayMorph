@@ -134,7 +134,7 @@ def run_residual_map_diagnostics(
             noise=image_products.noise,
             segmentation=image_products.segmentation,
             psf=_psf_to_image(psf, config),
-            contaminant_mask=image_products.contaminant_mask,
+            contaminant_mask=image_products.fitting_mask,
             target_mask=image_products.target_segment,
             original_image=image_products.original_image,
             cutout_bounds=image_products.cutout_bounds,
