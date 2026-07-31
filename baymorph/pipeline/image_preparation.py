@@ -502,7 +502,10 @@ def prepare_real_image_from_config(
     )
 
     external_mask = None
-    external_mask_path = resolved["data"].get("external_mask_path")
+    external_mask_path = (
+        resolved["data"].get("mask_path")
+        or resolved["data"].get("external_mask_path")
+    )
 
     if external_mask_path is not None:
         full_external_mask = load_external_mask(

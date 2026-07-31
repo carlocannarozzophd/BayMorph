@@ -138,7 +138,7 @@ def test_prepare_real_image_from_config_combines_external_mask(
         },
         "data": {
             "image_path": str(image_path),
-            "external_mask_path": str(external_mask_path),
+            "mask_path": str(external_mask_path),
             "target_position": {
                 "x": 40,
                 "y": 40,
