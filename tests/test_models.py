@@ -122,3 +122,105 @@ def test_sersic_model_rejects_invalid_parameters(parameter, value):
 
     with pytest.raises(ValueError):
         SersicModel(**parameters)
+
+
+def test_sersic_render_integrates_over_pixel_area():
+    model = SersicModel(
+        flux=1000.0,
+        re=3.2,
+        n=1.5,
+        q=0.8,
+        theta=0.3,
+        x0=10.37,
+        y0=9.82,
+    )
+
+    image = model.render(
+        shape=(21, 21),
+        integration_order=9,
+    )
+    reference = model.render(
+        shape=(21, 21),
+        integration_order=31,
+    )
+
+    relative_l1_error = (
+        np.abs(image - reference).sum()
+        / reference.sum()
+    )
+
+    assert relative_l1_error < 1.0e-4
+
+
+def test_sersic_large_cutout_recovers_total_flux():
+    model = SersicModel(
+        flux=1000.0,
+        re=5.0,
+        n=1.0,
+        q=0.8,
+        theta=0.4,
+        x0=100.0,
+        y0=100.0,
+    )
+
+    image = model.render(
+        shape=(201, 201),
+        integration_order=7,
+    )
+
+    assert image.sum() == pytest.approx(
+        model.flux,
+        rel=5.0e-5,
+    )
+
+
+def test_sersic_pixel_integration_is_cutout_invariant():
+    model = SersicModel(
+        flux=1000.0,
+        re=8.0,
+        n=2.0,
+        q=0.65,
+        theta=0.7,
+        x0=30.4,
+        y0=29.7,
+    )
+
+    smaller = model.render(
+        shape=(61, 61),
+        integration_order=5,
+    )
+    larger = model.render(
+        shape=(121, 121),
+        integration_order=5,
+    )
+
+    np.testing.assert_allclose(
+        smaller,
+        larger[:61, :61],
+        rtol=0.0,
+        atol=0.0,
+    )
+
+
+@pytest.mark.parametrize("integration_order", [0, -1, 1.5])
+def test_sersic_render_rejects_invalid_integration_order(
+    integration_order,
+):
+    with pytest.raises(ValueError):
+        make_model().render(
+            shape=(21, 21),
+            integration_order=integration_order,
+        )
+
+
+def test_sersic_model_rejects_axis_ratio_above_unity():
+    with pytest.raises(ValueError):
+        SersicModel(
+            flux=1000.0,
+            re=10.0,
+            n=4.0,
+            q=1.1,
+            theta=0.5,
+            x0=50.0,
+            y0=50.0,
+        )

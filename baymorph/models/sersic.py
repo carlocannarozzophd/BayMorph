@@ -11,7 +11,7 @@ FloatArray = NDArray[np.float64]
 
 @dataclass
 class SersicModel:
-    """Single-component Sérsic surface-brightness model.
+    r"""Single-component Sérsic surface-brightness model.
 
     The elliptical radius is defined as
 
@@ -73,9 +73,9 @@ class SersicModel:
         if not np.isfinite(self.n) or self.n <= 0.0:
             raise ValueError("Sersic index must be finite and positive.")
 
-        if not np.isfinite(self.q) or self.q <= 0.0:
+        if not np.isfinite(self.q) or self.q <= 0.0 or self.q > 1.0:
             raise ValueError(
-                "Sersic axis ratio must be finite and positive."
+                "Sersic axis ratio must be finite and satisfy 0 < q <= 1."
             )
 
         if not np.isfinite(self.theta):
@@ -91,7 +91,7 @@ class SersicModel:
 
     @property
     def log_central_intensity(self) -> float:
-        """Return the logarithm of the central surface brightness.
+        r"""Return the logarithm of the central surface brightness.
 
         For the adopted elliptical-radius convention, the total flux is
 
@@ -152,42 +152,28 @@ class SersicModel:
 
         return np.asarray(np.exp(log_intensity), dtype=float)
 
-    def render_components(
+    def _elliptical_radius(
         self,
-        shape: tuple[int, int],
-    ) -> dict[str, FloatArray]:
-        """Render the Sérsic model as a named single-component model."""
-        return {"sersic": self.render(shape=shape)}
-
-    def render(
-        self,
-        shape: tuple[int, int],
+        x: FloatArray,
+        y: FloatArray,
     ) -> FloatArray:
-        """Sample the continuous model on a pixel-centered grid.
+        """Return elliptical radii for Cartesian coordinates."""
+        dx = x - self.x0
+        dy = y - self.y0
 
-        This method evaluates the surface brightness at pixel centers. It does
-        not renormalize the sampled cutout. Consequently, changing the output
-        shape does not change model values at coordinates shared by both
-        images.
+        cos_theta = np.cos(self.theta)
+        sin_theta = np.sin(self.theta)
 
-        Pixel integration is intentionally not performed at this stage and
-        will be introduced separately.
+        x_rotated = dx * cos_theta + dy * sin_theta
+        y_rotated = -dx * sin_theta + dy * cos_theta
 
-        Parameters
-        ----------
-        shape : tuple of int
-            Output image shape as ``(ny, nx)``.
+        return np.sqrt(
+            x_rotated**2 + (y_rotated / self.q) ** 2
+        )
 
-        Returns
-        -------
-        ndarray
-            Surface brightness sampled at pixel centers.
-
-        Raises
-        ------
-        ValueError
-            If the requested shape is not a pair of positive integers.
-        """
+    @staticmethod
+    def _validate_shape(shape: tuple[int, int]) -> None:
+        """Validate a requested image shape."""
         if (
             len(shape) != 2
             or any(
@@ -199,20 +185,96 @@ class SersicModel:
                 "Sersic render shape must contain two positive integers."
             )
 
+    @staticmethod
+    def _validate_integration_order(integration_order: int) -> None:
+        """Validate the Gauss-Legendre integration order."""
+        if (
+            not isinstance(integration_order, (int, np.integer))
+            or integration_order <= 0
+        ):
+            raise ValueError(
+                "Pixel integration order must be a positive integer."
+            )
+
+    def render_components(
+        self,
+        shape: tuple[int, int],
+        *,
+        integration_order: int = 5,
+    ) -> dict[str, FloatArray]:
+        """Render the Sérsic model as a named single-component model."""
+        return {
+            "sersic": self.render(
+                shape=shape,
+                integration_order=integration_order,
+            )
+        }
+
+    def render(
+        self,
+        shape: tuple[int, int],
+        *,
+        integration_order: int = 5,
+    ) -> FloatArray:
+        """Integrate the continuous model over square detector pixels.
+
+        Each output value is the integral of the continuous Sérsic surface
+        brightness over one unit-area pixel. Integration uses tensor-product
+        Gauss-Legendre quadrature.
+
+        The analytic profile is never renormalized on the requested cutout.
+        Therefore, pixels shared by two cutouts retain identical values and
+        the sum of a finite image represents only the flux captured by that
+        footprint.
+
+        Parameters
+        ----------
+        shape : tuple of int
+            Output image shape as ``(ny, nx)``.
+        integration_order : int, optional
+            One-dimensional Gauss-Legendre quadrature order used along each
+            pixel axis. The number of profile evaluations per pixel is the
+            square of this value.
+
+        Returns
+        -------
+        ndarray
+            Flux integrated over every output pixel.
+        """
+        self._validate_shape(shape)
+        self._validate_integration_order(integration_order)
+
         ny, nx = shape
-        y, x = np.mgrid[0:ny, 0:nx]
+        pixel_y, pixel_x = np.mgrid[0:ny, 0:nx]
 
-        dx = x - self.x0
-        dy = y - self.y0
-
-        cos_theta = np.cos(self.theta)
-        sin_theta = np.sin(self.theta)
-
-        x_rotated = dx * cos_theta + dy * sin_theta
-        y_rotated = -dx * sin_theta + dy * cos_theta
-
-        radius = np.sqrt(
-            x_rotated**2 + (y_rotated / self.q) ** 2
+        nodes, weights = np.polynomial.legendre.leggauss(
+            integration_order
         )
 
-        return self.surface_brightness(radius)
+        offsets = 0.5 * nodes
+        pixel_weights = 0.5 * weights
+
+        image = np.zeros(shape, dtype=float)
+
+        for y_offset, y_weight in zip(
+            offsets,
+            pixel_weights,
+            strict=True,
+        ):
+            for x_offset, x_weight in zip(
+                offsets,
+                pixel_weights,
+                strict=True,
+            ):
+                radius = self._elliptical_radius(
+                    x=np.asarray(pixel_x + x_offset, dtype=float),
+                    y=np.asarray(pixel_y + y_offset, dtype=float),
+                )
+
+                image += (
+                    x_weight
+                    * y_weight
+                    * self.surface_brightness(radius)
+                )
+
+        return image
