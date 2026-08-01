@@ -3,17 +3,41 @@
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.special import gammaincinv
+from numpy.typing import ArrayLike, NDArray
+from scipy.special import gammaincinv, gammaln
+
+FloatArray = NDArray[np.float64]
 
 
 @dataclass
 class SersicModel:
     """Single-component Sérsic surface-brightness model.
 
+    The elliptical radius is defined as
+
+    .. math::
+
+        R^2 = x'^2 + \left(\frac{y'}{q}\right)^2,
+
+    and the surface-brightness profile is
+
+    .. math::
+
+        I(R) = I_e
+        \exp\left\{
+            -b_n
+            \left[
+                \left(\frac{R}{R_e}\right)^{1/n} - 1
+            \right]
+        \right\}.
+
+    The normalization is computed analytically so that ``flux`` is the
+    continuous total flux integrated over the full elliptical plane.
+
     Parameters
     ----------
     flux : float
-        Total integrated flux of the model.
+        Total integrated flux over the full continuous profile.
     re : float
         Effective (half-light) radius, in pixels.
     n : float
@@ -36,33 +60,118 @@ class SersicModel:
     x0: float
     y0: float
 
-    def render_components(
+    def __post_init__(self) -> None:
+        """Validate the physical model parameters."""
+        if not np.isfinite(self.flux) or self.flux <= 0.0:
+            raise ValueError("Sersic flux must be finite and positive.")
+
+        if not np.isfinite(self.re) or self.re <= 0.0:
+            raise ValueError(
+                "Sersic effective radius must be finite and positive."
+            )
+
+        if not np.isfinite(self.n) or self.n <= 0.0:
+            raise ValueError("Sersic index must be finite and positive.")
+
+        if not np.isfinite(self.q) or self.q <= 0.0:
+            raise ValueError(
+                "Sersic axis ratio must be finite and positive."
+            )
+
+        if not np.isfinite(self.theta):
+            raise ValueError("Sersic position angle must be finite.")
+
+        if not np.isfinite(self.x0) or not np.isfinite(self.y0):
+            raise ValueError("Sersic center coordinates must be finite.")
+
+    @property
+    def bn(self) -> float:
+        """Return the Sérsic constant enclosing half the total flux."""
+        return float(gammaincinv(2.0 * self.n, 0.5))
+
+    @property
+    def log_central_intensity(self) -> float:
+        """Return the logarithm of the central surface brightness.
+
+        For the adopted elliptical-radius convention, the total flux is
+
+        .. math::
+
+            F =
+            2 \pi q I_0 R_e^2 n
+            b_n^{-2n}
+            \Gamma(2n),
+
+        where ``I_0`` is the central surface brightness.
+        """
+        bn = self.bn
+
+        log_normalization = (
+            np.log(2.0 * np.pi)
+            + np.log(self.q)
+            + 2.0 * np.log(self.re)
+            + np.log(self.n)
+            + gammaln(2.0 * self.n)
+            - 2.0 * self.n * np.log(bn)
+        )
+
+        return float(np.log(self.flux) - log_normalization)
+
+    def surface_brightness(
         self,
-        shape: tuple[int, int],
-    ) -> dict[str, np.ndarray]:
-        """Render the Sérsic model as a named single-component model.
+        radius: ArrayLike,
+    ) -> FloatArray:
+        """Evaluate the continuous Sérsic surface brightness.
 
         Parameters
         ----------
-        shape : tuple of int
-            Output image shape as ``(ny, nx)``.
+        radius : array-like
+            Elliptical radius in pixels.
 
         Returns
         -------
-        dict of str, ndarray
-            Dictionary containing the rendered Sérsic component.
+        ndarray
+            Surface brightness evaluated at each radius.
+
+        Raises
+        ------
+        ValueError
+            If any radius is negative or non-finite.
         """
-        return {
-            "sersic": self.render(
-                shape=shape,
-            )
-        }
+        radius_array = np.asarray(radius, dtype=float)
+
+        if np.any(~np.isfinite(radius_array)):
+            raise ValueError("Sersic radii must be finite.")
+
+        if np.any(radius_array < 0.0):
+            raise ValueError("Sersic radii must be non-negative.")
+
+        log_intensity = self.log_central_intensity - self.bn * (
+            radius_array / self.re
+        ) ** (1.0 / self.n)
+
+        return np.asarray(np.exp(log_intensity), dtype=float)
+
+    def render_components(
+        self,
+        shape: tuple[int, int],
+    ) -> dict[str, FloatArray]:
+        """Render the Sérsic model as a named single-component model."""
+        return {"sersic": self.render(shape=shape)}
 
     def render(
         self,
         shape: tuple[int, int],
-    ) -> np.ndarray:
-        """Render the Sérsic model on a pixel-centered grid.
+    ) -> FloatArray:
+        """Sample the continuous model on a pixel-centered grid.
+
+        This method evaluates the surface brightness at pixel centers. It does
+        not renormalize the sampled cutout. Consequently, changing the output
+        shape does not change model values at coordinates shared by both
+        images.
+
+        Pixel integration is intentionally not performed at this stage and
+        will be introduced separately.
 
         Parameters
         ----------
@@ -72,59 +181,38 @@ class SersicModel:
         Returns
         -------
         ndarray
-            Rendered image normalized to the requested total flux.
+            Surface brightness sampled at pixel centers.
 
         Raises
         ------
         ValueError
-            If the rendered model has a non-positive normalization.
+            If the requested shape is not a pair of positive integers.
         """
+        if (
+            len(shape) != 2
+            or any(
+                not isinstance(size, (int, np.integer)) or size <= 0
+                for size in shape
+            )
+        ):
+            raise ValueError(
+                "Sersic render shape must contain two positive integers."
+            )
+
         ny, nx = shape
         y, x = np.mgrid[0:ny, 0:nx]
 
         dx = x - self.x0
         dy = y - self.y0
 
-        cos_t = np.cos(self.theta)
-        sin_t = np.sin(self.theta)
+        cos_theta = np.cos(self.theta)
+        sin_theta = np.sin(self.theta)
 
-        x_rot = dx * cos_t + dy * sin_t
-        y_rot = -dx * sin_t + dy * cos_t
+        x_rotated = dx * cos_theta + dy * sin_theta
+        y_rotated = -dx * sin_theta + dy * cos_theta
 
         radius = np.sqrt(
-            x_rot**2
-            + (
-                y_rot
-                / self.q
-            )
-            ** 2
+            x_rotated**2 + (y_rotated / self.q) ** 2
         )
 
-        bn = gammaincinv(
-            2.0 * self.n,
-            0.5,
-        )
-
-        intensity = np.exp(
-            -bn
-            * (
-                (
-                    radius
-                    / self.re
-                )
-                ** (
-                    1.0
-                    / self.n
-                )
-                - 1.0
-            )
-        )
-
-        norm = intensity.sum()
-
-        if norm <= 0:
-            raise ValueError(
-                "Sersic model has non-positive normalization."
-            )
-
-        return self.flux * intensity / norm
+        return self.surface_brightness(radius)
