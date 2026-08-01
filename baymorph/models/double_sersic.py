@@ -7,17 +7,7 @@ import numpy as np
 
 @dataclass
 class DoubleSersicModel:
-    """Two-component Sérsic model.
-
-    Parameters
-    ----------
-    bulge : object
-        Inner Sérsic-like component exposing a ``render(shape)`` method.
-    disk : object
-        Outer Sérsic-like component exposing a ``render(shape)`` method.
-    sky : float, optional
-        Constant sky background added to the total rendered model.
-    """
+    """Two-component Sérsic model."""
 
     bulge: object
     disk: object
@@ -26,39 +16,35 @@ class DoubleSersicModel:
     def render_components(
         self,
         shape: tuple[int, int],
+        *,
+        origin: tuple[float, float] = (0.0, 0.0),
     ) -> dict[str, np.ndarray]:
-        """Render the bulge and disk components.
-
-        Parameters
-        ----------
-        shape : tuple of int
-            Output image shape as ``(ny, nx)``.
-
-        Returns
-        -------
-        dict of str, ndarray
-            Rendered model components.
-        """
+        """Render the bulge and disk components."""
         return {
-            "bulge": self.bulge.render(shape=shape),
-            "disk": self.disk.render(shape=shape),
+            "bulge": self.bulge.render(
+                shape=shape,
+                origin=origin,
+            ),
+            "disk": self.disk.render(
+                shape=shape,
+                origin=origin,
+            ),
         }
 
     def render(
         self,
         shape: tuple[int, int],
+        *,
+        origin: tuple[float, float] = (0.0, 0.0),
     ) -> np.ndarray:
-        """Render the sum of the bulge, disk, and sky components.
+        """Render the complete double-Sérsic model."""
+        components = self.render_components(
+            shape=shape,
+            origin=origin,
+        )
 
-        Parameters
-        ----------
-        shape : tuple of int
-            Output image shape as ``(ny, nx)``.
-
-        Returns
-        -------
-        ndarray
-            Rendered double-Sérsic image.
-        """
-        components = self.render_components(shape=shape)
-        return components["bulge"] + components["disk"] + self.sky
+        return (
+            components["bulge"]
+            + components["disk"]
+            + self.sky
+        )

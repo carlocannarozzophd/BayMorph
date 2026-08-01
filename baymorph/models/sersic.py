@@ -201,12 +201,14 @@ class SersicModel:
         shape: tuple[int, int],
         *,
         integration_order: int = 5,
+        origin: tuple[float, float] = (0.0, 0.0),
     ) -> dict[str, FloatArray]:
         """Render the Sérsic model as a named single-component model."""
         return {
             "sersic": self.render(
                 shape=shape,
                 integration_order=integration_order,
+                origin=origin,
             )
         }
 
@@ -215,6 +217,7 @@ class SersicModel:
         shape: tuple[int, int],
         *,
         integration_order: int = 5,
+        origin: tuple[float, float] = (0.0, 0.0),
     ) -> FloatArray:
         """Integrate the continuous model over square detector pixels.
 
@@ -235,6 +238,8 @@ class SersicModel:
             One-dimensional Gauss-Legendre quadrature order used along each
             pixel axis. The number of profile evaluations per pixel is the
             square of this value.
+        origin : tuple of float, optional
+            Physical ``(y, x)`` coordinates of output pixel ``[0, 0]``.
 
         Returns
         -------
@@ -245,7 +250,11 @@ class SersicModel:
         self._validate_integration_order(integration_order)
 
         ny, nx = shape
+        y_origin, x_origin = origin
+
         pixel_y, pixel_x = np.mgrid[0:ny, 0:nx]
+        pixel_y = np.asarray(pixel_y, dtype=float) + y_origin
+        pixel_x = np.asarray(pixel_x, dtype=float) + x_origin
 
         nodes, weights = np.polynomial.legendre.leggauss(
             integration_order
