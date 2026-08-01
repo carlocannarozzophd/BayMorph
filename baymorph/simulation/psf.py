@@ -18,9 +18,16 @@ class GaussianPSF:
 
     fwhm: float
 
+    def __post_init__(self) -> None:
+        """Validate the Gaussian PSF parameters."""
+        if not np.isfinite(self.fwhm) or self.fwhm <= 0.0:
+            raise ValueError(
+                "Gaussian PSF FWHM must be finite and positive."
+            )
+
     @property
     def sigma(self) -> float:
-        """float : Gaussian standard deviation, in pixels."""
+        """Return the Gaussian standard deviation in pixels."""
         return self.fwhm / 2.354820045
 
     def kernel(
@@ -32,7 +39,8 @@ class GaussianPSF:
         Parameters
         ----------
         size : int, default=25
-            Width and height of the square kernel. Must be odd.
+            Width and height of the square kernel. Must be a positive odd
+            integer.
 
         Returns
         -------
@@ -42,29 +50,30 @@ class GaussianPSF:
         Raises
         ------
         ValueError
-            If ``size`` is even.
+            If ``size`` is not a positive odd integer.
         """
-        if size % 2 == 0:
+        if (
+            not isinstance(size, (int, np.integer))
+            or size <= 0
+            or size % 2 == 0
+        ):
             raise ValueError(
-                "Kernel size must be odd."
+                "Gaussian PSF kernel size must be a positive odd integer."
             )
 
         center = size // 2
-
         y, x = np.mgrid[0:size, 0:size]
 
-        r2 = (
+        radius_squared = (
             (x - center) ** 2
             + (y - center) ** 2
         )
 
         kernel = np.exp(
-            -0.5 * r2 / self.sigma**2
+            -0.5 * radius_squared / self.sigma**2
         )
 
-        kernel /= kernel.sum()
-
-        return kernel
+        return kernel / kernel.sum()
 
 
 @dataclass
@@ -89,7 +98,7 @@ class EmpiricalPSF:
         ----------
         size : int, optional
             Reserved for API compatibility with analytic PSF models. The value
-            is currently ignored.
+            is ignored.
 
         Returns
         -------
@@ -102,6 +111,8 @@ class EmpiricalPSF:
             If the kernel is not two-dimensional or has non-positive total
             flux.
         """
+        del size
+
         kernel = np.asarray(
             self.kernel_array,
             dtype=float,
@@ -119,11 +130,15 @@ class EmpiricalPSF:
             neginf=0.0,
         )
 
-        kernel[kernel < 0] = 0.0
+        kernel = np.clip(
+            kernel,
+            a_min=0.0,
+            a_max=None,
+        )
 
         total = kernel.sum()
 
-        if total <= 0:
+        if total <= 0.0:
             raise ValueError(
                 "Empirical PSF kernel must have positive flux."
             )
@@ -136,15 +151,20 @@ def convolve_with_psf(
     psf,
     kernel_size: int = 25,
 ) -> np.ndarray:
-    """Convolve an image with a PSF using edge padding.
+    """Convolve a finite image with a normalized PSF kernel.
+
+    The convolution assumes zero surface brightness outside the supplied image.
+    Flux scattered beyond the finite image footprint is therefore not retained.
+    This is preferable to edge replication, which creates artificial emission
+    outside the rendered domain.
 
     Parameters
     ----------
     image : ndarray
-        Input image.
+        Two-dimensional finite input image.
     psf : object
         PSF object exposing a ``kernel()`` method. For ``GaussianPSF``,
-        ``kernel_size`` is passed to ``kernel(size=...)``.
+        ``kernel_size`` is passed as ``kernel(size=...)``.
     kernel_size : int, default=25
         Kernel size used for Gaussian PSF models.
 
@@ -156,71 +176,58 @@ def convolve_with_psf(
     Raises
     ------
     ValueError
-        If the PSF kernel is not two-dimensional, contains non-finite values,
-        or has non-positive total flux.
+        If the image or PSF kernel is not two-dimensional, contains non-finite
+        values, or if the kernel has non-positive total flux.
     """
-    image = np.asarray(
+    image_array = np.asarray(
         image,
         dtype=float,
     )
 
-    if isinstance(
-        psf,
-        GaussianPSF,
-    ):
-        kernel = psf.kernel(
-            size=kernel_size,
+    if image_array.ndim != 2:
+        raise ValueError(
+            "Input image must be 2D."
         )
+
+    if not np.all(np.isfinite(image_array)):
+        raise ValueError(
+            "Input image must contain only finite values."
+        )
+
+    if isinstance(psf, GaussianPSF):
+        kernel = psf.kernel(size=kernel_size)
     else:
         kernel = psf.kernel()
 
-    kernel = np.asarray(
+    kernel_array = np.asarray(
         kernel,
         dtype=float,
     )
 
-    if kernel.ndim != 2:
+    if kernel_array.ndim != 2:
         raise ValueError(
             "PSF kernel must be 2D."
         )
 
-    if not np.all(
-        np.isfinite(kernel)
-    ):
+    if not np.all(np.isfinite(kernel_array)):
         raise ValueError(
             "PSF kernel must contain only finite values."
         )
 
-    kernel_sum = np.sum(
-        kernel,
-    )
+    kernel_sum = kernel_array.sum()
 
-    if kernel_sum <= 0:
+    if kernel_sum <= 0.0:
         raise ValueError(
             "PSF kernel must have positive sum."
         )
 
-    kernel = kernel / kernel_sum
+    normalized_kernel = kernel_array / kernel_sum
 
-    pad_y = kernel.shape[0] // 2
-    pad_x = kernel.shape[1] // 2
-
-    padded = np.pad(
-        image,
-        pad_width=(
-            (pad_y, pad_y),
-            (pad_x, pad_x),
+    return np.asarray(
+        fftconvolve(
+            image_array,
+            normalized_kernel,
+            mode="same",
         ),
-        mode="edge",
+        dtype=float,
     )
-
-    convolved = fftconvolve(
-        padded,
-        kernel,
-        mode="same",
-    )
-
-    return convolved[
-        pad_y : pad_y + image.shape[0],
-        pad_x : pad_x + image.shape[1],
-    ]
