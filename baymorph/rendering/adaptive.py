@@ -60,3 +60,77 @@ def estimate_cell(
         tolerance=tolerance,
         accepted=error <= tolerance,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class AdaptiveIntegrationResult:
+    """Store the result and diagnostics of adaptive cell integration."""
+
+    value: float
+    estimated_error: float
+    accepted_cells: int
+    refined_cells: int
+    maximum_level: int
+
+
+def integrate_adaptively(
+    cell: IntegrationCell,
+    integrate: CellIntegrator,
+    *,
+    rtol: float,
+    atol: float,
+    max_depth: int,
+) -> AdaptiveIntegrationResult:
+    """Integrate one cell through recursive isotropic refinement.
+
+    Each cell is compared with the sum of its four children. Accepted cells
+    contribute their refined estimate. Rejected cells are recursively
+    subdivided until the local tolerance is satisfied or ``max_depth`` is
+    reached.
+    """
+    if max_depth < cell.level:
+        raise ValueError(
+            "max_depth must be greater than or equal to the cell level."
+        )
+
+    estimate = estimate_cell(
+        cell,
+        integrate,
+        rtol=rtol,
+        atol=atol,
+    )
+
+    if estimate.accepted or cell.level >= max_depth:
+        return AdaptiveIntegrationResult(
+            value=estimate.fine,
+            estimated_error=estimate.error,
+            accepted_cells=1,
+            refined_cells=0,
+            maximum_level=cell.level,
+        )
+
+    children = tuple(
+        integrate_adaptively(
+            child,
+            integrate,
+            rtol=rtol,
+            atol=0.25 * atol,
+            max_depth=max_depth,
+        )
+        for child in cell.subdivide()
+    )
+
+    return AdaptiveIntegrationResult(
+        value=sum(child.value for child in children),
+        estimated_error=sum(
+            child.estimated_error for child in children
+        ),
+        accepted_cells=sum(
+            child.accepted_cells for child in children
+        ),
+        refined_cells=1
+        + sum(child.refined_cells for child in children),
+        maximum_level=max(
+            child.maximum_level for child in children
+        ),
+    )
