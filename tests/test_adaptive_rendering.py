@@ -1,8 +1,17 @@
+"""Tests for adaptive numerical rendering."""
+
+from __future__ import annotations
+
 import math
+from collections import Counter
 
 import pytest
 
-from baymorph.rendering import IntegrationCell, estimate_cell
+from baymorph.rendering import (
+    IntegrationCell,
+    estimate_cell,
+    integrate_adaptively,
+)
 
 
 def test_estimate_cell_accepts_exact_constant_integral():
@@ -41,6 +50,7 @@ def test_estimate_cell_rejects_inaccurate_coarse_estimate():
     def integrate(candidate):
         if candidate.level == 0:
             return 1.0
+
         return 0.3
 
     estimate = estimate_cell(
@@ -68,6 +78,7 @@ def test_estimate_cell_uses_absolute_tolerance_near_zero():
     def integrate(candidate):
         if candidate.level == 0:
             return 0.0
+
         return 2.0e-9
 
     estimate = estimate_cell(
@@ -133,6 +144,7 @@ def test_estimate_cell_rejects_invalid_refined_estimate():
     def integrate(candidate):
         if candidate.level == 0:
             return 1.0
+
         return math.nan
 
     with pytest.raises(
@@ -148,8 +160,6 @@ def test_estimate_cell_rejects_invalid_refined_estimate():
 
 
 def test_integrate_adaptively_accepts_exact_integral_without_recursion():
-    from baymorph.rendering import integrate_adaptively
-
     cell = IntegrationCell(
         xmin=0.0,
         xmax=2.0,
@@ -173,8 +183,6 @@ def test_integrate_adaptively_accepts_exact_integral_without_recursion():
 
 
 def test_integrate_adaptively_refines_until_estimate_converges():
-    from baymorph.rendering import integrate_adaptively
-
     cell = IntegrationCell(
         xmin=0.0,
         xmax=1.0,
@@ -203,8 +211,6 @@ def test_integrate_adaptively_refines_until_estimate_converges():
 
 
 def test_integrate_adaptively_stops_at_maximum_depth():
-    from baymorph.rendering import integrate_adaptively
-
     cell = IntegrationCell(
         xmin=0.0,
         xmax=1.0,
@@ -230,9 +236,70 @@ def test_integrate_adaptively_stops_at_maximum_depth():
     assert result.maximum_level == 2
 
 
-def test_integrate_adaptively_rejects_invalid_maximum_depth():
-    from baymorph.rendering import integrate_adaptively
+def test_integrate_adaptively_integrates_each_cell_once():
+    cell = IntegrationCell(
+        xmin=0.0,
+        xmax=1.0,
+        ymin=0.0,
+        ymax=1.0,
+    )
+    evaluations: Counter[IntegrationCell] = Counter()
 
+    def integrate(candidate):
+        evaluations[candidate] += 1
+
+        return candidate.area * (
+            1.0 + 0.5 ** (candidate.level + 1)
+        )
+
+    result = integrate_adaptively(
+        cell,
+        integrate,
+        rtol=0.0,
+        atol=0.0,
+        max_depth=3,
+    )
+
+    visited_cells = result.accepted_cells + result.refined_cells
+
+    assert all(count == 1 for count in evaluations.values())
+    assert len(evaluations) == 1 + 4 * visited_cells
+
+
+def test_integrate_adaptively_rejects_invalid_tolerances():
+    cell = IntegrationCell(
+        xmin=0.0,
+        xmax=1.0,
+        ymin=0.0,
+        ymax=1.0,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="rtol must be non-negative",
+    ):
+        integrate_adaptively(
+            cell,
+            lambda candidate: candidate.area,
+            rtol=-1.0,
+            atol=0.0,
+            max_depth=1,
+        )
+
+    with pytest.raises(
+        ValueError,
+        match="atol must be non-negative",
+    ):
+        integrate_adaptively(
+            cell,
+            lambda candidate: candidate.area,
+            rtol=0.0,
+            atol=-1.0,
+            max_depth=1,
+        )
+
+
+def test_integrate_adaptively_rejects_invalid_maximum_depth():
     cell = IntegrationCell(
         xmin=0.0,
         xmax=1.0,

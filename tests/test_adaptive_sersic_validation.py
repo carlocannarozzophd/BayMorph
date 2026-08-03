@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 
 import numpy as np
 import pytest
@@ -17,17 +18,21 @@ from baymorph.rendering import (
 
 @dataclass
 class CountingSersicIntegrator:
-    """Integrate Sérsic cells while counting quadrature-point evaluations."""
+    """Integrate Sérsic cells while recording deterministic cost."""
 
     model: SersicModel
     integration_order: int
     calls: int = 0
     point_evaluations: int = 0
+    evaluated_cells: Counter[IntegrationCell] = field(
+        default_factory=Counter
+    )
 
     def __call__(self, cell: IntegrationCell) -> float:
-        """Integrate one cell and update deterministic cost diagnostics."""
+        """Integrate one cell and update deterministic diagnostics."""
         self.calls += 1
         self.point_evaluations += self.integration_order**2
+        self.evaluated_cells[cell] += 1
 
         return float(
             self.model._integrate_rectangle(
@@ -213,11 +218,16 @@ def test_adaptive_cost_accounting_matches_recursion_tree():
     )
 
     visited_cells = result.accepted_cells + result.refined_cells
+    expected_calls = 1 + 4 * visited_cells
 
-    assert integrator.calls == 5 * visited_cells
+    assert integrator.calls == expected_calls
     assert (
         integrator.point_evaluations
-        == 5 * visited_cells * integration_order**2
+        == expected_calls * integration_order**2
+    )
+    assert all(
+        count == 1
+        for count in integrator.evaluated_cells.values()
     )
 
 
@@ -257,8 +267,45 @@ def test_tighter_tolerance_requires_at_least_as_much_work():
         max_depth=7,
     )
 
-    assert (
-        tight_integrator.point_evaluations
-        >= loose_integrator.point_evaluations
-    )
     assert tight_result.maximum_level >= loose_result.maximum_level
+    assert tight_integrator.calls >= loose_integrator.calls
+
+
+def test_larger_maximum_depth_never_reduces_work():
+    model = SersicModel(
+        flux=1000.0,
+        re=3.0,
+        n=4.0,
+        q=0.7,
+        theta=0.3,
+        x0=0.13,
+        y0=-0.21,
+    )
+    cell = make_pixel_cell(0.0, 0.0)
+
+    shallow_integrator = CountingSersicIntegrator(
+        model=model,
+        integration_order=3,
+    )
+    deep_integrator = CountingSersicIntegrator(
+        model=model,
+        integration_order=3,
+    )
+
+    shallow_result = integrate_adaptively(
+        cell,
+        shallow_integrator,
+        rtol=1.0e-8,
+        atol=1.0e-14,
+        max_depth=3,
+    )
+    deep_result = integrate_adaptively(
+        cell,
+        deep_integrator,
+        rtol=1.0e-8,
+        atol=1.0e-14,
+        max_depth=7,
+    )
+
+    assert deep_result.maximum_level >= shallow_result.maximum_level
+    assert deep_integrator.calls >= shallow_integrator.calls
