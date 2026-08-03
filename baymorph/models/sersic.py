@@ -196,6 +196,55 @@ class SersicModel:
                 "Pixel integration order must be a positive integer."
             )
 
+    def _integrate_rectangle(
+        self,
+        *,
+        xmin: ArrayLike,
+        xmax: ArrayLike,
+        ymin: ArrayLike,
+        ymax: ArrayLike,
+        integration_order: int,
+    ) -> FloatArray:
+        """Integrate the profile over an arbitrary rectangular region."""
+
+        nodes, weights = np.polynomial.legendre.leggauss(
+            integration_order
+        )
+
+        xmin, xmax, ymin, ymax = np.broadcast_arrays(
+            np.asarray(xmin, dtype=float),
+            np.asarray(xmax, dtype=float),
+            np.asarray(ymin, dtype=float),
+            np.asarray(ymax, dtype=float),
+        )
+
+        half_width = 0.5 * (xmax - xmin)
+        half_height = 0.5 * (ymax - ymin)
+
+        x_center = 0.5 * (xmin + xmax)
+        y_center = 0.5 * (ymin + ymax)
+
+        integrated_flux = np.zeros_like(x_center)
+
+        for xi, wx in zip(nodes, weights, strict=True):
+            x = x_center + half_width * xi
+
+            for yi, wy in zip(nodes, weights, strict=True):
+                y = y_center + half_height * yi
+
+                radius = self._elliptical_radius(
+                    x=np.asarray(x, dtype=float),
+                    y=np.asarray(y, dtype=float),
+                )
+
+                integrated_flux += (
+                    wx
+                    * wy
+                    * self.surface_brightness(radius)
+                )
+
+        return integrated_flux * half_width * half_height
+
     def _integrate_pixel(
         self,
         pixel_x: ArrayLike,
@@ -203,56 +252,16 @@ class SersicModel:
         *,
         integration_order: int,
     ) -> FloatArray:
-        """Integrate the continuous profile over unit detector pixels.
+        """Integrate the profile over a unit detector pixel."""
 
-        ``pixel_x`` and ``pixel_y`` are the detector coordinates of pixel
-        centres. They may be scalars or broadcast-compatible arrays. Batched
-        coordinates preserve vectorized fixed-order rendering, while scalar
-        or subset coordinates provide the same numerical kernel required by
-        future adaptive refinement.
-        """
-        pixel_x_array, pixel_y_array = np.broadcast_arrays(
-            np.asarray(pixel_x, dtype=float),
-            np.asarray(pixel_y, dtype=float),
+        return self._integrate_rectangle(
+            xmin=np.asarray(pixel_x, dtype=float) - 0.5,
+            xmax=np.asarray(pixel_x, dtype=float) + 0.5,
+            ymin=np.asarray(pixel_y, dtype=float) - 0.5,
+            ymax=np.asarray(pixel_y, dtype=float) + 0.5,
+            integration_order=integration_order,
         )
 
-        nodes, weights = np.polynomial.legendre.leggauss(
-            integration_order
-        )
-
-        offsets = 0.5 * nodes
-        pixel_weights = 0.5 * weights
-
-        integrated_flux = np.zeros(pixel_x_array.shape, dtype=float)
-
-        for y_offset, y_weight in zip(
-            offsets,
-            pixel_weights,
-            strict=True,
-        ):
-            for x_offset, x_weight in zip(
-                offsets,
-                pixel_weights,
-                strict=True,
-            ):
-                radius = self._elliptical_radius(
-                    x=np.asarray(
-                        pixel_x_array + x_offset,
-                        dtype=float,
-                    ),
-                    y=np.asarray(
-                        pixel_y_array + y_offset,
-                        dtype=float,
-                    ),
-                )
-
-                integrated_flux += (
-                    x_weight
-                    * y_weight
-                    * self.surface_brightness(radius)
-                )
-
-        return integrated_flux
 
     def render_components(
         self,

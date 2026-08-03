@@ -266,3 +266,77 @@ def test_sersic_model_rejects_axis_ratio_above_unity():
             x0=50.0,
             y0=50.0,
         )
+
+
+def test_sersic_rectangle_integrator_recovers_pixel_integral():
+    model = SersicModel(
+        flux=1000.0,
+        re=3.2,
+        n=1.5,
+        q=0.8,
+        theta=0.3,
+        x0=10.37,
+        y0=9.82,
+    )
+
+    pixel_x = np.arange(9.0, 13.0)[None, :]
+    pixel_y = np.arange(8.0, 11.0)[:, None]
+
+    pixel_flux = model._integrate_pixel(
+        pixel_x=pixel_x,
+        pixel_y=pixel_y,
+        integration_order=7,
+    )
+    rectangle_flux = model._integrate_rectangle(
+        xmin=pixel_x - 0.5,
+        xmax=pixel_x + 0.5,
+        ymin=pixel_y - 0.5,
+        ymax=pixel_y + 0.5,
+        integration_order=7,
+    )
+
+    np.testing.assert_allclose(
+        rectangle_flux,
+        pixel_flux,
+        rtol=0.0,
+        atol=0.0,
+    )
+
+
+def test_sersic_rectangle_integrator_is_additive_under_quadrisection():
+    model = SersicModel(
+        flux=1000.0,
+        re=3.2,
+        n=1.5,
+        q=0.8,
+        theta=0.3,
+        x0=10.37,
+        y0=9.82,
+    )
+
+    whole = model._integrate_rectangle(
+        xmin=9.0,
+        xmax=10.0,
+        ymin=8.0,
+        ymax=9.0,
+        integration_order=15,
+    )
+
+    quadrants = sum(
+        model._integrate_rectangle(
+            xmin=xmin,
+            xmax=xmax,
+            ymin=ymin,
+            ymax=ymax,
+            integration_order=15,
+        )
+        for ymin, ymax in ((8.0, 8.5), (8.5, 9.0))
+        for xmin, xmax in ((9.0, 9.5), (9.5, 10.0))
+    )
+
+    np.testing.assert_allclose(
+        quadrants,
+        whole,
+        rtol=1.0e-12,
+        atol=1.0e-14,
+    )
