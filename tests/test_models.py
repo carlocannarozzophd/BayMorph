@@ -152,6 +152,48 @@ def test_sersic_render_integrates_over_pixel_area():
     assert relative_l1_error < 1.0e-4
 
 
+def test_sersic_pixel_integrator_supports_scalar_and_batched_coordinates():
+    model = SersicModel(
+        flux=1000.0,
+        re=3.2,
+        n=1.5,
+        q=0.8,
+        theta=0.3,
+        x0=10.37,
+        y0=9.82,
+    )
+
+    pixel_x = np.arange(9.0, 13.0)[None, :]
+    pixel_y = np.arange(8.0, 11.0)[:, None]
+
+    batched = model._integrate_pixel(
+        pixel_x=pixel_x,
+        pixel_y=pixel_y,
+        integration_order=7,
+    )
+    scalar = np.array(
+        [
+            [
+                model._integrate_pixel(
+                    pixel_x=x,
+                    pixel_y=y,
+                    integration_order=7,
+                )
+                for x in pixel_x[0]
+            ]
+            for y in pixel_y[:, 0]
+        ],
+        dtype=float,
+    )
+
+    np.testing.assert_allclose(
+        batched,
+        scalar,
+        rtol=1.0e-14,
+        atol=1.0e-15,
+    )
+
+
 def test_sersic_large_cutout_recovers_total_flux():
     model = SersicModel(
         flux=1000.0,
