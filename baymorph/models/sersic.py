@@ -298,14 +298,14 @@ class SersicModel:
             )
         )
 
-    def _integrate_pixel(
+    def _integrate_pixel_fixed(
         self,
         pixel_x: ArrayLike,
         pixel_y: ArrayLike,
         *,
         integration_order: int,
     ) -> FloatArray:
-        """Integrate the profile over a unit detector pixel."""
+        """Integrate the profile over detector pixels using fixed quadrature."""
 
         return self._integrate_rectangle(
             xmin=np.asarray(pixel_x, dtype=float) - 0.5,
@@ -315,59 +315,123 @@ class SersicModel:
             integration_order=integration_order,
         )
 
+    def _integrate_pixel(
+        self,
+        pixel_x: ArrayLike,
+        pixel_y: ArrayLike,
+        *,
+        integration_order: int,
+    ) -> FloatArray:
+        """Backward-compatible alias for fixed pixel integration."""
 
+        return self._integrate_pixel_fixed(
+            pixel_x=pixel_x,
+            pixel_y=pixel_y,
+            integration_order=integration_order,
+        )
+
+
+    def _integrate_pixel_adaptive(
+        self,
+        pixel_x: ArrayLike,
+        pixel_y: ArrayLike,
+        *,
+        integration_order: int,
+        rtol: float,
+        atol: float,
+        max_depth: int,
+    ) -> FloatArray:
+        """Integrate detector pixels using adaptive quadrature."""
+
+        from baymorph.rendering import (
+            IntegrationCell,
+            integrate_adaptively,
+        )
+
+        pixel_x, pixel_y = np.broadcast_arrays(
+            np.asarray(pixel_x, dtype=float),
+            np.asarray(pixel_y, dtype=float),
+        )
+
+        image = np.empty(pixel_x.shape, dtype=float)
+
+        for index in np.ndindex(pixel_x.shape):
+            cell = IntegrationCell(
+                xmin=pixel_x[index] - 0.5,
+                xmax=pixel_x[index] + 0.5,
+                ymin=pixel_y[index] - 0.5,
+                ymax=pixel_y[index] + 0.5,
+            )
+
+            def integrate(candidate: IntegrationCell) -> float:
+                return float(
+                    self._integrate_rectangle(
+                        xmin=candidate.xmin,
+                        xmax=candidate.xmax,
+                        ymin=candidate.ymin,
+                        ymax=candidate.ymax,
+                        integration_order=integration_order,
+                    )
+                )
+
+            result = integrate_adaptively(
+                cell,
+                integrate,
+                rtol=rtol,
+                atol=atol,
+                max_depth=max_depth,
+            )
+
+            image[index] = result.value
+
+        return image
+    
     def render_components(
         self,
         shape: tuple[int, int],
         *,
+        renderer: str = "fixed",
         integration_order: int = 5,
+        rtol: float = 1.0e-6,
+        atol: float = 1.0e-12,
+        max_depth: int = 6,
         origin: tuple[float, float] = (0.0, 0.0),
     ) -> dict[str, FloatArray]:
         """Render the Sérsic model as a named single-component model."""
+
         return {
             "sersic": self.render(
                 shape=shape,
+                renderer=renderer,
                 integration_order=integration_order,
+                rtol=rtol,
+                atol=atol,
+                max_depth=max_depth,
                 origin=origin,
             )
         }
+
 
     def render(
         self,
         shape: tuple[int, int],
         *,
+        renderer: str = "fixed",
         integration_order: int = 5,
+        rtol: float = 1.0e-6,
+        atol: float = 1.0e-12,
+        max_depth: int = 6,
         origin: tuple[float, float] = (0.0, 0.0),
     ) -> FloatArray:
-        """Integrate the continuous model over square detector pixels.
+        """Integrate the continuous model over detector pixels."""
 
-        Each output value is the integral of the continuous Sérsic surface
-        brightness over one unit-area pixel. Integration uses tensor-product
-        Gauss-Legendre quadrature.
-
-        The analytic profile is never renormalized on the requested cutout.
-        Therefore, pixels shared by two cutouts retain identical values and
-        the sum of a finite image represents only the flux captured by that
-        footprint.
-
-        Parameters
-        ----------
-        shape : tuple of int
-            Output image shape as ``(ny, nx)``.
-        integration_order : int, optional
-            One-dimensional Gauss-Legendre quadrature order used along each
-            pixel axis. The number of profile evaluations per pixel is the
-            square of this value.
-        origin : tuple of float, optional
-            Physical ``(y, x)`` coordinates of output pixel ``[0, 0]``.
-
-        Returns
-        -------
-        ndarray
-            Flux integrated over every output pixel.
-        """
         self._validate_shape(shape)
         self._validate_integration_order(integration_order)
+
+        if renderer not in {"fixed", "adaptive"}:
+            raise ValueError(
+                "renderer must be either 'fixed' or 'adaptive'."
+            )
 
         ny, nx = shape
         y_origin, x_origin = origin
@@ -376,8 +440,18 @@ class SersicModel:
         pixel_y = np.asarray(pixel_y, dtype=float) + y_origin
         pixel_x = np.asarray(pixel_x, dtype=float) + x_origin
 
-        return self._integrate_pixel(
+        if renderer == "fixed":
+            return self._integrate_pixel_fixed(
+                pixel_x=pixel_x,
+                pixel_y=pixel_y,
+                integration_order=integration_order,
+            )
+
+        return self._integrate_pixel_adaptive(
             pixel_x=pixel_x,
             pixel_y=pixel_y,
             integration_order=integration_order,
+            rtol=rtol,
+            atol=atol,
+            max_depth=max_depth,
         )
