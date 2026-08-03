@@ -245,6 +245,59 @@ class SersicModel:
 
         return integrated_flux * half_width * half_height
 
+    def _integrate_refined_rectangle(
+        self,
+        *,
+        xmin: ArrayLike,
+        xmax: ArrayLike,
+        ymin: ArrayLike,
+        ymax: ArrayLike,
+        integration_order: int,
+    ) -> FloatArray:
+        """Integrate a rectangle through its four equal subrectangles."""
+        xmin_array, xmax_array, ymin_array, ymax_array = (
+            np.broadcast_arrays(
+                np.asarray(xmin, dtype=float),
+                np.asarray(xmax, dtype=float),
+                np.asarray(ymin, dtype=float),
+                np.asarray(ymax, dtype=float),
+            )
+        )
+
+        xmid = 0.5 * (xmin_array + xmax_array)
+        ymid = 0.5 * (ymin_array + ymax_array)
+
+        return (
+            self._integrate_rectangle(
+                xmin=xmin_array,
+                xmax=xmid,
+                ymin=ymin_array,
+                ymax=ymid,
+                integration_order=integration_order,
+            )
+            + self._integrate_rectangle(
+                xmin=xmid,
+                xmax=xmax_array,
+                ymin=ymin_array,
+                ymax=ymid,
+                integration_order=integration_order,
+            )
+            + self._integrate_rectangle(
+                xmin=xmin_array,
+                xmax=xmid,
+                ymin=ymid,
+                ymax=ymax_array,
+                integration_order=integration_order,
+            )
+            + self._integrate_rectangle(
+                xmin=xmid,
+                xmax=xmax_array,
+                ymin=ymid,
+                ymax=ymax_array,
+                integration_order=integration_order,
+            )
+        )
+
     def _integrate_pixel(
         self,
         pixel_x: ArrayLike,

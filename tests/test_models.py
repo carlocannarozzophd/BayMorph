@@ -194,6 +194,45 @@ def test_sersic_pixel_integrator_supports_scalar_and_batched_coordinates():
     )
 
 
+def test_sersic_refined_rectangle_matches_explicit_quadrisection():
+    model = SersicModel(
+        flux=1000.0,
+        re=3.2,
+        n=1.5,
+        q=0.8,
+        theta=0.3,
+        x0=10.37,
+        y0=9.82,
+    )
+
+    refined = model._integrate_refined_rectangle(
+        xmin=9.0,
+        xmax=10.0,
+        ymin=8.0,
+        ymax=9.0,
+        integration_order=7,
+    )
+
+    explicit = sum(
+        model._integrate_rectangle(
+            xmin=xmin,
+            xmax=xmax,
+            ymin=ymin,
+            ymax=ymax,
+            integration_order=7,
+        )
+        for ymin, ymax in ((8.0, 8.5), (8.5, 9.0))
+        for xmin, xmax in ((9.0, 9.5), (9.5, 10.0))
+    )
+
+    np.testing.assert_allclose(
+        refined,
+        explicit,
+        rtol=0.0,
+        atol=0.0,
+    )
+
+
 def test_sersic_large_cutout_recovers_total_flux():
     model = SersicModel(
         flux=1000.0,
