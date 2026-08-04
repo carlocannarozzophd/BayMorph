@@ -8,15 +8,17 @@ from typing import Any
 from baymorph.fitting.dynesty import DynestyFitter
 from baymorph.fitting.native import NativeFitter
 from baymorph.fitting.parameters import ParameterSet
+from baymorph.fitting.problem import InferenceProblem
 from baymorph.likelihood import ImageLikelihood
 
 
 def make_sampler(
     config: Mapping[str, Any] | str | None,
     *,
-    model_factory,
-    parameters: ParameterSet,
-    likelihood: ImageLikelihood,
+    problem: InferenceProblem | None = None,
+    model_factory=None,
+    parameters: ParameterSet | None = None,
+    likelihood: ImageLikelihood | None = None,
 ):
     """Construct a configured sampling backend.
 
@@ -25,13 +27,14 @@ def make_sampler(
     config : mapping, str, or None
         Sampler configuration. A string is interpreted as the sampler name.
         If ``None``, Dynesty is selected.
-    model_factory : callable
-        Callable receiving model parameters as keyword arguments and
-        returning an object exposing a ``render(shape=...)`` method.
-    parameters : ParameterSet
-        Ordered fitted-parameter definitions.
-    likelihood : ImageLikelihood
-        Fully configured image likelihood.
+    problem : InferenceProblem, optional
+        Backend-neutral inference problem. Currently supported by Dynesty.
+    model_factory : callable, optional
+        Legacy single-image model factory.
+    parameters : ParameterSet, optional
+        Legacy single-image fitted-parameter definitions.
+    likelihood : ImageLikelihood, optional
+        Legacy single-image likelihood.
 
     Returns
     -------
@@ -41,13 +44,12 @@ def make_sampler(
     Raises
     ------
     TypeError
-        If ``config`` is not a mapping, string, or ``None``.
+        If ``config`` has an invalid type.
     ValueError
-        If the requested sampler is unsupported.
+        If construction arguments are inconsistent or the requested backend
+        does not support backend-neutral inference problems.
     """
-    sampler_config = _normalize_config(
-        config
-    )
+    sampler_config = _normalize_config(config)
 
     sampler_name = str(
         sampler_config.get(
@@ -55,6 +57,34 @@ def make_sampler(
             "dynesty",
         )
     ).strip().lower()
+
+    if problem is not None:
+        if any(
+            value is not None
+            for value in (
+                model_factory,
+                parameters,
+                likelihood,
+            )
+        ):
+            raise ValueError(
+                "problem cannot be combined with model_factory, "
+                "parameters, or likelihood."
+            )
+
+        if not isinstance(problem, InferenceProblem):
+            raise TypeError(
+                "problem must be an InferenceProblem instance."
+            )
+
+        if sampler_name == "dynesty":
+            return DynestyFitter(problem=problem)
+
+        if sampler_name == "native":
+            raise ValueError(
+                "The archived native backend does not support "
+                "InferenceProblem construction."
+            )
 
     if sampler_name == "dynesty":
         return DynestyFitter(
@@ -86,23 +116,15 @@ def _normalize_config(
             "name": "dynesty",
         }
 
-    if isinstance(
-        config,
-        str,
-    ):
+    if isinstance(config, str):
         return {
             "name": config,
         }
 
-    if not isinstance(
-        config,
-        Mapping,
-    ):
+    if not isinstance(config, Mapping):
         raise TypeError(
             "Sampler configuration must be a mapping, "
             "string, or None."
         )
 
-    return dict(
-        config
-    )
+    return dict(config)
