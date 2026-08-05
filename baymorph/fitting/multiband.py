@@ -8,12 +8,12 @@ from typing import Literal
 
 from baymorph.fitting.parameters import Parameter, ParameterSet
 
-CouplingMode = Literal["shared", "band_specific"]
+CouplingMode = Literal["shared", "independent"]
 
 
 @dataclass(frozen=True)
 class MultiBandParameterSpec:
-    """Define the coupling and prior bounds of one model parameter."""
+    """Define the coupling and prior of one model parameter."""
 
     name: str
     coupling: CouplingMode
@@ -33,21 +33,33 @@ class MultiBandParameterSpec:
         )
 
     @classmethod
+    def independent(
+        cls,
+        name: str,
+        parameters: Mapping[str, Parameter],
+    ) -> MultiBandParameterSpec:
+        """Create an independently parameterized specification."""
+        return cls(
+            name=name,
+            coupling="independent",
+            by_band=dict(parameters),
+        )
+
+    @classmethod
     def band_specific(
         cls,
         name: str,
         parameters: Mapping[str, Parameter],
     ) -> MultiBandParameterSpec:
-        """Create a band-specific parameter specification."""
-        return cls(
+        """Create an independent specification through the legacy alias."""
+        return cls.independent(
             name=name,
-            coupling="band_specific",
-            by_band=dict(parameters),
+            parameters=parameters,
         )
 
 
 class MultiBandParameterLayout:
-    """Map one sampled parameter vector to per-band model parameters."""
+    """Map one sampled state to complete parameters for every band."""
 
     def __init__(
         self,
@@ -65,30 +77,41 @@ class MultiBandParameterLayout:
         for specification in self._specifications:
             if specification.coupling == "shared":
                 assert specification.shared is not None
-                global_parameters.append(specification.shared)
+                global_parameters.append(
+                    specification.shared
+                )
                 continue
 
             assert specification.by_band is not None
 
             for band in self._bands:
                 parameter = specification.by_band[band]
+
                 global_parameters.append(
                     Parameter(
                         name=self.global_name(
                             specification.name,
                             band,
                         ),
-                        lower=parameter.lower,
-                        upper=parameter.upper,
+                        prior=parameter.prior,
                     )
                 )
 
-        self._parameter_set = ParameterSet(global_parameters)
+        self._parameter_set = ParameterSet(
+            global_parameters
+        )
 
     @property
     def bands(self) -> tuple[str, ...]:
-        """Return the bands in deterministic routing order."""
+        """Return bands in deterministic routing order."""
         return self._bands
+
+    @property
+    def specifications(
+        self,
+    ) -> tuple[MultiBandParameterSpec, ...]:
+        """Return parameter specifications in model order."""
+        return self._specifications
 
     @property
     def parameter_set(self) -> ParameterSet:
@@ -97,7 +120,7 @@ class MultiBandParameterLayout:
 
     @property
     def ndim(self) -> int:
-        """Return the global sampled dimension."""
+        """Return the number of sampled global parameters."""
         return self._parameter_set.ndim
 
     @staticmethod
@@ -105,21 +128,47 @@ class MultiBandParameterLayout:
         name: str,
         band: str,
     ) -> str:
-        """Return the unambiguous global name of a local parameter."""
+        """Return the unambiguous global name of an independent parameter."""
         return f"{name}__{band}"
+
+    def complete_global_values(
+        self,
+        sampled_values: Mapping[str, float],
+    ) -> dict[str, float]:
+        """Combine sampled and deterministic global parameter values."""
+        complete = dict(
+            self._parameter_set.fixed_values
+        )
+        complete.update(
+            {
+                name: float(value)
+                for name, value in sampled_values.items()
+            }
+        )
+
+        missing = set(
+            self._parameter_set.all_names
+        ).difference(complete)
+
+        if missing:
+            missing_names = ", ".join(
+                sorted(missing)
+            )
+            raise KeyError(
+                "Missing global parameter values: "
+                f"{missing_names}."
+            )
+
+        return complete
 
     def route(
         self,
         values: Mapping[str, float],
     ) -> dict[str, dict[str, float]]:
-        """Route global named values to model parameters for every band."""
-        missing = set(self._parameter_set.names).difference(values)
-
-        if missing:
-            missing_names = ", ".join(sorted(missing))
-            raise KeyError(
-                f"Missing global parameter values: {missing_names}."
-            )
+        """Route global values to complete model parameters for every band."""
+        complete = self.complete_global_values(
+            values
+        )
 
         routed = {
             band: {}
@@ -128,15 +177,21 @@ class MultiBandParameterLayout:
 
         for specification in self._specifications:
             if specification.coupling == "shared":
-                value = values[specification.name]
+                value = complete[
+                    specification.name
+                ]
 
                 for band in self._bands:
-                    routed[band][specification.name] = value
+                    routed[band][
+                        specification.name
+                    ] = value
 
                 continue
 
             for band in self._bands:
-                routed[band][specification.name] = values[
+                routed[band][
+                    specification.name
+                ] = complete[
                     self.global_name(
                         specification.name,
                         band,
@@ -152,10 +207,17 @@ class MultiBandParameterLayout:
             )
 
         if len(set(self._bands)) != len(self._bands):
-            raise ValueError("Band names must be unique.")
+            raise ValueError(
+                "Band names must be unique."
+            )
 
-        if any(not band for band in self._bands):
-            raise ValueError("Band names must be non-empty strings.")
+        if any(
+            not isinstance(band, str) or not band
+            for band in self._bands
+        ):
+            raise ValueError(
+                "Band names must be non-empty strings."
+            )
 
         names = [
             specification.name
@@ -163,60 +225,85 @@ class MultiBandParameterLayout:
         ]
 
         if len(set(names)) != len(names):
-            raise ValueError("Parameter names must be unique.")
+            raise ValueError(
+                "Parameter names must be unique."
+            )
 
         for specification in self._specifications:
             if specification.coupling == "shared":
-                if specification.shared is None:
-                    raise ValueError(
-                        f"Shared parameter '{specification.name}' "
-                        "requires one Parameter definition."
-                    )
-
-                if specification.shared.name != specification.name:
-                    raise ValueError(
-                        "Shared parameter name does not match its "
-                        "specification."
-                    )
-
-                if specification.by_band is not None:
-                    raise ValueError(
-                        f"Shared parameter '{specification.name}' cannot "
-                        "define band-specific parameters."
-                    )
-
+                self._validate_shared(
+                    specification
+                )
                 continue
 
-            if specification.coupling != "band_specific":
-                raise ValueError(
-                    f"Unsupported coupling mode "
-                    f"'{specification.coupling}'."
+            if specification.coupling == "independent":
+                self._validate_independent(
+                    specification
                 )
+                continue
 
-            if specification.shared is not None:
+            raise ValueError(
+                "Unsupported coupling mode "
+                f"'{specification.coupling}'."
+            )
+
+    def _validate_shared(
+        self,
+        specification: MultiBandParameterSpec,
+    ) -> None:
+        """Validate one shared parameter specification."""
+        if specification.shared is None:
+            raise ValueError(
+                f"Shared parameter '{specification.name}' "
+                "requires one Parameter definition."
+            )
+
+        if specification.shared.name != specification.name:
+            raise ValueError(
+                "Shared parameter name does not match its "
+                "specification."
+            )
+
+        if specification.by_band is not None:
+            raise ValueError(
+                f"Shared parameter '{specification.name}' "
+                "cannot define independent parameters."
+            )
+
+    def _validate_independent(
+        self,
+        specification: MultiBandParameterSpec,
+    ) -> None:
+        """Validate one independent parameter specification."""
+        if specification.shared is not None:
+            raise ValueError(
+                f"Independent parameter '{specification.name}' "
+                "cannot define a shared parameter."
+            )
+
+        if specification.by_band is None:
+            raise ValueError(
+                f"Independent parameter '{specification.name}' "
+                "requires one definition per band."
+            )
+
+        supplied_bands = set(
+            specification.by_band
+        )
+        expected_bands = set(
+            self._bands
+        )
+
+        if supplied_bands != expected_bands:
+            raise ValueError(
+                f"Independent parameter '{specification.name}' "
+                "must define exactly the configured bands."
+            )
+
+        for band, parameter in specification.by_band.items():
+            if parameter.name != specification.name:
                 raise ValueError(
-                    f"Band-specific parameter '{specification.name}' "
-                    "cannot define a shared parameter."
+                    f"Parameter name for band '{band}' "
+                    f"does not match specification "
+                    f"'{specification.name}'."
                 )
-
-            if specification.by_band is None:
-                raise ValueError(
-                    f"Band-specific parameter '{specification.name}' "
-                    "requires one definition per band."
-                )
-
-            supplied_bands = set(specification.by_band)
-            expected_bands = set(self._bands)
-
-            if supplied_bands != expected_bands:
-                raise ValueError(
-                    f"Band-specific parameter '{specification.name}' "
-                    "must define exactly the configured bands."
-                )
-
-            for band, parameter in specification.by_band.items():
-                if parameter.name != specification.name:
-                    raise ValueError(
-                        f"Parameter name for band '{band}' does not match "
-                        f"specification '{specification.name}'."
-                    )

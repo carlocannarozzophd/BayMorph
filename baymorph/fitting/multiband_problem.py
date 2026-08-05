@@ -14,7 +14,7 @@ FloatArray = NDArray[np.float64]
 
 
 class MultiBandInferenceProblem(InferenceProblem):
-    """Inference problem with configurable parameter coupling across bands."""
+    """Inference problem with explicit parameter coupling across bands."""
 
     def __init__(
         self,
@@ -47,10 +47,13 @@ class MultiBandInferenceProblem(InferenceProblem):
                 "likelihood must be a MultiBandLikelihood."
             )
 
-        if representation_factory.observations != parameter_layout.bands:
+        if (
+            representation_factory.observations
+            != parameter_layout.bands
+        ):
             raise ValueError(
-                "Representation factory and parameter layout bands must "
-                "match in both names and order."
+                "Representation factory and parameter layout bands "
+                "must match in both names and order."
             )
 
         if parameter_layout.bands != likelihood.bands:
@@ -70,14 +73,14 @@ class MultiBandInferenceProblem(InferenceProblem):
 
     @property
     def parameter_names(self) -> list[str]:
-        """Return global parameter names in sampling order."""
+        """Return sampled global parameter names in sampling order."""
         return self.parameter_layout.parameter_set.names
 
     def prior_transform(
         self,
         cube: FloatArray,
     ) -> FloatArray:
-        """Transform unit-cube coordinates into physical parameters."""
+        """Transform unit-cube coordinates into sampled physical values."""
         unit_values = np.asarray(
             cube,
             dtype=float,
@@ -85,10 +88,13 @@ class MultiBandInferenceProblem(InferenceProblem):
 
         if unit_values.shape != (self.ndim,):
             raise ValueError(
-                "Unit-cube sample must contain one value per parameter."
+                "Unit-cube sample must contain one value per "
+                "sampled parameter."
             )
 
-        if not np.all(np.isfinite(unit_values)):
+        if not np.all(
+            np.isfinite(unit_values)
+        ):
             raise ValueError(
                 "Unit-cube sample values must be finite."
             )
@@ -102,16 +108,21 @@ class MultiBandInferenceProblem(InferenceProblem):
             )
 
         transformed = np.asarray(
-            self.parameter_layout.parameter_set.transform(unit_values),
+            self.parameter_layout.parameter_set.transform(
+                unit_values
+            ),
             dtype=float,
         )
 
         if transformed.shape != (self.ndim,):
             raise ValueError(
-                "Prior transform must return one value per parameter."
+                "Prior transform must return one value per "
+                "sampled parameter."
             )
 
-        if not np.all(np.isfinite(transformed)):
+        if not np.all(
+            np.isfinite(transformed)
+        ):
             raise ValueError(
                 "Transformed parameter values must be finite."
             )
@@ -122,7 +133,7 @@ class MultiBandInferenceProblem(InferenceProblem):
         self,
         theta: FloatArray,
     ) -> dict[str, dict[str, float]]:
-        """Route one global vector to parameters required by each band."""
+        """Route one sampled vector to complete parameters for every band."""
         values_array = np.asarray(
             theta,
             dtype=float,
@@ -130,15 +141,18 @@ class MultiBandInferenceProblem(InferenceProblem):
 
         if values_array.shape != (self.ndim,):
             raise ValueError(
-                "Parameter vector must contain one value per parameter."
+                "Parameter vector must contain one value per "
+                "sampled parameter."
             )
 
-        if not np.all(np.isfinite(values_array)):
+        if not np.all(
+            np.isfinite(values_array)
+        ):
             raise ValueError(
                 "Parameter values must be finite."
             )
 
-        global_values = {
+        sampled_values = {
             name: float(value)
             for name, value in zip(
                 self.parameter_names,
@@ -147,15 +161,19 @@ class MultiBandInferenceProblem(InferenceProblem):
             )
         }
 
-        return self.parameter_layout.route(global_values)
+        return self.parameter_layout.route(
+            sampled_values
+        )
 
     def render_models(
         self,
         theta: FloatArray,
     ) -> dict[str, np.ndarray]:
         """Build and render one representation for every band."""
-        representations = self.representation_factory.build_all(
-            self.routed_parameters(theta)
+        representations = (
+            self.representation_factory.build_all(
+                self.routed_parameters(theta)
+            )
         )
 
         rendered: dict[str, np.ndarray] = {}
@@ -169,27 +187,33 @@ class MultiBandInferenceProblem(InferenceProblem):
 
             if not callable(render):
                 raise TypeError(
-                    f"Representation for band '{band}' must expose a "
-                    "callable render(shape=...) method."
+                    f"Representation for band '{band}' must expose "
+                    "a callable render(shape=...) method."
                 )
 
-            expected_shape = self.likelihood.image_shapes[band]
+            expected_shape = (
+                self.likelihood.image_shapes[band]
+            )
 
             model_image = np.asarray(
-                render(shape=expected_shape),
+                render(
+                    shape=expected_shape
+                ),
                 dtype=float,
             )
 
             if model_image.shape != expected_shape:
                 raise ValueError(
-                    f"Rendered representation for band '{band}' has an "
-                    "incompatible shape."
+                    f"Rendered representation for band '{band}' "
+                    "has an incompatible shape."
                 )
 
-            if not np.all(np.isfinite(model_image)):
+            if not np.all(
+                np.isfinite(model_image)
+            ):
                 raise ValueError(
-                    f"Rendered representation for band '{band}' contains "
-                    "non-finite values."
+                    f"Rendered representation for band '{band}' "
+                    "contains non-finite values."
                 )
 
             rendered[band] = model_image
@@ -201,6 +225,8 @@ class MultiBandInferenceProblem(InferenceProblem):
         theta: FloatArray,
     ) -> float:
         """Evaluate the joint multi-band log-likelihood."""
-        return self.likelihood(
-            self.render_models(theta)
+        return float(
+            self.likelihood(
+                self.render_models(theta)
+            )
         )
