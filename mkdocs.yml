@@ -1,0 +1,125 @@
+site_name: BayMorph Scientific Documentation
+site_description: >-
+  Scientific documentation for BayMorph, an open-source Bayesian framework
+  for astronomical morphology and correlated multi-observation inference.
+site_author: Carlo Cannarozzo
+site_url: https://carlocannarozzophd.github.io/BayMorph/
+
+repo_name: carlocannarozzophd/BayMorph
+repo_url: https://github.com/carlocannarozzophd/BayMorph
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+site_dir: site
+
+exclude_docs: |
+  /README.md
+  /ARCHITECTURE.md
+  /VALIDATION.md
+  /archive/
+
+theme:
+  name: material
+  language: en
+
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.indexes
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - toc.follow
+
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: index.md
+
+  - Architecture:
+      - Overview: architecture/ARCHITECTURE.md
+      - Core Architecture: architecture/CORE_ARCHITECTURE.md
+      - Observation Model: architecture/OBSERVATION_MODEL.md
+      - Inference: architecture/INFERENCE.md
+      - Rendering: architecture/RENDERING.md
+      - Pipeline: architecture/PIPELINE.md
+      - Validation: architecture/VALIDATION.md
+      - Architecture Decisions:
+          - Policy: architecture/decisions/README.md
+
+  - Public API: API.md
+
+  - Research:
+      - Paper Blueprint: research/PAPER_BLUEPRINT.md
+      - Multi-band Formulation: research/MULTIBAND_FORMULATION.md
+      - Adaptive Rendering: research/ADAPTIVE_RENDERING.md
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+
+  - toc:
+      permalink: true
+
+  - pymdownx.arithmatex:
+      generic: true
+
+  - pymdownx.details
+
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/carlocannarozzophd/BayMorph
+      name: BayMorph on GitHub
+
+copyright: >-
+  Copyright &copy; Carlo Cannarozzo.
+  BayMorph is distributed under the MIT License.
+
+strict: true
