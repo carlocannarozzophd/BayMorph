@@ -15,6 +15,7 @@ from baymorph.fitting.model_factories import (
     make_double_sersic_psf_sky_model,
     make_single_sersic_psf_sky_model,
 )
+from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.fitting.parameters import Parameter, ParameterSet
 from baymorph.likelihood import make_likelihood
 from baymorph.models import get_model
@@ -81,64 +82,13 @@ def run_real_fit_from_config(
     all_products = {}
 
     for model_name in resolved["fit"]["models"]:
-        parameter_names, parameters, _, _ = _build_parameter_set(
-            model_name,
-            data_fit=image_products.prepared_data,
-            noise_fit=image_products.noise,
-            mask_fit=image_products.fitting_mask,
-            target_x=image_products.target_x,
-            target_y=image_products.target_y,
+        products = _execute_single_model_fit(
+            model_name=model_name,
+            image_products=image_products,
+            psf=psf,
             prior_cfg=resolved["fit"]["priors"],
-        )
-
-        model_factory = _make_model_factory(
-            model_name,
-            psf,
-        )
-
-        result = _run_sampler(
-            data_fit=image_products.prepared_data,
-            noise_fit=image_products.noise,
-            mask_fit=image_products.fitting_mask,
-            parameters=parameters,
-            model_factory=model_factory,
             likelihood_cfg=likelihood_cfg,
             sampler_cfg=sampler_cfg,
-            nlive=sampler_cfg["nlive"],
-            sample=sampler_cfg.get("sample", "auto"),
-            dlogz=sampler_cfg.get("dlogz", None),
-            n_processes=sampler_cfg.get("n_processes", 1),
-            queue_size=sampler_cfg.get("queue_size", None),
-            seed=sampler_cfg.get("seed", None),
-            progress_label=model_name,
-        )
-
-        best_model_image, best_parameters = _compute_best_model(
-            result=result,
-            parameter_names=parameter_names,
-            model_factory=model_factory,
-            image_shape=image_products.prepared_data.shape,
-        )
-
-        stats = _compute_fit_statistics(
-            data=image_products.prepared_data,
-            model_image=best_model_image,
-            noise=image_products.noise,
-            mask=image_products.fitting_mask,
-            n_parameters=len(parameter_names),
-        )
-
-        products = RealFitProducts(
-            model_name=model_name,
-            posterior=result,
-            best_parameters=best_parameters,
-            best_model_image=best_model_image,
-            residual=stats["residual"],
-            norm_residual=stats["norm_residual"],
-            chi2=stats["chi2"],
-            ndof=stats["ndof"],
-            reduced_chi2=stats["reduced_chi2"],
-            noise=image_products.noise,
         )
 
         save_real_fit_products(
@@ -163,6 +113,86 @@ def run_real_fit_from_config(
     )
 
     return all_products
+
+
+def _execute_single_model_fit(
+    *,
+    model_name,
+    image_products,
+    psf,
+    prior_cfg,
+    likelihood_cfg,
+    sampler_cfg,
+):
+    """Execute one complete Bayesian fit for one morphology model."""
+
+    parameter_names, parameters, _, _ = _build_parameter_set(
+        model_name,
+        data_fit=image_products.prepared_data,
+        noise_fit=image_products.noise,
+        mask_fit=image_products.fitting_mask,
+        target_x=image_products.target_x,
+        target_y=image_products.target_y,
+        prior_cfg=prior_cfg,
+    )
+
+    model_factory = _make_model_factory(
+        model_name,
+        psf,
+    )
+
+    problem = _build_image_inference_problem(
+        model_factory=model_factory,
+        parameters=parameters,
+        likelihood_cfg=likelihood_cfg,
+        data_fit=image_products.prepared_data,
+        noise_fit=image_products.noise,
+        mask_fit=image_products.fitting_mask,
+    )
+
+    sampler = make_sampler(
+        sampler_cfg,
+        problem=problem,
+    )
+
+    result = sampler.run(
+        nlive=sampler_cfg["nlive"],
+        sample=sampler_cfg.get("sample", "auto"),
+        dlogz=sampler_cfg.get("dlogz"),
+        n_processes=sampler_cfg.get("n_processes", 1),
+        queue_size=sampler_cfg.get("queue_size"),
+        seed=sampler_cfg.get("seed"),
+        progress_label=model_name,
+    )
+
+    best_model_image, best_parameters = _compute_best_model(
+        result=result,
+        parameter_names=parameter_names,
+        model_factory=model_factory,
+        image_shape=image_products.prepared_data.shape,
+    )
+
+    stats = _compute_fit_statistics(
+        data=image_products.prepared_data,
+        model_image=best_model_image,
+        noise=image_products.noise,
+        mask=image_products.fitting_mask,
+        n_parameters=len(parameter_names),
+    )
+
+    return RealFitProducts(
+        model_name=model_name,
+        posterior=result,
+        best_parameters=best_parameters,
+        best_model_image=best_model_image,
+        residual=stats["residual"],
+        norm_residual=stats["norm_residual"],
+        chi2=stats["chi2"],
+        ndof=stats["ndof"],
+        reduced_chi2=stats["reduced_chi2"],
+        noise=image_products.noise,
+    )
+
 
 
 def save_real_fit_products(
@@ -720,6 +750,31 @@ def _compute_bayesian_model_comparison(
             "double_sersic_over_single_sersic": bayes_factor,
         },
     }
+
+
+def _build_image_inference_problem(
+    *,
+    model_factory,
+    parameters,
+    likelihood_cfg,
+    data_fit,
+    noise_fit,
+    mask_fit,
+):
+    """Build one backend-neutral image inference problem."""
+    likelihood = make_likelihood(
+        likelihood_cfg,
+        data=data_fit,
+        noise=noise_fit,
+        mask=mask_fit,
+    )
+
+    return ImageInferenceProblem(
+        model_factory=model_factory,
+        parameters=parameters,
+        likelihood=likelihood,
+    )
+
 
 
 def _run_sampler(
