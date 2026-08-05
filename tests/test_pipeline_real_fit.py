@@ -357,14 +357,14 @@ def test_make_model_factory_single_sersic():
     )
 
     model = factory(
-        100.0,
-        5.0,
-        2.0,
-        0.8,
-        0.0,
-        15.0,
-        15.0,
-        1.0,
+        flux=100.0,
+        re=5.0,
+        n=2.0,
+        q=0.8,
+        theta=0.0,
+        x0=15.0,
+        y0=15.0,
+        sky=1.0,
     )
 
     image = model.render((31, 31))
@@ -380,19 +380,19 @@ def test_make_model_factory_double_sersic():
     )
 
     model = factory(
-        100.0,   # flux_bulge
-        3.0,     # re_bulge
-        2.0,     # n_bulge
-        0.9,     # q_bulge
-        0.1,     # theta_bulge
-        50.0,    # flux_disk
-        8.0,     # re_disk
-        1.0,     # n_disk
-        0.8,     # q_disk
-        0.0,     # theta_disk
-        15.0,    # x0
-        15.0,    # y0
-        1.0,     # sky
+        flux_bulge=100.0,
+        re_bulge=3.0,
+        n_bulge=2.0,
+        q_bulge=0.9,
+        theta_bulge=0.1,
+        flux_disk=50.0,
+        re_disk=8.0,
+        n_disk=1.0,
+        q_disk=0.8,
+        theta_disk=0.0,
+        x0=15.0,
+        y0=15.0,
+        sky=1.0,
     )
 
     image = model.render((31, 31))

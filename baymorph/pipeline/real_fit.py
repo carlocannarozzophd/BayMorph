@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -564,78 +565,6 @@ def _build_parameter_set(
     )
 
 
-class SingleSersicModelFactory:
-    """Factory for PSF-convolved single-Sérsic plus sky models."""
-
-    def __init__(self, psf):
-        self.psf = psf
-
-    def __call__(
-        self,
-        flux,
-        re,
-        n,
-        q,
-        theta,
-        x0,
-        y0,
-        sky,
-    ):
-        """Create a single-Sérsic model instance."""
-        return make_single_sersic_psf_sky_model(
-            flux=flux,
-            re=re,
-            n=n,
-            q=q,
-            theta=theta,
-            x0=x0,
-            y0=y0,
-            sky=sky,
-            psf=self.psf,
-        )
-
-class DoubleSersicModelFactory:
-    """Factory for PSF-convolved double-Sérsic plus sky models."""
-
-    def __init__(
-        self,
-        psf,
-    ):
-        self.psf = psf
-
-    def __call__(
-        self,
-        flux_bulge,
-        re_bulge,
-        n_bulge,
-        q_bulge,
-        theta_bulge,
-        flux_disk,
-        re_disk,
-        n_disk,
-        q_disk,
-        theta_disk,
-        x0,
-        y0,
-        sky,
-    ):
-        """Create a double-Sérsic model instance."""
-        return make_double_sersic_psf_sky_model(
-            flux_bulge=flux_bulge,
-            re_bulge=re_bulge,
-            n_bulge=n_bulge,
-            q_bulge=q_bulge,
-            theta_bulge=theta_bulge,
-            flux_disk=flux_disk,
-            re_disk=re_disk,
-            n_disk=n_disk,
-            q_disk=q_disk,
-            theta_disk=theta_disk,
-            x0=x0,
-            y0=y0,
-            sky=sky,
-            psf=self.psf,
-        )
 
 def _make_model_factory(
     model_name,
@@ -645,18 +574,24 @@ def _make_model_factory(
     model_definition = get_model(model_name)
 
     factories = {
-        "SingleSersicModelFactory": SingleSersicModelFactory,
-        "DoubleSersicModelFactory": DoubleSersicModelFactory,
+        "SingleSersicModelFactory": make_single_sersic_psf_sky_model,
+        "DoubleSersicModelFactory": make_double_sersic_psf_sky_model,
     }
 
     try:
-        factory_class = factories[model_definition.factory_name]
+        factory = factories[
+            model_definition.factory_name
+        ]
     except KeyError as exc:
         raise ValueError(
-            f"Unsupported model factory: {model_definition.factory_name}"
+            f"Unsupported model factory: "
+            f"{model_definition.factory_name}"
         ) from exc
 
-    return factory_class(psf)
+    return partial(
+        factory,
+        psf=psf,
+    )
 
 
 def _compute_best_model(

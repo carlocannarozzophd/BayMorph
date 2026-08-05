@@ -96,6 +96,8 @@ def test_dynesty_generic_fit_runs():
 
     result = fitter.run(
         nlive=20,
+        sample="rwalk",
+        bootstrap=0,
         dlogz=5.0,
         print_progress=False,
         seed=123,
