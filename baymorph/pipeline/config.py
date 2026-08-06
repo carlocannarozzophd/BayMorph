@@ -40,7 +40,7 @@ DEFAULT_CONFIG = {
         "detection": {
             "n_sigma": 3.0,
             "n_levels": 32,
-            "npixels": 20,
+            "n_pixels": 20,
         },
     },
     "masking": {
@@ -253,6 +253,19 @@ def validate_config(config: dict[str, Any]) -> None:
 
     if "root" not in config["outputs"]:
         raise ValueError("Config section 'outputs' must contain 'root'.")
+
+    detection_config = (
+        config
+        .get("preparation", {})
+        .get("detection", {})
+    )
+
+    if "npixels" in detection_config:
+        raise ValueError(
+            "Unsupported configuration key "
+            "'preparation.detection.npixels'. "
+            "Use 'preparation.detection.n_pixels' instead."
+        )
 
 
 def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
