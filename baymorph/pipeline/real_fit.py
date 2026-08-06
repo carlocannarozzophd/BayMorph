@@ -103,14 +103,25 @@ def run_real_fit_from_config(
     if len(all_products) == 1:
         return next(iter(all_products.values()))
 
-    comparison = _compute_bayesian_model_comparison(
-        all_products,
-    )
+    comparison_cfg = resolved["fit"]["comparison"]
 
-    save_bayesian_model_comparison(
-        resolved,
-        comparison,
-    )
+    if comparison_cfg["enabled"]:
+        metric = comparison_cfg["metric"]
+
+        if metric != "bayes_factor":
+            raise ValueError(
+                "Unsupported model-comparison metric "
+                f"{metric!r}. Supported metric: 'bayes_factor'."
+            )
+
+        comparison = _compute_bayesian_model_comparison(
+            all_products,
+        )
+
+        save_bayesian_model_comparison(
+            resolved,
+            comparison,
+        )
 
     return all_products
 

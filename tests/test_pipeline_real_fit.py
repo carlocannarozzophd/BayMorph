@@ -642,3 +642,137 @@ def test_run_sampler_executes_native_backend_end_to_end():
     ) == pytest.approx(
         1.0
     )
+
+
+def _run_two_model_fit_for_comparison_test(
+    monkeypatch,
+    *,
+    comparison_enabled,
+    comparison_metric="bayes_factor",
+):
+    resolved = {
+        "data": {
+            "image_path": "missing-image.fits",
+        },
+        "fit": {
+            "models": [
+                "single_sersic",
+                "double_sersic",
+            ],
+            "priors": {},
+            "likelihood": {
+                "type": "gaussian",
+            },
+            "sampler": {},
+            "comparison": {
+                "enabled": comparison_enabled,
+                "metric": comparison_metric,
+            },
+        },
+    }
+
+    image_products = SimpleNamespace()
+    saved_comparisons = []
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.resolve_config",
+        lambda config: resolved,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.make_output_tree",
+        lambda config: None,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.save_resolved_config",
+        lambda config: None,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.load_image_preparation_products",
+        lambda config: image_products,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit._load_psf_from_config",
+        lambda config: object(),
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit._execute_single_model_fit",
+        lambda **kwargs: RealFitProducts(
+            model_name=kwargs["model_name"],
+            posterior=SimpleNamespace(
+                logz=np.array([1.0]),
+                logzerr=np.array([0.1]),
+            ),
+            best_parameters={},
+            best_model_image=np.zeros((2, 2)),
+            residual=np.zeros((2, 2)),
+            norm_residual=np.zeros((2, 2)),
+            chi2=1.0,
+            ndof=1,
+            reduced_chi2=1.0,
+            noise=np.ones((2, 2)),
+        ),
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.save_real_fit_products",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.save_bayesian_model_comparison",
+        lambda config, comparison: saved_comparisons.append(comparison),
+    )
+
+    products = run_real_fit_from_config({})
+
+    return products, saved_comparisons
+
+
+def test_multiple_models_skip_comparison_when_disabled(
+    monkeypatch,
+):
+    """Multiple fits must not imply model comparison."""
+    products, saved_comparisons = (
+        _run_two_model_fit_for_comparison_test(
+            monkeypatch,
+            comparison_enabled=False,
+        )
+    )
+
+    assert set(products) == {
+        "single_sersic",
+        "double_sersic",
+    }
+    assert saved_comparisons == []
+
+
+def test_multiple_models_compute_comparison_when_enabled(
+    monkeypatch,
+):
+    """Enabled comparison must compute and persist Bayes factors."""
+    products, saved_comparisons = (
+        _run_two_model_fit_for_comparison_test(
+            monkeypatch,
+            comparison_enabled=True,
+        )
+    )
+
+    assert set(products) == {
+        "single_sersic",
+        "double_sersic",
+    }
+    assert len(saved_comparisons) == 1
+    assert "bayes_factor" in saved_comparisons[0]
+
+
+def test_model_comparison_rejects_unknown_metric(
+    monkeypatch,
+):
+    """Unsupported comparison metrics must fail explicitly."""
+    with pytest.raises(
+        ValueError,
+        match="Unsupported model-comparison metric",
+    ):
+        _run_two_model_fit_for_comparison_test(
+            monkeypatch,
+            comparison_enabled=True,
+            comparison_metric="aic",
+        )
