@@ -61,3 +61,34 @@ def test_legacy_npixels_is_rejected() -> None:
         match=r"preparation\.detection\.n_pixels",
     ):
         resolve_config(config)
+
+
+@pytest.mark.parametrize(
+    "unsupported_key",
+    [
+        "noise_map_path",
+        "psf_path",
+    ],
+)
+def test_unsupported_external_data_paths_are_rejected(
+    unsupported_key,
+) -> None:
+    """Unimplemented external products must not be silently accepted."""
+    config = _minimal_config()
+    config["data"][unsupported_key] = "external.fits"
+
+    with pytest.raises(
+        ValueError,
+        match="not yet supported",
+    ):
+        resolve_config(config)
+
+
+def test_external_mask_path_remains_supported() -> None:
+    """The implemented external-mask configuration must remain valid."""
+    config = _minimal_config()
+    config["data"]["mask_path"] = "mask.fits"
+
+    resolved = resolve_config(config)
+
+    assert resolved["data"]["mask_path"] == "mask.fits"

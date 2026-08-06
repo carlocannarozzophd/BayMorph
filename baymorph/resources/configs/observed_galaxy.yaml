@@ -16,9 +16,8 @@ data:
   # in which BayMorph is launched.
   image_path: data/observed_galaxy.fits
 
-  # Optional external products.
+  # Optional external fitting mask.
   mask_path: null
-  noise_map_path: null
 
   # Set this only when the pixel scale cannot be recovered from the FITS
   # header. Units: arcsec/pixel.

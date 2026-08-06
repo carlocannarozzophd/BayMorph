@@ -16,8 +16,6 @@ REQUIRED_TOP_LEVEL_KEYS = ("object", "data", "outputs")
 DEFAULT_CONFIG = {
     "data": {
         "mask_path": None,
-        "noise_map_path": None,
-        "psf_path": None,
         "pixel_scale": None,
         "target_position": None,
         "cutout": {
@@ -250,6 +248,22 @@ def validate_config(config: dict[str, Any]) -> None:
 
     if "image_path" not in config["data"]:
         raise ValueError("Config section 'data' must contain 'image_path'.")
+
+    unsupported_data_keys = sorted(
+        {
+            "noise_map_path",
+            "psf_path",
+        }
+        & config["data"].keys()
+    )
+
+    if unsupported_data_keys:
+        raise ValueError(
+            "Unsupported configuration entries in section 'data': "
+            f"{unsupported_data_keys}. "
+            "External noise maps and direct PSF paths are not yet "
+            "supported by the single-band production workflow."
+        )
 
     if "root" not in config["outputs"]:
         raise ValueError("Config section 'outputs' must contain 'root'.")
