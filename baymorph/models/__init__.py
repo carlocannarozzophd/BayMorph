@@ -4,6 +4,7 @@ from baymorph.models import builtin as _builtin  # noqa: F401
 from baymorph.models.composite import CompositeModel
 from baymorph.models.convolved import ConvolvedModel
 from baymorph.models.double_sersic import DoubleSersicModel
+from baymorph.models.exponential import ExponentialComponent
 from baymorph.models.labels import (
     parameter_labels,
     parameter_names,
@@ -25,6 +26,7 @@ __all__ = [
     "ConvolvedModel",
     "DecomposableMorphology",
     "DoubleSersicModel",
+    "ExponentialComponent",
     "MorphologicalComponent",
     "PointSourceModel",
     "SersicModel",
