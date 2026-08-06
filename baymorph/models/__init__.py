@@ -9,6 +9,7 @@ from baymorph.models.labels import (
     parameter_names,
 )
 from baymorph.models.point_source import PointSourceModel
+from baymorph.models.sersic_point_source import SersicPointSourceModel
 from baymorph.models.protocols import (
     DecomposableMorphology,
     MorphologicalComponent,
@@ -27,6 +28,7 @@ __all__ = [
     "MorphologicalComponent",
     "PointSourceModel",
     "SersicModel",
+    "SersicPointSourceModel",
     "get_model",
     "parameter_labels",
     "parameter_names",
