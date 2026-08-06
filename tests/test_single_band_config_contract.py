@@ -92,3 +92,37 @@ def test_external_mask_path_remains_supported() -> None:
     resolved = resolve_config(config)
 
     assert resolved["data"]["mask_path"] == "mask.fits"
+
+
+@pytest.mark.parametrize(
+    ("section", "value"),
+    [
+        ("background", "empirical"),
+        ("noise", "empirical"),
+    ],
+)
+def test_fixed_preparation_method_selectors_are_rejected(
+    section,
+    value,
+) -> None:
+    """Fixed preparation algorithms must not appear configurable."""
+    config = _minimal_config()
+    config["preparation"] = {
+        section: {
+            "method": value,
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match=r"Unsupported fixed configuration entries",
+    ):
+        resolve_config(config)
+
+
+def test_resolved_config_omits_fixed_preparation_methods() -> None:
+    """Resolved configurations must expose only effective choices."""
+    resolved = resolve_config(_minimal_config())
+
+    assert "method" not in resolved["preparation"]["background"]
+    assert "method" not in resolved["preparation"]["noise"]

@@ -57,12 +57,8 @@ outputs:
 
 preparation:
   background:
-    method: empirical
     box_size: 64
     filter_size: 3
-
-  noise:
-    method: empirical
 
   detection:
     n_sigma: 2.5

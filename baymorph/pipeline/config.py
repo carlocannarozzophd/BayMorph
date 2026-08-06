@@ -28,13 +28,10 @@ DEFAULT_CONFIG = {
     },
     "preparation": {
         "background": {
-            "method": "empirical",
             "box_size": 30,
             "filter_size": 3,
         },
-        "noise": {
-            "method": "empirical",
-        },
+        "noise": {},
         "detection": {
             "n_sigma": 3.0,
             "n_levels": 32,
@@ -268,11 +265,29 @@ def validate_config(config: dict[str, Any]) -> None:
     if "root" not in config["outputs"]:
         raise ValueError("Config section 'outputs' must contain 'root'.")
 
-    detection_config = (
-        config
-        .get("preparation", {})
-        .get("detection", {})
-    )
+    preparation_config = config.get("preparation", {})
+
+    unsupported_preparation_entries = []
+
+    if "method" in preparation_config.get("background", {}):
+        unsupported_preparation_entries.append(
+            "preparation.background.method"
+        )
+
+    if "method" in preparation_config.get("noise", {}):
+        unsupported_preparation_entries.append(
+            "preparation.noise.method"
+        )
+
+    if unsupported_preparation_entries:
+        raise ValueError(
+            "Unsupported fixed configuration entries: "
+            f"{unsupported_preparation_entries}. "
+            "The single-band production workflow currently uses empirical "
+            "background estimation and MAD-based noise estimation."
+        )
+
+    detection_config = preparation_config.get("detection", {})
 
     if "npixels" in detection_config:
         raise ValueError(
