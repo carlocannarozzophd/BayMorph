@@ -59,7 +59,6 @@ DEFAULT_CONFIG = {
                 "isolation_margin": 2,
             },
             "construction": {
-                "auto_size": True,
                 "normalize": True,
             },
         },
@@ -260,6 +259,21 @@ def validate_config(config: dict[str, Any]) -> None:
             "The current single-band workflow constructs its automatic "
             "fitting mask during image preparation and does not expose "
             "masking strategy toggles."
+        )
+
+    psf_construction_config = (
+        config
+        .get("psf", {})
+        .get("empirical", {})
+        .get("construction", {})
+    )
+
+    if "auto_size" in psf_construction_config:
+        raise ValueError(
+            "Unsupported configuration key "
+            "'psf.empirical.construction.auto_size'. "
+            "Empirical PSF sizing is controlled by candidate-selection "
+            "cutout limits."
         )
 
     preparation_config = config.get("preparation", {})

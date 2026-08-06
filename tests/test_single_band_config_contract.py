@@ -149,3 +149,30 @@ def test_resolved_config_omits_masking_strategy_controls() -> None:
     resolved = resolve_config(_minimal_config())
 
     assert "masking" not in resolved
+
+
+def test_empirical_psf_auto_size_is_rejected() -> None:
+    """Unused empirical PSF sizing controls must not be accepted."""
+    config = _minimal_config()
+    config["psf"] = {
+        "empirical": {
+            "construction": {
+                "auto_size": True,
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match=r"psf\.empirical\.construction\.auto_size",
+    ):
+        resolve_config(config)
+
+
+def test_resolved_config_omits_empirical_psf_auto_size() -> None:
+    """Resolved configurations must omit the unused PSF sizing key."""
+    resolved = resolve_config(_minimal_config())
+
+    construction = resolved["psf"]["empirical"]["construction"]
+
+    assert "auto_size" not in construction

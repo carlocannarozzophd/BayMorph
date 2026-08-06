@@ -114,7 +114,6 @@ psf:
       isolation_margin: 2
 
     construction:
-      auto_size: true
       normalize: true
 
 # ----------------------------------------------------------------------------
