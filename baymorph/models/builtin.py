@@ -1,3 +1,5 @@
+"""Registration of built-in BayMorph model definitions."""
+
 from __future__ import annotations
 
 from baymorph.models.definition import ModelDefinition
@@ -7,6 +9,7 @@ from baymorph.models.registry import register_model
 _BUILTIN_FACTORY_NAMES = {
     "single_sersic": "SingleSersicModelFactory",
     "double_sersic": "DoubleSersicModelFactory",
+    "sersic_point_source": "SersicPointSourceModelFactory",
 }
 
 

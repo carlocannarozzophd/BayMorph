@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Parameter names and display labels for built-in BayMorph models."""
+
+from __future__ import annotations
 
 MODEL_PARAMETER_LABELS = {
     "single_sersic": {
@@ -24,6 +24,17 @@ MODEL_PARAMETER_LABELS = {
         "n_disk": r"$n_d$",
         "q_disk": r"$q_d$",
         "theta_disk": r"$\theta_d$",
+        "x0": r"$x_0$",
+        "y0": r"$y_0$",
+        "sky": r"$S$",
+    },
+    "sersic_point_source": {
+        "flux_sersic": r"$F_{\mathrm{Sersic}}$",
+        "re": r"$R_e$",
+        "n": r"$n$",
+        "q": r"$q$",
+        "theta": r"$\theta$",
+        "flux_point_source": r"$F_{\mathrm{PS}}$",
         "x0": r"$x_0$",
         "y0": r"$y_0$",
         "sky": r"$S$",
