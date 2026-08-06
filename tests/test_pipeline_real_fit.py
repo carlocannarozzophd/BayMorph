@@ -829,3 +829,35 @@ def test_make_model_factory_sersic_point_source():
 
     assert image.shape == (31, 31)
     assert np.all(np.isfinite(image))
+
+
+def test_build_parameter_set_bulge_disk():
+    """Build the Sérsic-bulge plus exponential-disc parameter set."""
+    parameter_names, parameters, _, _ = (
+        _build_parameter_set(
+            "bulge_disk",
+            data_fit=np.ones((10, 10)),
+            noise_fit=np.ones((10, 10)),
+            mask_fit=np.zeros((10, 10), dtype=bool),
+            target_x=5,
+            target_y=5,
+        )
+    )
+
+    assert parameter_names == [
+        "flux_bulge",
+        "re_bulge",
+        "n_bulge",
+        "q_bulge",
+        "theta_bulge",
+        "flux_disk",
+        "re_disk",
+        "q_disk",
+        "theta_disk",
+        "x0",
+        "y0",
+        "sky",
+    ]
+
+    assert "n_disk" not in parameter_names
+    assert parameters.names == parameter_names

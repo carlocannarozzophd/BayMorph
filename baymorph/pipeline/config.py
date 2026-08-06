@@ -193,6 +193,54 @@ DEFAULT_CONFIG = {
                     "max": 50.0,
                 },
             },
+            "bulge_disk": {
+                "flux_bulge": {
+                    "min_factor": 0.0,
+                    "max_factor": 1.0,
+                },
+                "re_bulge": {
+                    "min": 1.0,
+                    "max": 30.0,
+                },
+                "n_bulge": {
+                    "min": 1.5,
+                    "max": 6.0,
+                },
+                "q_bulge": {
+                    "min": 0.4,
+                    "max": 1.0,
+                },
+                "theta_bulge": {
+                    "min": "-pi/2",
+                    "max": "pi/2",
+                },
+                "flux_disk": {
+                    "min_factor": 0.0,
+                    "max_factor": 2.0,
+                },
+                "re_disk": {
+                    "min": 10.0,
+                    "max": 120.0,
+                },
+                "q_disk": {
+                    "min": 0.4,
+                    "max": 1.0,
+                },
+                "theta_disk": {
+                    "min": "-pi/2",
+                    "max": "pi/2",
+                },
+                "x0": {
+                    "offset": 8.0,
+                },
+                "y0": {
+                    "offset": 8.0,
+                },
+                "sky": {
+                    "min": -50.0,
+                    "max": 50.0,
+                },
+            },
         },
     },
     "diagnostics": {
