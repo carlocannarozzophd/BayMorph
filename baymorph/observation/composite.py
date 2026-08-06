@@ -85,6 +85,54 @@ class ObservedCompositeModel:
             kernel_size=kernel_size,
         )
 
+    @classmethod
+    def from_sersic_point_source(
+        cls,
+        morphology,
+        *,
+        psf: Any,
+        kernel_size: int = 25,
+    ) -> "ObservedCompositeModel":
+        """Build an observed Sérsic plus point-source model.
+
+        Parameters
+        ----------
+        morphology : SersicPointSourceModel
+            Intrinsic named morphology containing one extended Sérsic
+            component and one unresolved central source.
+        psf : object
+            Observation PSF shared by both source components.
+        kernel_size : int, default=25
+            Kernel size used for analytic Gaussian PSFs.
+
+        Returns
+        -------
+        ObservedCompositeModel
+            Observation-level model with independently correct treatment of
+            the extended and unresolved components.
+        """
+        from baymorph.models.sersic_point_source import (
+            SersicPointSourceModel,
+        )
+
+        if not isinstance(
+            morphology,
+            SersicPointSourceModel,
+        ):
+            raise TypeError(
+                "from_sersic_point_source() requires a "
+                "SersicPointSourceModel."
+            )
+
+        return cls(
+            extended_model=morphology.sersic,
+            point_sources={
+                "point_source": morphology.point_source,
+            },
+            psf=psf,
+            kernel_size=kernel_size,
+        )
+
     def render_components(
         self,
         shape: tuple[int, int],

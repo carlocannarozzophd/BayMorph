@@ -159,3 +159,91 @@ def test_observed_composite_rejects_invalid_point_source() -> None:
             },
             psf=GaussianPSF(fwhm=2.5),
         )
+
+
+def test_build_from_sersic_point_source_morphology() -> None:
+    """The named intrinsic morphology must map to observed components."""
+    from baymorph.models import SersicPointSourceModel
+
+    morphology = SersicPointSourceModel(
+        sersic=make_sersic(),
+        point_source=PointSourceModel(
+            flux=25.0,
+            x0=15.0,
+            y0=15.0,
+        ),
+    )
+
+    model = ObservedCompositeModel.from_sersic_point_source(
+        morphology,
+        psf=GaussianPSF(fwhm=2.5),
+        kernel_size=15,
+    )
+
+    components = model.render_components(
+        shape=(31, 31),
+    )
+    total = model.render(
+        shape=(31, 31),
+    )
+
+    assert set(components) == {
+        "sersic",
+        "point_source",
+    }
+
+    np.testing.assert_allclose(
+        total,
+        components["sersic"] + components["point_source"],
+        rtol=0.0,
+        atol=0.0,
+    )
+
+
+def test_sersic_point_source_constructor_uses_shared_psf_once() -> None:
+    """The unresolved component must equal direct PSF rendering."""
+    from baymorph.models import SersicPointSourceModel
+
+    point_source = PointSourceModel(
+        flux=25.0,
+        x0=15.0,
+        y0=15.0,
+    )
+    morphology = SersicPointSourceModel(
+        sersic=make_sersic(),
+        point_source=point_source,
+    )
+
+    model = ObservedCompositeModel.from_sersic_point_source(
+        morphology,
+        psf=GaussianPSF(fwhm=2.5),
+        kernel_size=15,
+    )
+
+    components = model.render_components(
+        shape=(31, 31),
+    )
+
+    expected = model.point_source_renderer.render(
+        point_source,
+        shape=(31, 31),
+    )
+
+    np.testing.assert_allclose(
+        components["point_source"],
+        expected,
+        rtol=0.0,
+        atol=0.0,
+    )
+
+
+def test_sersic_point_source_constructor_rejects_wrong_type() -> None:
+    """The named constructor must require the matching morphology."""
+    with pytest.raises(
+        TypeError,
+        match="SersicPointSourceModel",
+    ):
+        ObservedCompositeModel.from_sersic_point_source(
+            object(),
+            psf=GaussianPSF(fwhm=2.5),
+        )
