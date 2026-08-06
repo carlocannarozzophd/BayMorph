@@ -296,12 +296,13 @@ class BayMorphRunner:
         return self.profile_bands
 
     def diagnostics(self) -> Any:
-        """Generate all available fit diagnostics.
+        """Generate the diagnostics enabled by the configuration.
 
         Returns
         -------
         Any
-            Posterior radial-profile bands when available.
+            Posterior radial-profile bands when radial-profile diagnostics
+            are enabled, otherwise None.
 
         Raises
         ------
@@ -312,12 +313,22 @@ class BayMorphRunner:
             "diagnostics"
         )
 
-        self.corner()
-        self.residual_maps()
-        profile_bands = self.radial_profile()
+        diagnostics_config = self.config["diagnostics"]
+
+        if diagnostics_config["corner"]:
+            self.corner()
+
+        if diagnostics_config["residual"]:
+            self.residual_maps()
+
+        if diagnostics_config["radial_profile"]:
+            profile_bands = self.radial_profile()
+        else:
+            self.profile_bands = None
+            profile_bands = None
 
         self._status(
-            "All diagnostics generated"
+            "Configured diagnostics generated"
         )
 
         return profile_bands

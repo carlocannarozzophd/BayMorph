@@ -447,3 +447,131 @@ def test_runner_run_dir(tmp_path):
         / "runs"
         / "tutorial_galaxy"
     )
+
+def test_runner_diagnostics_honor_enabled_toggles(
+    monkeypatch,
+):
+    """The diagnostic orchestrator must run only enabled products."""
+    calls = []
+    expected_bands = object()
+
+    config = make_runner_config()
+    config["diagnostics"] = {
+        "corner": True,
+        "residual": False,
+        "radial_profile": True,
+    }
+
+    runner = BayMorphRunner(
+        config,
+        verbose=False,
+    )
+    runner.fit_result = object()
+
+    monkeypatch.setattr(
+        runner,
+        "corner",
+        lambda: calls.append("corner"),
+    )
+    monkeypatch.setattr(
+        runner,
+        "residual_maps",
+        lambda: calls.append("residual"),
+    )
+    monkeypatch.setattr(
+        runner,
+        "radial_profile",
+        lambda: calls.append("radial") or expected_bands,
+    )
+
+    result = runner.diagnostics()
+
+    assert result is expected_bands
+    assert calls == [
+        "corner",
+        "radial",
+    ]
+
+
+def test_runner_diagnostics_can_disable_all_products(
+    monkeypatch,
+):
+    """Disabling all diagnostics must perform no diagnostic work."""
+    calls = []
+
+    config = make_runner_config()
+    config["diagnostics"] = {
+        "corner": False,
+        "residual": False,
+        "radial_profile": False,
+    }
+
+    runner = BayMorphRunner(
+        config,
+        verbose=False,
+    )
+    runner.fit_result = object()
+    runner.profile_bands = object()
+
+    monkeypatch.setattr(
+        runner,
+        "corner",
+        lambda: calls.append("corner"),
+    )
+    monkeypatch.setattr(
+        runner,
+        "residual_maps",
+        lambda: calls.append("residual"),
+    )
+    monkeypatch.setattr(
+        runner,
+        "radial_profile",
+        lambda: calls.append("radial"),
+    )
+
+    result = runner.diagnostics()
+
+    assert result is None
+    assert runner.profile_bands is None
+    assert calls == []
+
+
+def test_runner_diagnostics_can_run_residuals_only(
+    monkeypatch,
+):
+    """Each diagnostic toggle must operate independently."""
+    calls = []
+
+    config = make_runner_config()
+    config["diagnostics"] = {
+        "corner": False,
+        "residual": True,
+        "radial_profile": False,
+    }
+
+    runner = BayMorphRunner(
+        config,
+        verbose=False,
+    )
+    runner.fit_result = object()
+
+    monkeypatch.setattr(
+        runner,
+        "corner",
+        lambda: calls.append("corner"),
+    )
+    monkeypatch.setattr(
+        runner,
+        "residual_maps",
+        lambda: calls.append("residual"),
+    )
+    monkeypatch.setattr(
+        runner,
+        "radial_profile",
+        lambda: calls.append("radial"),
+    )
+
+    result = runner.diagnostics()
+
+    assert result is None
+    assert calls == ["residual"]
