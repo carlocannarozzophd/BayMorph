@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from baymorph.simulation.psf import convolve_with_psf
+from baymorph.simulation.psf import GaussianPSF, convolve_with_psf
 
 FloatArray = NDArray[np.float64]
 
@@ -55,14 +55,55 @@ class PSFEffect:
         self.psf = psf
         self.kernel_size = int(kernel_size)
 
+    def normalized_kernel(self) -> FloatArray:
+        """Return the finite unit-normalized PSF kernel."""
+        if isinstance(self.psf, GaussianPSF):
+            kernel = self.psf.kernel(
+                size=self.kernel_size,
+            )
+        else:
+            kernel = self.psf.kernel()
+
+        kernel_array = np.asarray(
+            kernel,
+            dtype=float,
+        )
+
+        if kernel_array.ndim != 2:
+            raise ValueError(
+                "PSF kernel must be 2D."
+            )
+
+        if not np.all(np.isfinite(kernel_array)):
+            raise ValueError(
+                "PSF kernel must contain only finite values."
+            )
+
+        total = float(kernel_array.sum())
+
+        if total <= 0.0:
+            raise ValueError(
+                "PSF kernel must have positive sum."
+            )
+
+        return np.asarray(
+            kernel_array / total,
+            dtype=float,
+        )
+
     def apply(
         self,
         image: ArrayLike,
     ) -> FloatArray:
         """Convolve the finite input image with the configured PSF."""
+        self.normalized_kernel()
+
         return np.asarray(
             convolve_with_psf(
-                np.asarray(image, dtype=float),
+                np.asarray(
+                    image,
+                    dtype=float,
+                ),
                 self.psf,
                 kernel_size=self.kernel_size,
             ),

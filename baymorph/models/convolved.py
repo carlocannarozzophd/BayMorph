@@ -6,11 +6,11 @@ from typing import Any
 
 import numpy as np
 
-from baymorph.simulation.psf import GaussianPSF, convolve_with_psf
+from baymorph.observation.effects import PSFEffect
 
 
 class ConvolvedModel:
-    """Apply PSF convolution to a model rendered on an extended domain.
+    """Apply a PSF effect after rendering on an extended domain.
 
     The intrinsic model is rendered beyond the requested output footprint by
     the half-width of the PSF kernel. This retains light originating outside
@@ -34,39 +34,33 @@ class ConvolvedModel:
         kernel_size: int = 25,
     ) -> None:
         self.model = model
-        self.psf = psf
-        self.kernel_size = kernel_size
+        self.psf_effect = PSFEffect(
+            psf,
+            kernel_size=kernel_size,
+        )
 
-    def _kernel(self) -> np.ndarray:
-        """Return the normalized PSF kernel used by this wrapper."""
-        if isinstance(self.psf, GaussianPSF):
-            kernel = self.psf.kernel(size=self.kernel_size)
-        else:
-            kernel = self.psf.kernel()
+    @property
+    def psf(self) -> Any:
+        """Return the configured PSF object."""
+        return self.psf_effect.psf
 
-        kernel_array = np.asarray(kernel, dtype=float)
+    @property
+    def kernel_size(self) -> int:
+        """Return the configured analytic-kernel size."""
+        return self.psf_effect.kernel_size
 
-        if kernel_array.ndim != 2:
-            raise ValueError("PSF kernel must be 2D.")
-
-        if not np.all(np.isfinite(kernel_array)):
-            raise ValueError(
-                "PSF kernel must contain only finite values."
-            )
-
-        total = kernel_array.sum()
-
-        if total <= 0.0:
-            raise ValueError("PSF kernel must have positive sum.")
-
-        return kernel_array / total
-
-    def _render_extended(
+    def _extended_domain(
         self,
         shape: tuple[int, int],
-    ) -> tuple[np.ndarray, int, int]:
-        """Render the intrinsic model on the PSF-extended domain."""
-        kernel = self._kernel()
+    ) -> tuple[
+        tuple[int, int],
+        tuple[float, float],
+        int,
+        int,
+    ]:
+        """Return the PSF-extended shape, origin, and crop widths."""
+        kernel = self.psf_effect.normalized_kernel()
+
         pad_y = kernel.shape[0] // 2
         pad_x = kernel.shape[1] // 2
 
@@ -79,8 +73,44 @@ class ConvolvedModel:
             -float(pad_x),
         )
 
+        return (
+            extended_shape,
+            extended_origin,
+            pad_y,
+            pad_x,
+        )
+
+    @staticmethod
+    def _crop(
+        image: np.ndarray,
+        *,
+        shape: tuple[int, int],
+        pad_y: int,
+        pad_x: int,
+    ) -> np.ndarray:
+        """Crop an extended image to the requested footprint."""
+        return np.asarray(
+            image[
+                pad_y : pad_y + shape[0],
+                pad_x : pad_x + shape[1],
+            ],
+            dtype=float,
+        )
+
+    def render(
+        self,
+        shape: tuple[int, int],
+    ) -> np.ndarray:
+        """Render, PSF-convolve, and crop the complete model."""
+        (
+            extended_shape,
+            extended_origin,
+            pad_y,
+            pad_x,
+        ) = self._extended_domain(shape)
+
         try:
-            image = self.model.render(
+            intrinsic = self.model.render(
                 shape=extended_shape,
                 origin=extended_origin,
             )
@@ -90,49 +120,39 @@ class ConvolvedModel:
                 "render(shape=..., origin=...)."
             ) from exc
 
-        return np.asarray(image, dtype=float), pad_y, pad_x
-
-    def render(
-        self,
-        shape: tuple[int, int],
-    ) -> np.ndarray:
-        """Render, PSF-convolve, and crop to the requested footprint."""
-        extended, pad_y, pad_x = self._render_extended(shape)
-
-        convolved = convolve_with_psf(
-            extended,
-            self.psf,
-            kernel_size=self.kernel_size,
+        convolved = self.psf_effect.apply(
+            intrinsic,
         )
 
-        return convolved[
-            pad_y : pad_y + shape[0],
-            pad_x : pad_x + shape[1],
-        ]
+        return self._crop(
+            convolved,
+            shape=shape,
+            pad_y=pad_y,
+            pad_x=pad_x,
+        )
 
     def render_components(
         self,
         shape: tuple[int, int],
     ) -> dict[str, np.ndarray]:
-        """Render and convolve every component on the extended domain."""
-        kernel = self._kernel()
-        pad_y = kernel.shape[0] // 2
-        pad_x = kernel.shape[1] // 2
-
-        extended_shape = (
-            shape[0] + 2 * pad_y,
-            shape[1] + 2 * pad_x,
-        )
-        extended_origin = (
-            -float(pad_y),
-            -float(pad_x),
-        )
+        """Render, convolve, and crop every named component."""
+        (
+            extended_shape,
+            extended_origin,
+            pad_y,
+            pad_x,
+        ) = self._extended_domain(shape)
 
         try:
             components = self.model.render_components(
                 shape=extended_shape,
                 origin=extended_origin,
             )
+        except AttributeError as exc:
+            raise TypeError(
+                "PSF-convolved component models must implement "
+                "render_components()."
+            ) from exc
         except TypeError as exc:
             raise TypeError(
                 "PSF-convolved component models must support "
@@ -140,13 +160,11 @@ class ConvolvedModel:
             ) from exc
 
         return {
-            name: convolve_with_psf(
-                image,
-                self.psf,
-                kernel_size=self.kernel_size,
-            )[
-                pad_y : pad_y + shape[0],
-                pad_x : pad_x + shape[1],
-            ]
+            name: self._crop(
+                self.psf_effect.apply(image),
+                shape=shape,
+                pad_y=pad_y,
+                pad_x=pad_x,
+            )
             for name, image in components.items()
         }
