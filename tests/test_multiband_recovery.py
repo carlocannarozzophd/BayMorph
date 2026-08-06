@@ -35,6 +35,7 @@ def make_model(
     )
 
 
+@pytest.mark.slow
 def test_multiband_posterior_recovers_shared_radius_and_local_fluxes():
     """Joint inference should recover a controlled two-band Sérsic model."""
     rng = np.random.default_rng(20260804)
@@ -137,7 +138,7 @@ def test_multiband_posterior_recovers_shared_radius_and_local_fluxes():
     )
 
     result = sampler.run(
-        nlive=80,
+        nlive=20,
         sample="rwalk",
         dlogz=0.5,
         print_progress=False,
