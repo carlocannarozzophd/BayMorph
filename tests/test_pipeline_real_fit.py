@@ -804,3 +804,28 @@ def test_build_parameter_set_sersic_point_source():
     ]
 
     assert parameters.names == parameter_names
+
+
+def test_make_model_factory_sersic_point_source():
+    """The pipeline must resolve the Sérsic plus point-source factory."""
+    factory = _make_model_factory(
+        "sersic_point_source",
+        DeltaPSF(),
+    )
+
+    model = factory(
+        flux_sersic=100.0,
+        re=3.0,
+        n=2.0,
+        q=0.8,
+        theta=0.0,
+        flux_point_source=25.0,
+        x0=15.0,
+        y0=15.0,
+        sky=1.0,
+    )
+
+    image = model.render((31, 31))
+
+    assert image.shape == (31, 31)
+    assert np.all(np.isfinite(image))

@@ -13,6 +13,7 @@ from baymorph.core.observation import Observation
 from baymorph.fitting import make_sampler
 from baymorph.fitting.model_factories import (
     make_double_sersic_psf_sky_model,
+    make_sersic_point_source_psf_sky_model,
     make_single_sersic_psf_sky_model,
 )
 from baymorph.fitting.image_problem import ImageInferenceProblem
@@ -617,6 +618,9 @@ def _make_model_factory(
     factories = {
         "SingleSersicModelFactory": make_single_sersic_psf_sky_model,
         "DoubleSersicModelFactory": make_double_sersic_psf_sky_model,
+        "SersicPointSourceModelFactory": (
+            make_sersic_point_source_psf_sky_model
+        ),
     }
 
     try:

@@ -5,8 +5,11 @@ from __future__ import annotations
 from baymorph.models import (
     ConvolvedModel,
     DoubleSersicModel,
+    PointSourceModel,
     SersicModel,
+    SersicPointSourceModel,
 )
+from baymorph.observation.composite import ObservedCompositeModel
 
 
 class SkyModelWrapper:
@@ -201,3 +204,77 @@ def make_double_sersic_psf_sky_model(
         model=convolved_galaxy,
         sky=sky,
     )
+
+
+def make_sersic_point_source_psf_sky_model(
+    *,
+    flux_sersic: float,
+    re: float,
+    n: float,
+    q: float,
+    theta: float,
+    flux_point_source: float,
+    x0: float,
+    y0: float,
+    sky: float,
+    psf,
+):
+    """Build an observed Sérsic plus point-source model with sky.
+
+    Parameters
+    ----------
+    flux_sersic : float
+        Total intrinsic Sérsic flux.
+    re : float
+        Sérsic effective radius in pixels.
+    n : float
+        Sérsic index.
+    q : float
+        Sérsic axis ratio.
+    theta : float
+        Sérsic position angle in radians.
+    flux_point_source : float
+        Total intrinsic unresolved-source flux.
+    x0, y0 : float
+        Shared source centre in pixel coordinates.
+    sky : float
+        Constant additive sky level.
+    psf : object
+        Observation PSF.
+
+    Returns
+    -------
+    SkyModelWrapper
+        Observed Sérsic plus point-source model with additive sky.
+    """
+    sersic = SersicModel(
+        flux=flux_sersic,
+        re=re,
+        n=n,
+        q=q,
+        theta=theta,
+        x0=x0,
+        y0=y0,
+    )
+
+    point_source = PointSourceModel(
+        flux=flux_point_source,
+        x0=x0,
+        y0=y0,
+    )
+
+    morphology = SersicPointSourceModel(
+        sersic=sersic,
+        point_source=point_source,
+    )
+
+    observed = ObservedCompositeModel.from_sersic_point_source(
+        morphology,
+        psf=psf,
+    )
+
+    return SkyModelWrapper(
+        model=observed,
+        sky=sky,
+    )
+

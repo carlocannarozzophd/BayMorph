@@ -166,3 +166,38 @@ def test_make_double_sersic_psf_sky_model_adds_sky_level():
         image_with_sky - image_no_sky,
         2.0,
     )
+
+def test_make_sersic_point_source_psf_sky_model_renders_components():
+    """The factory must render extended and unresolved contributions."""
+    from baymorph.fitting import make_sersic_point_source_psf_sky_model
+
+    model = make_sersic_point_source_psf_sky_model(
+        flux_sersic=100.0,
+        re=3.0,
+        n=2.0,
+        q=0.8,
+        theta=0.0,
+        flux_point_source=25.0,
+        x0=15.0,
+        y0=15.0,
+        sky=2.0,
+        psf=DeltaPSF(),
+    )
+
+    image = model.render((31, 31))
+    components = model.render_components((31, 31))
+
+    assert image.shape == (31, 31)
+    assert set(components) == {
+        "sersic",
+        "point_source",
+    }
+
+    np.testing.assert_allclose(
+        image,
+        components["sersic"]
+        + components["point_source"]
+        + 2.0,
+        rtol=0.0,
+        atol=1.0e-13,
+    )
