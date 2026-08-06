@@ -776,3 +776,31 @@ def test_model_comparison_rejects_unknown_metric(
             comparison_enabled=True,
             comparison_metric="aic",
         )
+
+
+def test_build_parameter_set_sersic_point_source():
+    """Build the Sérsic plus point-source parameter set."""
+    parameter_names, parameters, _, _ = (
+        _build_parameter_set(
+            "sersic_point_source",
+            data_fit=np.ones((10, 10)),
+            noise_fit=np.ones((10, 10)),
+            mask_fit=np.zeros((10, 10), dtype=bool),
+            target_x=5,
+            target_y=5,
+        )
+    )
+
+    assert parameter_names == [
+        "flux_sersic",
+        "re",
+        "n",
+        "q",
+        "theta",
+        "flux_point_source",
+        "x0",
+        "y0",
+        "sky",
+    ]
+
+    assert parameters.names == parameter_names

@@ -157,6 +157,42 @@ DEFAULT_CONFIG = {
                     "max": 50.0,
                 },
             },
+            "sersic_point_source": {
+                "flux_sersic": {
+                    "min_factor": 0.0,
+                    "max_factor": 2.0,
+                },
+                "re": {
+                    "min": 1.0,
+                    "max": 120.0,
+                },
+                "n": {
+                    "min": 0.5,
+                    "max": 6.0,
+                },
+                "q": {
+                    "min": 0.4,
+                    "max": 1.0,
+                },
+                "theta": {
+                    "min": "-pi/2",
+                    "max": "pi/2",
+                },
+                "flux_point_source": {
+                    "min_factor": 0.0,
+                    "max_factor": 2.0,
+                },
+                "x0": {
+                    "offset": 8.0,
+                },
+                "y0": {
+                    "offset": 8.0,
+                },
+                "sky": {
+                    "min": -50.0,
+                    "max": 50.0,
+                },
+            },
         },
     },
     "diagnostics": {
