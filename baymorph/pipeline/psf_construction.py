@@ -80,59 +80,93 @@ def load_empirical_psf(
     )
 
 
-def estimate_psf_fwhm(
+def estimate_psf_equivalent_gaussian_fwhm(
     psf: np.ndarray,
 ) -> float | None:
-    """Estimate the empirical PSF FWHM in pixels.
+    """Estimate the moment-based Gaussian-equivalent PSF FWHM.
+
+    The estimate is derived from the intensity-weighted second moments
+    around the PSF centroid. It avoids the integer-pixel quantization of
+    a direct half-maximum threshold and recovers the nominal width of a
+    sampled Gaussian PSF.
+
+    For a non-Gaussian empirical PSF, the returned value is a
+    Gaussian-equivalent width rather than an exact geometric
+    half-maximum diameter.
 
     Parameters
     ----------
-    psf : ndarray
+    psf : numpy.ndarray
         Two-dimensional PSF image.
 
     Returns
     -------
     float or None
-        Approximate full width at half maximum in pixels. Returns ``None`` if
-        the estimate cannot be computed robustly.
+        Gaussian-equivalent FWHM in pixels, or ``None`` when the
+        estimate cannot be computed.
     """
     data = np.asarray(psf, dtype=float)
 
-    if data.ndim != 2:
+    if data.ndim != 2 or not np.all(np.isfinite(data)):
         return None
 
-    if not np.all(np.isfinite(data)):
+    weights = np.clip(
+        data,
+        a_min=0.0,
+        a_max=None,
+    )
+    total = float(weights.sum())
+
+    if not np.isfinite(total) or total <= 0.0:
         return None
 
-    peak = np.nanmax(data)
+    yy, xx = np.indices(weights.shape, dtype=float)
 
-    if not np.isfinite(peak) or peak <= 0:
-        return None
+    x_centroid = float(np.sum(weights * xx) / total)
+    y_centroid = float(np.sum(weights * yy) / total)
 
-    half_max = 0.5 * peak
-
-    yy, xx = np.indices(data.shape)
-
-    y0, x0 = np.unravel_index(
-        np.nanargmax(data),
-        data.shape,
+    variance_x = float(
+        np.sum(weights * (xx - x_centroid) ** 2) / total
+    )
+    variance_y = float(
+        np.sum(weights * (yy - y_centroid) ** 2) / total
     )
 
-    radius = np.sqrt(
-        (xx - x0) ** 2
-        + (yy - y0) ** 2
-    )
-
-    inside = data >= half_max
-
-    if not np.any(inside):
+    if (
+        not np.isfinite(variance_x)
+        or not np.isfinite(variance_y)
+        or variance_x <= 0.0
+        or variance_y <= 0.0
+    ):
         return None
 
-    fwhm = 2.0 * np.nanmax(
-        radius[inside]
+    sigma_equivalent = (variance_x * variance_y) ** 0.25
+    gaussian_fwhm_factor = 2.0 * np.sqrt(2.0 * np.log(2.0))
+
+    return float(
+        gaussian_fwhm_factor * sigma_equivalent
     )
 
-    return float(fwhm)
+
+def estimate_psf_fwhm(
+    psf: np.ndarray,
+) -> float | None:
+    """Return the equivalent-Gaussian PSF FWHM.
+
+    This compatibility alias preserves the historical API. New code
+    should use :func:`estimate_psf_equivalent_gaussian_fwhm`.
+
+    Parameters
+    ----------
+    psf : numpy.ndarray
+        Two-dimensional PSF image.
+
+    Returns
+    -------
+    float or None
+        Moment-based equivalent-Gaussian FWHM in pixels.
+    """
+    return estimate_psf_equivalent_gaussian_fwhm(psf)
 
 
 def psf_radial_profile(
@@ -302,7 +336,7 @@ def save_psf_diagnostics(
         dtype=float,
     )
 
-    measured_fwhm = estimate_psf_fwhm(
+    equivalent_gaussian_fwhm = estimate_psf_equivalent_gaussian_fwhm(
         psf,
     )
 
@@ -346,15 +380,15 @@ def save_psf_diagnostics(
         label="Measured profile",
     )
 
-    if measured_fwhm is not None:
+    if equivalent_gaussian_fwhm is not None:
         axes[1].axvline(
-            0.5 * measured_fwhm,
+            0.5 * equivalent_gaussian_fwhm,
             color="mediumvioletred",
             linestyle="--",
             lw=3,
             label=(
-                r"$\mathrm{FWHM}_{\mathrm{measured}}"
-                rf" = {measured_fwhm:.2f}\ \mathrm{{pix}}$"
+                r"$\mathrm{FWHM}_{\mathrm{equiv.\ Gaussian}}"
+                rf" = {equivalent_gaussian_fwhm:.2f}\ \mathrm{{pix}}$"
             ),
         )
 
@@ -365,7 +399,7 @@ def save_psf_diagnostics(
             linestyle=":",
             lw=3,
             label=(
-                r"$\mathrm{FWHM}_{\mathrm{nominal}}"
+                r"$\mathrm{FWHM}_{\mathrm{nominal\ Gaussian}}"
                 rf" = {nominal_fwhm:.2f}\ \mathrm{{pix}}$"
             ),
         )
@@ -605,7 +639,7 @@ def run_psf_construction_from_config(
 
     psf = stack_psf_cutouts(cutouts)
 
-    psf_fwhm = estimate_psf_fwhm(
+    psf_equivalent_gaussian_fwhm = estimate_psf_equivalent_gaussian_fwhm(
         psf,
     )
 
@@ -633,12 +667,12 @@ def run_psf_construction_from_config(
             "psf_peak": float(np.nanmax(psf)),
             "psf_min": float(np.nanmin(psf)),
             "psf_max": float(np.nanmax(psf)),
-            "psf_fwhm_pix": psf_fwhm,
+            "psf_equivalent_gaussian_fwhm_pix": psf_equivalent_gaussian_fwhm,
             "used_candidates": used_candidates,
             "warnings": _empirical_psf_warnings(
                 psf,
                 n_candidates_used=len(cutouts),
-                psf_fwhm_pix=psf_fwhm,
+                psf_equivalent_gaussian_fwhm_pix=psf_equivalent_gaussian_fwhm,
             ),
         },
     )
@@ -925,7 +959,7 @@ def _empirical_psf_warnings(
     psf: np.ndarray,
     *,
     n_candidates_used: int,
-    psf_fwhm_pix: float | None,
+    psf_equivalent_gaussian_fwhm_pix: float | None,
 ) -> list[str]:
     """Build quality-control warnings for an empirical PSF."""
     warnings = []
@@ -975,11 +1009,11 @@ def _empirical_psf_warnings(
             "PSF peak is not positive."
         )
 
-    if psf_fwhm_pix is None:
+    if psf_equivalent_gaussian_fwhm_pix is None:
         warnings.append(
             "Could not estimate empirical PSF FWHM."
         )
-    elif psf_fwhm_pix <= 0:
+    elif psf_equivalent_gaussian_fwhm_pix <= 0:
         warnings.append(
             "Empirical PSF FWHM is non-positive."
         )

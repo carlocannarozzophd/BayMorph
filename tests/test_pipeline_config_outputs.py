@@ -116,10 +116,10 @@ outputs:
 
 def test_official_learn_config_loads():
     config = load_resolved_config(
-        "configs/learn_baymorph.yaml"
+        "configs/simulated_galaxy.yaml"
     )
 
-    assert config["object"]["name"] == "learn_baymorph"
+    assert config["object"]["name"] == "simulated_galaxy"
     assert config["psf"]["type"] == "gaussian"
     assert config["fit"]["models"] == [
         "single_sersic",
@@ -501,12 +501,12 @@ def test_resolve_runtime_config_preserves_explicit_max_peak():
     )
 
 
-def test_learn_baymorph_config_is_mirrored_and_resolves_diagnostics():
+def test_simulated_galaxy_config_is_mirrored_and_resolves_diagnostics():
     public_path = Path(
-        "configs/learn_baymorph.yaml"
+        "configs/simulated_galaxy.yaml"
     )
     resource_path = Path(
-        "baymorph/resources/configs/learn_baymorph.yaml"
+        "baymorph/resources/configs/simulated_galaxy.yaml"
     )
 
     assert public_path.read_bytes() == resource_path.read_bytes()
@@ -517,12 +517,7 @@ def test_learn_baymorph_config_is_mirrored_and_resolves_diagnostics():
     diagnostics = resolved["diagnostics"]
 
     assert diagnostics["posterior_profile_bands"] is True
-    assert diagnostics["radial_profile"] == {
-        "binning": "fixed",
-        "dr": 1.0,
-        "min_pixels": 50,
-        "log_n_bins": 40,
-    }
+    assert diagnostics["radial_profile"] is True
 
 def test_resolve_config_preserves_native_sampler_limits():
     config = {

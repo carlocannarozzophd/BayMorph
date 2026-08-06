@@ -195,3 +195,72 @@ def test_crop_center_raises_if_too_large():
 
     with pytest.raises(ValueError, match="outside the image boundaries"):
         crop_center(image, half_size=4)
+
+def test_equivalent_gaussian_fwhm_recovers_sampled_gaussian_width():
+    """Moment-based FWHM must recover the nominal Gaussian width."""
+    import pytest
+
+    from baymorph.pipeline.psf_construction import estimate_psf_equivalent_gaussian_fwhm
+    from baymorph.simulation.psf import GaussianPSF
+
+    for nominal_fwhm in (2.5, 4.0):
+        psf = GaussianPSF(fwhm=nominal_fwhm).kernel()
+
+        equivalent_gaussian_fwhm = estimate_psf_equivalent_gaussian_fwhm(psf)
+
+        assert equivalent_gaussian_fwhm == pytest.approx(
+            nominal_fwhm,
+            abs=0.05,
+        )
+
+
+def test_equivalent_gaussian_fwhm_is_invariant_to_normalization():
+    """Multiplicative PSF normalization must not change the width."""
+    import pytest
+
+    from baymorph.pipeline.psf_construction import estimate_psf_equivalent_gaussian_fwhm
+    from baymorph.simulation.psf import GaussianPSF
+
+    psf = GaussianPSF(fwhm=2.5).kernel()
+
+    reference = estimate_psf_equivalent_gaussian_fwhm(psf)
+    rescaled = estimate_psf_equivalent_gaussian_fwhm(100.0 * psf)
+
+    assert rescaled == pytest.approx(
+        reference,
+        rel=1.0e-12,
+        abs=1.0e-12,
+    )
+
+
+def test_equivalent_gaussian_fwhm_rejects_invalid_inputs():
+    """Invalid or degenerate PSF arrays must return ``None``."""
+    import numpy as np
+
+    from baymorph.pipeline.psf_construction import estimate_psf_equivalent_gaussian_fwhm
+
+    assert estimate_psf_equivalent_gaussian_fwhm(np.ones(10)) is None
+    assert estimate_psf_equivalent_gaussian_fwhm(np.zeros((9, 9))) is None
+    assert estimate_psf_equivalent_gaussian_fwhm(
+        np.full((9, 9), np.nan)
+    ) is None
+
+
+
+def test_estimate_psf_fwhm_preserves_compatibility():
+    """The historical FWHM helper must remain a compatible alias."""
+    import pytest
+
+    from baymorph.pipeline.psf_construction import (
+        estimate_psf_equivalent_gaussian_fwhm,
+        estimate_psf_fwhm,
+    )
+    from baymorph.simulation.psf import GaussianPSF
+
+    psf = GaussianPSF(fwhm=2.5).kernel()
+
+    assert estimate_psf_fwhm(psf) == pytest.approx(
+        estimate_psf_equivalent_gaussian_fwhm(psf),
+        rel=1.0e-12,
+        abs=1.0e-12,
+    )

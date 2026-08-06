@@ -40,7 +40,7 @@ def test_packaged_tutorial_uses_supported_imports() -> None:
     notebook_path = (
         files("baymorph.resources")
         / "notebooks"
-        / "01_learn_baymorph.ipynb"
+        / "01_Simulated_SingleSersic_SingleBand_Fit.ipynb"
     )
 
     with notebook_path.open("r", encoding="utf-8") as stream:

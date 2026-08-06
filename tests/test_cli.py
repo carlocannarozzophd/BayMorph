@@ -30,13 +30,13 @@ def test_examples_command_copies_resources(
     assert (
         destination
         / "configs"
-        / "learn_baymorph.yaml"
+        / "simulated_galaxy.yaml"
     ).is_file()
 
     assert (
         destination
         / "notebooks"
-        / "01_learn_baymorph.ipynb"
+        / "01_Simulated_SingleSersic_SingleBand_Fit.ipynb"
     ).is_file()
 
 
@@ -66,13 +66,13 @@ def test_init_command_creates_project_tree(
     assert (
         project
         / "configs"
-        / "learn_baymorph.yaml"
+        / "simulated_galaxy.yaml"
     ).is_file()
 
     assert (
         project
         / "notebooks"
-        / "01_learn_baymorph.ipynb"
+        / "01_Simulated_SingleSersic_SingleBand_Fit.ipynb"
     ).is_file()
 
 

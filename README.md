@@ -15,7 +15,7 @@
 <p align="center">
   <a href="#installation">Installation</a> ·
   <a href="#quick-start">Quick Start</a> ·
-  <a href="notebooks/01_learn_baymorph.ipynb">Tutorial</a> ·
+  <a href="notebooks/01_Simulated_SingleSersic_SingleBand_Fit.ipynb">Tutorial</a> ·
   <a href="docs/API.md">API</a> ·
   <a href="docs/architecture/ARCHITECTURE.md">Architecture</a> ·
   <a href="ROADMAP.md">Roadmap</a>
@@ -281,7 +281,7 @@ BayMorph analyses are driven by YAML configuration files.
 ```python
 from baymorph import BayMorphRunner
 
-runner = BayMorphRunner("configs/learn_baymorph.yaml")
+runner = BayMorphRunner("configs/simulated_galaxy.yaml")
 
 runner.prepare_image()
 runner.fit()
@@ -314,7 +314,7 @@ directory to preserve reproducibility.
 The recommended starting point is:
 
 ```text
-notebooks/01_learn_baymorph.ipynb
+notebooks/01_Simulated_SingleSersic_SingleBand_Fit.ipynb
 ```
 
 The tutorial demonstrates:
