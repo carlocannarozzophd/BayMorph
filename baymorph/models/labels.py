@@ -39,6 +39,20 @@ MODEL_PARAMETER_LABELS = {
         "y0": r"$y_0$",
         "sky": r"$S$",
     },
+    "bulge_disk": {
+        "flux_bulge": r"$F_{\mathrm{b}}$",
+        "re_bulge": r"$R_{e,\mathrm{b}}$",
+        "n_bulge": r"$n_{\mathrm{b}}$",
+        "q_bulge": r"$q_{\mathrm{b}}$",
+        "theta_bulge": r"$\theta_{\mathrm{b}}$",
+        "flux_disk": r"$F_{\mathrm{d}}$",
+        "re_disk": r"$R_{e,\mathrm{d}}$",
+        "q_disk": r"$q_{\mathrm{d}}$",
+        "theta_disk": r"$\theta_{\mathrm{d}}$",
+        "x0": r"$x_0$",
+        "y0": r"$y_0$",
+        "sky": r"$S$",
+    },
 }
 
 

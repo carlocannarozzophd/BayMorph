@@ -10,6 +10,7 @@ _BUILTIN_FACTORY_NAMES = {
     "single_sersic": "SingleSersicModelFactory",
     "double_sersic": "DoubleSersicModelFactory",
     "sersic_point_source": "SersicPointSourceModelFactory",
+    "bulge_disk": "BulgeDiskModelFactory",
 }
 
 
