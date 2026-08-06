@@ -861,3 +861,31 @@ def test_build_parameter_set_bulge_disk():
 
     assert "n_disk" not in parameter_names
     assert parameters.names == parameter_names
+
+
+def test_make_model_factory_bulge_disk():
+    """The pipeline must resolve the production bulge-disc factory."""
+    factory = _make_model_factory(
+        "bulge_disk",
+        DeltaPSF(),
+    )
+
+    model = factory(
+        flux_bulge=100.0,
+        re_bulge=3.0,
+        n_bulge=3.0,
+        q_bulge=0.9,
+        theta_bulge=0.1,
+        flux_disk=200.0,
+        re_disk=10.0,
+        q_disk=0.7,
+        theta_disk=0.2,
+        x0=15.0,
+        y0=15.0,
+        sky=1.0,
+    )
+
+    image = model.render((31, 31))
+
+    assert image.shape == (31, 31)
+    assert np.all(np.isfinite(image))

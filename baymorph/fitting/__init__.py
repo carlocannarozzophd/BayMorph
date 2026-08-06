@@ -10,6 +10,7 @@ from baymorph.fitting.grid import (
 )
 from baymorph.fitting.model_factories import (
     SkyModelWrapper,
+    make_bulge_disk_psf_sky_model,
     make_double_sersic_psf_sky_model,
     make_sersic_point_source_psf_sky_model,
     make_single_sersic_psf_sky_model,
@@ -40,6 +41,7 @@ __all__ = [
     "SkyModelWrapper",
     "UniformPrior",
     "grid_search_1d",
+    "make_bulge_disk_psf_sky_model",
     "make_double_sersic_psf_sky_model",
     "make_sersic_point_source_psf_sky_model",
     "make_sampler",

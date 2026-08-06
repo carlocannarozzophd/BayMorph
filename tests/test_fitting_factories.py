@@ -201,3 +201,42 @@ def test_make_sersic_point_source_psf_sky_model_renders_components():
         rtol=0.0,
         atol=1.0e-13,
     )
+
+
+def test_make_bulge_disk_psf_sky_model_renders_expected_components():
+    """The bulge-disc factory must render bulge and exponential disc."""
+    from baymorph.fitting import make_bulge_disk_psf_sky_model
+
+    model = make_bulge_disk_psf_sky_model(
+        flux_bulge=100.0,
+        re_bulge=3.0,
+        n_bulge=3.0,
+        q_bulge=0.9,
+        theta_bulge=0.1,
+        flux_disk=200.0,
+        re_disk=10.0,
+        q_disk=0.7,
+        theta_disk=0.2,
+        x0=15.0,
+        y0=15.0,
+        sky=2.0,
+        psf=DeltaPSF(),
+    )
+
+    image = model.render((31, 31))
+    components = model.render_components((31, 31))
+
+    assert image.shape == (31, 31)
+    assert set(components) == {
+        "bulge",
+        "disk",
+    }
+
+    np.testing.assert_allclose(
+        image,
+        components["bulge"]
+        + components["disk"]
+        + 2.0,
+        rtol=0.0,
+        atol=1.0e-13,
+    )

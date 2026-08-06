@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from baymorph.models import (
+    BulgeDiskModel,
     ConvolvedModel,
     DoubleSersicModel,
+    ExponentialComponent,
     PointSourceModel,
     SersicModel,
     SersicPointSourceModel,
@@ -270,6 +272,58 @@ def make_sersic_point_source_psf_sky_model(
 
     observed = ObservedCompositeModel.from_sersic_point_source(
         morphology,
+        psf=psf,
+    )
+
+    return SkyModelWrapper(
+        model=observed,
+        sky=sky,
+    )
+
+
+def make_bulge_disk_psf_sky_model(
+    *,
+    flux_bulge: float,
+    re_bulge: float,
+    n_bulge: float,
+    q_bulge: float,
+    theta_bulge: float,
+    flux_disk: float,
+    re_disk: float,
+    q_disk: float,
+    theta_disk: float,
+    x0: float,
+    y0: float,
+    sky: float,
+    psf,
+):
+    """Build a PSF-convolved Sérsic-bulge plus exponential-disc model."""
+    bulge = SersicModel(
+        flux=flux_bulge,
+        re=re_bulge,
+        n=n_bulge,
+        q=q_bulge,
+        theta=theta_bulge,
+        x0=x0,
+        y0=y0,
+    )
+
+    disk = ExponentialComponent(
+        flux=flux_disk,
+        re=re_disk,
+        q=q_disk,
+        theta=theta_disk,
+        x0=x0,
+        y0=y0,
+    )
+
+    morphology = BulgeDiskModel(
+        bulge=bulge,
+        disk=disk,
+    )
+
+    observed = ConvolvedModel(
+        model=morphology,
         psf=psf,
     )
 
