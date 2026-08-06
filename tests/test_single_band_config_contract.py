@@ -126,3 +126,26 @@ def test_resolved_config_omits_fixed_preparation_methods() -> None:
 
     assert "method" not in resolved["preparation"]["background"]
     assert "method" not in resolved["preparation"]["noise"]
+
+
+def test_unsupported_masking_section_is_rejected() -> None:
+    """Unimplemented masking controls must not be silently accepted."""
+    config = _minimal_config()
+    config["masking"] = {
+        "connected_source": {
+            "enabled": False,
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="Unsupported top-level configuration section 'masking'",
+    ):
+        resolve_config(config)
+
+
+def test_resolved_config_omits_masking_strategy_controls() -> None:
+    """Resolved configurations must contain no ineffective masking section."""
+    resolved = resolve_config(_minimal_config())
+
+    assert "masking" not in resolved

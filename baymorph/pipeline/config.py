@@ -38,17 +38,6 @@ DEFAULT_CONFIG = {
             "n_pixels": 20,
         },
     },
-    "masking": {
-        "connected_source": {
-            "enabled": True,
-        },
-        "star_halo": {
-            "enabled": True,
-        },
-        "interactive_refinement": {
-            "enabled": True,
-        },
-    },
     "psf": {
         "type": "empirical",
         "empirical": {
@@ -264,6 +253,14 @@ def validate_config(config: dict[str, Any]) -> None:
 
     if "root" not in config["outputs"]:
         raise ValueError("Config section 'outputs' must contain 'root'.")
+
+    if "masking" in config:
+        raise ValueError(
+            "Unsupported top-level configuration section 'masking'. "
+            "The current single-band workflow constructs its automatic "
+            "fitting mask during image preparation and does not expose "
+            "masking strategy toggles."
+        )
 
     preparation_config = config.get("preparation", {})
 

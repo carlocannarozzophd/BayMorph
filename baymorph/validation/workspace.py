@@ -130,17 +130,6 @@ class ValidationWorkspace:
                     "n_levels": 32,
                 },
             },
-            "masking": {
-                "connected_source": {
-                    "enabled": True,
-                },
-                "star_halo": {
-                    "enabled": True,
-                },
-                "interactive_refinement": {
-                    "enabled": False,
-                },
-            },
             "psf": {
                 "type": "gaussian",
                 "gaussian": {

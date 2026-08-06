@@ -68,7 +68,7 @@ def test_validation_workspace_writes_pipeline_inputs(tmp_path):
     assert config["psf"]["gaussian"]["fwhm"] == 2.0
     assert config["fit"]["models"] == ["single_sersic"]
     assert config["fit"]["sampler"]["seed"] == 42
-    assert not config["masking"]["interactive_refinement"]["enabled"]
+    assert "masking" not in config
 
     with fits.open(image_path) as hdul:
         assert hdul[0].data.shape == (32, 32)
