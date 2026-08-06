@@ -6,12 +6,14 @@ from baymorph.observation.effects import (
     render_shifted_psf,
 )
 from baymorph.observation.model import ObservationModel
+from baymorph.observation.point_source import PSFPointSourceRenderer
 from baymorph.observation.protocols import ObservationEffect
 
 __all__ = [
     "ObservationEffect",
     "ObservationModel",
     "PSFEffect",
+    "PSFPointSourceRenderer",
     "normalized_psf_kernel",
     "render_shifted_psf",
 ]
