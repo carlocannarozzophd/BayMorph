@@ -169,10 +169,37 @@ def test_empirical_psf_auto_size_is_rejected() -> None:
         resolve_config(config)
 
 
-def test_resolved_config_omits_empirical_psf_auto_size() -> None:
-    """Resolved configurations must omit the unused PSF sizing key."""
+def test_resolved_config_omits_empirical_psf_construction_options() -> None:
+    """Resolved configurations must omit obsolete PSF construction options."""
     resolved = resolve_config(_minimal_config())
 
-    construction = resolved["psf"]["empirical"]["construction"]
+    empirical = resolved["psf"]["empirical"]
 
-    assert "auto_size" not in construction
+    assert "construction" not in empirical
+
+
+def test_empirical_psf_normalize_option_is_rejected() -> None:
+    """PSF normalization must remain an invariant, not a user option."""
+    config = _minimal_config()
+    config["psf"] = {
+        "empirical": {
+            "construction": {
+                "normalize": False,
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match=r"psf\.empirical\.construction\.normalize",
+    ):
+        resolve_config(config)
+
+
+def test_resolved_config_omits_empirical_psf_normalize_option() -> None:
+    """Resolved configurations must not expose PSF normalization."""
+    resolved = resolve_config(_minimal_config())
+
+    empirical = resolved["psf"]["empirical"]
+
+    assert "construction" not in empirical

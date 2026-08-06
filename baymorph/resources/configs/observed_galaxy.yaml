@@ -113,9 +113,6 @@ psf:
       # Minimum separation margin used by the isolation filtering.
       isolation_margin: 2
 
-    construction:
-      normalize: true
-
 # ----------------------------------------------------------------------------
 # MORPHOLOGICAL FITTING
 # ----------------------------------------------------------------------------

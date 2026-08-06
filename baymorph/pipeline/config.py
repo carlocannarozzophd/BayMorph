@@ -58,9 +58,6 @@ DEFAULT_CONFIG = {
                 "max_half_size": 30,
                 "isolation_margin": 2,
             },
-            "construction": {
-                "normalize": True,
-            },
         },
     },
     "fit": {
@@ -274,6 +271,13 @@ def validate_config(config: dict[str, Any]) -> None:
             "'psf.empirical.construction.auto_size'. "
             "Empirical PSF sizing is controlled by candidate-selection "
             "cutout limits."
+        )
+
+    if "normalize" in psf_construction_config:
+        raise ValueError(
+            "Unsupported configuration key "
+            "'psf.empirical.construction.normalize'. "
+            "BayMorph always normalizes PSF kernels to unit sum."
         )
 
     preparation_config = config.get("preparation", {})
