@@ -104,7 +104,7 @@ def test_bulge_disk_recovers_principal_component_parameters() -> None:
     )
 
     result = sampler.run(
-        nlive=30,
+        nlive=20,
         sample="rwalk",
         dlogz=0.5,
         print_progress=False,

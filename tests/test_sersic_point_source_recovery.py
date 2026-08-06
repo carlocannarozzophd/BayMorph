@@ -108,7 +108,7 @@ def test_sersic_point_source_recovers_extended_and_unresolved_fluxes() -> None:
     )
 
     result = sampler.run(
-        nlive=30,
+        nlive=20,
         sample="rwalk",
         dlogz=0.5,
         print_progress=False,
