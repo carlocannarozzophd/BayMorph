@@ -150,10 +150,7 @@ def run_psf_candidate_selection_from_config(
     detection_cfg = resolved["preparation"]["detection"]
     background_cfg = resolved["preparation"]["background"]
 
-    detection_n_pixels = detection_cfg.get(
-        "n_pixels",
-        detection_cfg.get("npixels"),
-    )
+    detection_n_pixels = detection_cfg["n_pixels"]
 
     prepared = prepare_real_fits_image(
         image.data,

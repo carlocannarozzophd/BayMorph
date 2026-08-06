@@ -187,10 +187,7 @@ def _detect_target_in_image(
     context: str,
 ) -> _TargetDetection:
     """Detect sources and select the target near a requested position."""
-    detection_n_pixels = detection_cfg.get(
-        "n_pixels",
-        detection_cfg.get("npixels"),
-    )
+    detection_n_pixels = detection_cfg["n_pixels"]
 
     prepared = prepare_real_fits_image(
         data,
