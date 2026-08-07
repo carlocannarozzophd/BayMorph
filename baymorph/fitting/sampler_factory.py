@@ -8,6 +8,7 @@ from typing import Any
 from baymorph.fitting.dynesty import DynestyFitter
 from baymorph.fitting.native import NativeFitter
 from baymorph.fitting.parameters import ParameterSet
+from baymorph.fitting.pocomc import PocoMCFitter
 from baymorph.fitting.problem import InferenceProblem
 from baymorph.likelihood import ImageLikelihood
 
@@ -28,7 +29,7 @@ def make_sampler(
         Sampler configuration. A string is interpreted as the sampler name.
         If ``None``, Dynesty is selected.
     problem : InferenceProblem, optional
-        Backend-neutral inference problem. Currently supported by Dynesty.
+        Backend-neutral inference problem.
     model_factory : callable, optional
         Legacy single-image model factory.
     parameters : ParameterSet, optional
@@ -38,18 +39,12 @@ def make_sampler(
 
     Returns
     -------
-    DynestyFitter or NativeFitter
+    DynestyFitter, PocoMCFitter, or NativeFitter
         Configured sampling backend.
-
-    Raises
-    ------
-    TypeError
-        If ``config`` has an invalid type.
-    ValueError
-        If construction arguments are inconsistent or the requested backend
-        does not support backend-neutral inference problems.
     """
-    sampler_config = _normalize_config(config)
+    sampler_config = _normalize_config(
+        config
+    )
 
     sampler_name = str(
         sampler_config.get(
@@ -72,13 +67,24 @@ def make_sampler(
                 "parameters, or likelihood."
             )
 
-        if not isinstance(problem, InferenceProblem):
+        if not isinstance(
+            problem,
+            InferenceProblem,
+        ):
             raise TypeError(
                 "problem must be an InferenceProblem instance."
             )
 
         if sampler_name == "dynesty":
-            return DynestyFitter(problem=problem)
+            return DynestyFitter(
+                problem=problem
+            )
+
+        if sampler_name == "pocomc":
+            return PocoMCFitter(
+                problem=problem,
+                config=sampler_config,
+            )
 
         if sampler_name == "native":
             raise ValueError(
@@ -93,6 +99,14 @@ def make_sampler(
             likelihood=likelihood,
         )
 
+    if sampler_name == "pocomc":
+        return PocoMCFitter(
+            model_factory=model_factory,
+            parameters=parameters,
+            likelihood=likelihood,
+            config=sampler_config,
+        )
+
     if sampler_name == "native":
         return NativeFitter(
             model_factory=model_factory,
@@ -103,7 +117,7 @@ def make_sampler(
 
     raise ValueError(
         f"Unknown sampler {sampler_name!r}. "
-        "Available samplers are 'dynesty' and 'native'."
+        "Available samplers are 'dynesty', 'pocomc', and 'native'."
     )
 
 
@@ -116,15 +130,23 @@ def _normalize_config(
             "name": "dynesty",
         }
 
-    if isinstance(config, str):
+    if isinstance(
+        config,
+        str,
+    ):
         return {
             "name": config,
         }
 
-    if not isinstance(config, Mapping):
+    if not isinstance(
+        config,
+        Mapping,
+    ):
         raise TypeError(
             "Sampler configuration must be a mapping, "
             "string, or None."
         )
 
-    return dict(config)
+    return dict(
+        config
+    )

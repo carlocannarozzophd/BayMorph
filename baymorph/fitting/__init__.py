@@ -20,6 +20,10 @@ from baymorph.fitting.parameters import (
     Parameter,
     ParameterSet,
 )
+from baymorph.fitting.pocomc import (
+    PocoMCFitter,
+    PocoMCResult,
+)
 from baymorph.fitting.priors import (
     FixedPrior,
     NormalPrior,
@@ -37,6 +41,8 @@ __all__ = [
     "NormalPrior",
     "Parameter",
     "ParameterSet",
+    "PocoMCFitter",
+    "PocoMCResult",
     "Prior",
     "SkyModelWrapper",
     "UniformPrior",

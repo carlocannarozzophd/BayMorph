@@ -50,6 +50,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+pocomc = [
+    "pocomc>=1.2.6,<2",
+]
 dev = [
     "pytest",
     "jupyter",
