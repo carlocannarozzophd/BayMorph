@@ -1,3 +1,5 @@
+import json
+
 from types import SimpleNamespace
 
 import numpy as np
@@ -519,10 +521,16 @@ def test_run_sampler_builds_problem_and_backend(
 
     sampler_cfg = {
         "name": "dynesty",
-        "nlive": 40,
-        "sample": "rwalk",
-        "dlogz": 0.5,
-        "seed": 123,
+        "mode": "static",
+        "init": {
+            "nlive": 40,
+            "sample": "rwalk",
+            "rstate": 123,
+        },
+        "run": {
+            "dlogz": 0.5,
+            "print_progress": False,
+        },
     }
 
     result = _run_sampler(
@@ -801,3 +809,144 @@ def test_make_model_factory_bulge_disk():
 
     assert image.shape == (31, 31)
     assert np.all(np.isfinite(image))
+
+
+def test_fit_summary_preserves_complete_sampler_configuration(
+    tmp_path,
+):
+    """Fit summaries should preserve the complete sampler configuration."""
+    from baymorph.pipeline.real_fit import save_real_fit_products
+    from baymorph.results import (
+        EvidenceEstimate,
+        InferenceResult,
+        PosteriorSamples,
+        RealFitProducts,
+    )
+
+    sampler_config = {
+        "name": "dynesty",
+        "mode": "static",
+        "init": {
+            "nlive": 500,
+            "sample": "rwalk",
+            "future_init_option": 17,
+            "rstate": np.random.default_rng(
+                42
+            ),
+        },
+        "run": {
+            "dlogz": 0.05,
+            "print_progress": False,
+            "future_run_option": "value",
+        },
+    }
+
+    config = resolve_config(
+        {
+            "object": {
+                "name": "test",
+            },
+            "data": {
+                "image_path": "image.fits",
+            },
+            "outputs": {
+                "root": str(
+                    tmp_path
+                ),
+            },
+            "fit": {
+                "models": [
+                    "single_sersic",
+                ],
+                "sampler": sampler_config,
+            },
+        }
+    )
+
+    posterior = InferenceResult(
+        posterior=PosteriorSamples(
+            samples=np.asarray(
+                [
+                    [1.0],
+                    [2.0],
+                ]
+            ),
+            weights=np.asarray(
+                [
+                    0.5,
+                    0.5,
+                ]
+            ),
+            parameter_names=[
+                "flux",
+            ],
+            log_likelihood=np.asarray(
+                [
+                    -1.0,
+                    -0.5,
+                ]
+            ),
+        ),
+        evidence=EvidenceEstimate(
+            logz=-10.0,
+            uncertainty=0.1,
+            method="dynesty",
+        ),
+    )
+
+    products = RealFitProducts(
+        posterior=posterior,
+        best_parameters={
+            "flux": 2.0,
+        },
+        best_model_image=np.zeros(
+            (2, 2)
+        ),
+        residual=np.zeros(
+            (2, 2)
+        ),
+        norm_residual=np.zeros(
+            (2, 2)
+        ),
+        chi2=1.0,
+        ndof=3,
+        reduced_chi2=1.0 / 3.0,
+        model_name="single_sersic",
+    )
+
+    save_real_fit_products(
+        config,
+        "single_sersic",
+        products,
+    )
+
+    summary_path = (
+        tmp_path
+        / "test"
+        / "fits"
+        / "single_sersic"
+        / "fit_summary.json"
+    )
+
+    summary = json.loads(
+        summary_path.read_text()
+    )
+
+    assert summary["sampler"]["name"] == "dynesty"
+    assert summary["sampler"]["mode"] == "static"
+
+    assert summary["sampler"]["init"]["nlive"] == 500
+    assert summary["sampler"]["init"]["sample"] == "rwalk"
+    assert summary["sampler"]["init"]["future_init_option"] == 17
+
+    assert summary["sampler"]["init"]["rstate"] == {
+        "__runtime_object__": True,
+        "type": "numpy.random.Generator",
+        "bit_generator": "PCG64",
+    }
+
+    assert summary["sampler"]["run"] == {
+        "dlogz": 0.05,
+        "print_progress": False,
+        "future_run_option": "value",
+    }

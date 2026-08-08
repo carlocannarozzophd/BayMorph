@@ -16,25 +16,82 @@ from baymorph.results.samples import PosteriorSamples
 _FORMAT_VERSION = 2
 
 
-def _json_compatible(value: Any) -> Any:
-    """Convert nested result metadata into JSON-compatible values."""
-    if isinstance(value, dict):
+def json_compatible_metadata(
+    value: Any,
+) -> Any:
+    """Convert nested metadata into stable JSON-compatible values.
+
+    JSON-native values are preserved exactly. NumPy arrays and scalar
+    values are converted to their corresponding Python representations.
+    Runtime Python objects that cannot be represented faithfully in JSON
+    are described explicitly rather than converted to unstable ``repr``
+    strings.
+    """
+    if isinstance(
+        value,
+        dict,
+    ):
         return {
-            str(key): _json_compatible(item)
+            str(key): json_compatible_metadata(
+                item
+            )
             for key, item in value.items()
         }
 
-    if isinstance(value, (list, tuple)):
+    if isinstance(
+        value,
+        (list, tuple),
+    ):
         return [
-            _json_compatible(item)
+            json_compatible_metadata(
+                item
+            )
             for item in value
         ]
 
-    if isinstance(value, np.ndarray):
+    if isinstance(
+        value,
+        np.ndarray,
+    ):
         return value.tolist()
 
-    if isinstance(value, np.generic):
+    if isinstance(
+        value,
+        np.generic,
+    ):
         return value.item()
+
+    if isinstance(
+        value,
+        np.random.Generator,
+    ):
+        return {
+            "__runtime_object__": True,
+            "type": "numpy.random.Generator",
+            "bit_generator": type(
+                value.bit_generator
+            ).__name__,
+        }
+
+    try:
+        json.dumps(
+            value
+        )
+    except (
+        TypeError,
+        ValueError,
+    ):
+        value_type = type(
+            value
+        )
+
+        return {
+            "__runtime_object__": True,
+            "type": (
+                f"{value_type.__module__}."
+                f"{value_type.__qualname__}"
+            ),
+        }
 
     return value
 
@@ -214,14 +271,14 @@ class InferenceResult:
             ),
             "diagnostics_json": np.asarray(
                 json.dumps(
-                    _json_compatible(
+                    json_compatible_metadata(
                         self.diagnostics
                     )
                 )
             ),
             "provenance_json": np.asarray(
                 json.dumps(
-                    _json_compatible(
+                    json_compatible_metadata(
                         self.provenance
                     )
                 )
@@ -262,7 +319,7 @@ class InferenceResult:
                 "evidence_diagnostics_json"
             ] = np.asarray(
                 json.dumps(
-                    _json_compatible(
+                    json_compatible_metadata(
                         self.evidence.diagnostics
                     )
                 )
@@ -272,7 +329,7 @@ class InferenceResult:
                 "evidence_provenance_json"
             ] = np.asarray(
                 json.dumps(
-                    _json_compatible(
+                    json_compatible_metadata(
                         self.evidence.provenance
                     )
                 )

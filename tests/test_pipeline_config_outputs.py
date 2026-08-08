@@ -126,7 +126,7 @@ def test_official_learn_config_loads():
     ]
     assert (
         config["fit"]["sampler"]["name"]
-        == "dynesty"
+        == "pocomc"
     )
 
 

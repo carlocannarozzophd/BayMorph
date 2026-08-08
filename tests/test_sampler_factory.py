@@ -43,7 +43,11 @@ def test_make_sampler_builds_dynesty_fitter():
     sampler = make_sampler(
         {
             "name": "dynesty",
-            "nlive": 100,
+            "mode": "static",
+            "init": {
+                "nlive": 100,
+            },
+            "run": {},
         },
         model_factory=model_factory,
         parameters=parameters,

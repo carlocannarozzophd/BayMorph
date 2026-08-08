@@ -105,11 +105,18 @@ def test_sersic_point_source_recovers_extended_and_unresolved_fluxes() -> None:
     backend = make_sampler(
         {
             "name": "dynesty",
-            "nlive": 20,
-            "sample": "rwalk",
-            "dlogz": 0.5,
-            "print_progress": False,
-            "seed": 12345,
+            "mode": "static",
+            "init": {
+                "nlive": 20,
+                "sample": "rwalk",
+                "rstate": np.random.default_rng(
+                    12345
+                ),
+            },
+            "run": {
+                "dlogz": 0.5,
+                "print_progress": False,
+            },
         },
         problem=problem,
     )

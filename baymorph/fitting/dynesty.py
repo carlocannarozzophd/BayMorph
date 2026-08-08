@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-from multiprocessing import Pool
 
 import dynesty
 import numpy as np
@@ -404,154 +403,116 @@ class DynestyFitter:
 
     def run(
         self,
-        nlive: int = 100,
-        sample: str = "auto",
-        bound: str = "multi",
-        dlogz: float | None = None,
-        bootstrap: int | None = None,
-        print_progress: bool = True,
-        n_processes: int = 1,
-        queue_size: int | None = None,
-        seed: int | None = None,
+        *,
+        mode: str = "static",
+        init_kwargs=None,
+        run_kwargs=None,
         progress_label: str | None = None,
     ) -> InferenceResult:
-        """Run nested sampling.
+        """Run Dynesty using native constructor and run keyword arguments.
 
         Parameters
         ----------
-        nlive : int, default=100
-            Number of live points used by Dynesty.
-        sample : str, default="auto"
-            Dynesty sampling method.
-        bound : str, default="multi"
-            Dynesty bounding method.
-        dlogz : float, optional
-            Stopping threshold on the remaining evidence.
-        bootstrap : int, optional
-            Number of bootstrap realizations used for bounding.
-        print_progress : bool, default=True
-            If True, display Dynesty progress information.
-        n_processes : int, default=1
-            Number of worker processes used for likelihood evaluations.
-        queue_size : int, optional
-            Number of queued likelihood evaluations when multiprocessing is
-            enabled. If ``None``, it defaults to ``n_processes``.
-        seed : int, optional
-            Random seed used to initialize Dynesty's random generator.
+        mode : {"static", "dynamic"}, default="static"
+            Dynesty nested-sampling mode. ``"static"`` uses
+            :class:`dynesty.NestedSampler`; ``"dynamic"`` uses
+            :class:`dynesty.DynamicNestedSampler`.
+        init_kwargs : mapping, optional
+            Native keyword arguments forwarded unchanged to the selected
+            Dynesty sampler constructor.
+        run_kwargs : mapping, optional
+            Native keyword arguments forwarded unchanged to
+            ``sampler.run_nested``.
         progress_label : str, optional
-            Human-readable label shown in the progress display.
+            Human-readable BayMorph label displayed around the fit.
 
         Returns
         -------
-        DynestyResult
-            Posterior samples, log-weights, log-likelihoods, evidence values,
-            evidence uncertainties, and parameter names.
+        InferenceResult
+            Canonical backend-neutral BayMorph inference result.
+
+        Notes
+        -----
+        BayMorph owns the likelihood, prior transform, and problem
+        dimensionality. These constructor arguments therefore cannot be
+        supplied through ``init_kwargs``.
         """
-        if nlive < 1:
+        mode = str(
+            mode
+        ).strip().lower()
+
+        if mode not in {
+            "static",
+            "dynamic",
+        }:
             raise ValueError(
-                "nlive must be at least one."
+                "Dynesty mode must be 'static' or 'dynamic'."
             )
 
-        if n_processes < 1:
-            raise ValueError(
-                "n_processes must be at least one."
-            )
-
-        if queue_size is not None and queue_size < 1:
-            raise ValueError(
-                "queue_size must be at least one."
-            )
-
-        if dlogz is not None and dlogz <= 0.0:
-            raise ValueError(
-                "dlogz must be positive."
-            )
-
-        if bootstrap is not None and bootstrap < 0:
-            raise ValueError(
-                "bootstrap must be non-negative."
-            )
-
-        random_state = (
-            np.random.default_rng(seed)
-            if seed is not None
-            else None
+        init_config = dict(
+            {}
+            if init_kwargs is None
+            else init_kwargs
         )
+        run_config = dict(
+            {}
+            if run_kwargs is None
+            else run_kwargs
+        )
+
+        reserved_init = {
+            "loglikelihood",
+            "prior_transform",
+            "ndim",
+        }
+
+        collisions = sorted(
+            reserved_init
+            & set(init_config)
+        )
+
+        if collisions:
+            names = ", ".join(
+                collisions
+            )
+            raise ValueError(
+                "Dynesty constructor argument(s) owned by BayMorph "
+                f"cannot be configured explicitly: {names}."
+            )
 
         if progress_label is not None:
             print()
-            print("────────────────────────────────────────────────────")
-            print(f"Running Dynesty fit: {progress_label}")
             print(
-                f"ndim={self.ndim}, "
-                f"nlive={nlive}, "
-                f"sample={sample}, "
-                f"bound={bound}"
+                "────────────────────────────────────────────────────"
             )
-            print("────────────────────────────────────────────────────")
-
-        sampler_kwargs = {
-            "nlive": nlive,
-            "sample": sample,
-            "bound": bound,
-        }
-
-        if random_state is not None:
-            sampler_kwargs["rstate"] = random_state
-
-        if bootstrap is not None:
-            sampler_kwargs["bootstrap"] = bootstrap
-
-        run_kwargs = {
-            "print_progress": print_progress,
-        }
-
-        if dlogz is not None:
-            run_kwargs["dlogz"] = dlogz
-
-        if print_progress and progress_label is not None:
-            run_kwargs["print_func"] = DynestyMultilineProgress(
-                progress_label
+            print(
+                f"Running Dynesty {mode} fit: {progress_label}"
+            )
+            print(
+                f"ndim={self.ndim}"
+            )
+            print(
+                "────────────────────────────────────────────────────"
             )
 
-        if n_processes > 1:
-            resolved_queue_size = (
-                n_processes
-                if queue_size is None
-                else queue_size
-            )
+        sampler_class = (
+            dynesty.NestedSampler
+            if mode == "static"
+            else dynesty.DynamicNestedSampler
+        )
 
-            with Pool(
-                processes=n_processes,
-            ) as pool:
-                sampler = dynesty.NestedSampler(
-                    self.loglikelihood,
-                    self.prior_transform,
-                    ndim=self.ndim,
-                    pool=pool,
-                    queue_size=resolved_queue_size,
-                    **sampler_kwargs,
-                )
+        sampler = sampler_class(
+            self.loglikelihood,
+            self.prior_transform,
+            self.ndim,
+            **init_config,
+        )
 
-                sampler.run_nested(
-                    **run_kwargs,
-                )
+        sampler.run_nested(
+            **run_config
+        )
 
-                results = sampler.results
-
-        else:
-            sampler = dynesty.NestedSampler(
-                self.loglikelihood,
-                self.prior_transform,
-                ndim=self.ndim,
-                **sampler_kwargs,
-            )
-
-            sampler.run_nested(
-                **run_kwargs,
-            )
-
-            results = sampler.results
+        results = sampler.results
 
         if progress_label is not None:
             total_calls = (
@@ -560,16 +521,31 @@ class DynestyFitter:
                         results.ncall
                     )
                 )
-                if hasattr(results, "ncall")
+                if hasattr(
+                    results,
+                    "ncall",
+                )
                 else "unknown"
             )
 
-            print("────────────────────────────────────────────────────")
-            print(f"Completed Dynesty fit: {progress_label}")
-            print(f"logZ={float(results.logz[-1]):.6g}")
-            print(f"logZerr={float(results.logzerr[-1]):.6g}")
-            print(f"ncall={total_calls}")
-            print("────────────────────────────────────────────────────")
+            print(
+                "────────────────────────────────────────────────────"
+            )
+            print(
+                f"Completed Dynesty {mode} fit: {progress_label}"
+            )
+            print(
+                f"logZ={float(results.logz[-1]):.6g}"
+            )
+            print(
+                f"logZerr={float(results.logzerr[-1]):.6g}"
+            )
+            print(
+                f"ncall={total_calls}"
+            )
+            print(
+                "────────────────────────────────────────────────────"
+            )
 
         final_logz = float(
             results.logz[-1]
@@ -596,28 +572,6 @@ class DynestyFitter:
             ),
         )
 
-        evidence = EvidenceEstimate(
-            logz=final_logz,
-            uncertainty=float(
-                results.logzerr[-1]
-            ),
-            method="dynesty",
-            uncertainty_kind="nested_sampling_internal",
-            diagnostics={
-                "nlive": int(nlive),
-                "sample": str(sample),
-                "bound": str(bound),
-                "dlogz": (
-                    None
-                    if dlogz is None
-                    else float(dlogz)
-                ),
-            },
-            provenance={
-                "backend": "dynesty",
-            },
-        )
-
         total_calls = (
             int(
                 np.sum(
@@ -631,19 +585,39 @@ class DynestyFitter:
             else None
         )
 
+        sampler_configuration = {
+            "name": "dynesty",
+            "mode": mode,
+            "init": init_config,
+            "run": run_config,
+        }
+
+        evidence = EvidenceEstimate(
+            logz=final_logz,
+            uncertainty=float(
+                results.logzerr[-1]
+            ),
+            method="dynesty",
+            uncertainty_kind="nested_sampling_internal",
+            diagnostics={
+                "mode": mode,
+            },
+            provenance={
+                "backend": "dynesty",
+                "sampler": sampler_configuration,
+            },
+        )
+
         return InferenceResult(
             posterior=posterior,
             evidence=evidence,
             diagnostics={
                 "backend": "dynesty",
+                "mode": mode,
                 "calls": total_calls,
             },
             provenance={
                 "backend": "dynesty",
-                "seed": seed,
-                "n_processes": int(
-                    n_processes
-                ),
-                "queue_size": queue_size,
+                "sampler": sampler_configuration,
             },
         )

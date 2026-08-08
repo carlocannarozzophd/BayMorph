@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from baymorph.pipeline.config import resolve_config
 
 
@@ -25,59 +27,30 @@ def test_default_sampler_is_pocomc():
         _base_config()
     )
 
-    sampler = resolved[
-        "fit"
-    ][
-        "sampler"
-    ]
-
-    assert sampler["name"] == "pocomc"
-    assert sampler["n_effective"] == 512
-    assert sampler["n_active"] == 256
-
-    assert "nlive" not in sampler
-    assert "bound" not in sampler
-    assert "queue_size" not in sampler
-
-
-def test_explicit_dynesty_uses_only_dynesty_defaults():
-    config = _base_config()
-
-    config["fit"] = {
-        "sampler": {
-            "name": "dynesty",
-        }
+    assert resolved["fit"]["sampler"] == {
+        "name": "pocomc",
+        "init": {},
+        "run": {},
     }
 
-    resolved = resolve_config(
-        config
-    )
 
-    sampler = resolved[
-        "fit"
-    ][
-        "sampler"
-    ]
-
-    assert sampler["name"] == "dynesty"
-    assert sampler["nlive"] == 500
-    assert sampler["sample"] == "auto"
-    assert sampler["bound"] == "multi"
-
-    assert "n_effective" not in sampler
-    assert "n_active" not in sampler
-    assert "flow" not in sampler
-
-
-def test_sampler_overrides_backend_defaults():
+def test_pocomc_native_kwargs_are_preserved_verbatim():
     config = _base_config()
 
     config["fit"] = {
         "sampler": {
             "name": "pocomc",
-            "n_effective": 1024,
-            "n_active": 512,
-            "flow": "custom-flow",
+            "init": {
+                "n_effective": 1024,
+                "n_active": 512,
+                "sample": "tpcn",
+                "custom_future_option": 17,
+            },
+            "run": {
+                "n_total": 8192,
+                "n_evidence": 4096,
+                "future_run_option": "value",
+            },
         }
     }
 
@@ -85,27 +58,28 @@ def test_sampler_overrides_backend_defaults():
         config
     )
 
-    sampler = resolved[
+    assert resolved["fit"]["sampler"] == config[
         "fit"
-    ][
-        "sampler"
-    ]
-
-    assert sampler["n_effective"] == 1024
-    assert sampler["n_active"] == 512
-    assert sampler["flow"] == "custom-flow"
-
-    assert "nlive" not in sampler
+    ]["sampler"]
 
 
-def test_explicit_dynesty_overrides_do_not_leak_pocomc_defaults():
+def test_dynesty_static_native_kwargs_are_preserved_verbatim():
     config = _base_config()
 
     config["fit"] = {
         "sampler": {
             "name": "dynesty",
-            "nlive": 1000,
-            "sample": "rwalk",
+            "mode": "static",
+            "init": {
+                "nlive": 1000,
+                "sample": "rwalk",
+                "bound": "multi",
+                "future_init_option": 17,
+            },
+            "run": {
+                "dlogz": 0.01,
+                "future_run_option": "value",
+            },
         }
     }
 
@@ -113,15 +87,115 @@ def test_explicit_dynesty_overrides_do_not_leak_pocomc_defaults():
         config
     )
 
-    sampler = resolved[
+    assert resolved["fit"]["sampler"] == config[
         "fit"
-    ][
-        "sampler"
-    ]
+    ]["sampler"]
 
-    assert sampler["nlive"] == 1000
-    assert sampler["sample"] == "rwalk"
 
-    assert "n_effective" not in sampler
-    assert "n_evidence" not in sampler
-    assert "mcmc_sampler" not in sampler
+def test_dynesty_dynamic_native_kwargs_are_preserved_verbatim():
+    config = _base_config()
+
+    config["fit"] = {
+        "sampler": {
+            "name": "dynesty",
+            "mode": "dynamic",
+            "init": {
+                "sample": "rwalk",
+                "bound": "multi",
+            },
+            "run": {
+                "nlive_init": 500,
+                "nlive_batch": 250,
+                "dlogz_init": 0.05,
+            },
+        }
+    }
+
+    resolved = resolve_config(
+        config
+    )
+
+    assert resolved["fit"]["sampler"] == config[
+        "fit"
+    ]["sampler"]
+
+
+def test_dynesty_defaults_to_static_mode():
+    config = _base_config()
+
+    config["fit"] = {
+        "sampler": {
+            "name": "dynesty",
+        }
+    }
+
+    resolved = resolve_config(
+        config
+    )
+
+    assert resolved["fit"]["sampler"] == {
+        "name": "dynesty",
+        "mode": "static",
+        "init": {},
+        "run": {},
+    }
+
+
+def test_dynesty_rejects_unknown_mode():
+    config = _base_config()
+
+    config["fit"] = {
+        "sampler": {
+            "name": "dynesty",
+            "mode": "hyperdynamic",
+        }
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="static.*dynamic",
+    ):
+        resolve_config(config)
+
+
+def test_pocomc_rejects_dynesty_mode():
+    config = _base_config()
+
+    config["fit"] = {
+        "sampler": {
+            "name": "pocomc",
+            "mode": "dynamic",
+        }
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="does not define",
+    ):
+        resolve_config(config)
+
+
+@pytest.mark.parametrize(
+    "section",
+    [
+        "init",
+        "run",
+    ],
+)
+def test_sampler_native_sections_must_be_mappings(
+    section,
+):
+    config = _base_config()
+
+    config["fit"] = {
+        "sampler": {
+            "name": "pocomc",
+            section: 42,
+        }
+    }
+
+    with pytest.raises(
+        TypeError,
+        match=rf"sampler\.{section}.*mapping",
+    ):
+        resolve_config(config)

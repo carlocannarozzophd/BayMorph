@@ -77,10 +77,17 @@ def test_dynesty_returns_canonical_inference_result():
     )
 
     result = fitter.run(
-        nlive=20,
-        dlogz=1.0,
-        print_progress=False,
-        seed=123,
+        mode="static",
+        init_kwargs={
+            "nlive": 20,
+            "rstate": np.random.default_rng(
+                123
+            ),
+        },
+        run_kwargs={
+            "dlogz": 1.0,
+            "print_progress": False,
+        },
     )
 
     assert isinstance(
@@ -137,8 +144,12 @@ def test_dynesty_returns_canonical_inference_result():
     ] == "dynesty"
 
     assert result.provenance[
-        "seed"
-    ] == 123
+        "sampler"
+    ]["mode"] == "static"
+
+    assert result.provenance[
+        "sampler"
+    ]["init"]["nlive"] == 20
 
 
 def test_dynesty_result_has_no_nested_sampling_public_state():
@@ -147,10 +158,17 @@ def test_dynesty_result_has_no_nested_sampling_public_state():
     )
 
     result = fitter.run(
-        nlive=20,
-        dlogz=1.0,
-        print_progress=False,
-        seed=123,
+        mode="static",
+        init_kwargs={
+            "nlive": 20,
+            "rstate": np.random.default_rng(
+                123
+            ),
+        },
+        run_kwargs={
+            "dlogz": 1.0,
+            "print_progress": False,
+        },
     )
 
     assert not hasattr(
@@ -162,3 +180,50 @@ def test_dynesty_result_has_no_nested_sampling_public_state():
         result,
         "logzerr",
     )
+
+
+def test_dynesty_dynamic_returns_canonical_inference_result():
+    """Dynamic nested sampling should use the canonical result contract."""
+    fitter = DynestyFitter(
+        problem=_make_problem()
+    )
+
+    result = fitter.run(
+        mode="dynamic",
+        init_kwargs={
+            "nlive": 20,
+            "sample": "rwalk",
+            "rstate": np.random.default_rng(
+                321
+            ),
+        },
+        run_kwargs={
+            "nlive_init": 20,
+            "nlive_batch": 20,
+            "maxbatch": 1,
+            "dlogz_init": 5.0,
+            "print_progress": False,
+        },
+    )
+
+    assert isinstance(
+        result,
+        InferenceResult,
+    )
+
+    assert np.isfinite(
+        result.logz
+    )
+
+    assert result.logz_error is not None
+    assert np.isfinite(
+        result.logz_error
+    )
+
+    assert result.diagnostics[
+        "mode"
+    ] == "dynamic"
+
+    assert result.provenance[
+        "sampler"
+    ]["mode"] == "dynamic"

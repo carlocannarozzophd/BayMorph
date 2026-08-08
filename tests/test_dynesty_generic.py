@@ -95,12 +95,19 @@ def test_dynesty_generic_fit_runs():
     fitter = make_test_problem()
 
     result = fitter.run(
-        nlive=20,
-        sample="rwalk",
-        bootstrap=0,
-        dlogz=5.0,
-        print_progress=False,
-        seed=123,
+        mode="static",
+        init_kwargs={
+            "nlive": 20,
+            "sample": "rwalk",
+            "bootstrap": 0,
+            "rstate": np.random.default_rng(
+                123
+            ),
+        },
+        run_kwargs={
+            "dlogz": 5.0,
+            "print_progress": False,
+        },
     )
 
     assert result.samples.ndim == 2
@@ -296,14 +303,23 @@ def test_dynesty_generic_accepts_sampling_options(
 
     fitter = make_test_problem()
 
+    random_state = np.random.default_rng(
+        42
+    )
+
     result = fitter.run(
-        nlive=50,
-        sample="rwalk",
-        bound="single",
-        dlogz=0.25,
-        bootstrap=3,
-        print_progress=False,
-        seed=42,
+        mode="static",
+        init_kwargs={
+            "nlive": 50,
+            "sample": "rwalk",
+            "bound": "single",
+            "bootstrap": 3,
+            "rstate": random_state,
+        },
+        run_kwargs={
+            "dlogz": 0.25,
+            "print_progress": False,
+        },
     )
 
     assert captured["ndim"] == 3
@@ -312,7 +328,10 @@ def test_dynesty_generic_accepts_sampling_options(
     assert captured["sampler_kwargs"]["sample"] == "rwalk"
     assert captured["sampler_kwargs"]["bound"] == "single"
     assert captured["sampler_kwargs"]["bootstrap"] == 3
-    assert "rstate" in captured["sampler_kwargs"]
+    assert (
+        captured["sampler_kwargs"]["rstate"]
+        is random_state
+    )
 
     assert captured["run_kwargs"] == {
         "print_progress": False,

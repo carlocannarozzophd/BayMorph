@@ -123,15 +123,21 @@ fit:
     - double_sersic
 
   sampler:
-    name: dynesty
-    nlive: 100
-    sample: rslice
-    dlogz: 0.1
-    seed: 42
-
-    # Multiprocessing configuration.
-    n_processes: 10
-    queue_size: null
+    name: pocomc
+    init:
+      n_effective: 512
+      n_active: 256
+      flow: nsf6
+      precondition: true
+      dynamic: true
+      metric: ess
+      sample: tpcn
+      pytorch_threads: 1
+      random_state: 42
+    run:
+      n_total: 4096
+      n_evidence: 4096
+      progress: true
 
   comparison:
     enabled: true

@@ -59,7 +59,11 @@ def test_problem_path_returns_dynesty_backend():
     backend = make_sampler(
         {
             "name": "dynesty",
-            "nlive": 250,
+            "mode": "static",
+            "init": {
+                "nlive": 250,
+            },
+            "run": {},
         },
         problem=ScalarProblem(),
     )
@@ -72,15 +76,18 @@ def test_problem_path_returns_dynesty_backend():
         backend,
         InferenceBackend,
     )
-    assert backend.config["nlive"] == 250
+    assert backend.config["init"]["nlive"] == 250
 
 
 def test_problem_path_returns_pocomc_backend():
     backend = make_sampler(
         {
             "name": "pocomc",
-            "n_effective": 256,
-            "n_active": 128,
+            "init": {
+                "n_effective": 256,
+                "n_active": 128,
+            },
+            "run": {},
         },
         problem=ScalarProblem(),
     )
@@ -223,7 +230,7 @@ def test_legacy_pocomc_construction_remains_supported():
 def test_backend_specific_options_are_rejected_on_problem_path():
     with pytest.raises(
         ValueError,
-        match="Unknown pocoMC configuration",
+        match="placed under 'init' or 'run'",
     ):
         make_sampler(
             {

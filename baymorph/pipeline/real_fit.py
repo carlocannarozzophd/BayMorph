@@ -34,6 +34,7 @@ from baymorph.pipeline.outputs import (
     save_resolved_config,
 )
 from baymorph.pipeline.psf_construction import load_empirical_psf
+from baymorph.results.inference import json_compatible_metadata
 from baymorph.results import InferenceResult, RealFitProducts
 from baymorph.simulation.psf import GaussianPSF
 
@@ -258,19 +259,9 @@ def save_real_fit_products(
             )
             else products.posterior.logz_error
         ),
-        "sampler": {
-            "name": sampler_cfg.get("name", "dynesty"),
-            "nlive": sampler_cfg.get("nlive"),
-            "sample": sampler_cfg.get("sample"),
-            "dlogz": sampler_cfg.get("dlogz"),
-            "seed": sampler_cfg.get("seed"),
-            "n_processes": sampler_cfg.get("n_processes", 1),
-            "queue_size": sampler_cfg.get("queue_size"),
-            "max_iterations": sampler_cfg.get("max_iterations"),
-            "max_likelihood_calls": sampler_cfg.get(
-                "max_likelihood_calls"
-            ),
-        },
+        "sampler": json_compatible_metadata(
+            sampler_cfg
+        ),
     }
 
     with open(paths["dir"] / "fit_summary.json", "w") as f:

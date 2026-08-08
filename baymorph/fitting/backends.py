@@ -16,73 +16,36 @@ from baymorph.fitting.problem import InferenceProblem
 from baymorph.results import InferenceResult
 
 
-_DYNESTY_ALLOWED_CONFIG = frozenset(
-    {
-        "name",
-        "nlive",
-        "sample",
-        "bound",
-        "dlogz",
-        "bootstrap",
-        "print_progress",
-        "n_processes",
-        "queue_size",
-        "seed",
-    }
-)
-
-_POCOMC_ALLOWED_CONFIG = frozenset(
-    {
-        "name",
-        "n_effective",
-        "n_active",
-        "n_total",
-        "n_evidence",
-        "pytorch_threads",
-        "precondition",
-        "dynamic",
-        "metric",
-        "mcmc_sampler",
-        "flow",
-        "train_frequency",
-        "n_prior",
-        "n_steps",
-        "n_max_steps",
-        "train_config",
-        "vectorize",
-        "print_progress",
-        "n_processes",
-        "seed",
-    }
-)
-
-
-def _validate_config_keys(
+def _mapping_section(
     config: Mapping[str, Any],
-    *,
-    allowed: frozenset[str],
-    backend_name: str,
+    name: str,
 ) -> dict[str, Any]:
-    """Validate and copy one backend-specific configuration."""
-    resolved = dict(config)
-
-    unknown = sorted(
-        set(resolved) - allowed
+    """Return one native sampler-configuration section."""
+    value = config.get(
+        name,
+        {},
     )
 
-    if unknown:
-        names = ", ".join(unknown)
-
-        raise ValueError(
-            f"Unknown {backend_name} configuration "
-            f"option(s): {names}."
+    if not isinstance(
+        value,
+        Mapping,
+    ):
+        raise TypeError(
+            f"Sampler configuration section {name!r} must be a mapping."
         )
 
-    return resolved
+    return dict(
+        value
+    )
 
 
 class DynestyBackend(InferenceBackend):
-    """Backend-neutral adapter for Dynesty inference."""
+    """Backend-neutral adapter for Dynesty inference.
+
+    BayMorph owns only the backend name and Dynesty execution mode.
+    Entries under ``init`` and ``run`` retain their native Dynesty names
+    and semantics.
+    """
 
     def __init__(
         self,
@@ -90,11 +53,60 @@ class DynestyBackend(InferenceBackend):
         problem: InferenceProblem,
         config: Mapping[str, Any] | None = None,
     ) -> None:
-        resolved = _validate_config_keys(
-            {} if config is None else config,
-            allowed=_DYNESTY_ALLOWED_CONFIG,
-            backend_name="Dynesty",
+        raw = (
+            {}
+            if config is None
+            else dict(config)
         )
+
+        allowed_envelope = {
+            "name",
+            "mode",
+            "init",
+            "run",
+        }
+
+        unknown = sorted(
+            set(raw)
+            - allowed_envelope
+        )
+
+        if unknown:
+            names = ", ".join(
+                unknown
+            )
+            raise ValueError(
+                "Dynesty configuration options must be placed under "
+                f"'init' or 'run'. Unexpected top-level option(s): {names}."
+            )
+
+        mode = str(
+            raw.get(
+                "mode",
+                "static",
+            )
+        ).strip().lower()
+
+        if mode not in {
+            "static",
+            "dynamic",
+        }:
+            raise ValueError(
+                "Dynesty mode must be 'static' or 'dynamic'."
+            )
+
+        resolved = {
+            "name": "dynesty",
+            "mode": mode,
+            "init": _mapping_section(
+                raw,
+                "init",
+            ),
+            "run": _mapping_section(
+                raw,
+                "run",
+            ),
+        }
 
         super().__init__(
             problem=problem,
@@ -106,68 +118,41 @@ class DynestyBackend(InferenceBackend):
         """Return the stable backend identifier."""
         return "dynesty"
 
+    @property
+    def mode(self) -> str:
+        """Return the selected Dynesty nested-sampling mode."""
+        return str(
+            self.config["mode"]
+        )
+
     def fit(
         self,
         *,
         progress_label: str | None = None,
     ) -> InferenceResult:
-        """Run Dynesty using only Dynesty-specific configuration."""
+        """Run Dynesty with native constructor and run keyword arguments."""
         fitter = DynestyFitter(
             problem=self.problem
         )
 
         return fitter.run(
-            nlive=int(
-                self.config.get(
-                    "nlive",
-                    500,
-                )
-            ),
-            sample=str(
-                self.config.get(
-                    "sample",
-                    "auto",
-                )
-            ),
-            bound=str(
-                self.config.get(
-                    "bound",
-                    "multi",
-                )
-            ),
-            dlogz=float(
-                self.config.get(
-                    "dlogz",
-                    0.05,
-                )
-            ),
-            bootstrap=self.config.get(
-                "bootstrap"
-            ),
-            print_progress=bool(
-                self.config.get(
-                    "print_progress",
-                    True,
-                )
-            ),
-            n_processes=int(
-                self.config.get(
-                    "n_processes",
-                    1,
-                )
-            ),
-            queue_size=self.config.get(
-                "queue_size"
-            ),
-            seed=self.config.get(
-                "seed"
-            ),
+            mode=self.mode,
+            init_kwargs=self.config[
+                "init"
+            ],
+            run_kwargs=self.config[
+                "run"
+            ],
             progress_label=progress_label,
         )
 
 
 class PocoMCBackend(InferenceBackend):
-    """Backend-neutral adapter for pocoMC inference."""
+    """Backend-neutral adapter for pocoMC inference.
+
+    Entries under ``init`` and ``run`` retain their native pocoMC names
+    and semantics.
+    """
 
     def __init__(
         self,
@@ -175,11 +160,43 @@ class PocoMCBackend(InferenceBackend):
         problem: InferenceProblem,
         config: Mapping[str, Any] | None = None,
     ) -> None:
-        resolved = _validate_config_keys(
-            {} if config is None else config,
-            allowed=_POCOMC_ALLOWED_CONFIG,
-            backend_name="pocoMC",
+        raw = (
+            {}
+            if config is None
+            else dict(config)
         )
+
+        allowed_envelope = {
+            "name",
+            "init",
+            "run",
+        }
+
+        unknown = sorted(
+            set(raw)
+            - allowed_envelope
+        )
+
+        if unknown:
+            names = ", ".join(
+                unknown
+            )
+            raise ValueError(
+                "pocoMC configuration options must be placed under "
+                f"'init' or 'run'. Unexpected top-level option(s): {names}."
+            )
+
+        resolved = {
+            "name": "pocomc",
+            "init": _mapping_section(
+                raw,
+                "init",
+            ),
+            "run": _mapping_section(
+                raw,
+                "run",
+            ),
+        }
 
         super().__init__(
             problem=problem,
@@ -196,44 +213,18 @@ class PocoMCBackend(InferenceBackend):
         *,
         progress_label: str | None = None,
     ) -> InferenceResult:
-        """Run pocoMC using only pocoMC-specific configuration."""
-        fitter_config = dict(
-            self.config
-        )
-
-        fitter_config.pop(
-            "name",
-            None,
-        )
-
-        print_progress = bool(
-            fitter_config.pop(
-                "print_progress",
-                True,
-            )
-        )
-
-        n_processes = int(
-            fitter_config.pop(
-                "n_processes",
-                1,
-            )
-        )
-
-        seed = fitter_config.pop(
-            "seed",
-            None,
-        )
-
+        """Run pocoMC with native constructor and run keyword arguments."""
         fitter = PocoMCFitter(
-            problem=self.problem,
-            config=fitter_config,
+            problem=self.problem
         )
 
         return fitter.run(
-            print_progress=print_progress,
-            n_processes=n_processes,
-            seed=seed,
+            init_kwargs=self.config[
+                "init"
+            ],
+            run_kwargs=self.config[
+                "run"
+            ],
             progress_label=progress_label,
         )
 

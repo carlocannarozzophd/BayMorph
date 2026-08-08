@@ -135,7 +135,6 @@ def _make_legacy_sampler(
             model_factory=model_factory,
             parameters=parameters,
             likelihood=likelihood,
-            config=sampler_config,
         )
 
     if sampler_name == "native":

@@ -16,30 +16,14 @@ REQUIRED_TOP_LEVEL_KEYS = ("object", "data", "outputs")
 SAMPLER_DEFAULTS = {
     "pocomc": {
         "name": "pocomc",
-        "n_effective": 512,
-        "n_active": 256,
-        "n_total": 4096,
-        "n_evidence": 4096,
-        "flow": "nsf6",
-        "precondition": True,
-        "dynamic": True,
-        "metric": "ess",
-        "mcmc_sampler": "tpcn",
-        "print_progress": True,
-        "n_processes": 1,
-        "seed": None,
+        "init": {},
+        "run": {},
     },
     "dynesty": {
         "name": "dynesty",
-        "nlive": 500,
-        "sample": "auto",
-        "bound": "multi",
-        "dlogz": 0.05,
-        "bootstrap": None,
-        "print_progress": True,
-        "n_processes": 1,
-        "queue_size": None,
-        "seed": None,
+        "mode": "static",
+        "init": {},
+        "run": {},
     },
 }
 
@@ -494,6 +478,10 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
 
     resolved["fit"]["sampler"]["name"] = sampler_name
 
+    validate_sampler_config(
+        resolved["fit"]["sampler"]
+    )
+
     resolved["object"] = dict(resolved["object"])
     resolved["data"] = dict(resolved["data"])
     resolved["outputs"] = dict(resolved["outputs"])
@@ -719,3 +707,75 @@ def deep_update(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]
             result[key] = value
 
     return result
+
+def validate_sampler_config(
+    sampler_config: dict[str, Any],
+) -> None:
+    """Validate the BayMorph sampler-configuration envelope.
+
+    Native sampler keyword arguments are intentionally not interpreted here.
+    They are forwarded by the selected backend to the corresponding upstream
+    constructor or run method.
+    """
+    name = str(
+        sampler_config.get(
+            "name",
+            "",
+        )
+    ).strip().lower()
+
+    if name not in SAMPLER_DEFAULTS:
+        available = ", ".join(
+            sorted(SAMPLER_DEFAULTS)
+        )
+        raise ValueError(
+            f"Unknown sampler {name!r}. "
+            f"Available samplers: {available}."
+        )
+
+    init_config = sampler_config.get(
+        "init",
+        {},
+    )
+    run_config = sampler_config.get(
+        "run",
+        {},
+    )
+
+    if not isinstance(
+        init_config,
+        dict,
+    ):
+        raise TypeError(
+            "fit.sampler.init must be a mapping."
+        )
+
+    if not isinstance(
+        run_config,
+        dict,
+    ):
+        raise TypeError(
+            "fit.sampler.run must be a mapping."
+        )
+
+    if name == "dynesty":
+        mode = str(
+            sampler_config.get(
+                "mode",
+                "static",
+            )
+        ).strip().lower()
+
+        if mode not in {
+            "static",
+            "dynamic",
+        }:
+            raise ValueError(
+                "Dynesty sampler mode must be "
+                "'static' or 'dynamic'."
+            )
+
+    elif "mode" in sampler_config:
+        raise ValueError(
+            f"Sampler {name!r} does not define a BayMorph mode."
+        )

@@ -163,17 +163,19 @@ def test_pocomc_returns_canonical_native_result(
 
     fitter = PocoMCFitter(
         problem=_make_problem(),
-        config={
-            "n_effective": 64,
-            "n_active": 32,
-            "n_total": 128,
-            "n_evidence": 64,
-        },
     )
 
     result = fitter.run(
-        print_progress=False,
-        seed=42,
+        init_kwargs={
+            "n_effective": 64,
+            "n_active": 32,
+            "random_state": 42,
+        },
+        run_kwargs={
+            "n_total": 128,
+            "n_evidence": 64,
+            "progress": False,
+        },
     )
 
     assert isinstance(
@@ -243,8 +245,8 @@ def test_pocomc_returns_canonical_native_result(
     ] == "pocomc"
 
     assert result.provenance[
-        "seed"
-    ] == 42
+        "sampler"
+    ]["init"]["random_state"] == 42
 
 
 def test_pocomc_result_has_no_nested_sampling_public_state(
@@ -303,12 +305,14 @@ def test_pocomc_result_has_no_nested_sampling_public_state(
 
     result = PocoMCFitter(
         problem=_make_problem(),
-        config={
+    ).run(
+        init_kwargs={
             "n_effective": 64,
             "n_active": 32,
         },
-    ).run(
-        print_progress=False
+        run_kwargs={
+            "progress": False,
+        },
     )
 
     assert not hasattr(

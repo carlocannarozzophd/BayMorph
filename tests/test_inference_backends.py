@@ -14,9 +14,7 @@ from baymorph.fitting.backends import (
     PocoMCBackend,
     register_builtin_backends,
 )
-from baymorph.fitting.problem import (
-    InferenceProblem,
-)
+from baymorph.fitting.problem import InferenceProblem
 
 
 class ScalarProblem(InferenceProblem):
@@ -53,44 +51,150 @@ class ScalarProblem(InferenceProblem):
         return -0.5 * value**2
 
 
-def test_dynesty_backend_owns_dynesty_config():
+def test_dynesty_backend_preserves_static_native_config():
     backend = DynestyBackend(
         problem=ScalarProblem(),
         config={
             "name": "dynesty",
-            "nlive": 300,
-            "sample": "auto",
-            "n_processes": 4,
+            "mode": "static",
+            "init": {
+                "nlive": 300,
+                "sample": "rslice",
+                "future_init_option": 17,
+            },
+            "run": {
+                "dlogz": 0.05,
+                "future_run_option": "value",
+            },
         },
     )
 
     assert backend.name == "dynesty"
-    assert backend.config["nlive"] == 300
-    assert backend.config["n_processes"] == 4
+    assert backend.mode == "static"
+
+    assert backend.config == {
+        "name": "dynesty",
+        "mode": "static",
+        "init": {
+            "nlive": 300,
+            "sample": "rslice",
+            "future_init_option": 17,
+        },
+        "run": {
+            "dlogz": 0.05,
+            "future_run_option": "value",
+        },
+    }
 
 
-def test_pocomc_backend_owns_pocomc_config():
+def test_dynesty_backend_preserves_dynamic_native_config():
+    backend = DynestyBackend(
+        problem=ScalarProblem(),
+        config={
+            "name": "dynesty",
+            "mode": "dynamic",
+            "init": {
+                "sample": "rwalk",
+            },
+            "run": {
+                "nlive_init": 500,
+                "nlive_batch": 250,
+                "dlogz_init": 0.01,
+            },
+        },
+    )
+
+    assert backend.mode == "dynamic"
+
+    assert backend.config["run"] == {
+        "nlive_init": 500,
+        "nlive_batch": 250,
+        "dlogz_init": 0.01,
+    }
+
+
+def test_dynesty_backend_defaults_to_static():
+    backend = DynestyBackend(
+        problem=ScalarProblem(),
+    )
+
+    assert backend.config == {
+        "name": "dynesty",
+        "mode": "static",
+        "init": {},
+        "run": {},
+    }
+
+
+def test_dynesty_backend_rejects_flat_native_option():
+    with pytest.raises(
+        ValueError,
+        match="placed under 'init' or 'run'",
+    ):
+        DynestyBackend(
+            problem=ScalarProblem(),
+            config={
+                "nlive": 500,
+            },
+        )
+
+
+def test_dynesty_backend_rejects_invalid_mode():
+    with pytest.raises(
+        ValueError,
+        match="static.*dynamic",
+    ):
+        DynestyBackend(
+            problem=ScalarProblem(),
+            config={
+                "mode": "hyperdynamic",
+            },
+        )
+
+
+def test_pocomc_backend_preserves_native_config():
     backend = PocoMCBackend(
         problem=ScalarProblem(),
         config={
             "name": "pocomc",
-            "n_effective": 512,
-            "n_active": 256,
-            "n_processes": 4,
+            "init": {
+                "n_effective": 512,
+                "sample": "tpcn",
+                "random_state": 42,
+                "future_init_option": 17,
+            },
+            "run": {
+                "n_total": 4096,
+                "n_evidence": 4096,
+                "future_run_option": "value",
+            },
         },
     )
 
     assert backend.name == "pocomc"
-    assert backend.config["n_effective"] == 512
-    assert backend.config["n_active"] == 256
+
+    assert backend.config == {
+        "name": "pocomc",
+        "init": {
+            "n_effective": 512,
+            "sample": "tpcn",
+            "random_state": 42,
+            "future_init_option": 17,
+        },
+        "run": {
+            "n_total": 4096,
+            "n_evidence": 4096,
+            "future_run_option": "value",
+        },
+    }
 
 
-def test_dynesty_backend_rejects_pocomc_option():
+def test_pocomc_backend_rejects_flat_native_option():
     with pytest.raises(
         ValueError,
-        match="Unknown Dynesty configuration",
+        match="placed under 'init' or 'run'",
     ):
-        DynestyBackend(
+        PocoMCBackend(
             problem=ScalarProblem(),
             config={
                 "n_effective": 512,
@@ -98,15 +202,15 @@ def test_dynesty_backend_rejects_pocomc_option():
         )
 
 
-def test_pocomc_backend_rejects_dynesty_option():
+def test_pocomc_backend_rejects_mode():
     with pytest.raises(
         ValueError,
-        match="Unknown pocoMC configuration",
+        match="Unexpected top-level option",
     ):
         PocoMCBackend(
             problem=ScalarProblem(),
             config={
-                "nlive": 500,
+                "mode": "dynamic",
             },
         )
 
@@ -135,7 +239,13 @@ def test_registry_constructs_dynesty_backend():
         "dynesty",
         problem=ScalarProblem(),
         config={
-            "nlive": 250,
+            "mode": "dynamic",
+            "init": {
+                "sample": "rwalk",
+            },
+            "run": {
+                "nlive_init": 250,
+            },
         },
     )
 
@@ -147,7 +257,7 @@ def test_registry_constructs_dynesty_backend():
         backend,
         InferenceBackend,
     )
-    assert backend.config["nlive"] == 250
+    assert backend.mode == "dynamic"
 
 
 def test_registry_constructs_pocomc_backend():
@@ -161,8 +271,13 @@ def test_registry_constructs_pocomc_backend():
         "pocomc",
         problem=ScalarProblem(),
         config={
-            "n_effective": 256,
-            "n_active": 128,
+            "init": {
+                "n_effective": 256,
+                "n_active": 128,
+            },
+            "run": {
+                "n_total": 1024,
+            },
         },
     )
 
@@ -190,21 +305,3 @@ def test_builtin_registration_rejects_duplicate_registration():
         register_builtin_backends(
             registry
         )
-
-
-def test_builtin_registration_can_replace_existing_entries():
-    registry = BackendRegistry()
-
-    register_builtin_backends(
-        registry
-    )
-
-    register_builtin_backends(
-        registry,
-        replace=True,
-    )
-
-    assert registry.names == (
-        "dynesty",
-        "pocomc",
-    )

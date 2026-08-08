@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any
 
 import numpy as np
 from scipy.stats import norm, uniform
@@ -33,8 +31,6 @@ class PocoMCFitter:
         Legacy single-image fitted parameters.
     likelihood : ImageLikelihood, optional
         Legacy single-image likelihood.
-    config : mapping, optional
-        pocoMC-specific sampler configuration.
 
     Notes
     -----
@@ -53,7 +49,6 @@ class PocoMCFitter:
         likelihood: ImageLikelihood | None = None,
         *,
         problem: InferenceProblem | None = None,
-        config: Mapping[str, Any] | None = None,
     ) -> None:
         if problem is not None:
             if any(
@@ -83,7 +78,6 @@ class PocoMCFitter:
                 likelihood=likelihood,
             )
 
-        self.config = dict(config or {})
 
     @property
     def ndim(self) -> int:
@@ -106,46 +100,64 @@ class PocoMCFitter:
 
     def run(
         self,
-        nlive: int | None = None,
-        sample: str | None = None,
-        bound: str | None = None,
-        dlogz: float | None = None,
-        bootstrap: int | None = None,
-        print_progress: bool = True,
-        n_processes: int = 1,
-        queue_size: int | None = None,
-        seed: int | None = None,
+        *,
+        init_kwargs=None,
+        run_kwargs=None,
         progress_label: str | None = None,
     ) -> InferenceResult:
-        """Run pocoMC and return a BayMorph posterior result.
+        """Run pocoMC using native constructor and run keyword arguments.
 
-        Dynesty-specific arguments are accepted for compatibility with the
-        current BayMorph pipeline but are not translated into pocoMC control
-        parameters.
+        Parameters
+        ----------
+        init_kwargs : mapping, optional
+            Native keyword arguments forwarded unchanged to
+            :class:`pocomc.Sampler`.
+        run_kwargs : mapping, optional
+            Native keyword arguments forwarded unchanged to
+            ``pocomc.Sampler.run``.
+        progress_label : str, optional
+            Human-readable BayMorph label displayed around the fit.
 
-        pocoMC-specific settings are read from ``config``.
+        Returns
+        -------
+        InferenceResult
+            Canonical backend-neutral BayMorph inference result.
+
+        Notes
+        -----
+        BayMorph owns the prior, likelihood, and problem dimensionality.
+        These constructor arguments therefore cannot be supplied through
+        ``init_kwargs``.
         """
-        del nlive
-        del sample
-        del bound
-        del dlogz
-        del bootstrap
-        del queue_size
+        init_config = dict(
+            {}
+            if init_kwargs is None
+            else init_kwargs
+        )
+        run_config = dict(
+            {}
+            if run_kwargs is None
+            else run_kwargs
+        )
 
-        if n_processes < 1:
+        reserved_init = {
+            "prior",
+            "likelihood",
+            "n_dim",
+        }
+
+        collisions = sorted(
+            reserved_init
+            & set(init_config)
+        )
+
+        if collisions:
+            names = ", ".join(
+                collisions
+            )
             raise ValueError(
-                "n_processes must be at least one."
-            )
-
-        if bool(
-            self.config.get(
-                "vectorize",
-                False,
-            )
-        ):
-            raise NotImplementedError(
-                "Vectorized pocoMC likelihood evaluation is not yet "
-                "supported by BayMorph."
+                "pocoMC constructor argument(s) owned by BayMorph "
+                f"cannot be configured explicitly: {names}."
             )
 
         try:
@@ -165,92 +177,6 @@ class PocoMCFitter:
             parameter_set,
         )
 
-        n_effective = int(
-            self.config.get(
-                "n_effective",
-                512,
-            )
-        )
-        n_active = int(
-            self.config.get(
-                "n_active",
-                256,
-            )
-        )
-
-        if n_effective < 2:
-            raise ValueError(
-                "n_effective must be at least two."
-            )
-
-        if n_active < 1:
-            raise ValueError(
-                "n_active must be at least one."
-            )
-
-        if n_active >= n_effective:
-            raise ValueError(
-                "n_active must be smaller than n_effective."
-            )
-
-        sampler_kwargs: dict[str, Any] = {
-            "prior": prior,
-            "likelihood": self.loglikelihood,
-            "n_dim": self.ndim,
-            "n_effective": n_effective,
-            "n_active": n_active,
-            "flow": self.config.get(
-                "flow",
-                "nsf6",
-            ),
-            "precondition": bool(
-                self.config.get(
-                    "precondition",
-                    True,
-                )
-            ),
-            "dynamic": bool(
-                self.config.get(
-                    "dynamic",
-                    True,
-                )
-            ),
-            "metric": self.config.get(
-                "metric",
-                "ess",
-            ),
-            "sample": self.config.get(
-                "mcmc_sampler",
-                "tpcn",
-            ),
-            "random_state": seed,
-        }
-
-        optional_integer_settings = (
-            "train_frequency",
-            "n_prior",
-            "n_steps",
-            "n_max_steps",
-        )
-
-        for name in optional_integer_settings:
-            value = self.config.get(name)
-
-            if value is not None:
-                sampler_kwargs[name] = int(value)
-
-        train_config = self.config.get(
-            "train_config"
-        )
-
-        if train_config is not None:
-            sampler_kwargs["train_config"] = dict(
-                train_config
-            )
-
-        if n_processes > 1:
-            sampler_kwargs["pool"] = n_processes
-
         if progress_label is not None:
             print()
             print(
@@ -260,33 +186,21 @@ class PocoMCFitter:
                 f"Running pocoMC fit: {progress_label}"
             )
             print(
-                f"ndim={self.ndim}, "
-                f"n_effective={n_effective}, "
-                f"n_active={n_active}, "
-                f"flow={sampler_kwargs['flow']}"
+                f"ndim={self.ndim}"
             )
             print(
                 "────────────────────────────────────────────────────"
             )
 
         sampler = pc.Sampler(
-            **sampler_kwargs
+            prior=prior,
+            likelihood=self.loglikelihood,
+            n_dim=self.ndim,
+            **init_config,
         )
 
         sampler.run(
-            n_total=int(
-                self.config.get(
-                    "n_total",
-                    4096,
-                )
-            ),
-            n_evidence=int(
-                self.config.get(
-                    "n_evidence",
-                    4096,
-                )
-            ),
-            progress=print_progress,
+            **run_config
         )
 
         samples, weights, logl, logp = (
@@ -307,6 +221,10 @@ class PocoMCFitter:
             logl,
             dtype=float,
         )
+        logp = np.asarray(
+            logp,
+            dtype=float,
+        )
 
         normalization = float(
             np.sum(weights)
@@ -324,11 +242,6 @@ class PocoMCFitter:
         weights = (
             weights
             / normalization
-        )
-
-        logp = np.asarray(
-            logp,
-            dtype=float,
         )
 
         logz_value = float(
@@ -400,6 +313,12 @@ class PocoMCFitter:
             log_prior=logp,
         )
 
+        sampler_configuration = {
+            "name": "pocomc",
+            "init": init_config,
+            "run": run_config,
+        }
+
         evidence = EvidenceEstimate(
             logz=logz_value,
             uncertainty=float(
@@ -407,28 +326,9 @@ class PocoMCFitter:
             ),
             method="pocomc",
             uncertainty_kind="importance_sampling_internal",
-            diagnostics={
-                "n_effective": int(
-                    n_effective
-                ),
-                "n_active": int(
-                    n_active
-                ),
-                "n_total": int(
-                    self.config.get(
-                        "n_total",
-                        4096,
-                    )
-                ),
-                "n_evidence": int(
-                    self.config.get(
-                        "n_evidence",
-                        4096,
-                    )
-                ),
-            },
             provenance={
                 "backend": "pocomc",
+                "sampler": sampler_configuration,
             },
         )
 
@@ -438,10 +338,7 @@ class PocoMCFitter:
             diagnostics=diagnostics,
             provenance={
                 "backend": "pocomc",
-                "seed": seed,
-                "n_processes": int(
-                    n_processes
-                ),
+                "sampler": sampler_configuration,
             },
         )
 

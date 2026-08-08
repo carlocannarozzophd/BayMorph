@@ -183,18 +183,19 @@ def test_pocomc_result_preserves_posterior_weights(
 
     fitter = PocoMCFitter(
         problem=_make_problem(),
-        config={
-            "name": "pocomc",
-            "n_effective": 64,
-            "n_active": 32,
-            "n_total": 128,
-            "n_evidence": 64,
-        },
     )
 
     result = fitter.run(
-        print_progress=False,
-        seed=42,
+        init_kwargs={
+            "n_effective": 64,
+            "n_active": 32,
+            "random_state": 42,
+        },
+        run_kwargs={
+            "n_total": 128,
+            "n_evidence": 64,
+            "progress": False,
+        },
     )
     assert result.logz == pytest.approx(
         -2.5
@@ -229,21 +230,3 @@ def test_pocomc_result_preserves_posterior_weights(
     ] == pytest.approx(
         200.0
     )
-
-
-def test_pocomc_rejects_vectorized_likelihood_for_now():
-    fitter = PocoMCFitter(
-        problem=_make_problem(),
-        config={
-            "name": "pocomc",
-            "vectorize": True,
-        },
-    )
-
-    with pytest.raises(
-        NotImplementedError,
-        match="Vectorized",
-    ):
-        fitter.run(
-            print_progress=False,
-        )

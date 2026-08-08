@@ -101,11 +101,18 @@ def test_bulge_disk_recovers_principal_component_parameters() -> None:
     backend = make_sampler(
         {
             "name": "dynesty",
-            "nlive": 20,
-            "sample": "rwalk",
-            "dlogz": 0.5,
-            "print_progress": False,
-            "seed": 12345,
+            "mode": "static",
+            "init": {
+                "nlive": 20,
+                "sample": "rwalk",
+                "rstate": np.random.default_rng(
+                    12345
+                ),
+            },
+            "run": {
+                "dlogz": 0.5,
+                "print_progress": False,
+            },
         },
         problem=problem,
     )

@@ -104,10 +104,17 @@ def test_dynesty_runs_multiband_problem():
     backend = make_sampler(
         {
             "name": "dynesty",
-            "nlive": 20,
-            "dlogz": 5.0,
-            "print_progress": False,
-            "seed": 123,
+            "mode": "static",
+            "init": {
+                "nlive": 20,
+                "rstate": np.random.default_rng(
+                    123
+                ),
+            },
+            "run": {
+                "dlogz": 5.0,
+                "print_progress": False,
+            },
         },
         problem=problem,
     )

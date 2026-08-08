@@ -224,3 +224,70 @@ def test_inference_result_loads_legacy_posterior_archive(
     assert loaded.provenance == {
         "source_format": "posterior_result_v1",
     }
+
+
+def test_inference_result_serializes_runtime_sampler_objects(
+    tmp_path,
+):
+    """Runtime sampler objects should have stable provenance metadata."""
+    result = InferenceResult(
+        posterior=PosteriorSamples(
+            samples=np.asarray(
+                [
+                    [0.0],
+                    [1.0],
+                ]
+            ),
+            weights=np.asarray(
+                [
+                    0.5,
+                    0.5,
+                ]
+            ),
+            parameter_names=[
+                "x",
+            ],
+        ),
+        provenance={
+            "backend": "dynesty",
+            "sampler": {
+                "name": "dynesty",
+                "mode": "static",
+                "init": {
+                    "nlive": 500,
+                    "rstate": np.random.default_rng(
+                        42
+                    ),
+                },
+                "run": {
+                    "dlogz": 0.05,
+                },
+            },
+        },
+    )
+
+    path = result.save(
+        tmp_path / "result.npz"
+    )
+
+    loaded = InferenceResult.load(
+        path
+    )
+
+    assert loaded.provenance[
+        "sampler"
+    ]["init"]["nlive"] == 500
+
+    assert loaded.provenance[
+        "sampler"
+    ]["init"]["rstate"] == {
+        "__runtime_object__": True,
+        "type": "numpy.random.Generator",
+        "bit_generator": "PCG64",
+    }
+
+    assert loaded.provenance[
+        "sampler"
+    ]["run"] == {
+        "dlogz": 0.05,
+    }
