@@ -1,16 +1,24 @@
-"""Factory functions for constructing BayMorph sampling backends."""
+"""Factory functions for constructing BayMorph inference backends."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
 
+from baymorph.fitting.backend import (
+    InferenceBackend,
+    backend_registry,
+)
+from baymorph.fitting.backends import register_builtin_backends
 from baymorph.fitting.dynesty import DynestyFitter
 from baymorph.fitting.native import NativeFitter
 from baymorph.fitting.parameters import ParameterSet
 from baymorph.fitting.pocomc import PocoMCFitter
 from baymorph.fitting.problem import InferenceProblem
 from baymorph.likelihood import ImageLikelihood
+
+
+register_builtin_backends()
 
 
 def make_sampler(
@@ -21,15 +29,17 @@ def make_sampler(
     parameters: ParameterSet | None = None,
     likelihood: ImageLikelihood | None = None,
 ):
-    """Construct a configured sampling backend.
+    """Construct a configured BayMorph inference backend.
 
     Parameters
     ----------
     config : mapping, str, or None
-        Sampler configuration. A string is interpreted as the sampler name.
-        If ``None``, Dynesty is selected.
+        Sampler configuration. A string is interpreted as the backend name.
+        If ``None``, Dynesty is selected temporarily for backward
+        compatibility.
     problem : InferenceProblem, optional
-        Backend-neutral inference problem.
+        Backend-neutral inference problem. When supplied, construction is
+        delegated entirely to the backend registry.
     model_factory : callable, optional
         Legacy single-image model factory.
     parameters : ParameterSet, optional
@@ -39,8 +49,16 @@ def make_sampler(
 
     Returns
     -------
-    DynestyFitter, PocoMCFitter, or NativeFitter
-        Configured sampling backend.
+    InferenceBackend, DynestyFitter, PocoMCFitter, or NativeFitter
+        Configured inference implementation.
+
+    Notes
+    -----
+    The ``InferenceProblem`` path is the canonical BayMorph architecture.
+
+    Legacy construction from ``model_factory``, ``parameters``, and
+    ``likelihood`` is retained temporarily for backward compatibility and
+    remains explicitly coupled to the historical fitter classes.
     """
     sampler_config = _normalize_config(
         config
@@ -75,23 +93,36 @@ def make_sampler(
                 "problem must be an InferenceProblem instance."
             )
 
-        if sampler_name == "dynesty":
-            return DynestyFitter(
-                problem=problem
-            )
-
-        if sampler_name == "pocomc":
-            return PocoMCFitter(
-                problem=problem,
-                config=sampler_config,
-            )
-
         if sampler_name == "native":
             raise ValueError(
                 "The archived native backend does not support "
                 "InferenceProblem construction."
             )
 
+        return backend_registry.create(
+            sampler_name,
+            problem=problem,
+            config=sampler_config,
+        )
+
+    return _make_legacy_sampler(
+        sampler_name=sampler_name,
+        sampler_config=sampler_config,
+        model_factory=model_factory,
+        parameters=parameters,
+        likelihood=likelihood,
+    )
+
+
+def _make_legacy_sampler(
+    *,
+    sampler_name: str,
+    sampler_config: Mapping[str, Any],
+    model_factory,
+    parameters: ParameterSet | None,
+    likelihood: ImageLikelihood | None,
+):
+    """Construct a backend through the legacy single-image interface."""
     if sampler_name == "dynesty":
         return DynestyFitter(
             model_factory=model_factory,
@@ -117,7 +148,8 @@ def make_sampler(
 
     raise ValueError(
         f"Unknown sampler {sampler_name!r}. "
-        "Available samplers are 'dynesty', 'pocomc', and 'native'."
+        "Available legacy samplers are "
+        "'dynesty', 'pocomc', and 'native'."
     )
 
 
@@ -150,3 +182,9 @@ def _normalize_config(
     return dict(
         config
     )
+
+
+__all__ = [
+    "InferenceBackend",
+    "make_sampler",
+]

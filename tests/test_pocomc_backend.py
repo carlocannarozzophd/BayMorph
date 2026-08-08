@@ -14,6 +14,7 @@ from baymorph.fitting import (
     PocoMCFitter,
     PocoMCResult,
 )
+from baymorph.fitting.backends import PocoMCBackend
 from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.fitting.sampler_factory import make_sampler
 from baymorph.likelihood import GaussianImageLikelihood
@@ -82,7 +83,7 @@ def test_factory_constructs_pocomc_backend():
 
     assert isinstance(
         sampler,
-        PocoMCFitter,
+        PocoMCBackend,
     )
     assert sampler.problem is problem
 

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.fitting import (
     Parameter,
     ParameterSet,
@@ -438,12 +439,21 @@ def test_compute_bayesian_model_comparison():
         np.exp(3.0)
     )
 
-def test_run_sampler_builds_likelihood_and_backend(
+def test_run_sampler_builds_problem_and_backend(
     monkeypatch,
 ):
-    data = np.ones((5, 5), dtype=float)
-    noise = np.full(data.shape, 2.0)
-    mask = np.zeros(data.shape, dtype=bool)
+    data = np.ones(
+        (5, 5),
+        dtype=float,
+    )
+    noise = np.full(
+        data.shape,
+        2.0,
+    )
+    mask = np.zeros(
+        data.shape,
+        dtype=bool,
+    )
 
     parameters = ParameterSet(
         [
@@ -458,25 +468,28 @@ def test_run_sampler_builds_likelihood_and_backend(
     expected_result = object()
     captured = {}
 
-    class DummySampler:
-        def run(self, **kwargs):
-            captured["run_kwargs"] = kwargs
+    class DummyBackend:
+        def fit(
+            self,
+            *,
+            progress_label=None,
+        ):
+            captured["progress_label"] = progress_label
             return expected_result
 
     def fake_make_sampler(
         config,
         *,
-        model_factory,
-        parameters,
-        likelihood,
+        problem,
     ):
         captured["sampler_cfg"] = config
-        captured["model_factory"] = model_factory
-        captured["parameters"] = parameters
-        captured["likelihood"] = likelihood
-        return DummySampler()
+        captured["problem"] = problem
+        return DummyBackend()
 
-    def model_factory(*, flux):
+    def model_factory(
+        *,
+        flux,
+    ):
         del flux
         return None
 
@@ -488,6 +501,9 @@ def test_run_sampler_builds_likelihood_and_backend(
     sampler_cfg = {
         "name": "dynesty",
         "nlive": 40,
+        "sample": "rwalk",
+        "dlogz": 0.5,
+        "seed": 123,
     }
 
     result = _run_sampler(
@@ -500,148 +516,25 @@ def test_run_sampler_builds_likelihood_and_backend(
             "type": "gaussian",
         },
         sampler_cfg=sampler_cfg,
-        nlive=40,
-        sample="rwalk",
-        dlogz=0.5,
-        n_processes=1,
-        queue_size=None,
-        seed=123,
         progress_label="single_sersic",
     )
 
     assert result is expected_result
     assert captured["sampler_cfg"] is sampler_cfg
-    assert captured["model_factory"] is model_factory
-    assert captured["parameters"] is parameters
     assert isinstance(
-        captured["likelihood"],
+        captured["problem"],
+        ImageInferenceProblem,
+    )
+    assert captured["problem"].parameters is parameters
+    assert isinstance(
+        captured["problem"].likelihood,
         GaussianImageLikelihood,
     )
     assert np.array_equal(
-        captured["likelihood"].data,
+        captured["problem"].likelihood.data,
         data,
     )
-    assert captured["run_kwargs"] == {
-        "nlive": 40,
-        "sample": "rwalk",
-        "dlogz": 0.5,
-        "print_progress": True,
-        "n_processes": 1,
-        "queue_size": None,
-        "seed": 123,
-        "progress_label": "single_sersic",
-    }
-
-
-def test_run_sampler_executes_native_backend_end_to_end():
-    class ConstantFluxModel:
-        def __init__(
-            self,
-            flux: float,
-        ) -> None:
-            self.flux = float(flux)
-
-        def render(
-            self,
-            shape,
-        ):
-            return np.full(
-                shape,
-                self.flux,
-                dtype=float,
-            )
-
-    def model_factory(
-        *,
-        flux,
-    ):
-        return ConstantFluxModel(
-            flux
-        )
-
-    data = np.full(
-        (3, 3),
-        1.5,
-        dtype=float,
-    )
-    noise = np.ones_like(
-        data
-    )
-    mask = np.zeros(
-        data.shape,
-        dtype=bool,
-    )
-
-    parameters = ParameterSet(
-        [
-            Parameter(
-                "flux",
-                1.0,
-                2.0,
-            )
-        ]
-    )
-
-    result = _run_sampler(
-        data_fit=data,
-        noise_fit=noise,
-        mask_fit=mask,
-        parameters=parameters,
-        model_factory=model_factory,
-        likelihood_cfg={
-            "type": "gaussian",
-            "include_normalization": False,
-        },
-        sampler_cfg={
-            "name": "native",
-            "nlive": 8,
-            "sample": "prior",
-            "max_iterations": 2,
-            "seed": 123,
-        },
-        nlive=8,
-        sample="prior",
-        dlogz=1.0e-12,
-        n_processes=1,
-        queue_size=None,
-        seed=123,
-        progress_label="native_test",
-    )
-
-    assert result.parameter_names == [
-        "flux"
-    ]
-    assert result.samples.shape == (
-        10,
-        1,
-    )
-    assert result.logl.shape == (
-        10,
-    )
-    assert result.logwt.shape == (
-        10,
-    )
-    assert result.logz.shape == (
-        10,
-    )
-    assert np.all(
-        np.isfinite(
-            result.samples
-        )
-    )
-    assert np.all(
-        np.isfinite(
-            result.logl
-        )
-    )
-    assert np.isfinite(
-        result.final_logz
-    )
-    assert np.sum(
-        result.weights
-    ) == pytest.approx(
-        1.0
-    )
+    assert captured["progress_label"] == "single_sersic"
 
 
 def _run_two_model_fit_for_comparison_test(

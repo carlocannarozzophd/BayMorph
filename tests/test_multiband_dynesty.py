@@ -101,17 +101,18 @@ def test_dynesty_runs_multiband_problem():
         likelihood=likelihood,
     )
 
-    sampler = make_sampler(
-        "dynesty",
+    backend = make_sampler(
+        {
+            "name": "dynesty",
+            "nlive": 20,
+            "dlogz": 5.0,
+            "print_progress": False,
+            "seed": 123,
+        },
         problem=problem,
     )
 
-    result = sampler.run(
-        nlive=20,
-        dlogz=5.0,
-        print_progress=False,
-        seed=123,
-    )
+    result = backend.fit()
 
     assert result.samples.ndim == 2
     assert result.samples.shape[1] == 3

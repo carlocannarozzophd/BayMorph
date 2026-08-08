@@ -131,18 +131,19 @@ def test_multiband_posterior_recovers_shared_radius_and_local_fluxes():
         likelihood=likelihood,
     )
 
-    sampler = make_sampler(
-        "dynesty",
+    backend = make_sampler(
+        {
+            "name": "dynesty",
+            "nlive": 20,
+            "sample": "rwalk",
+            "dlogz": 0.5,
+            "print_progress": False,
+            "seed": 12345,
+        },
         problem=problem,
     )
 
-    result = sampler.run(
-        nlive=20,
-        sample="rwalk",
-        dlogz=0.5,
-        print_progress=False,
-        seed=12345,
-    )
+    result = backend.fit()
 
     assert result.parameter_names == [
         "re",

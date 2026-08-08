@@ -163,18 +163,12 @@ def _execute_single_model_fit(
         mask_fit=image_products.fitting_mask,
     )
 
-    sampler = make_sampler(
+    backend = make_sampler(
         sampler_cfg,
         problem=problem,
     )
 
-    result = sampler.run(
-        nlive=sampler_cfg["nlive"],
-        sample=sampler_cfg.get("sample", "auto"),
-        dlogz=sampler_cfg.get("dlogz"),
-        n_processes=sampler_cfg.get("n_processes", 1),
-        queue_size=sampler_cfg.get("queue_size"),
-        seed=sampler_cfg.get("seed"),
+    result = backend.fit(
         progress_label=model_name,
     )
 
@@ -803,37 +797,24 @@ def _run_sampler(
     likelihood_cfg,
     sampler_cfg,
     *,
-    nlive: int = 300,
-    sample: str = "auto",
-    dlogz: float | None = None,
-    n_processes: int = 1,
-    queue_size: int | None = None,
-    seed: int | None = None,
     progress_label: str | None = None,
 ):
-    """Build the configured likelihood and run one sampling backend."""
-    likelihood = make_likelihood(
-        likelihood_cfg,
-        data=data_fit,
-        noise=noise_fit,
-        mask=mask_fit,
-    )
-
-    sampler = make_sampler(
-        sampler_cfg,
+    """Build an inference problem and run one configured backend."""
+    problem = _build_image_inference_problem(
         model_factory=model_factory,
         parameters=parameters,
-        likelihood=likelihood,
+        likelihood_cfg=likelihood_cfg,
+        data_fit=data_fit,
+        noise_fit=noise_fit,
+        mask_fit=mask_fit,
     )
 
-    return sampler.run(
-        nlive=nlive,
-        sample=sample,
-        dlogz=dlogz,
-        print_progress=True,
-        n_processes=n_processes,
-        queue_size=queue_size,
-        seed=seed,
+    backend = make_sampler(
+        sampler_cfg,
+        problem=problem,
+    )
+
+    return backend.fit(
         progress_label=progress_label,
     )
 

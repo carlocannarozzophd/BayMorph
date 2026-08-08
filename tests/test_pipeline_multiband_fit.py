@@ -15,21 +15,21 @@ from baymorph.fitting.parameters import Parameter
 from baymorph.pipeline import multiband_fit
 
 
-class DummySampler:
-    """Minimal sampler recording the received inference problem."""
+class DummyBackend:
+    """Minimal backend recording the received fit request."""
 
     def __init__(
         self,
         result,
     ):
         self.result = result
-        self.run_kwargs = None
+        self.fit_kwargs = None
 
-    def run(
+    def fit(
         self,
         **kwargs,
     ):
-        self.run_kwargs = kwargs
+        self.fit_kwargs = kwargs
         return self.result
 
 
@@ -170,7 +170,7 @@ def test_run_multiband_fit_builds_problem_and_returns_result(
     monkeypatch,
 ):
     expected_result = object()
-    sampler = DummySampler(
+    backend = DummyBackend(
         expected_result
     )
 
@@ -217,7 +217,7 @@ def test_run_multiband_fit_builds_problem_and_returns_result(
     ):
         captured["config"] = config
         captured["problem"] = problem
-        return sampler
+        return backend
 
     monkeypatch.setattr(
         multiband_fit,
@@ -246,15 +246,9 @@ def test_run_multiband_fit_builds_problem_and_returns_result(
         "r",
     )
 
-    assert sampler.run_kwargs[
-        "nlive"
-    ] == 50
-    assert sampler.run_kwargs[
-        "seed"
-    ] == 4
-    assert sampler.run_kwargs[
-        "progress_label"
-    ] == "multi_band_single_sersic"
+    assert backend.fit_kwargs == {
+        "progress_label": "multi_band_single_sersic",
+    }
 
 
 def test_run_multiband_fit_rejects_different_shapes(

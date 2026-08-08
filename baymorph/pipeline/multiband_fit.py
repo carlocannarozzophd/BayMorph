@@ -148,30 +148,12 @@ def run_multiband_fit_from_config(
         likelihood=likelihood,
     )
 
-    sampler = make_sampler(
+    backend = make_sampler(
         sampler_config,
         problem=problem,
     )
 
-    return sampler.run(
-        nlive=sampler_config["nlive"],
-        sample=sampler_config.get(
-            "sample",
-            "auto",
-        ),
-        dlogz=sampler_config.get(
-            "dlogz"
-        ),
-        n_processes=sampler_config.get(
-            "n_processes",
-            1,
-        ),
-        queue_size=sampler_config.get(
-            "queue_size"
-        ),
-        seed=sampler_config.get(
-            "seed"
-        ),
+    return backend.fit(
         progress_label="multi_band_single_sersic",
     )
 
