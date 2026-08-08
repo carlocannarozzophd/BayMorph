@@ -2,279 +2,329 @@
 
 ## Purpose
 
-This document defines the public software interfaces of BayMorph.
+This document defines the stable user-facing software interfaces of BayMorph.
 
-Its purpose is not to document every Python object.
-
-Instead, it defines:
+It does not attempt to document every Python object. Its purpose is to define:
 
 - which interfaces are intended for public use;
-- which interfaces are considered internal;
-- the stability guarantees associated with each interface;
-- the principles governing API evolution.
+- which interfaces are implementation details;
+- how scientific semantics are separated from inference backends;
+- which result objects form the canonical inference contract;
+- the stability expectations associated with the public API.
 
-Detailed API reference documentation is generated separately.
+Detailed implementation reference documentation may be generated separately.
 
----
+## API philosophy
 
-# API Philosophy
+BayMorph exposes scientific concepts rather than backend-specific machinery.
 
-The BayMorph API follows the same principles as the scientific architecture.
+The public API is designed around:
 
-## Scientific interfaces first
+- astronomical observations;
+- morphology models;
+- point-spread functions;
+- complete scientific workflows;
+- backend-neutral Bayesian inference results.
 
-Public interfaces represent scientific concepts rather than implementation
-details.
+Scientific meaning has priority over implementation convenience.
 
-Users should interact with concepts such as observations, morphology models,
-inference problems, and posterior results rather than internal implementation
-classes.
+Changing the inference backend must not require users to rewrite the scientific
+interpretation of their analysis.
 
----
+## Recommended user workflow
 
-## Backend neutrality
-
-Public interfaces must remain independent of the inference backend.
-
-Changing the backend must not require users to rewrite scientific workflows.
-
-Backend-specific objects are implementation details.
-
----
-
-## Stable scientific semantics
-
-Scientific meaning has higher priority than implementation stability.
-
-Implementations may evolve.
-
-Scientific interpretation should not.
-
-A parameter should retain the same scientific meaning even if its internal
-implementation changes.
-
----
-
-## Minimal public surface
-
-Only interfaces with long-term scientific meaning should become part of the
-public API.
-
-Internal implementation details should remain private.
-
-A small stable API is preferable to a large unstable one.
-
----
-
-# Design Principles
-
-The public API follows these principles.
-
-- Explicit over implicit.
-- Composition over duplication.
-- Scientific correctness before convenience.
-- Stable semantics before stable implementation.
-- Backend-neutral scientific workflows.
-- Clear separation between public and internal interfaces.
-
----
-
-# Public API
-
-The following categories constitute the supported public API.
-
-## User workflows
-
-High-level user interaction is performed through
+The recommended high-level entry point is:
 
 - `BayMorphRunner`
 
-This represents the recommended entry point for complete scientific analyses.
+`BayMorphRunner` coordinates complete BayMorph analyses while preserving the
+separation between preparation, scientific model construction, inference, and
+reporting.
 
----
+Users should normally interact with BayMorph through stable high-level
+interfaces rather than internal pipeline or fitting classes.
 
 ## Scientific data
 
-Public scientific data structures include
+The public scientific data interfaces are:
 
 - `Observation`
 - `ObservationMetadata`
 - `ImageData`
 
-These objects describe astronomical observations rather than implementation
-details.
-
----
+These objects represent astronomical data and metadata independently of the
+inference backend.
 
 ## Morphology models
 
-Current public morphology models include
+The current public morphology interfaces are:
 
 - `SersicModel`
 - `DoubleSersicModel`
 - `CompositeModel`
+- `ConvolvedModel`
 
-Future morphology families should integrate into the same public model
-architecture.
-
----
+These objects describe scientific morphology and rendering structure rather
+than sampler implementation details.
 
 ## Point-spread functions
 
-Current public PSF interfaces include
+The current public PSF interfaces are:
 
 - `GaussianPSF`
 - `EmpiricalPSF`
 
-Additional PSF implementations should preserve the same conceptual interface.
+PSF objects belong to the observation and rendering model and remain
+independent of the selected inference backend.
 
----
+## Simulation interfaces
 
-## Scientific results
+The current public simulation interfaces are:
 
-Current public result objects include
+- `SyntheticObservation`
+- `SyntheticSersic`
 
-- `PosteriorResult`
+These provide controlled synthetic data products for examples, validation, and
+scientific testing.
 
-Future result containers should extend rather than replace this abstraction
-whenever possible.
+## Canonical inference results
 
----
+Production inference backends return a backend-neutral result hierarchy.
 
-# Stable Scientific Interfaces
+The public interfaces are:
 
-The public API is organized around stable scientific interfaces.
+- `InferenceResult`
+- `PosteriorSamples`
+- `EvidenceEstimate`
+- `RealFitProducts`
 
-Conceptually, BayMorph follows the sequence
+### InferenceResult
 
-    Observation
-          |
-          v
-    Representation
-          |
-          v
-    Observation Operator
-          |
-          v
-    Likelihood
-          |
-          v
-    Inference Problem
-          |
-          v
-    Posterior Result
+`InferenceResult` is the canonical BayMorph inference result.
 
-These interfaces define scientific responsibilities.
+It separates:
 
-Concrete implementations may evolve while preserving this conceptual contract.
+- posterior samples and normalized weights;
+- parameter names;
+- optional sample log-likelihoods and log-priors;
+- Bayesian evidence when available;
+- backend diagnostics;
+- inference provenance.
 
----
+Sampler-specific implementation state is intentionally excluded from the
+scientific result contract.
 
-# Extension Points
+For example, a backend is not required to expose nested-sampling-specific
+quantities merely because another backend produces them.
 
-BayMorph is designed to be extended through composition.
+### PosteriorSamples
 
-Typical extension points include
+`PosteriorSamples` contains the backend-neutral weighted posterior
+representation.
+
+Its responsibilities include:
+
+- preserving sample ordering;
+- preserving parameter names;
+- normalized posterior weights;
+- posterior summary statistics;
+- maximum-likelihood and posterior-median parameter access;
+- effective sample-size information.
+
+### EvidenceEstimate
+
+`EvidenceEstimate` represents a Bayesian evidence estimate when the selected
+backend provides one.
+
+It preserves:
+
+- the logarithmic evidence;
+- an optional uncertainty estimate;
+- the evidence-estimation method;
+- uncertainty semantics;
+- diagnostics;
+- provenance.
+
+Evidence uncertainty is not assumed to have identical statistical meaning
+across inference algorithms.
+
+### RealFitProducts
+
+`RealFitProducts` groups the scientific outputs of a morphology fit, including:
+
+- the canonical `InferenceResult`;
+- best-fitting parameters;
+- model image;
+- residual products;
+- goodness-of-fit statistics;
+- diagnostic data.
+
+## Inference backend neutrality
+
+Inference backends are implementation mechanisms rather than public scientific
+result types.
+
+BayMorph currently supports:
+
+- pocoMC as the default production backend;
+- Dynesty static nested sampling;
+- Dynesty dynamic nested sampling.
+
+Backend-specific fitter and adapter classes are not part of the stable
+top-level API.
+
+Sampler selection and numerical configuration are performed through the
+pipeline configuration rather than through backend-specific public workflows.
+
+## Sampler configuration
+
+The public sampler configuration contract is intentionally minimal.
+
+pocoMC uses:
+
+    sampler:
+      name: pocomc
+      init:
+        # Native pocomc.Sampler keyword arguments.
+      run:
+        # Native pocomc.Sampler.run keyword arguments.
+
+Dynesty static nested sampling uses:
+
+    sampler:
+      name: dynesty
+      mode: static
+      init:
+        # Native dynesty.NestedSampler keyword arguments.
+      run:
+        # Native dynesty.NestedSampler.run_nested keyword arguments.
+
+Dynesty dynamic nested sampling uses:
+
+    sampler:
+      name: dynesty
+      mode: dynamic
+      init:
+        # Native dynesty.DynamicNestedSampler keyword arguments.
+      run:
+        # Native dynesty.DynamicNestedSampler.run_nested keyword arguments.
+
+BayMorph deliberately does not duplicate the complete upstream sampler API.
+
+Arguments under `init` and `run` retain their native upstream names and
+semantics. Sampler-specific numerical options should therefore be taken from
+the documentation corresponding to the installed pocoMC or Dynesty version.
+
+## Public top-level namespace
+
+The stable top-level public namespace currently contains:
+
+- `BayMorphRunner`
+- `Observation`
+- `ObservationMetadata`
+- `ImageData`
+- `SersicModel`
+- `DoubleSersicModel`
+- `CompositeModel`
+- `ConvolvedModel`
+- `GaussianPSF`
+- `EmpiricalPSF`
+- `SyntheticObservation`
+- `SyntheticSersic`
+- `PosteriorSamples`
+- `EvidenceEstimate`
+- `InferenceResult`
+- `RealFitProducts`
+
+These names are available directly from `baymorph`.
+
+## Legacy result compatibility
+
+`PosteriorResult` is the historical BayMorph result representation.
+
+It is retained within `baymorph.results` for compatibility with legacy result
+archives and internal migration paths.
+
+It is not part of the stable top-level public API.
+
+New user code and documentation should use `InferenceResult`,
+`PosteriorSamples`, and `EvidenceEstimate`.
+
+Legacy persisted results may be migrated into the canonical
+`InferenceResult` representation when loaded.
+
+## Internal APIs
+
+Implementation modules such as the following are not stable public interfaces:
+
+- `baymorph.fitting`
+- `baymorph.pipeline`
+- `baymorph.rendering`
+- `baymorph.validation`
+
+This includes backend adapters and backend-specific fitter classes such as
+Dynesty and pocoMC implementation objects.
+
+These modules may evolve as the architecture develops.
+
+Users writing scientific analyses should prefer the stable top-level API and
+configuration-driven workflows.
+
+## Extension points
+
+BayMorph supports extension through composition.
+
+Relevant extension points include:
 
 - morphology models;
 - observation operators;
 - likelihoods;
-- rendering algorithms;
+- prior models;
 - inference backends;
-- posterior diagnostics;
+- diagnostics;
 - validation experiments.
 
-Extensions should reuse existing abstractions whenever possible.
+New abstractions should be introduced only when multiple concrete scientific
+use cases justify them.
 
-New abstractions should be introduced only when multiple scientific use cases
-justify them.
+Extensions must preserve the separation between:
 
----
+- scientific model;
+- numerical backend;
+- backend-neutral scientific result.
 
-# Internal APIs
+## API stability policy
 
-Many modules are intentionally **not** part of the public API.
-
-Examples include internal implementation details within
-
-- `baymorph.fitting`
-- `baymorph.rendering`
-- `baymorph.pipeline`
-- `baymorph.validation`
-
-These modules may evolve without preserving backward compatibility.
-
-Users should avoid depending directly on internal implementation details unless
-they are actively developing BayMorph itself.
-
----
-
-# API Stability Policy
-
-BayMorph distinguishes four stability levels.
+BayMorph distinguishes four interface states.
 
 | Status | Meaning |
-| ------- | ------- |
+| --- | --- |
 | **Stable** | Backward compatibility is expected across minor releases. |
-| **Experimental** | Interface may evolve as the scientific architecture matures. |
-| **Internal** | No compatibility guarantees are provided. |
-| **Deprecated** | Interface is scheduled for removal after an appropriate transition period. |
+| **Experimental** | The interface may evolve as the scientific architecture matures. |
+| **Internal** | No backward-compatibility guarantee is provided. |
+| **Deprecated** | The interface is retained temporarily during migration. |
 
-Unless explicitly documented otherwise, newly introduced scientific interfaces
-should initially be considered **Experimental**.
+Scientific correctness takes precedence over preserving an incorrect or
+misleading interface.
 
----
+## Compatibility policy
 
-# Compatibility Policy
-
-Backward compatibility is maintained for stable public interfaces whenever
+Backward compatibility should be preserved for stable public interfaces when
 scientifically reasonable.
 
 Compatibility must not preserve scientifically incorrect behaviour.
 
-If scientific correctness requires changing an interface, the transition should
-be explicit and documented.
+When a scientific or architectural correction requires an API change, the
+transition should be:
 
-Internal APIs may change at any time.
+1. explicit;
+2. documented;
+3. tested;
+4. accompanied by a migration path where practical.
 
----
+## Relationship to the architecture
 
-# Deprecation Policy
-
-Public interfaces are not removed abruptly.
-
-The preferred sequence is
-
-1. introduce the replacement;
-2. mark the previous interface as deprecated;
-3. document the migration path;
-4. remove the deprecated interface in a future release.
-
-Deprecated interfaces should remain functional during the transition period
-whenever practical.
-
----
-
-# Versioning
-
-Software releases describe implementation evolution.
-
-Architectural evolution is described by
-
-- the constitutional architecture;
-- specialized architecture documents;
-- Architecture Decision Records.
-
-These documents define the long-term scientific contract independently of
-release numbering.
-
----
-
-# Relationship to the Architecture
-
-The public API is an implementation of the BayMorph scientific architecture.
-
-Its design follows
+The public API implements the scientific contracts defined in:
 
 - `docs/architecture/CORE_ARCHITECTURE.md`
 - `docs/architecture/OBSERVATION_MODEL.md`
@@ -283,22 +333,7 @@ Its design follows
 - `docs/architecture/PIPELINE.md`
 - `docs/architecture/VALIDATION.md`
 
-Architecture defines scientific responsibilities.
+The architecture defines responsibilities.
 
-The API exposes those responsibilities to users.
-
----
-
-# Future Evolution
-
-Future public interfaces will continue to be guided by
-
-- the probabilistic formulation;
-- the observation-centred architecture;
-- backend neutrality;
-- validated numerical methods;
-- reproducible scientific workflows.
-
-The public API should evolve conservatively.
-
-Scientific meaning should remain stable even as implementation details improve.
+The public API exposes the subset of those responsibilities that should remain
+stable for scientific users.

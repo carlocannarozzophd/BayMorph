@@ -5,9 +5,10 @@
 </p>
 
 BayMorph is an open-source scientific Python framework for Bayesian
-astronomical morphology, statistical inference, and scientific image analysis.
+astronomical morphology, statistical inference, simulation, and astronomical
+image analysis.
 
-It is designed around a simple principle:
+Its central scientific principle is:
 
 > **Galaxy morphology is fundamentally an inference problem, not merely an
 > optimization problem.**
@@ -15,8 +16,6 @@ It is designed around a simple principle:
 BayMorph connects physically interpretable morphology models, explicit
 observation operators, backend-neutral Bayesian inference, validated numerical
 rendering, and reproducible scientific workflows.
-
----
 
 ## Scientific philosophy
 
@@ -35,10 +34,6 @@ BayMorph is developed simultaneously as:
 - a scientific Python package;
 - a validation framework;
 - a scientific manuscript.
-
-These components evolve together.
-
----
 
 ## Scientific architecture
 
@@ -59,10 +54,13 @@ BayMorph is observation-centred.
     Likelihood
           |
           v
-    Posterior inference
+    Inference problem
           |
           v
-    Scientific result
+    Numerical backend
+          |
+          v
+    InferenceResult
 
 Single-observation inference is the one-observation specialization of the same
 architecture used for multiple observations of the same physical object.
@@ -71,7 +69,35 @@ Inference backends evaluate the probabilistic problem but do not define it.
 
 [Explore the architecture](architecture/ARCHITECTURE.md)
 
----
+## Production inference
+
+BayMorph currently provides two production inference backends:
+
+- **pocoMC**, the default backend;
+- **Dynesty**, with both static and dynamic nested sampling.
+
+Sampler-specific numerical arguments retain the names and semantics defined by
+the upstream libraries.
+
+BayMorph does not maintain a duplicate sampler API.
+
+[Read the inference architecture](architecture/INFERENCE.md)
+
+## Canonical scientific results
+
+Production inference returns the backend-neutral `InferenceResult`.
+
+The result contract separates:
+
+- weighted posterior samples;
+- Bayesian evidence, when available;
+- diagnostics;
+- inference provenance.
+
+Backend-specific internal sampler state is not part of the scientific result
+contract.
+
+[Read the public API](API.md)
 
 ## Documentation map
 
@@ -99,8 +125,8 @@ Inference backends evaluate the probabilistic problem but do not define it.
 
     ---
 
-    Inferential states, priors, likelihoods, posterior products, evidence, and
-    backend neutrality.
+    Inferential states, priors, likelihoods, backend configuration, posterior
+    products, evidence, and backend neutrality.
 
     [Read the inference architecture](architecture/INFERENCE.md)
 
@@ -134,8 +160,8 @@ Inference backends evaluate the probabilistic problem but do not define it.
 
     ---
 
-    Public interfaces, extension points, stability levels, compatibility, and
-    deprecation policy.
+    Stable public interfaces, canonical result objects, compatibility, and
+    extension policy.
 
     [Read the API policy](API.md)
 
@@ -149,22 +175,6 @@ Inference backends evaluate the probabilistic problem but do not define it.
 
 </div>
 
----
-
-## Current development
-
-Current development focuses on:
-
-1. completing the production multi-observation workflow;
-2. migrating `real_fit.py` to the observation-centred inference architecture;
-3. consolidating scientific documentation;
-4. validating joint inference on representative astronomical observations.
-
-The native nested sampler is archived and is not an active development
-priority.
-
----
-
 ## Scientific scope
 
 BayMorph currently focuses on:
@@ -173,18 +183,38 @@ BayMorph currently focuses on:
 - astronomical imaging;
 - Bayesian statistical inference;
 - physically motivated forward modelling;
-- correlated multi-observation inference;
-- reproducible scientific workflows.
+- correlated observations of the same astronomical object;
+- reproducible scientific workflows;
+- scientific validation.
 
-The current scope excludes stellar-population modelling, SED fitting, dust
-modelling, and radiative transfer.
+The current scope excludes:
 
----
+- stellar-population modelling;
+- spectral-energy-distribution fitting;
+- dust modelling;
+- radiative transfer.
+
+## Current priorities
+
+Current development follows this order:
+
+1. probabilistic formulation;
+2. BayMorph manuscript;
+3. architecture;
+4. implementation;
+5. validation.
+
+The native BayMorph nested sampler is archived and is not an active development
+priority.
+
+This archived sampler is distinct from the supported Dynesty production
+backend.
 
 ## Project links
 
 - [Repository](https://github.com/carlocannarozzophd/BayMorph)
 - [Architecture](architecture/ARCHITECTURE.md)
+- [Inference](architecture/INFERENCE.md)
 - [Public API](API.md)
-- [Contributing](https://github.com/carlocannarozzophd/BayMorph/blob/feature/baymorph-v0.4/CONTRIBUTING.md)
-- [Roadmap](https://github.com/carlocannarozzophd/BayMorph/blob/feature/baymorph-v0.4/ROADMAP.md)
+- [Roadmap](https://github.com/carlocannarozzophd/BayMorph/blob/main/ROADMAP.md)
+- [Contributing](https://github.com/carlocannarozzophd/BayMorph/blob/main/CONTRIBUTING.md)

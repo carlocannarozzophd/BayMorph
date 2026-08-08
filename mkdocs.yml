@@ -60,25 +60,32 @@ theme:
     repo: fontawesome/brands/github
 
 nav:
-  - Home: index.md
 
-  - Architecture:
-      - Overview: architecture/ARCHITECTURE.md
-      - Core Architecture: architecture/CORE_ARCHITECTURE.md
-      - Observation Model: architecture/OBSERVATION_MODEL.md
-      - Inference: architecture/INFERENCE.md
-      - Rendering: architecture/RENDERING.md
-      - Pipeline: architecture/PIPELINE.md
-      - Validation: architecture/VALIDATION.md
-      - Architecture Decisions:
-          - Policy: architecture/decisions/README.md
+- Home: index.md
 
-  - Public API: API.md
+- Architecture:
 
-  - Research:
-      - Paper Blueprint: research/PAPER_BLUEPRINT.md
-      - Multi-band Formulation: research/MULTIBAND_FORMULATION.md
-      - Adaptive Rendering: research/ADAPTIVE_RENDERING.md
+  - Overview: architecture/ARCHITECTURE.md
+  - Core Architecture: architecture/CORE_ARCHITECTURE.md
+  - Observation Model: architecture/OBSERVATION_MODEL.md
+  - Inference: architecture/INFERENCE.md
+  - Rendering: architecture/RENDERING.md
+  - Morphological Components: architecture/MORPHOLOGICAL_COMPONENTS.md
+  - Pipeline: architecture/PIPELINE.md
+  - Production Workflow: architecture/PRODUCTION_WORKFLOW.md
+  - Validation: architecture/VALIDATION.md
+  - Architecture Decisions:
+    - Policy: architecture/decisions/README.md
+
+- Public API: API.md
+
+- Research:
+
+  - Paper Blueprint: research/PAPER_BLUEPRINT.md
+  - Multi-band Formulation: research/MULTIBAND_FORMULATION.md
+  - Adaptive Rendering: research/ADAPTIVE_RENDERING.md
+  - PSF Characterization: research/PSF_CHARACTERIZATION.md
+  - pocoMC-Dynesty Initial Validation: research/pocomc_dynesty_initial_validation.md
 
 plugins:
   - search

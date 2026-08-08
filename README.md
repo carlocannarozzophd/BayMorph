@@ -5,7 +5,6 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/carlocannarozzophd/BayMorph/releases"><img alt="Version" src="https://img.shields.io/badge/version-v0.4-blue"></a>
   <img alt="Python" src="https://img.shields.io/badge/python-%E2%89%A53.11-green">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey"></a>
   <a href="https://github.com/carlocannarozzophd/BayMorph/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/carlocannarozzophd/BayMorph/actions/workflows/ci.yml/badge.svg"></a>
@@ -33,8 +32,7 @@
 >
 > Need a relaxing afternoon by the bay?
 >
-> Sorry.
-> We only borrowed the name.
+> Sorry. We only borrowed the name.
 
 ---
 
@@ -43,34 +41,18 @@
 > BayMorph is under active scientific development.
 >
 > The current implementation provides physically consistent forward modelling,
-> backend-neutral Bayesian inference, evidence-based model comparison,
-> reproducible observation preparation, posterior diagnostics, and a scientific
-> validation framework.
+> backend-neutral Bayesian inference, reproducible observation preparation,
+> evidence-aware model comparison, posterior diagnostics, and scientific
+> validation infrastructure.
 
-## Contents
-
-- [What is BayMorph?](#what-is-baymorph)
-- [Why BayMorph?](#why-baymorph)
-- [Scientific Philosophy](#scientific-philosophy)
-- [Scientific Scope](#scientific-scope)
-- [Current Capabilities](#current-capabilities)
-- [Architecture](#architecture)
-- [Documentation](#documentation)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Learn BayMorph](#learn-baymorph)
-- [Development Status](#development-status)
-- [Contributing](#contributing)
-- [Citation](#citation)
-- [License](#license)
-
-# What is BayMorph?
+## What is BayMorph?
 
 BayMorph is an open-source scientific Python framework for Bayesian
-astronomical morphology, statistical inference, and scientific image analysis.
+astronomical morphology, statistical inference, simulation, and astronomical
+image analysis.
 
 Rather than treating galaxy fitting as the optimization of an analytical
-profile sampled at detector pixels, BayMorph models the observation process
+profile evaluated at detector pixels, BayMorph models the observation process
 connecting an intrinsic light distribution to measured detector data.
 
 Its scientific architecture separates:
@@ -78,18 +60,20 @@ Its scientific architecture separates:
 - intrinsic morphology;
 - observation modelling;
 - numerical rendering;
-- statistical inference;
+- probabilistic inference;
+- inference backend;
 - workflow orchestration;
 - scientific validation.
 
 Posterior distributions, parameter degeneracies, and Bayesian evidence are
 first-class scientific products.
 
-> **Galaxy morphology is fundamentally an inference problem, not merely an optimization problem.**
+> **Galaxy morphology is fundamentally an inference problem, not merely an
+> optimization problem.**
 
-# Why BayMorph?
+## Why BayMorph?
 
-Modern morphology analyses often require several independent tools for:
+Morphology analyses commonly require separate tools for:
 
 - image ingestion and preparation;
 - source detection and segmentation;
@@ -109,24 +93,10 @@ into complete analyses.
 
 Configuration files define analyses.
 
-Notebooks remain user interfaces rather than hidden implementations.
+Notebooks provide user-facing scientific workflows rather than hidden
+implementations.
 
-# Scientific Philosophy
-
-BayMorph is developed according to four principles:
-
-> **Theory drives architecture.**
->
-> **Architecture drives implementation.**
->
-> **Implementation validates theory.**
->
-> **Scientific correctness has priority over implementation convenience.**
-
-These principles govern the probabilistic formulation, software architecture,
-implementation, validation, documentation, and manuscript.
-
-# Scientific Scope
+## Scientific scope
 
 BayMorph currently focuses on:
 
@@ -146,40 +116,25 @@ The current scope intentionally excludes:
 - dust modelling;
 - radiative transfer.
 
-These topics require additional scientific architecture and are not part of the
-present BayMorph programme.
-
-# Current Capabilities
+## Current capabilities
 
 | Area | Current capability |
 | --- | --- |
 | Observation preparation | FITS ingestion, target identification, automatic and fixed cutouts, background and noise estimation |
-| Detection and masking | Source detection, segmentation, connected-source masking, optional refinement |
-| Morphology models | Continuous single- and double-Sérsic models, composite models, analytic total-flux normalization |
-| Rendering | Detector-pixel integration, extended-domain rendering, physically consistent PSF convolution, adaptive integration infrastructure |
-| PSF workflows | Analytic Gaussian PSFs, empirical candidates, recentering, validation, stacking, normalization, persistence |
-| Likelihoods | Gaussian likelihoods, with Cash and Poisson-Gaussian infrastructure |
-| Inference | Backend-neutral inference problems with a production Dynesty backend |
-| Posterior products | Posterior summaries, weighted and equal-weight samples, derived diagnostics |
-| Evidence | Bayesian evidence, Bayes factors, and evidence-aware model comparison |
-| Diagnostics | Corner plots, model and residual images, normalized residuals, radial profiles, preparation and runtime reports |
+| Detection and masking | Source detection, segmentation, contaminant identification, fitting-mask construction |
+| Morphology models | Single- and double-Sérsic models, composite models, analytic total-flux normalization |
+| Rendering | Detector-pixel integration, extended-domain rendering, PSF convolution, adaptive integration infrastructure |
+| PSF workflows | Analytic Gaussian PSFs and empirical PSF construction |
+| Likelihoods | Gaussian likelihoods, with additional likelihood infrastructure under development |
+| Inference | Backend-neutral inference problems with pocoMC and Dynesty production backends |
+| Dynesty modes | Static and dynamic nested sampling |
+| Posterior products | Weighted posterior samples, summaries, diagnostics, and canonical backend-neutral inference results |
+| Evidence | Bayesian evidence and evidence-aware model comparison |
+| Diagnostics | Model images, residuals, normalized residuals, radial profiles, posterior diagnostics, and reports |
 | Validation | Mathematical, numerical, statistical, backend, and workflow validation infrastructure |
 | Multi-observation architecture | Observation-centred representations and joint inference abstractions |
-| Production multi-observation workflow | Under active development |
 
-## Forward-modelling principles
-
-BayMorph treats a galaxy as a continuous distribution of light.
-
-Detector pixels represent integrated signal over finite areas, not point samples.
-The observation model may include coordinate transformations, pixel integration,
-finite support, and PSF convolution before likelihood evaluation.
-
-This preserves the scientific meaning of quantities such as total flux,
-effective radius, centroid, axis ratio, and position angle independently of the
-chosen inference backend.
-
-# Architecture
+## Architecture
 
 BayMorph is observation-centred and backend-neutral.
 
@@ -198,196 +153,257 @@ BayMorph is observation-centred and backend-neutral.
     Likelihood
           |
           v
-    Posterior inference
+    Inference problem
           |
           v
-    Scientific result
+    Numerical backend
+          |
+          v
+    InferenceResult
 
-Single-observation inference is the one-observation specialization of the same
-general architecture used for multiple observations of the same physical
-object.
+The probabilistic problem is defined independently of the numerical inference
+backend.
 
-Cross-observation parameter sharing, observation-specific freedom, deterministic
-relations, and hierarchical coupling are distinct probabilistic models and must
-remain explicit.
+Changing from pocoMC to Dynesty does not redefine the scientific model, prior,
+likelihood, parameter meaning, or result interpretation.
 
-The authoritative architectural documentation is available in
+The authoritative architectural documentation is available under
 [`docs/architecture/`](docs/architecture/).
 
-# Documentation
+## Installation
 
-| Document | Purpose |
-| --- | --- |
-| [Architecture entry point](docs/architecture/ARCHITECTURE.md) | Navigation across the BayMorph scientific architecture |
-| [Core Architecture](docs/architecture/CORE_ARCHITECTURE.md) | Constitutional principles and architectural invariants |
-| [Observation Model](docs/architecture/OBSERVATION_MODEL.md) | Observation-centred scientific model |
-| [Inference Architecture](docs/architecture/INFERENCE.md) | Priors, likelihoods, posterior inference, evidence, and backend neutrality |
-| [Rendering Architecture](docs/architecture/RENDERING.md) | Detector integration, finite support, PSF operations, and numerical accuracy |
-| [Pipeline Architecture](docs/architecture/PIPELINE.md) | Configuration, orchestration, persistence, provenance, and reporting |
-| [Validation Architecture](docs/architecture/VALIDATION.md) | Mathematical, numerical, statistical, and workflow validation |
-| [Architecture Decision Records](docs/architecture/decisions/README.md) | Governance and history of long-lived architectural decisions |
-| [Public API](docs/API.md) | Stable public interfaces |
-| [Roadmap](ROADMAP.md) | Scientific and development milestones |
-| [Contributing](CONTRIBUTING.md) | Development workflow and contribution requirements |
-| [Changelog](CHANGELOG.md) | Release history |
+BayMorph supports **Python 3.11 and later**.
 
-# Installation
+Install directly from GitHub:
 
-BayMorph currently supports **Python 3.11 and later**.
-
-Because the repository is private, installation requires GitHub access.
-
-## Install from GitHub
-
-```bash
+~~~bash
 conda create -n baymorph -c conda-forge python=3.11 -y
 conda activate baymorph
 
 python -m pip install --upgrade pip
-
 python -m pip install \
   "git+https://github.com/carlocannarozzophd/BayMorph.git@main"
-```
+~~~
 
 Verify the installation:
 
-```bash
+~~~bash
 baymorph --version
 baymorph --help
-```
+~~~
 
-## Development installation
+The standard BayMorph installation includes the currently supported production
+inference backends:
 
-```bash
+- pocoMC;
+- Dynesty.
+
+### Development installation
+
+~~~bash
 git clone https://github.com/carlocannarozzophd/BayMorph.git
 cd BayMorph
 
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
-```
+~~~
 
-Run the quality checks:
+Run the quality checks with:
 
-```bash
+~~~bash
 git diff --check
 python -m ruff check .
 python -m pytest -q
-```
+~~~
 
-# Quick Start
+## Quick start
 
 BayMorph analyses are driven by YAML configuration files.
 
-```python
+The recommended high-level workflow is:
+
+~~~python
+from baymorph import BayMorphRunner
+
+runner = BayMorphRunner("configs/simulated_galaxy.yaml")
+
+result = runner.run(
+    diagnostics=True,
+)
+~~~
+
+`run()` performs the configured workflow, including image preparation,
+conditional empirical-PSF construction, Bayesian fitting, and optional
+diagnostics.
+
+For interactive scientific work, the same workflow may be executed
+step-by-step:
+
+~~~python
 from baymorph import BayMorphRunner
 
 runner = BayMorphRunner("configs/simulated_galaxy.yaml")
 
 runner.prepare_image()
-runner.fit()
-runner.diagnostics()
-```
-
-The principal products remain accessible from the runner:
-
-```python
-prepared_image = runner.image
-posterior = runner.results
-profile_bands = runner.profile_bands
-```
-
-For empirical PSF workflows:
-
-```python
-runner.prepare_image()
-runner.select_psf_candidates()
 runner.build_psf()
-runner.fit()
+result = runner.fit()
 runner.diagnostics()
-```
+~~~
+
+For configurations using an empirical PSF, candidate selection precedes PSF
+construction. The high-level `run()` workflow handles this automatically.
 
 Resolved configurations and scientific products are written to a structured run
 directory to preserve reproducibility.
 
-# Learn BayMorph
+## Inference backends
+
+pocoMC is the default production inference backend.
+
+A sampler configuration has a deliberately thin BayMorph envelope:
+
+~~~yaml
+sampler:
+  name: pocomc
+  init:
+    n_effective: 512
+    n_active: 256
+    random_state: 42
+  run:
+    n_total: 4096
+    n_evidence: 4096
+    progress: true
+~~~
+
+Entries under `init` and `run` use the native names and semantics of the
+selected upstream sampler.
+
+BayMorph does not maintain a duplicate list of pocoMC or Dynesty numerical
+options.
+
+For the complete available options, consult the documentation corresponding to
+the installed upstream package version:
+
+- [pocoMC documentation](https://pocomc.readthedocs.io/)
+- [Dynesty documentation](https://dynesty.readthedocs.io/)
+
+### Dynesty static nested sampling
+
+~~~yaml
+sampler:
+  name: dynesty
+  mode: static
+  init:
+    nlive: 500
+    sample: rwalk
+  run:
+    dlogz: 0.05
+    print_progress: true
+~~~
+
+### Dynesty dynamic nested sampling
+
+~~~yaml
+sampler:
+  name: dynesty
+  mode: dynamic
+  init:
+    nlive: 500
+    sample: rwalk
+  run:
+    nlive_init: 500
+    nlive_batch: 250
+    dlogz_init: 0.05
+    print_progress: true
+~~~
+
+The numerical configuration belongs to the selected sampler.
+
+The scientific inference problem does not.
+
+## Inference results
+
+Production inference returns the canonical backend-neutral `InferenceResult`.
+
+The result separates:
+
+- `PosteriorSamples`;
+- `EvidenceEstimate`, when available;
+- backend diagnostics;
+- provenance.
+
+Sampler-specific implementation state is intentionally not part of the stable
+scientific result contract.
+
+The sampler configuration supplied to the backend is recorded in inference
+provenance and fit summaries.
+
+## Learn BayMorph
 
 The recommended starting point is:
 
-```text
-notebooks/01_Simulated_SingleSersic_SingleBand_Fit.ipynb
-```
+    notebooks/01_Simulated_SingleSersic_SingleBand_Fit.ipynb
 
-The tutorial demonstrates:
+The tutorial demonstrates the complete scientific workflow from configuration
+through posterior inference and diagnostics.
 
-1. YAML configuration;
-2. synthetic galaxy generation;
-3. observation preparation;
-4. background estimation;
-5. noise estimation;
-6. Gaussian PSF construction;
-7. Bayesian fitting;
-8. posterior interpretation;
-9. scientific diagnostics.
+The observed-galaxy workflow is available in:
 
-# Development Status
+    notebooks/02_Observed_Galaxy_Analysis.ipynb
+
+## Documentation
+
+| Document | Purpose |
+| --- | --- |
+| [Scientific documentation](docs/index.md) | Documentation landing page |
+| [Architecture](docs/architecture/ARCHITECTURE.md) | Scientific and software architecture |
+| [Inference](docs/architecture/INFERENCE.md) | Probabilistic formulation and backend contract |
+| [Pipeline](docs/architecture/PIPELINE.md) | Workflow, configuration, provenance, and persistence |
+| [Public API](docs/API.md) | Stable public interfaces |
+| [Validation](docs/architecture/VALIDATION.md) | Validation architecture |
+| [Roadmap](ROADMAP.md) | Current scientific and development priorities |
+| [Changelog](CHANGELOG.md) | Release history |
+
+## Development status
 
 BayMorph is an active scientific research programme and an evolving Python
 package.
 
-## Completed foundations
+Current priorities are:
 
-- observation-centred architecture;
-- backend-neutral inference architecture;
-- single-observation inference problems;
-- joint inference abstractions;
-- observation-indexed representation construction;
-- adaptive numerical rendering infrastructure;
-- Dynesty production backend;
-- backend-neutral posterior products;
-- configuration-driven workflows;
-- scientific validation framework;
-- constitutional architecture documentation.
+1. probabilistic formulation;
+2. BayMorph manuscript;
+3. architecture;
+4. implementation;
+5. validation.
 
-## Current priorities
+The native BayMorph nested sampler is archived and is not an active development
+priority.
 
-1. complete the production multi-observation workflow;
-2. resume development of `real_fit.py`;
-3. consolidate the public architecture and implementation documentation;
-4. introduce Material for MkDocs as the official BayMorph scientific documentation;
-5. validate correlated multi-observation inference on realistic astronomical data.
-
-The native nested sampler is archived and is not an active development priority.
+This archived sampler is distinct from the supported Dynesty backend.
 
 The long-term scientific objective is coherent Bayesian inference from
-correlated observations of the same astronomical object.
+correlated observations of the same underlying astronomical object.
 
-See [`ROADMAP.md`](ROADMAP.md) for the authoritative development plan.
-
-# Contributing
+## Contributing
 
 Contributions are welcome.
 
 Changes affecting scientific models, priors, likelihoods, rendering, inference,
-posterior products, or public interfaces must include corresponding validation
-and synchronized documentation.
+results, or public interfaces must include corresponding validation and
+synchronized documentation.
 
 Before committing code changes, run:
 
-```bash
+~~~bash
 git diff --check
 python -m ruff check .
 python -m pytest -q
-```
-
-Documentation-only changes normally require:
-
-```bash
-git diff --check
-```
+~~~
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the complete development workflow.
 
-# Citation
+## Citation
 
 Citation metadata are provided in [`CITATION.cff`](CITATION.cff).
 
@@ -396,13 +412,14 @@ When using a development version of BayMorph in scientific work, record:
 - the BayMorph version;
 - the Git commit;
 - the resolved configuration;
-- the input-data provenance;
-- the inference and rendering configuration.
+- input-data provenance;
+- inference configuration;
+- rendering configuration.
 
-Citation information for the BayMorph paper will be added when the manuscript is
-released.
+Citation information for the BayMorph paper will be added when the manuscript
+is released.
 
-# License
+## License
 
 BayMorph is distributed under the MIT License.
 

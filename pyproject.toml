@@ -47,12 +47,10 @@ dependencies = [
     "matplotlib",
     "pyyaml",
     "dynesty>=3.0,<4",
+"pocomc>=1.2.6,<2",
 ]
 
 [project.optional-dependencies]
-pocomc = [
-    "pocomc>=1.2.6,<2",
-]
 dev = [
     "pytest",
     "jupyter",
