@@ -18,11 +18,11 @@ from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.fitting.parameters import ParameterSet
 from baymorph.fitting.problem import InferenceProblem
 from baymorph.likelihood import ImageLikelihood
-from baymorph.results import PosteriorResult
-
-
-class DynestyResult(PosteriorResult):
-    """Posterior result produced by the Dynesty fitting backend."""
+from baymorph.results import (
+    EvidenceEstimate,
+    InferenceResult,
+    PosteriorSamples,
+)
 
 
 class DynestyMultilineProgress:
@@ -414,7 +414,7 @@ class DynestyFitter:
         queue_size: int | None = None,
         seed: int | None = None,
         progress_label: str | None = None,
-    ) -> DynestyResult:
+    ) -> InferenceResult:
         """Run nested sampling.
 
         Parameters
@@ -571,11 +571,79 @@ class DynestyFitter:
             print(f"ncall={total_calls}")
             print("────────────────────────────────────────────────────")
 
-        return DynestyResult(
-            samples=results.samples,
-            logwt=results.logwt,
-            logz=results.logz,
-            logl=results.logl,
-            logzerr=results.logzerr,
+        final_logz = float(
+            results.logz[-1]
+        )
+
+        posterior_weights = np.exp(
+            np.asarray(
+                results.logwt,
+                dtype=float,
+            )
+            - final_logz
+        )
+
+        posterior = PosteriorSamples(
+            samples=np.asarray(
+                results.samples,
+                dtype=float,
+            ),
+            weights=posterior_weights,
             parameter_names=self.parameter_names,
+            log_likelihood=np.asarray(
+                results.logl,
+                dtype=float,
+            ),
+        )
+
+        evidence = EvidenceEstimate(
+            logz=final_logz,
+            uncertainty=float(
+                results.logzerr[-1]
+            ),
+            method="dynesty",
+            uncertainty_kind="nested_sampling_internal",
+            diagnostics={
+                "nlive": int(nlive),
+                "sample": str(sample),
+                "bound": str(bound),
+                "dlogz": (
+                    None
+                    if dlogz is None
+                    else float(dlogz)
+                ),
+            },
+            provenance={
+                "backend": "dynesty",
+            },
+        )
+
+        total_calls = (
+            int(
+                np.sum(
+                    results.ncall
+                )
+            )
+            if hasattr(
+                results,
+                "ncall",
+            )
+            else None
+        )
+
+        return InferenceResult(
+            posterior=posterior,
+            evidence=evidence,
+            diagnostics={
+                "backend": "dynesty",
+                "calls": total_calls,
+            },
+            provenance={
+                "backend": "dynesty",
+                "seed": seed,
+                "n_processes": int(
+                    n_processes
+                ),
+                "queue_size": queue_size,
+            },
         )

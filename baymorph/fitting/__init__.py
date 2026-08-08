@@ -2,7 +2,6 @@
 
 from baymorph.fitting.dynesty import (
     DynestyFitter,
-    DynestyResult,
 )
 from baymorph.fitting.grid import (
     GridSearchResult,
@@ -22,7 +21,6 @@ from baymorph.fitting.parameters import (
 )
 from baymorph.fitting.pocomc import (
     PocoMCFitter,
-    PocoMCResult,
 )
 from baymorph.fitting.priors import (
     FixedPrior,
@@ -34,7 +32,6 @@ from baymorph.fitting.sampler_factory import make_sampler
 
 __all__ = [
     "DynestyFitter",
-    "DynestyResult",
     "FixedPrior",
     "GridSearchResult",
     "NativeFitter",
@@ -42,7 +39,6 @@ __all__ = [
     "Parameter",
     "ParameterSet",
     "PocoMCFitter",
-    "PocoMCResult",
     "Prior",
     "SkyModelWrapper",
     "UniformPrior",

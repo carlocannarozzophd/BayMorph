@@ -31,12 +31,12 @@ from baymorph.pipeline.multiband_config import (
 from baymorph.pipeline.real_fit import (
     _load_psf_from_config,
 )
-from baymorph.results import PosteriorResult
+from baymorph.results import InferenceResult
 
 
 def run_multiband_fit_from_config(
     config: str | Path | Mapping[str, Any],
-) -> PosteriorResult:
+) -> InferenceResult:
     """Run a production joint multi-band single-Sersic fit.
 
     Parameters
@@ -46,8 +46,8 @@ def run_multiband_fit_from_config(
 
     Returns
     -------
-    PosteriorResult
-        Joint posterior result produced by the configured sampler.
+    InferenceResult
+        Canonical joint inference result produced by the configured backend.
 
     Raises
     ------

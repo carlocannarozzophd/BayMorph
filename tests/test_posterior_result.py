@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from baymorph import PosteriorResult
+from baymorph.results import PosteriorResult
 
 
 

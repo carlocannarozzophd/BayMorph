@@ -12,7 +12,9 @@ from baymorph.models import (
     SersicModel,
 )
 from baymorph.results import (
-    PosteriorResult,
+    EvidenceEstimate,
+    InferenceResult,
+    PosteriorSamples,
     RealFitProducts,
 )
 from baymorph.runner import BayMorphRunner
@@ -35,7 +37,9 @@ __all__ = [
     "ImageData",
     "Observation",
     "ObservationMetadata",
-    "PosteriorResult",
+    "EvidenceEstimate",
+    "InferenceResult",
+    "PosteriorSamples",
     "RealFitProducts",
     "SersicModel",
     "SyntheticObservation",

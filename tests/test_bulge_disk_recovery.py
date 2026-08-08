@@ -130,6 +130,7 @@ def test_bulge_disk_recovers_principal_component_parameters() -> None:
             rel=relative_tolerances[name],
         )
 
-    assert np.isfinite(result.final_logz)
-    assert result.logzerr is not None
-    assert np.isfinite(result.logzerr[-1])
+    assert result.logz is not None
+    assert np.isfinite(result.logz)
+    assert result.logz_error is not None
+    assert np.isfinite(result.logz_error)

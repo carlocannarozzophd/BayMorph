@@ -13,7 +13,7 @@ from baymorph.fitting.backend import (
 from baymorph.fitting.dynesty import DynestyFitter
 from baymorph.fitting.pocomc import PocoMCFitter
 from baymorph.fitting.problem import InferenceProblem
-from baymorph.results import PosteriorResult
+from baymorph.results import InferenceResult
 
 
 _DYNESTY_ALLOWED_CONFIG = frozenset(
@@ -110,7 +110,7 @@ class DynestyBackend(InferenceBackend):
         self,
         *,
         progress_label: str | None = None,
-    ) -> PosteriorResult:
+    ) -> InferenceResult:
         """Run Dynesty using only Dynesty-specific configuration."""
         fitter = DynestyFitter(
             problem=self.problem
@@ -195,7 +195,7 @@ class PocoMCBackend(InferenceBackend):
         self,
         *,
         progress_label: str | None = None,
-    ) -> PosteriorResult:
+    ) -> InferenceResult:
         """Run pocoMC using only pocoMC-specific configuration."""
         fitter_config = dict(
             self.config

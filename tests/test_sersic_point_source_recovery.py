@@ -142,6 +142,7 @@ def test_sersic_point_source_recovers_extended_and_unresolved_fluxes() -> None:
             < summary["q84"]
         )
 
-    assert np.isfinite(result.final_logz)
-    assert result.logzerr is not None
-    assert np.isfinite(result.logzerr[-1])
+    assert result.logz is not None
+    assert np.isfinite(result.logz)
+    assert result.logz_error is not None
+    assert np.isfinite(result.logz_error)

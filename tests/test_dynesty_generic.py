@@ -113,10 +113,10 @@ def test_dynesty_generic_fit_runs():
     ]
 
     assert np.isfinite(
-        result.logz[-1]
+        result.logz
     )
     assert np.isfinite(
-        result.logzerr[-1]
+        result.logz_error
     )
 
 

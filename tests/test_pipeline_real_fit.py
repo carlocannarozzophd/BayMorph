@@ -8,7 +8,11 @@ from baymorph.fitting import (
     Parameter,
     ParameterSet,
 )
-from baymorph import PosteriorResult
+from baymorph.results import (
+    EvidenceEstimate,
+    InferenceResult,
+    PosteriorSamples,
+)
 from baymorph.likelihood import GaussianImageLikelihood
 from baymorph.pipeline.config import resolve_config
 
@@ -127,21 +131,40 @@ def test_real_fit_products_preserve_posterior_round_trip(
         }
     )
 
-    posterior = PosteriorResult(
-        samples=np.array(
-            [
-                [1.0, 10.0],
-                [2.0, 20.0],
-            ]
+    posterior = InferenceResult(
+        posterior=PosteriorSamples(
+            samples=np.array(
+                [
+                    [1.0, 10.0],
+                    [2.0, 20.0],
+                ]
+            ),
+            weights=np.array(
+                [
+                    0.25,
+                    0.75,
+                ]
+            ),
+            parameter_names=[
+                "flux",
+                "re",
+            ],
+            log_likelihood=np.array(
+                [
+                    -10.0,
+                    -5.0,
+                ]
+            ),
         ),
-        logwt=np.array([-2.0, -1.0]),
-        logz=np.array([-3.0, -0.5]),
-        parameter_names=[
-            "flux",
-            "re",
-        ],
-        logl=np.array([-10.0, -5.0]),
-        logzerr=np.array([0.4, 0.2]),
+        evidence=EvidenceEstimate(
+            logz=-0.5,
+            uncertainty=0.2,
+            method="test",
+            uncertainty_kind="test",
+        ),
+        provenance={
+            "backend": "test",
+        },
     )
 
     products = RealFitProducts(
@@ -183,21 +206,17 @@ def test_real_fit_products_preserve_posterior_round_trip(
         loaded.posterior.samples,
         posterior.samples,
     )
-    assert np.array_equal(
-        loaded.posterior.logwt,
-        posterior.logwt,
+    assert loaded.posterior.weights == pytest.approx(
+        posterior.weights
     )
-    assert np.array_equal(
-        loaded.posterior.logz,
-        posterior.logz,
+    assert loaded.posterior.logz == pytest.approx(
+        posterior.logz
     )
-    assert np.array_equal(
-        loaded.posterior.logl,
-        posterior.logl,
+    assert loaded.posterior.log_likelihood == pytest.approx(
+        posterior.log_likelihood
     )
-    assert np.array_equal(
-        loaded.posterior.logzerr,
-        posterior.logzerr,
+    assert loaded.posterior.logz_error == pytest.approx(
+        posterior.logz_error
     )
     assert (
         loaded.posterior.parameter_names
@@ -230,7 +249,7 @@ class DeltaPSF:
 
 class DummyPosterior:
     def __init__(self, logz):
-        self.logz = np.array([logz])
+        self.logz = float(logz)
 
 
 def test_compute_best_model_uses_best_parameters():
@@ -592,8 +611,8 @@ def _run_two_model_fit_for_comparison_test(
         lambda **kwargs: RealFitProducts(
             model_name=kwargs["model_name"],
             posterior=SimpleNamespace(
-                logz=np.array([1.0]),
-                logzerr=np.array([0.1]),
+                logz=1.0,
+                logz_error=0.1,
             ),
             best_parameters={},
             best_model_image=np.zeros((2, 2)),

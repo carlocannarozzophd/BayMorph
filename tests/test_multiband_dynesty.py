@@ -121,5 +121,5 @@ def test_dynesty_runs_multiband_problem():
         "flux__g",
         "flux__r",
     ]
-    assert np.isfinite(result.logz[-1])
-    assert np.isfinite(result.logzerr[-1])
+    assert np.isfinite(result.logz)
+    assert np.isfinite(result.logz_error)

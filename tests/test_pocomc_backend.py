@@ -12,7 +12,6 @@ from baymorph.fitting import (
     Parameter,
     ParameterSet,
     PocoMCFitter,
-    PocoMCResult,
 )
 from baymorph.fitting.backends import PocoMCBackend
 from baymorph.fitting.image_problem import ImageInferenceProblem
@@ -197,17 +196,11 @@ def test_pocomc_result_preserves_posterior_weights(
         print_progress=False,
         seed=42,
     )
-
-    assert isinstance(
-        result,
-        PocoMCResult,
-    )
-
-    assert result.final_logz == pytest.approx(
+    assert result.logz == pytest.approx(
         -2.5
     )
 
-    assert result.logzerr[-1] == pytest.approx(
+    assert result.logz_error == pytest.approx(
         0.15
     )
 

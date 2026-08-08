@@ -16,7 +16,9 @@ EXPECTED_PUBLIC_API = {
     "EmpiricalPSF",
     "SyntheticObservation",
     "SyntheticSersic",
-    "PosteriorResult",
+    "EvidenceEstimate",
+    "InferenceResult",
+    "PosteriorSamples",
     "RealFitProducts",
 }
 

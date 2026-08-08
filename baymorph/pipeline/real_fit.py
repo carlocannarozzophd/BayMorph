@@ -34,7 +34,7 @@ from baymorph.pipeline.outputs import (
     save_resolved_config,
 )
 from baymorph.pipeline.psf_construction import load_empirical_psf
-from baymorph.results import PosteriorResult, RealFitProducts
+from baymorph.results import InferenceResult, RealFitProducts
 from baymorph.simulation.psf import GaussianPSF
 
 
@@ -248,15 +248,15 @@ def save_real_fit_products(
         "logz": (
             None
             if products.posterior is None
-            else float(products.posterior.logz[-1])
+            else products.posterior.logz
         ),
         "logzerr": (
             None
             if (
                 products.posterior is None
-                or products.posterior.logzerr is None
+                or products.posterior.logz_error is None
             )
-            else float(products.posterior.logzerr[-1])
+            else products.posterior.logz_error
         ),
         "sampler": {
             "name": sampler_cfg.get("name", "dynesty"),
@@ -300,16 +300,16 @@ def save_fit_summary_text(
     logz = (
         None
         if products.posterior is None
-        else float(products.posterior.logz[-1])
+        else products.posterior.logz
     )
 
     logzerr = (
         None
         if (
             products.posterior is None
-            or products.posterior.logzerr is None
+            or products.posterior.logz_error is None
         )
-        else float(products.posterior.logzerr[-1])
+        else products.posterior.logz_error
     )
 
     lines = [
@@ -382,7 +382,7 @@ def load_real_fit_products(
     posterior = None
 
     if paths["posterior"].exists():
-        posterior = PosteriorResult.load(
+        posterior = InferenceResult.load(
             paths["posterior"]
         )
 
@@ -719,7 +719,7 @@ def _compute_bayesian_model_comparison(
     """Compute Bayesian model-comparison quantities from model evidences."""
     logz = {
         model_name: float(
-            products.posterior.logz[-1]
+            products.posterior.logz
         )
         for model_name, products in products_by_model.items()
     }

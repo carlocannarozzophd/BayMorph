@@ -7,7 +7,7 @@ from collections.abc import Callable, Mapping
 from typing import Any, TypeAlias
 
 from baymorph.fitting.problem import InferenceProblem
-from baymorph.results import PosteriorResult
+from baymorph.results import InferenceResult
 
 
 BackendFactory: TypeAlias = Callable[
@@ -55,8 +55,8 @@ class InferenceBackend(ABC):
         self,
         *,
         progress_label: str | None = None,
-    ) -> PosteriorResult:
-        """Execute inference and return a BayMorph result."""
+    ) -> InferenceResult:
+        """Execute inference and return a canonical BayMorph result."""
 
 
 class BackendRegistry:

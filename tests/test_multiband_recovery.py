@@ -182,6 +182,7 @@ def test_multiband_posterior_recovers_shared_radius_and_local_fluxes():
 
         assert lower_two_sigma <= expected <= upper_two_sigma
 
-    assert np.isfinite(result.final_logz)
-    assert result.logzerr is not None
-    assert np.isfinite(result.logzerr[-1])
+    assert result.logz is not None
+    assert np.isfinite(result.logz)
+    assert result.logz_error is not None
+    assert np.isfinite(result.logz_error)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -14,14 +13,11 @@ from baymorph.fitting.parameters import ParameterSet
 from baymorph.fitting.priors import NormalPrior, UniformPrior
 from baymorph.fitting.problem import InferenceProblem
 from baymorph.likelihood import ImageLikelihood
-from baymorph.results import PosteriorResult
-
-
-@dataclass
-class PocoMCResult(PosteriorResult):
-    """Posterior result produced by the pocoMC fitting backend."""
-
-    diagnostics: dict[str, Any] = field(default_factory=dict)
+from baymorph.results import (
+    EvidenceEstimate,
+    InferenceResult,
+    PosteriorSamples,
+)
 
 
 class PocoMCFitter:
@@ -120,7 +116,7 @@ class PocoMCFitter:
         queue_size: int | None = None,
         seed: int | None = None,
         progress_label: str | None = None,
-    ) -> PocoMCResult:
+    ) -> InferenceResult:
         """Run pocoMC and return a BayMorph posterior result.
 
         Dynesty-specific arguments are accepted for compatibility with the
@@ -293,7 +289,7 @@ class PocoMCFitter:
             progress=print_progress,
         )
 
-        samples, weights, logl, _logp = (
+        samples, weights, logl, logp = (
             sampler.posterior()
         )
 
@@ -325,17 +321,19 @@ class PocoMCFitter:
                 "normalization."
             )
 
-        weights = weights / normalization
+        weights = (
+            weights
+            / normalization
+        )
 
-        logz_value = float(logz)
+        logp = np.asarray(
+            logp,
+            dtype=float,
+        )
 
-        with np.errstate(
-            divide="ignore",
-        ):
-            logwt = (
-                np.log(weights)
-                + logz_value
-            )
+        logz_value = float(
+            logz
+        )
 
         native_results = dict(
             sampler.results
@@ -394,22 +392,58 @@ class PocoMCFitter:
                 "────────────────────────────────────────────────────"
             )
 
-        return PocoMCResult(
+        posterior = PosteriorSamples(
             samples=samples,
-            logwt=logwt,
-            logz=np.asarray(
-                [logz_value],
-                dtype=float,
-            ),
-            logl=logl,
-            logzerr=np.asarray(
-                [float(logzerr)],
-                dtype=float,
-            ),
+            weights=weights,
             parameter_names=self.parameter_names,
-            diagnostics=diagnostics,
+            log_likelihood=logl,
+            log_prior=logp,
         )
 
+        evidence = EvidenceEstimate(
+            logz=logz_value,
+            uncertainty=float(
+                logzerr
+            ),
+            method="pocomc",
+            uncertainty_kind="importance_sampling_internal",
+            diagnostics={
+                "n_effective": int(
+                    n_effective
+                ),
+                "n_active": int(
+                    n_active
+                ),
+                "n_total": int(
+                    self.config.get(
+                        "n_total",
+                        4096,
+                    )
+                ),
+                "n_evidence": int(
+                    self.config.get(
+                        "n_evidence",
+                        4096,
+                    )
+                ),
+            },
+            provenance={
+                "backend": "pocomc",
+            },
+        )
+
+        return InferenceResult(
+            posterior=posterior,
+            evidence=evidence,
+            diagnostics=diagnostics,
+            provenance={
+                "backend": "pocomc",
+                "seed": seed,
+                "n_processes": int(
+                    n_processes
+                ),
+            },
+        )
 
 def _parameter_set_from_problem(
     problem: InferenceProblem,
