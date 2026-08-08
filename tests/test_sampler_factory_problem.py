@@ -95,7 +95,7 @@ def test_problem_path_returns_pocomc_backend():
     )
 
 
-def test_problem_path_defaults_to_dynesty_temporarily():
+def test_problem_path_defaults_to_pocomc():
     backend = make_sampler(
         None,
         problem=ScalarProblem(),
@@ -103,7 +103,7 @@ def test_problem_path_defaults_to_dynesty_temporarily():
 
     assert isinstance(
         backend,
-        DynestyBackend,
+        PocoMCBackend,
     )
 
 

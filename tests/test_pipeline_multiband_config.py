@@ -367,5 +367,5 @@ def test_resolve_observation_configs_loads_pipeline_configs(
         ["fit"]
         ["sampler"]
         ["name"]
-        == "dynesty"
+        == "pocomc"
     )

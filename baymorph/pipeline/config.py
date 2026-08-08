@@ -13,6 +13,37 @@ from baymorph.core.observation import Observation
 
 REQUIRED_TOP_LEVEL_KEYS = ("object", "data", "outputs")
 
+SAMPLER_DEFAULTS = {
+    "pocomc": {
+        "name": "pocomc",
+        "n_effective": 512,
+        "n_active": 256,
+        "n_total": 4096,
+        "n_evidence": 4096,
+        "flow": "nsf6",
+        "precondition": True,
+        "dynamic": True,
+        "metric": "ess",
+        "mcmc_sampler": "tpcn",
+        "print_progress": True,
+        "n_processes": 1,
+        "seed": None,
+    },
+    "dynesty": {
+        "name": "dynesty",
+        "nlive": 500,
+        "sample": "auto",
+        "bound": "multi",
+        "dlogz": 0.05,
+        "bootstrap": None,
+        "print_progress": True,
+        "n_processes": 1,
+        "queue_size": None,
+        "seed": None,
+    },
+}
+
+
 DEFAULT_CONFIG = {
     "data": {
         "mask_path": None,
@@ -67,14 +98,7 @@ DEFAULT_CONFIG = {
             "include_normalization": True,
         },
         "sampler": {
-            "name": "dynesty",
-            "nlive": 500,
-            "sample": "auto",
-            "seed": None,
-            "n_processes": 1,
-            "queue_size": None,
-            "max_iterations": None,
-            "max_likelihood_calls": None,
+            "name": "pocomc",
         },
         "comparison": {
             "enabled": False,
@@ -417,10 +441,58 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
     """
     validate_config(config)
 
+    user_sampler = dict(
+        config.get(
+            "fit",
+            {},
+        ).get(
+            "sampler",
+            {},
+        )
+    )
+
+    sampler_name = str(
+        user_sampler.get(
+            "name",
+            DEFAULT_CONFIG["fit"]["sampler"]["name"],
+        )
+    ).strip().lower()
+
+    if sampler_name not in SAMPLER_DEFAULTS:
+        available = ", ".join(
+            sorted(SAMPLER_DEFAULTS)
+        )
+        raise ValueError(
+            f"Unknown sampler {sampler_name!r}. "
+            f"Available samplers: {available}."
+        )
+
+    config_without_sampler = deepcopy(config)
+
+    if "fit" in config_without_sampler:
+        config_without_sampler["fit"] = dict(
+            config_without_sampler["fit"]
+        )
+        config_without_sampler["fit"].pop(
+            "sampler",
+            None,
+        )
+
     resolved = deep_update(
         deepcopy(DEFAULT_CONFIG),
-        config,
+        config_without_sampler,
     )
+
+    resolved["fit"]["sampler"] = deep_update(
+        deepcopy(
+            SAMPLER_DEFAULTS[
+                sampler_name
+            ]
+        ),
+        user_sampler,
+    )
+
+    resolved["fit"]["sampler"]["name"] = sampler_name
 
     resolved["object"] = dict(resolved["object"])
     resolved["data"] = dict(resolved["data"])

@@ -192,7 +192,7 @@ def test_resolve_config_applies_nested_defaults():
     assert resolved["preparation"]["detection"]["n_levels"] == 32
     assert resolved["psf"]["type"] == "empirical"
     assert resolved["fit"]["models"] == ["double_sersic"]
-    assert resolved["fit"]["sampler"]["name"] == "dynesty"
+    assert resolved["fit"]["sampler"]["name"] == "pocomc"
     assert resolved["diagnostics"]["radial_profile"] is True
 
     candidate_cfg = resolved["psf"]["empirical"]["candidate_selection"]
@@ -226,7 +226,7 @@ def test_resolve_config_preserves_user_nested_overrides():
     assert resolved["preparation"]["detection"]["n_sigma"] == 5.0
     assert resolved["preparation"]["detection"]["n_levels"] == 32
     assert resolved["fit"]["models"] == ["single_sersic", "double_sersic"]
-    assert resolved["fit"]["sampler"]["name"] == "dynesty"
+    assert resolved["fit"]["sampler"]["name"] == "pocomc"
     assert resolved["fit"]["sampler"]["nlive"] == 1000
 
 
@@ -518,7 +518,7 @@ def test_simulated_galaxy_config_is_mirrored_and_resolves_diagnostics():
     assert diagnostics["posterior_profile_bands"] is True
     assert diagnostics["radial_profile"] is True
 
-def test_resolve_config_preserves_native_sampler_limits():
+def test_resolve_config_rejects_archived_native_sampler():
     config = {
         "object": {
             "name": "NGC1234",
@@ -532,22 +532,15 @@ def test_resolve_config_preserves_native_sampler_limits():
         "fit": {
             "sampler": {
                 "name": "native",
-                "nlive": 80,
-                "sample": "prior",
-                "max_iterations": 25,
-                "max_likelihood_calls": 5000,
             },
         },
     }
 
-    resolved = resolve_config(config)
-    sampler = resolved["fit"]["sampler"]
-
-    assert sampler["name"] == "native"
-    assert sampler["nlive"] == 80
-    assert sampler["sample"] == "prior"
-    assert sampler["max_iterations"] == 25
-    assert sampler["max_likelihood_calls"] == 5000
+    with pytest.raises(
+        ValueError,
+        match="Unknown sampler 'native'",
+    ):
+        resolve_config(config)
 
 
 def test_runtime_report_path_is_canonical(tmp_path):
@@ -588,7 +581,7 @@ def test_build_runtime_report_returns_independent_data(tmp_path):
 
     assert report["config"]["object"]["name"] == "NGC1234"
     assert report["runtime"]["image_preparation"]["background"] == 1.5
-    assert report["config"]["fit"]["sampler"]["name"] == "dynesty"
+    assert report["config"]["fit"]["sampler"]["name"] == "pocomc"
 
 
 def test_runtime_report_roundtrip(tmp_path):

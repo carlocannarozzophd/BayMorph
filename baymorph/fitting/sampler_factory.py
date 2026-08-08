@@ -159,7 +159,7 @@ def _normalize_config(
     """Return a mutable sampler configuration dictionary."""
     if config is None:
         return {
-            "name": "dynesty",
+            "name": "pocomc",
         }
 
     if isinstance(

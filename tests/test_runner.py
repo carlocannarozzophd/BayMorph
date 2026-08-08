@@ -54,7 +54,7 @@ def test_runner_resolves_default_configuration():
         verbose=False,
     )
 
-    assert runner.config["fit"]["sampler"]["name"] == "dynesty"
+    assert runner.config["fit"]["sampler"]["name"] == "pocomc"
     assert runner.config["fit"]["likelihood"]["type"] == "gaussian"
     assert runner.config["diagnostics"]["corner"] is True
 

@@ -5,6 +5,7 @@ import pytest
 
 from baymorph.fitting import (
     DynestyFitter,
+    PocoMCFitter,
     make_sampler,
     Parameter,
     ParameterSet,
@@ -55,7 +56,7 @@ def test_make_sampler_builds_dynesty_fitter():
     assert sampler.likelihood is likelihood
 
 
-def test_make_sampler_defaults_to_dynesty():
+def test_make_sampler_defaults_to_pocomc():
     model_factory, parameters, likelihood = _make_inputs()
 
     sampler = make_sampler(
@@ -65,7 +66,7 @@ def test_make_sampler_defaults_to_dynesty():
         likelihood=likelihood,
     )
 
-    assert isinstance(sampler, DynestyFitter)
+    assert isinstance(sampler, PocoMCFitter)
 
 
 def test_make_sampler_rejects_unknown_backend():
