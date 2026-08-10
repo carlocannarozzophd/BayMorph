@@ -284,18 +284,19 @@ def test_independent_parameter_requires_every_observation():
         )
 
 
-def test_layout_rejects_unsupported_model_set():
+def test_layout_rejects_multiple_model_set():
     config = (
         _multiband_config()
     )
 
     config["fit"]["models"] = [
+        "single_sersic",
         "double_sersic",
     ]
 
     with pytest.raises(
         ValueError,
-        match="single_sersic",
+        match="exactly one registered model",
     ):
         build_multiband_parameter_layout(
             config
@@ -414,3 +415,179 @@ def test_effective_radius_can_be_observation_specific():
 
     assert routed["g"]["re"] == pytest.approx(4.0)
     assert routed["r"]["re"] == pytest.approx(7.0)
+
+
+def _sky_parameter_config() -> dict:
+    parameters = _parameter_config()
+
+    parameters.pop("re")
+    parameters.pop("theta")
+    parameters.pop("x0")
+    parameters.pop("y0")
+
+    parameters["re_arcsec"] = {
+        "coupling": "independent",
+        "priors": {
+            "g": {
+                "type": "uniform",
+                "lower": 0.1,
+                "upper": 5.0,
+            },
+            "r": {
+                "type": "uniform",
+                "lower": 0.1,
+                "upper": 8.0,
+            },
+        },
+    }
+
+    parameters["position_angle"] = {
+        "coupling": "shared",
+        "prior": {
+            "type": "uniform",
+            "lower": -1.57,
+            "upper": 1.57,
+        },
+    }
+
+    parameters["ra"] = {
+        "coupling": "shared",
+        "prior": {
+            "type": "uniform",
+            "lower": 149.99,
+            "upper": 150.01,
+        },
+    }
+
+    parameters["dec"] = {
+        "coupling": "shared",
+        "prior": {
+            "type": "uniform",
+            "lower": 29.99,
+            "upper": 30.01,
+        },
+    }
+
+    return parameters
+
+
+def test_sky_parameter_frame_builds_distinct_scientific_state():
+    config = _multiband_config()
+
+    config["fit"]["multiband"][
+        "parameter_frame"
+    ] = "sky"
+    config["fit"]["multiband"][
+        "parameters"
+    ] = _sky_parameter_config()
+
+    layout = build_multiband_parameter_layout(
+        config
+    )
+
+    assert layout.parameter_set.names == [
+        "flux__g",
+        "flux__r",
+        "re_arcsec__g",
+        "re_arcsec__r",
+        "q",
+        "position_angle",
+        "ra",
+        "dec",
+        "sky__r",
+    ]
+
+    assert "re" not in layout.parameter_set.all_names
+    assert "theta" not in layout.parameter_set.all_names
+    assert "x0" not in layout.parameter_set.all_names
+    assert "y0" not in layout.parameter_set.all_names
+
+
+def test_detector_parameter_frame_remains_default():
+    config = _multiband_config()
+
+    layout = build_multiband_parameter_layout(
+        config
+    )
+
+    assert "re" in layout.parameter_set.all_names
+    assert "theta" in layout.parameter_set.all_names
+    assert "x0" in layout.parameter_set.all_names
+    assert "y0" in layout.parameter_set.all_names
+
+    assert "re_arcsec" not in layout.parameter_set.all_names
+    assert "ra" not in layout.parameter_set.all_names
+    assert "dec" not in layout.parameter_set.all_names
+
+
+def test_multiband_parameter_frame_rejects_unknown_frame():
+    config = _multiband_config()
+
+    config["fit"]["multiband"][
+        "parameter_frame"
+    ] = "physical"
+
+    with pytest.raises(
+        ValueError,
+        match="parameter_frame",
+    ):
+        build_multiband_parameter_layout(
+            config
+        )
+
+
+def test_detector_frame_uses_registered_model_parameter_contract():
+    from baymorph.models import get_model
+
+    config = _multiband_config()
+
+    config["fit"]["models"] = [
+        "bulge_disk",
+    ]
+
+    model_parameters = list(
+        get_model(
+            "bulge_disk"
+        ).parameter_names
+    )
+
+    config["fit"]["multiband"][
+        "parameters"
+    ] = {
+        name: {
+            "coupling": "shared",
+            "prior": {
+                "type": "uniform",
+                "lower": 0.1,
+                "upper": 10.0,
+            },
+        }
+        for name in model_parameters
+    }
+
+    layout = build_multiband_parameter_layout(
+        config
+    )
+
+    assert layout.parameter_set.all_names == (
+        model_parameters
+    )
+
+
+def test_sky_frame_rejects_model_without_geometric_transform():
+    config = _multiband_config()
+
+    config["fit"]["models"] = [
+        "bulge_disk",
+    ]
+    config["fit"]["multiband"][
+        "parameter_frame"
+    ] = "sky"
+
+    with pytest.raises(
+        ValueError,
+        match="single_sersic reference model",
+    ):
+        build_multiband_parameter_layout(
+            config
+        )

@@ -17,6 +17,7 @@ from baymorph.fitting.priors import (
     Prior,
     UniformPrior,
 )
+from baymorph.models import get_model
 from baymorph.pipeline.config import load_resolved_config
 
 SINGLE_SERSIC_PARAMETER_NAMES = (
@@ -263,13 +264,21 @@ def build_multiband_parameter_layout(
         "models"
     )
 
-    if models != [
-        "single_sersic"
-    ]:
+    if (
+        not isinstance(models, list)
+        or len(models) != 1
+        or not isinstance(models[0], str)
+        or not models[0]
+    ):
         raise ValueError(
-            "The production multi-band workflow currently supports "
-            "exactly fit.models: ['single_sersic']."
+            "The production multi-observation workflow currently "
+            "requires exactly one registered model."
         )
+
+    model_name = models[0]
+    model_definition = get_model(
+        model_name
+    )
 
     multiband_config = fit_config.get(
         "multiband"
@@ -296,11 +305,30 @@ def build_multiband_parameter_layout(
             "a 'parameters' mapping."
         )
 
+    parameter_frame = multiband_parameter_frame(
+        config
+    )
+
+    if parameter_frame == "sky":
+        if model_name != "single_sersic":
+            raise ValueError(
+                "Sky-frame multi-observation parameters are currently "
+                "implemented only for the single_sersic reference model."
+            )
+
+        parameter_names = (
+            SKY_SINGLE_SERSIC_PARAMETER_NAMES
+        )
+    else:
+        parameter_names = tuple(
+            model_definition.parameter_names
+        )
+
     supplied = set(
         parameters
     )
     expected = set(
-        SINGLE_SERSIC_PARAMETER_NAMES
+        parameter_names
     )
 
     if supplied != expected:
@@ -316,7 +344,7 @@ def build_multiband_parameter_layout(
         )
 
         raise ValueError(
-            "Multi-band single-Sersic parameters must be "
+            "Multi-observation model parameters must be "
             "defined exactly. "
             f"Missing: {missing}. Extra: {extra}."
         )
@@ -327,7 +355,7 @@ def build_multiband_parameter_layout(
             config=parameters[name],
             bands=bands,
         )
-        for name in SINGLE_SERSIC_PARAMETER_NAMES
+        for name in parameter_names
     ]
 
     return MultiBandParameterLayout(
@@ -551,3 +579,66 @@ def _require_exact_keys(
             f"{context} configuration keys are invalid. "
             f"Missing: {missing}. Extra: {extra}."
         )
+
+
+SKY_SINGLE_SERSIC_PARAMETER_NAMES = (
+    "flux",
+    "re_arcsec",
+    "n",
+    "q",
+    "position_angle",
+    "ra",
+    "dec",
+    "sky",
+)
+
+
+def multiband_parameter_frame(
+    config: Mapping[str, Any],
+) -> str:
+    """Return the declared multi-band inferential parameter frame.
+
+    The historical detector-frame parameterization remains the default
+    when ``parameter_frame`` is omitted.
+    """
+    fit_config = config.get(
+        "fit"
+    )
+
+    if not isinstance(
+        fit_config,
+        Mapping,
+    ):
+        raise ValueError(
+            "Multi-band configuration requires a 'fit' mapping."
+        )
+
+    multiband_config = fit_config.get(
+        "multiband"
+    )
+
+    if not isinstance(
+        multiband_config,
+        Mapping,
+    ):
+        raise ValueError(
+            "Fit configuration requires a 'multiband' mapping."
+        )
+
+    frame = str(
+        multiband_config.get(
+            "parameter_frame",
+            "detector",
+        )
+    ).strip().lower()
+
+    if frame not in {
+        "detector",
+        "sky",
+    }:
+        raise ValueError(
+            "fit.multiband.parameter_frame must be "
+            "'detector' or 'sky'."
+        )
+
+    return frame
