@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from baymorph.fitting.parameters import Parameter, ParameterSet
+from baymorph.fitting.routing import ProjectionParameterRouter
 
 CouplingMode = Literal["shared", "independent"]
 
@@ -101,6 +102,32 @@ class MultiBandParameterLayout:
             global_parameters
         )
 
+        routes = {
+            band: {}
+            for band in self._bands
+        }
+
+        for specification in self._specifications:
+            if specification.coupling == "shared":
+                for band in self._bands:
+                    routes[band][
+                        specification.name
+                    ] = specification.name
+                continue
+
+            for band in self._bands:
+                routes[band][
+                    specification.name
+                ] = self.global_name(
+                    specification.name,
+                    band,
+                )
+
+        self._router = ProjectionParameterRouter(
+            observations=self._bands,
+            routes=routes,
+        )
+
     @property
     def bands(self) -> tuple[str, ...]:
         """Return bands in deterministic routing order."""
@@ -165,40 +192,14 @@ class MultiBandParameterLayout:
         self,
         values: Mapping[str, float],
     ) -> dict[str, dict[str, float]]:
-        """Route global values to complete model parameters for every band."""
+        """Route global values to complete parameters for every band."""
         complete = self.complete_global_values(
             values
         )
 
-        routed = {
-            band: {}
-            for band in self._bands
-        }
-
-        for specification in self._specifications:
-            if specification.coupling == "shared":
-                value = complete[
-                    specification.name
-                ]
-
-                for band in self._bands:
-                    routed[band][
-                        specification.name
-                    ] = value
-
-                continue
-
-            for band in self._bands:
-                routed[band][
-                    specification.name
-                ] = complete[
-                    self.global_name(
-                        specification.name,
-                        band,
-                    )
-                ]
-
-        return routed
+        return self._router.route(
+            complete
+        )
 
     def _validate(self) -> None:
         if not self._bands:
