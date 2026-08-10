@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
@@ -478,3 +480,106 @@ def local_wcs_jacobian(
         )
 
     return jacobian
+
+
+
+
+@dataclass(frozen=True)
+class DetectorEllipseGeometry:
+    """Elliptical morphology expressed on one native detector grid.
+
+    Parameters
+    ----------
+    x0, y0 : float
+        Source centre in zero-based detector-pixel coordinates.
+    re : float
+        Effective semi-major-axis radius in detector pixels.
+    q : float
+        Detector-frame minor-to-major axis ratio.
+    theta : float
+        Detector-frame major-axis angle in radians, following the
+        BayMorph renderer convention.
+    """
+
+    x0: float
+    y0: float
+    re: float
+    q: float
+    theta: float
+
+
+def sky_ellipse_to_detector(
+    *,
+    wcs,
+    centre,
+    re_arcsec: float,
+    q: float,
+    position_angle: float,
+    step_arcsec: float = 0.01,
+) -> DetectorEllipseGeometry:
+    """Transform one sky-frame ellipse to a native detector grid.
+
+    Parameters
+    ----------
+    wcs : astropy.wcs.WCS
+        Two-dimensional celestial WCS for the observation.
+    centre : astropy.coordinates.SkyCoord
+        Common celestial source centre.
+    re_arcsec : float
+        Sky-frame effective semi-major-axis radius in arcseconds.
+    q : float
+        Sky-frame minor-to-major axis ratio.
+    position_angle : float
+        Sky-frame major-axis angle in radians, measured from local east
+        toward local north.
+    step_arcsec : float, default=0.01
+        Finite-difference step used for the local WCS Jacobian.
+
+    Returns
+    -------
+    DetectorEllipseGeometry
+        Geometry expressed in the coordinate convention required by the
+        BayMorph detector-frame renderer.
+    """
+    source = ellipse_quadratic_form(
+        re=re_arcsec,
+        q=q,
+        theta=position_angle,
+    )
+
+    jacobian = local_wcs_jacobian(
+        wcs,
+        centre,
+        step_arcsec=step_arcsec,
+    )
+
+    detector = transform_quadratic_form(
+        source,
+        jacobian,
+    )
+
+    re_detector, q_detector, theta_detector = (
+        quadratic_form_to_ellipse(
+            detector
+        )
+    )
+
+    x0, y0 = wcs.world_to_pixel(
+        centre
+    )
+
+    x0 = float(x0)
+    y0 = float(y0)
+
+    if not np.isfinite(x0) or not np.isfinite(y0):
+        raise ValueError(
+            "WCS transformation produced a non-finite detector centre."
+        )
+
+    return DetectorEllipseGeometry(
+        x0=x0,
+        y0=y0,
+        re=re_detector,
+        q=q_detector,
+        theta=theta_detector,
+    )

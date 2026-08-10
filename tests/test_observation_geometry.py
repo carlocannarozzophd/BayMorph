@@ -464,3 +464,280 @@ def test_wcs_jacobian_transforms_elliptical_geometry_consistently():
         0.6,
         rel=1.0e-7,
     )
+
+
+def test_local_wcs_jacobian_recovers_rotated_anisotropic_reflected_mapping():
+    from astropy import units as u
+    from astropy.coordinates import SkyCoord
+    from astropy.wcs import WCS
+
+    from baymorph.observation.geometry import (
+        local_wcs_jacobian,
+    )
+
+    pixel_scale_x = 0.20
+    pixel_scale_y = 0.35
+    angle = np.deg2rad(27.0)
+
+    rotation = np.array(
+        [
+            [
+                np.cos(angle),
+                -np.sin(angle),
+            ],
+            [
+                np.sin(angle),
+                np.cos(angle),
+            ],
+        ],
+        dtype=float,
+    )
+
+    reflection = np.array(
+        [
+            [-1.0, 0.0],
+            [0.0, 1.0],
+        ],
+        dtype=float,
+    )
+
+    expected = (
+        rotation
+        @ reflection
+        @ np.diag(
+            [
+                1.0 / pixel_scale_x,
+                1.0 / pixel_scale_y,
+            ]
+        )
+    )
+
+    pixel_to_sky_arcsec = np.linalg.inv(
+        expected
+    )
+
+    wcs = WCS(
+        naxis=2
+    )
+    wcs.wcs.crpix = [
+        101.0,
+        101.0,
+    ]
+    wcs.wcs.crval = [
+        150.0,
+        30.0,
+    ]
+    wcs.wcs.ctype = [
+        "RA---TAN",
+        "DEC--TAN",
+    ]
+    wcs.wcs.cd = (
+        pixel_to_sky_arcsec
+        / 3600.0
+    )
+
+    centre = SkyCoord(
+        150.0 * u.deg,
+        30.0 * u.deg,
+        frame="icrs",
+    )
+
+    jacobian = local_wcs_jacobian(
+        wcs,
+        centre,
+        step_arcsec=0.01,
+    )
+
+    assert jacobian == pytest.approx(
+        expected,
+        rel=1.0e-7,
+        abs=1.0e-7,
+    )
+
+    assert np.linalg.det(
+        jacobian
+    ) == pytest.approx(
+        np.linalg.det(
+            expected
+        ),
+        rel=1.0e-7,
+    )
+
+    assert np.linalg.det(
+        jacobian
+    ) < 0.0
+
+
+def test_sky_ellipse_to_detector_recovers_centre_scale_and_shape():
+    from astropy import units as u
+    from astropy.coordinates import SkyCoord
+
+    from baymorph.observation.geometry import (
+        sky_ellipse_to_detector,
+    )
+
+    wcs = _make_tan_wcs(
+        pixel_scale_arcsec=0.2
+    )
+
+    centre = SkyCoord(
+        150.0 * u.deg,
+        30.0 * u.deg,
+        frame="icrs",
+    )
+
+    geometry = sky_ellipse_to_detector(
+        wcs=wcs,
+        centre=centre,
+        re_arcsec=1.2,
+        q=0.6,
+        position_angle=0.0,
+    )
+
+    assert geometry.x0 == pytest.approx(
+        100.0,
+        abs=1.0e-8,
+    )
+    assert geometry.y0 == pytest.approx(
+        100.0,
+        abs=1.0e-8,
+    )
+    assert geometry.re == pytest.approx(
+        6.0,
+        rel=1.0e-7,
+    )
+    assert geometry.q == pytest.approx(
+        0.6,
+        rel=1.0e-7,
+    )
+
+
+def test_sky_ellipse_to_detector_matches_general_affine_geometry():
+    from astropy import units as u
+    from astropy.coordinates import SkyCoord
+    from astropy.wcs import WCS
+
+    from baymorph.observation.geometry import (
+        sky_ellipse_to_detector,
+    )
+
+    pixel_scale_x = 0.20
+    pixel_scale_y = 0.35
+    detector_rotation = np.deg2rad(
+        27.0
+    )
+
+    rotation = np.array(
+        [
+            [
+                np.cos(detector_rotation),
+                -np.sin(detector_rotation),
+            ],
+            [
+                np.sin(detector_rotation),
+                np.cos(detector_rotation),
+            ],
+        ]
+    )
+
+    reflection = np.array(
+        [
+            [-1.0, 0.0],
+            [0.0, 1.0],
+        ]
+    )
+
+    expected_jacobian = (
+        rotation
+        @ reflection
+        @ np.diag(
+            [
+                1.0 / pixel_scale_x,
+                1.0 / pixel_scale_y,
+            ]
+        )
+    )
+
+    wcs = WCS(
+        naxis=2
+    )
+    wcs.wcs.crpix = [
+        101.0,
+        101.0,
+    ]
+    wcs.wcs.crval = [
+        150.0,
+        30.0,
+    ]
+    wcs.wcs.ctype = [
+        "RA---TAN",
+        "DEC--TAN",
+    ]
+    wcs.wcs.cd = (
+        np.linalg.inv(
+            expected_jacobian
+        )
+        / 3600.0
+    )
+
+    centre = SkyCoord(
+        150.0 * u.deg,
+        30.0 * u.deg,
+        frame="icrs",
+    )
+
+    re_arcsec = 1.4
+    q = 0.53
+    angle = -0.38
+
+    geometry = sky_ellipse_to_detector(
+        wcs=wcs,
+        centre=centre,
+        re_arcsec=re_arcsec,
+        q=q,
+        position_angle=angle,
+    )
+
+    source = ellipse_quadratic_form(
+        re=re_arcsec,
+        q=q,
+        theta=angle,
+    )
+
+    expected_detector = (
+        transform_quadratic_form(
+            source,
+            expected_jacobian,
+        )
+    )
+
+    expected_re, expected_q, expected_theta = (
+        quadratic_form_to_ellipse(
+            expected_detector
+        )
+    )
+
+    assert geometry.x0 == pytest.approx(
+        100.0,
+        abs=1.0e-8,
+    )
+    assert geometry.y0 == pytest.approx(
+        100.0,
+        abs=1.0e-8,
+    )
+
+    assert geometry.re == pytest.approx(
+        expected_re,
+        rel=1.0e-7,
+    )
+    assert geometry.q == pytest.approx(
+        expected_q,
+        rel=1.0e-7,
+    )
+    assert _axis_angle_difference(
+        geometry.theta,
+        expected_theta,
+    ) == pytest.approx(
+        0.0,
+        abs=1.0e-7,
+    )
