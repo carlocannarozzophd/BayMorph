@@ -583,3 +583,92 @@ def sky_ellipse_to_detector(
         q=q_detector,
         theta=theta_detector,
     )
+
+
+def slice_wcs_to_cutout(
+    wcs,
+    *,
+    xmin: int,
+    xmax: int,
+    ymin: int,
+    ymax: int,
+):
+    """Return the WCS associated with one NumPy-style image cutout.
+
+    Parameters
+    ----------
+    wcs : astropy.wcs.WCS
+        WCS of the parent image.
+    xmin, xmax : int
+        Horizontal half-open cutout bounds in parent-image pixels.
+    ymin, ymax : int
+        Vertical half-open cutout bounds in parent-image pixels.
+
+    Returns
+    -------
+    astropy.wcs.WCS
+        WCS expressed on the cutout pixel grid.
+
+    Notes
+    -----
+    The cutout convention is identical to
+
+    ``image[ymin:ymax, xmin:xmax]``.
+
+    The transformation changes the detector-coordinate origin while
+    preserving the local sky-to-detector differential geometry.
+    """
+    from astropy.wcs import WCS
+
+    if not isinstance(
+        wcs,
+        WCS,
+    ):
+        raise TypeError(
+            "wcs must be an astropy.wcs.WCS instance."
+        )
+
+    bounds = {
+        "xmin": xmin,
+        "xmax": xmax,
+        "ymin": ymin,
+        "ymax": ymax,
+    }
+
+    for name, value in bounds.items():
+        if not isinstance(
+            value,
+            (int, np.integer),
+        ):
+            raise TypeError(
+                f"{name} must be an integer."
+            )
+
+    if xmax <= xmin:
+        raise ValueError(
+            "xmax must be greater than xmin."
+        )
+
+    if ymax <= ymin:
+        raise ValueError(
+            "ymax must be greater than ymin."
+        )
+
+    if xmin < 0 or ymin < 0:
+        raise ValueError(
+            "Cutout lower bounds must be non-negative."
+        )
+
+    return wcs.slice(
+        (
+            slice(
+                int(ymin),
+                int(ymax),
+            ),
+            slice(
+                int(xmin),
+                int(xmax),
+            ),
+        ),
+        numpy_order=True,
+    )

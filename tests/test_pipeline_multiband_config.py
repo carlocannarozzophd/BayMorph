@@ -369,3 +369,48 @@ def test_resolve_observation_configs_loads_pipeline_configs(
         ["name"]
         == "pocomc"
     )
+
+
+def test_effective_radius_can_be_observation_specific():
+    config = _multiband_config()
+
+    config["fit"]["multiband"]["parameters"]["re"] = {
+        "coupling": "independent",
+        "priors": {
+            "g": {
+                "type": "uniform",
+                "lower": 1.0,
+                "upper": 15.0,
+            },
+            "r": {
+                "type": "uniform",
+                "lower": 1.0,
+                "upper": 25.0,
+            },
+        },
+    }
+
+    layout = build_multiband_parameter_layout(
+        config
+    )
+
+    assert "re" not in layout.parameter_set.names
+    assert "re__g" in layout.parameter_set.names
+    assert "re__r" in layout.parameter_set.names
+
+    routed = layout.route(
+        {
+            "flux__g": 500.0,
+            "flux__r": 900.0,
+            "re__g": 4.0,
+            "re__r": 7.0,
+            "q": 0.7,
+            "theta": 0.2,
+            "x0": 15.0,
+            "y0": 15.0,
+            "sky__r": 1.0,
+        }
+    )
+
+    assert routed["g"]["re"] == pytest.approx(4.0)
+    assert routed["r"]["re"] == pytest.approx(7.0)

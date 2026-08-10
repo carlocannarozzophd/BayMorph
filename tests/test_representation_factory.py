@@ -129,3 +129,128 @@ def test_representation_factory_requires_exact_observations():
                 },
             }
         )
+
+
+def test_factory_applies_observation_parameter_transform():
+    received = {}
+
+    def factory(
+        *,
+        re,
+        x0,
+        psf,
+    ):
+        received.update(
+            {
+                "re": re,
+                "x0": x0,
+                "psf": psf,
+            }
+        )
+        return object()
+
+    representation_factory = RepresentationFactory(
+        factory=factory,
+        fixed_kwargs={
+            "g": {
+                "psf": "g_psf",
+            },
+        },
+        parameter_transforms={
+            "g": lambda parameters: {
+                "re": 2.0 * parameters["re_arcsec"],
+                "x0": parameters["ra_offset"] + 10.0,
+            },
+        },
+    )
+
+    representation_factory.build(
+        "g",
+        {
+            "re_arcsec": 3.0,
+            "ra_offset": 1.5,
+        },
+    )
+
+    assert received == {
+        "re": 6.0,
+        "x0": 11.5,
+        "psf": "g_psf",
+    }
+
+
+def test_factory_leaves_untransformed_observations_unchanged():
+    received = {}
+
+    def factory(
+        *,
+        re,
+        psf,
+    ):
+        received.update(
+            {
+                "re": re,
+                "psf": psf,
+            }
+        )
+        return object()
+
+    representation_factory = RepresentationFactory(
+        factory=factory,
+        fixed_kwargs={
+            "g": {
+                "psf": "g_psf",
+            },
+        },
+    )
+
+    representation_factory.build(
+        "g",
+        {
+            "re": 4.0,
+        },
+    )
+
+    assert received == {
+        "re": 4.0,
+        "psf": "g_psf",
+    }
+
+
+def test_factory_rejects_transform_for_unknown_observation():
+    with pytest.raises(
+        ValueError,
+        match="unknown observations",
+    ):
+        RepresentationFactory(
+            factory=lambda **kwargs: kwargs,
+            fixed_kwargs={
+                "g": {},
+            },
+            parameter_transforms={
+                "r": lambda parameters: parameters,
+            },
+        )
+
+
+def test_factory_rejects_non_mapping_transform_result():
+    representation_factory = RepresentationFactory(
+        factory=lambda **kwargs: kwargs,
+        fixed_kwargs={
+            "g": {},
+        },
+        parameter_transforms={
+            "g": lambda parameters: 1.0,
+        },
+    )
+
+    with pytest.raises(
+        TypeError,
+        match="must return mappings",
+    ):
+        representation_factory.build(
+            "g",
+            {
+                "re": 4.0,
+            },
+        )
