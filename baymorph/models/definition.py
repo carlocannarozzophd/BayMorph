@@ -4,6 +4,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from baymorph.models.geometry import ModelGeometry
+
 
 @dataclass(frozen=True)
 class ModelDefinition:
@@ -23,6 +25,10 @@ class ModelDefinition:
         Factory callable used to instantiate the model. This may be ``None``
         when the model definition is registered before the corresponding
         factory is available.
+    geometry : ModelGeometry, optional
+        Declarative geometry contract of the current production
+        parameterization. A registered model need not define one if no
+        supported sky-to-detector transformation exists.
     """
 
     name: str
@@ -30,3 +36,4 @@ class ModelDefinition:
     parameter_labels: list[str]
     factory_name: str
     factory: Callable[..., Any] | None = None
+    geometry: ModelGeometry | None = None

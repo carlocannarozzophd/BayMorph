@@ -3,39 +3,108 @@
 from __future__ import annotations
 
 from baymorph.models.definition import ModelDefinition
+from baymorph.models.geometry import (
+    EllipticalStructureGeometry,
+    ModelGeometry,
+)
 from baymorph.models.labels import parameter_labels, parameter_names
 from baymorph.models.registry import register_model
 
-_BUILTIN_FACTORY_NAMES = {
-    "single_sersic": "SingleSersicModelFactory",
-    "double_sersic": "DoubleSersicModelFactory",
-    "sersic_point_source": "SersicPointSourceModelFactory",
-    "bulge_disk": "BulgeDiskModelFactory",
+
+_BUILTIN_MODELS = {
+    "single_sersic": {
+        "factory_name": "SingleSersicModelFactory",
+        "geometry": ModelGeometry(
+            centre_x="x0",
+            centre_y="y0",
+            elliptical_structures=(
+                EllipticalStructureGeometry(
+                    radius="re",
+                    axis_ratio="q",
+                    position_angle="theta",
+                ),
+            ),
+        ),
+    },
+    "double_sersic": {
+        "factory_name": "DoubleSersicModelFactory",
+        "geometry": ModelGeometry(
+            centre_x="x0",
+            centre_y="y0",
+            elliptical_structures=(
+                EllipticalStructureGeometry(
+                    radius="re_bulge",
+                    axis_ratio="q_bulge",
+                    position_angle="theta_bulge",
+                ),
+                EllipticalStructureGeometry(
+                    radius="re_disk",
+                    axis_ratio="q_disk",
+                    position_angle="theta_disk",
+                ),
+            ),
+        ),
+    },
+    "sersic_point_source": {
+        "factory_name": "SersicPointSourceModelFactory",
+        "geometry": ModelGeometry(
+            centre_x="x0",
+            centre_y="y0",
+            elliptical_structures=(
+                EllipticalStructureGeometry(
+                    radius="re",
+                    axis_ratio="q",
+                    position_angle="theta",
+                ),
+            ),
+        ),
+    },
+    "bulge_disk": {
+        "factory_name": "BulgeDiskModelFactory",
+        "geometry": ModelGeometry(
+            centre_x="x0",
+            centre_y="y0",
+            elliptical_structures=(
+                EllipticalStructureGeometry(
+                    radius="re_bulge",
+                    axis_ratio="q_bulge",
+                    position_angle="theta_bulge",
+                ),
+                EllipticalStructureGeometry(
+                    radius="re_disk",
+                    axis_ratio="q_disk",
+                    position_angle="theta_disk",
+                ),
+            ),
+        ),
+    },
 }
 
 
 def register_builtin_models() -> None:
     """Register the built-in BayMorph model definitions.
 
-    This function populates the global model registry with the built-in
-    morphological models shipped with BayMorph. Each registered model stores
-    its parameter names, display labels, and the name of the factory class
-    responsible for constructing the corresponding model.
-
-    Notes
-    -----
-    This function is executed automatically when
-    :mod:`baymorph.models.builtin` is imported. Users normally do not need to
-    call it explicitly.
+    Each registered definition is the canonical source of truth for the
+    model parameter contract, display labels, production factory, and
+    supported geometry transformation.
     """
-    for model_name, factory_name in _BUILTIN_FACTORY_NAMES.items():
+    for model_name, specification in _BUILTIN_MODELS.items():
         register_model(
             ModelDefinition(
                 name=model_name,
-                parameter_names=parameter_names(model_name),
-                parameter_labels=parameter_labels(model_name),
-                factory_name=factory_name,
+                parameter_names=parameter_names(
+                    model_name
+                ),
+                parameter_labels=parameter_labels(
+                    model_name
+                ),
+                factory_name=specification[
+                    "factory_name"
+                ],
                 factory=None,
+                geometry=specification[
+                    "geometry"
+                ],
             )
         )
 

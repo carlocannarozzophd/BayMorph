@@ -574,7 +574,11 @@ def test_detector_frame_uses_registered_model_parameter_contract():
     )
 
 
-def test_sky_frame_rejects_model_without_geometric_transform():
+def test_sky_frame_uses_registered_model_geometry_contract():
+    from baymorph.models.geometry import (
+        sky_parameter_names,
+    )
+
     config = _multiband_config()
 
     config["fit"]["models"] = [
@@ -584,10 +588,28 @@ def test_sky_frame_rejects_model_without_geometric_transform():
         "parameter_frame"
     ] = "sky"
 
-    with pytest.raises(
-        ValueError,
-        match="single_sersic reference model",
-    ):
-        build_multiband_parameter_layout(
-            config
-        )
+    names = sky_parameter_names(
+        "bulge_disk"
+    )
+
+    config["fit"]["multiband"][
+        "parameters"
+    ] = {
+        name: {
+            "coupling": "shared",
+            "prior": {
+                "type": "uniform",
+                "lower": 0.1,
+                "upper": 10.0,
+            },
+        }
+        for name in names
+    }
+
+    layout = build_multiband_parameter_layout(
+        config
+    )
+
+    assert layout.parameter_set.all_names == list(
+        names
+    )

@@ -18,6 +18,7 @@ from baymorph.fitting.priors import (
     UniformPrior,
 )
 from baymorph.models import get_model
+from baymorph.models.geometry import sky_parameter_names
 from baymorph.pipeline.config import load_resolved_config
 
 SINGLE_SERSIC_PARAMETER_NAMES = (
@@ -310,14 +311,8 @@ def build_multiband_parameter_layout(
     )
 
     if parameter_frame == "sky":
-        if model_name != "single_sersic":
-            raise ValueError(
-                "Sky-frame multi-observation parameters are currently "
-                "implemented only for the single_sersic reference model."
-            )
-
-        parameter_names = (
-            SKY_SINGLE_SERSIC_PARAMETER_NAMES
+        parameter_names = sky_parameter_names(
+            model_name
         )
     else:
         parameter_names = tuple(
@@ -581,16 +576,6 @@ def _require_exact_keys(
         )
 
 
-SKY_SINGLE_SERSIC_PARAMETER_NAMES = (
-    "flux",
-    "re_arcsec",
-    "n",
-    "q",
-    "position_angle",
-    "ra",
-    "dec",
-    "sky",
-)
 
 
 def multiband_parameter_frame(
