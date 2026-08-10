@@ -5,6 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from baymorph.fitting.multiband import (
     MultiBandParameterLayout,
@@ -246,7 +247,7 @@ def test_run_multiband_fit_builds_problem_and_returns_result(
     )
 
     assert backend.fit_kwargs == {
-        "progress_label": "multi_band_single_sersic",
+        "progress_label": "multi_observation_single_sersic",
     }
 
 
@@ -335,3 +336,240 @@ def test_run_multiband_fit_supports_different_observation_shapes(
         "g": (11, 11),
         "r": (13, 17),
     }
+
+
+def test_build_sky_parameter_transforms_uses_each_cutout_wcs(
+    monkeypatch,
+):
+    from astropy.wcs import WCS
+
+    observation_configs = {
+        "g": {
+            "data": {
+                "image_path": "g.fits",
+            },
+        },
+        "r": {
+            "data": {
+                "image_path": "r.fits",
+            },
+        },
+    }
+
+    products = {
+        "g": SimpleNamespace(
+            cutout_bounds={
+                "xmin": 40,
+                "xmax": 160,
+                "ymin": 55,
+                "ymax": 175,
+            },
+        ),
+        "r": SimpleNamespace(
+            cutout_bounds={
+                "xmin": 20,
+                "xmax": 120,
+                "ymin": 30,
+                "ymax": 130,
+            },
+        ),
+    }
+
+    def make_wcs(scale):
+        wcs = WCS(naxis=2)
+        wcs.wcs.crpix = [
+            101.0,
+            101.0,
+        ]
+        wcs.wcs.crval = [
+            150.0,
+            30.0,
+        ]
+        wcs.wcs.ctype = [
+            "RA---TAN",
+            "DEC--TAN",
+        ]
+        wcs.wcs.cdelt = np.array(
+            [
+                -scale / 3600.0,
+                scale / 3600.0,
+            ]
+        )
+        return wcs
+
+    observations = {
+        "g.fits": SimpleNamespace(
+            metadata=SimpleNamespace(
+                wcs=make_wcs(
+                    0.2
+                )
+            )
+        ),
+        "r.fits": SimpleNamespace(
+            metadata=SimpleNamespace(
+                wcs=make_wcs(
+                    0.4
+                )
+            )
+        ),
+    }
+
+    monkeypatch.setattr(
+        multiband_fit.Observation,
+        "from_fits",
+        lambda path: observations[path],
+    )
+
+    transforms = (
+        multiband_fit
+        ._build_sky_parameter_transforms(
+            observation_configs=observation_configs,
+            image_products=products,
+            model_name="single_sersic",
+        )
+    )
+
+    assert set(transforms) == {
+        "g",
+        "r",
+    }
+
+    assert transforms["g"] is not transforms["r"]
+
+    g_x, g_y = (
+        transforms["g"]
+        .wcs.world_to_pixel_values(
+            150.0,
+            30.0,
+        )
+    )
+    r_x, r_y = (
+        transforms["r"]
+        .wcs.world_to_pixel_values(
+            150.0,
+            30.0,
+        )
+    )
+
+    assert g_x == pytest.approx(
+        60.0
+    )
+    assert g_y == pytest.approx(
+        45.0
+    )
+
+    assert r_x == pytest.approx(
+        80.0
+    )
+    assert r_y == pytest.approx(
+        70.0
+    )
+
+
+def test_build_sky_parameter_transforms_requires_wcs(
+    monkeypatch,
+):
+    observation_configs = {
+        "g": {
+            "data": {
+                "image_path": "g.fits",
+            },
+        },
+    }
+
+    products = {
+        "g": SimpleNamespace(
+            cutout_bounds={
+                "xmin": 0,
+                "xmax": 20,
+                "ymin": 0,
+                "ymax": 20,
+            },
+        ),
+    }
+
+    monkeypatch.setattr(
+        multiband_fit.Observation,
+        "from_fits",
+        lambda path: SimpleNamespace(
+            metadata=SimpleNamespace(
+                wcs=None
+            )
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="valid celestial WCS",
+    ):
+        (
+            multiband_fit
+            ._build_sky_parameter_transforms(
+                observation_configs=observation_configs,
+                image_products=products,
+                model_name="single_sersic",
+            )
+        )
+
+
+def test_build_sky_parameter_transforms_requires_cutout_bounds(
+    monkeypatch,
+):
+    from astropy.wcs import WCS
+
+    wcs = WCS(naxis=2)
+    wcs.wcs.crpix = [
+        11.0,
+        11.0,
+    ]
+    wcs.wcs.crval = [
+        150.0,
+        30.0,
+    ]
+    wcs.wcs.ctype = [
+        "RA---TAN",
+        "DEC--TAN",
+    ]
+    wcs.wcs.cdelt = np.array(
+        [
+            -0.2 / 3600.0,
+            0.2 / 3600.0,
+        ]
+    )
+
+    observation_configs = {
+        "g": {
+            "data": {
+                "image_path": "g.fits",
+            },
+        },
+    }
+
+    products = {
+        "g": SimpleNamespace(
+            cutout_bounds=None,
+        ),
+    }
+
+    monkeypatch.setattr(
+        multiband_fit.Observation,
+        "from_fits",
+        lambda path: SimpleNamespace(
+            metadata=SimpleNamespace(
+                wcs=wcs
+            )
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="saved cutout bounds",
+    ):
+        (
+            multiband_fit
+            ._build_sky_parameter_transforms(
+                observation_configs=observation_configs,
+                image_products=products,
+                model_name="single_sersic",
+            )
+        )

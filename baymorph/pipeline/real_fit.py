@@ -594,12 +594,13 @@ def _build_parameter_set(
 
 
 
-def _make_model_factory(
+def _resolve_model_factory(
     model_name,
-    psf,
 ):
-    """Build the model factory associated with a registered model."""
-    model_definition = get_model(model_name)
+    """Return the production factory associated with a registered model."""
+    model_definition = get_model(
+        model_name
+    )
 
     factories = {
         "SingleSersicModelFactory": make_single_sersic_psf_sky_model,
@@ -611,7 +612,7 @@ def _make_model_factory(
     }
 
     try:
-        factory = factories[
+        return factories[
             model_definition.factory_name
         ]
     except KeyError as exc:
@@ -620,8 +621,16 @@ def _make_model_factory(
             f"{model_definition.factory_name}"
         ) from exc
 
+
+def _make_model_factory(
+    model_name,
+    psf,
+):
+    """Build an observation-specific production model factory."""
     return partial(
-        factory,
+        _resolve_model_factory(
+            model_name
+        ),
         psf=psf,
     )
 
