@@ -5,7 +5,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import numpy as np
-import pytest
 
 from baymorph.fitting.multiband import (
     MultiBandParameterLayout,
@@ -251,7 +250,7 @@ def test_run_multiband_fit_builds_problem_and_returns_result(
     }
 
 
-def test_run_multiband_fit_rejects_different_shapes(
+def test_run_multiband_fit_supports_different_observation_shapes(
     monkeypatch,
 ):
     observation_configs = {
@@ -277,7 +276,7 @@ def test_run_multiband_fit_rejects_different_shapes(
         id(
             observation_configs["r"]
         ): _products(
-            (13, 13)
+            (13, 17)
         ),
     }
 
@@ -301,13 +300,38 @@ def test_run_multiband_fit_rejects_different_shapes(
         / 9.0,
     )
 
-    with pytest.raises(
-        ValueError,
-        match="same image shape",
+    expected_result = object()
+    backend = DummyBackend(
+        expected_result
+    )
+    captured = {}
+
+    def fake_make_sampler(
+        config,
+        *,
+        problem,
     ):
-        (
-            multiband_fit
-            .run_multiband_fit_from_config(
-                _config()
-            )
+        captured["problem"] = problem
+        return backend
+
+    monkeypatch.setattr(
+        multiband_fit,
+        "make_sampler",
+        fake_make_sampler,
+    )
+
+    result = (
+        multiband_fit
+        .run_multiband_fit_from_config(
+            _config()
         )
+    )
+
+    assert result is expected_result
+
+    problem = captured["problem"]
+
+    assert problem.likelihood.image_shapes == {
+        "g": (11, 11),
+        "r": (13, 17),
+    }

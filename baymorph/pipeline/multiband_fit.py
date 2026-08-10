@@ -54,8 +54,7 @@ def run_multiband_fit_from_config(
     TypeError
         If the configuration is not a mapping or filesystem path.
     ValueError
-        If the joint configuration is invalid or prepared images have
-        incompatible shapes.
+        If the joint configuration is invalid.
     FileNotFoundError
         If required image-preparation or PSF products are unavailable.
     """
@@ -115,10 +114,6 @@ def run_multiband_fit_from_config(
             raise FileNotFoundError(
                 f"PSF products are required for observation '{band}'."
             ) from exc
-
-    _validate_compatible_image_shapes(
-        image_products
-    )
 
     likelihood = MultiBandLikelihood(
         {
@@ -210,31 +205,3 @@ def _load_multiband_config(
     raise TypeError(
         "config must be a path or a mapping."
     )
-
-
-def _validate_compatible_image_shapes(
-    image_products: Mapping[str, Any],
-) -> None:
-    """Require the same prepared-image shape for every observation."""
-    shapes = {
-        band: tuple(
-            products.prepared_data.shape
-        )
-        for band, products in image_products.items()
-    }
-
-    if len(
-        set(
-            shapes.values()
-        )
-    ) != 1:
-        formatted = ", ".join(
-            f"{band}={shape}"
-            for band, shape in shapes.items()
-        )
-
-        raise ValueError(
-            "The initial production multi-band workflow requires "
-            "all prepared observations to have the same image shape. "
-            f"Received: {formatted}."
-        )
