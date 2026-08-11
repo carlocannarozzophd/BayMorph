@@ -62,7 +62,10 @@ def reference_multi_observation_sbc_parameter_config() -> dict[str, Any]:
         },
         "position_angle": {
             "coupling": "shared",
-            "prior": uniform(-1.5, 1.5),
+            "prior": uniform(
+                -0.5 * np.pi,
+                0.5 * np.pi,
+            ),
         },
         "ra": {
             "coupling": "shared",

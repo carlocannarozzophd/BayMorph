@@ -277,7 +277,10 @@ def test_sbc_campaign_builds_problem_with_fixed_sbc_prior(tmp_path):
             "re_arcsec": (0.6, 1.8),
             "n": (0.8, 4.0),
             "q": (0.3, 1.0),
-            "position_angle": (-1.5, 1.5),
+            "position_angle": (
+                -0.5 * np.pi,
+                0.5 * np.pi,
+            ),
             "ra": (
                 150.0 - 1.0 / 3600.0,
                 150.0 + 1.0 / 3600.0,
@@ -370,3 +373,20 @@ def test_sbc_campaign_resume_reuses_completed_case(
     )
 
     assert results == [sentinel]
+
+
+def test_sbc_position_angle_prior_spans_one_axial_period():
+    draw = draw_multi_observation_sbc_truth(
+        _reference_truth(),
+        index=0,
+    )
+
+    lower, upper = (
+        draw.parameter_layout.parameter_set.bounds[
+            "position_angle"
+        ]
+    )
+
+    assert lower == pytest.approx(-0.5 * np.pi)
+    assert upper == pytest.approx(0.5 * np.pi)
+    assert upper - lower == pytest.approx(np.pi)
