@@ -41,6 +41,37 @@ from baymorph.pipeline.real_fit import (
 from baymorph.results import InferenceResult
 
 
+def build_multiband_problem_from_config(
+    config: str | Path | Mapping[str, Any],
+) -> MultiBandInferenceProblem:
+    """Build a production multi-observation inference problem.
+
+    Parameters
+    ----------
+    config : mapping, str, or pathlib.Path
+        Joint multi-observation configuration or path to its YAML file.
+
+    Returns
+    -------
+    MultiBandInferenceProblem
+        Fully constructed backend-neutral inference problem.
+
+    Notes
+    -----
+    This function constructs the scientific inference problem but does not
+    instantiate or execute an inference backend. It is therefore suitable
+    for deterministic validation, likelihood inspection, and testing.
+    """
+    raw_config, base_dir = _load_multiband_config(
+        config
+    )
+
+    return _build_multiband_problem(
+        raw_config,
+        base_dir=base_dir,
+    )
+
+
 def run_multiband_fit_from_config(
     config: str | Path | Mapping[str, Any],
 ) -> InferenceResult:
@@ -70,6 +101,47 @@ def run_multiband_fit_from_config(
         config
     )
 
+    fit_config = raw_config["fit"]
+
+    sampler_config = fit_config.get(
+        "sampler"
+    )
+
+    if not isinstance(
+        sampler_config,
+        Mapping,
+    ):
+        raise ValueError(
+            "Multi-observation fit configuration requires a "
+            "'sampler' mapping."
+        )
+
+    models = fit_config["models"]
+    model_name = models[0]
+
+    problem = _build_multiband_problem(
+        raw_config,
+        base_dir=base_dir,
+    )
+
+    backend = make_sampler(
+        sampler_config,
+        problem=problem,
+    )
+
+    return backend.fit(
+        progress_label=(
+            f"multi_observation_{model_name}"
+        ),
+    )
+
+
+def _build_multiband_problem(
+    raw_config: Mapping[str, Any],
+    *,
+    base_dir: str | Path,
+) -> MultiBandInferenceProblem:
+    """Build a multi-observation problem from an already loaded config."""
     observation_configs, parameter_layout = (
         resolve_multiband_config(
             raw_config,
@@ -81,18 +153,6 @@ def run_multiband_fit_from_config(
 
     models = fit_config["models"]
     model_name = models[0]
-
-    sampler_config = fit_config.get(
-        "sampler"
-    )
-    if not isinstance(
-        sampler_config,
-        Mapping,
-    ):
-        raise ValueError(
-            "Multi-observation fit configuration requires a "
-            "'sampler' mapping."
-        )
 
     likelihood_config = fit_config.get(
         "likelihood",
@@ -111,10 +171,10 @@ def run_multiband_fit_from_config(
 
     for observation_name, observation_config in observation_configs.items():
         try:
-            image_products[observation_name] = (
-                load_image_preparation_products(
-                    observation_config
-                )
+            image_products[
+                observation_name
+            ] = load_image_preparation_products(
+                observation_config
             )
         except FileNotFoundError as exc:
             raise FileNotFoundError(
@@ -123,7 +183,9 @@ def run_multiband_fit_from_config(
             ) from exc
 
         try:
-            psfs[observation_name] = _load_psf_from_config(
+            psfs[
+                observation_name
+            ] = _load_psf_from_config(
                 observation_config
             )
         except FileNotFoundError as exc:
@@ -168,21 +230,10 @@ def run_multiband_fit_from_config(
         parameter_transforms=parameter_transforms,
     )
 
-    problem = MultiBandInferenceProblem(
+    return MultiBandInferenceProblem(
         representation_factory=representation_factory,
         parameter_layout=parameter_layout,
         likelihood=likelihood,
-    )
-
-    backend = make_sampler(
-        sampler_config,
-        problem=problem,
-    )
-
-    return backend.fit(
-        progress_label=(
-            f"multi_observation_{model_name}"
-        ),
     )
 
 

@@ -5,6 +5,11 @@ from baymorph.validation.experiment import (
     RecoveryExperiment,
     RecoveryFit,
 )
+from baymorph.validation.multi_observation_workspace import MultiObservationValidationWorkspace
+from baymorph.validation.multi_observation_truth import (
+    MultiObservationGroundTruth,
+    ObservationTruth,
+)
 from baymorph.validation.metrics import (
     bias,
     coverage_fraction,
@@ -22,6 +27,9 @@ from baymorph.validation.simulation import build_synthetic_observation
 from baymorph.validation.workspace import ValidationWorkspace
 
 __all__ = [
+    "MultiObservationValidationWorkspace",
+    "MultiObservationGroundTruth",
+    "ObservationTruth",
     "BenchmarkResult",
     "GroundTruth",
     "ParameterRecovery",
