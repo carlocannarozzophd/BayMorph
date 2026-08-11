@@ -5,6 +5,7 @@ from baymorph.validation.experiment import (
     RecoveryExperiment,
     RecoveryFit,
 )
+from baymorph.validation.multi_observation_campaign import MultiObservationNoiseCampaign
 from baymorph.validation.multi_observation_workspace import MultiObservationValidationWorkspace
 from baymorph.validation.multi_observation_truth import (
     MultiObservationGroundTruth,
@@ -22,11 +23,15 @@ from baymorph.validation.recovery import ParameterRecovery, RecoveryResult
 from baymorph.validation.report import summarize_recovery
 from baymorph.validation.simulation_grid import SimulationCase, SimulationGrid
 from baymorph.validation.truth import GroundTruth
-from baymorph.validation.baymorph_adapter import recovery_fit_from_baymorph
+from baymorph.validation.baymorph_adapter import (
+    recovery_fit_from_baymorph,
+    recovery_fit_from_inference_result,
+)
 from baymorph.validation.simulation import build_synthetic_observation
 from baymorph.validation.workspace import ValidationWorkspace
 
 __all__ = [
+    "MultiObservationNoiseCampaign",
     "MultiObservationValidationWorkspace",
     "MultiObservationGroundTruth",
     "ObservationTruth",
@@ -47,6 +52,7 @@ __all__ = [
     "scatter",
     "summarize_recovery",
     "recovery_fit_from_baymorph",
+    "recovery_fit_from_inference_result",
     "build_synthetic_observation",
     "ValidationWorkspace",
 ]
