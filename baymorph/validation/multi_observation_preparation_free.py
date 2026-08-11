@@ -90,6 +90,8 @@ class PreparationFreeMultiObservationCase:
 
 def build_preparation_free_multi_observation_case(
     truth: MultiObservationGroundTruth,
+    *,
+    parameter_config: Mapping[str, Any] | None = None,
 ) -> PreparationFreeMultiObservationCase:
     """Construct a preparation-free native-grid recovery problem.
 
@@ -107,7 +109,12 @@ def build_preparation_free_multi_observation_case(
             "only the single_sersic reference model."
         )
 
-    parameter_layout = build_multiband_parameter_layout(_layout_config(truth))
+    parameter_layout = build_multiband_parameter_layout(
+        _layout_config(
+            truth,
+            parameter_config=parameter_config,
+        )
+    )
     geometry = get_model_geometry(truth.model_name)
 
     wcs_by_observation: dict[str, WCS] = {}
@@ -380,8 +387,18 @@ def _noise_seed(
     return int(seed)
 
 
-def _layout_config(truth: MultiObservationGroundTruth) -> dict[str, Any]:
+def _layout_config(
+    truth: MultiObservationGroundTruth,
+    *,
+    parameter_config: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     """Return the minimal production layout config for direct validation."""
+    parameters = (
+        MultiObservationValidationWorkspace._parameter_config(truth)
+        if parameter_config is None
+        else dict(parameter_config)
+    )
+
     return {
         "observations": {
             observation_name: {"config_path": f"{observation_name}.yaml"}
@@ -391,9 +408,7 @@ def _layout_config(truth: MultiObservationGroundTruth) -> dict[str, Any]:
             "models": [truth.model_name],
             "multiband": {
                 "parameter_frame": "sky",
-                "parameters": MultiObservationValidationWorkspace._parameter_config(
-                    truth
-                ),
+                "parameters": parameters,
             },
         },
     }

@@ -1,5 +1,12 @@
 """Scientific validation infrastructure for BayMorph."""
 
+from baymorph.validation.multi_observation_sbc import (
+    MultiObservationSBCTruthDraw,
+    PreparationFreeMultiObservationSBCCampaign,
+    build_preparation_free_sbc_case,
+    draw_multi_observation_sbc_truth,
+    reference_multi_observation_sbc_parameter_config,
+)
 from baymorph.validation.calibration import (
     CalibrationCase,
     ParameterCalibration,
@@ -45,6 +52,11 @@ from baymorph.validation.simulation import build_synthetic_observation
 from baymorph.validation.workspace import ValidationWorkspace
 
 __all__ = [
+    "PreparationFreeMultiObservationSBCCampaign",
+    "reference_multi_observation_sbc_parameter_config",
+    "draw_multi_observation_sbc_truth",
+    "build_preparation_free_sbc_case",
+    "MultiObservationSBCTruthDraw",
     "weighted_posterior_rank",
     "weighted_credible_interval",
     "summarize_calibration",
