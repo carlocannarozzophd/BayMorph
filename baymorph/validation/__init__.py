@@ -6,6 +6,11 @@ from baymorph.validation.experiment import (
     RecoveryFit,
 )
 from baymorph.validation.multi_observation_campaign import MultiObservationNoiseCampaign
+from baymorph.validation.multi_observation_preparation_free import (
+    PreparationFreeMultiObservationCase,
+    PreparationFreeMultiObservationNoiseCampaign,
+    build_preparation_free_multi_observation_case,
+)
 from baymorph.validation.multi_observation_workspace import MultiObservationValidationWorkspace
 from baymorph.validation.multi_observation_truth import (
     MultiObservationGroundTruth,
@@ -32,6 +37,8 @@ from baymorph.validation.workspace import ValidationWorkspace
 
 __all__ = [
     "MultiObservationNoiseCampaign",
+    "PreparationFreeMultiObservationCase",
+    "PreparationFreeMultiObservationNoiseCampaign",
     "MultiObservationValidationWorkspace",
     "MultiObservationGroundTruth",
     "ObservationTruth",
@@ -45,6 +52,7 @@ __all__ = [
     "SimulationGrid",
     "benchmark_call",
     "bias",
+    "build_preparation_free_multi_observation_case",
     "coverage_fraction",
     "fractional_error",
     "interval_contains_truth",

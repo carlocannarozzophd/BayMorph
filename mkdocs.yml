@@ -83,6 +83,7 @@ nav:
 
   - Paper Blueprint: research/PAPER_BLUEPRINT.md
   - Multi-band Formulation: research/MULTIBAND_FORMULATION.md
+  - Preparation-Free Multi-Observation Recovery: research/PREPARATION_FREE_MULTI_OBSERVATION_RECOVERY.md
   - Adaptive Rendering: research/ADAPTIVE_RENDERING.md
   - PSF Characterization: research/PSF_CHARACTERIZATION.md
   - pocoMC-Dynesty Initial Validation: research/pocomc_dynesty_initial_validation.md
