@@ -170,3 +170,99 @@ def test_campaign_rejects_invalid_size(
             sampler={},
             n_cases=0,
         )
+
+
+def test_campaign_resume_reuses_completed_case(
+    tmp_path,
+    monkeypatch,
+):
+    campaign = _campaign(
+        tmp_path
+    )
+
+    expected = object()
+
+    monkeypatch.setattr(
+        MultiObservationNoiseCampaign,
+        "_result_path",
+        lambda self, index: (
+            tmp_path
+            / "existing.npz"
+        ),
+    )
+
+    (
+        tmp_path
+        / "existing.npz"
+    ).touch()
+
+    monkeypatch.setattr(
+        MultiObservationNoiseCampaign,
+        "load_case",
+        lambda self, index: expected,
+    )
+
+    def fail_run_case(
+        self,
+        index,
+    ):
+        raise AssertionError(
+            "Completed case must not be rerun."
+        )
+
+    monkeypatch.setattr(
+        MultiObservationNoiseCampaign,
+        "run_case",
+        fail_run_case,
+    )
+
+    object.__setattr__(
+        campaign,
+        "n_cases",
+        1,
+    )
+
+    assert campaign.run() == [
+        expected
+    ]
+
+
+def test_campaign_records_failure_metadata(
+    tmp_path,
+):
+    campaign = _campaign(
+        tmp_path
+    )
+
+    campaign._write_failure(
+        index=0,
+        stage="preparation",
+        exc=ValueError(
+            "No stable radial-profile plateau was detected."
+        ),
+    )
+
+    path = (
+        tmp_path
+        / "noise-000"
+        / "failure.yaml"
+    )
+
+    assert path.exists()
+
+    import yaml
+
+    with path.open() as stream:
+        record = yaml.safe_load(
+            stream
+        )
+
+    assert record == {
+        "case_id": "noise-000",
+        "status": "failed",
+        "stage": "preparation",
+        "exception_type": "ValueError",
+        "message": (
+            "No stable radial-profile plateau was detected."
+        ),
+    }

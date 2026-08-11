@@ -14,6 +14,7 @@ from baymorph.pipeline.image_preparation import (
 from baymorph.pipeline.multiband_fit import (
     run_multiband_fit_from_config,
 )
+from baymorph.results import InferenceResult
 from baymorph.validation.baymorph_adapter import (
     recovery_fit_from_inference_result,
 )
@@ -55,16 +56,64 @@ class MultiObservationNoiseCampaign:
             root,
         )
 
-    def run(self) -> list[RecoveryResult]:
-        """Execute all campaign cases sequentially."""
+    def run(
+        self,
+        *,
+        resume: bool = True,
+        continue_on_failure: bool = True,
+    ) -> list[RecoveryResult]:
+        """Execute the campaign, optionally reusing completed cases.
+
+        Parameters
+        ----------
+        resume : bool, default=True
+            Load existing inference results instead of rerunning completed
+            cases.
+        continue_on_failure : bool, default=True
+            Record failed cases and continue with the remaining campaign.
+
+        Returns
+        -------
+        list of RecoveryResult
+            Successfully completed recovery results.
+        """
         results = []
 
         for index in range(
             self.n_cases
         ):
-            result = self.run_case(
-                index
-            )
+            if (
+                resume
+                and self._result_path(
+                    index
+                ).exists()
+            ):
+                print(
+                    f"Reusing completed "
+                    f"{self._case_id(index)}"
+                )
+
+                results.append(
+                    self.load_case(
+                        index
+                    )
+                )
+                continue
+
+            try:
+                result = self.run_case(
+                    index
+                )
+            except Exception:
+                if not continue_on_failure:
+                    raise
+
+                print(
+                    f"Recorded failure for "
+                    f"{self._case_id(index)}"
+                )
+                continue
+
             results.append(
                 result
             )
@@ -76,16 +125,12 @@ class MultiObservationNoiseCampaign:
         index: int,
     ) -> RecoveryResult:
         """Execute one deterministic noise realization."""
-        if (
-            index < 0
-            or index >= self.n_cases
-        ):
-            raise IndexError(
-                "Campaign case index out of range."
-            )
+        self._validate_index(
+            index
+        )
 
-        case_id = (
-            f"noise-{index:03d}"
+        case_id = self._case_id(
+            index
         )
 
         case_truth = (
@@ -106,30 +151,101 @@ class MultiObservationNoiseCampaign:
             sampler=self.sampler,
         )
 
-        self._prepare_observations(
-            joint_path
-        )
+        try:
+            self._prepare_observations(
+                joint_path
+            )
+        except Exception as exc:
+            self._write_failure(
+                index=index,
+                stage="preparation",
+                exc=exc,
+            )
+            raise
 
         start = perf_counter()
 
-        inference_result = (
-            run_multiband_fit_from_config(
-                joint_path
+        try:
+            inference_result = (
+                run_multiband_fit_from_config(
+                    joint_path
+                )
             )
-        )
+        except Exception as exc:
+            self._write_failure(
+                index=index,
+                stage="inference",
+                exc=exc,
+            )
+            raise
 
         runtime_seconds = (
             perf_counter()
             - start
         )
 
-        inference_path = (
-            joint_path.parent
-            / "joint_inference_result.npz"
+        inference_result.save(
+            self._result_path(
+                index
+            )
         )
 
-        inference_result.save(
-            inference_path
+        failure_path = self._failure_path(
+            index
+        )
+
+        if failure_path.exists():
+            failure_path.unlink()
+
+        return self._recovery_result(
+            index=index,
+            inference_result=inference_result,
+            runtime_seconds=runtime_seconds,
+        )
+
+    def load_case(
+        self,
+        index: int,
+    ) -> RecoveryResult:
+        """Load one previously completed campaign case."""
+        self._validate_index(
+            index
+        )
+
+        result_path = self._result_path(
+            index
+        )
+
+        if not result_path.exists():
+            raise FileNotFoundError(
+                f"Completed campaign result not found: "
+                f"{result_path}"
+            )
+
+        inference_result = (
+            InferenceResult.load(
+                result_path
+            )
+        )
+
+        return self._recovery_result(
+            index=index,
+            inference_result=inference_result,
+            runtime_seconds=None,
+        )
+
+    def _recovery_result(
+        self,
+        *,
+        index: int,
+        inference_result: InferenceResult,
+        runtime_seconds: float | None,
+    ) -> RecoveryResult:
+        """Convert one inference result to campaign recovery diagnostics."""
+        case_truth = (
+            self._truth_for_case(
+                index
+            )
         )
 
         recovery_fit = (
@@ -140,9 +256,6 @@ class MultiObservationNoiseCampaign:
                         "multi_observation_noise"
                     ),
                     "case_index": index,
-                    "runtime_seconds": (
-                        runtime_seconds
-                    ),
                 },
             )
         )
@@ -158,8 +271,10 @@ class MultiObservationNoiseCampaign:
                 likelihood_evaluations
             )
 
-        result = RecoveryResult(
-            case_id=case_id,
+        return RecoveryResult(
+            case_id=self._case_id(
+                index
+            ),
             truth=dict(
                 case_truth.parameters
             ),
@@ -192,13 +307,15 @@ class MultiObservationNoiseCampaign:
             ),
         )
 
-        return result
-
     def _truth_for_case(
         self,
         index: int,
     ) -> MultiObservationGroundTruth:
         """Return truth with deterministic per-observation noise seeds."""
+        self._validate_index(
+            index
+        )
+
         observations = {}
 
         for offset, (
@@ -251,6 +368,108 @@ class MultiObservationNoiseCampaign:
                 self.truth.metadata
             ),
         )
+
+    def _case_id(
+        self,
+        index: int,
+    ) -> str:
+        """Return the stable identifier of one campaign case."""
+        self._validate_index(
+            index
+        )
+
+        return f"noise-{index:03d}"
+
+    def _case_dir(
+        self,
+        index: int,
+    ) -> Path:
+        """Return the directory of one campaign case."""
+        return (
+            self.root
+            / self._case_id(
+                index
+            )
+        )
+
+    def _result_path(
+        self,
+        index: int,
+    ) -> Path:
+        """Return the canonical inference-result path for one case."""
+        return (
+            self._case_dir(
+                index
+            )
+            / "joint_inference_result.npz"
+        )
+
+    def _failure_path(
+        self,
+        index: int,
+    ) -> Path:
+        """Return the failure-record path for one case."""
+        return (
+            self._case_dir(
+                index
+            )
+            / "failure.yaml"
+        )
+
+    def _write_failure(
+        self,
+        *,
+        index: int,
+        stage: str,
+        exc: Exception,
+    ) -> None:
+        """Persist one campaign failure without discarding the case."""
+        case_dir = self._case_dir(
+            index
+        )
+
+        case_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        record = {
+            "case_id": self._case_id(
+                index
+            ),
+            "status": "failed",
+            "stage": stage,
+            "exception_type": type(
+                exc
+            ).__name__,
+            "message": str(
+                exc
+            ),
+        }
+
+        with self._failure_path(
+            index
+        ).open(
+            "w"
+        ) as stream:
+            yaml.safe_dump(
+                record,
+                stream,
+                sort_keys=False,
+            )
+
+    def _validate_index(
+        self,
+        index: int,
+    ) -> None:
+        """Validate one campaign case index."""
+        if (
+            index < 0
+            or index >= self.n_cases
+        ):
+            raise IndexError(
+                "Campaign case index out of range."
+            )
 
     @staticmethod
     def _prepare_observations(
