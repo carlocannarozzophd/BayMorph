@@ -314,18 +314,20 @@ class MultiObservationValidationWorkspace:
                 name
             ] = config_path
 
-        sampler_config = {
-            "name": "dynesty",
-            "nlive": 150,
-            "sample": "auto",
-            "dlogz": 0.3,
-            "seed": truth.random_seed,
-            "n_processes": 1,
-            "queue_size": None,
-        }
-
-        if sampler is not None:
-            sampler_config.update(
+        if sampler is None:
+            sampler_config = {
+                "name": "dynesty",
+                "mode": "static",
+                "init": {
+                    "nlive": 150,
+                    "sample": "auto",
+                },
+                "run": {
+                    "dlogz": 0.3,
+                },
+            }
+        else:
+            sampler_config = dict(
                 sampler
             )
 

@@ -50,7 +50,7 @@ def make_result() -> InferenceResult:
             method="test",
         ),
         diagnostics={
-            "ncall": 1250,
+            "calls": 1250,
         },
         provenance={
             "backend": "test_backend",

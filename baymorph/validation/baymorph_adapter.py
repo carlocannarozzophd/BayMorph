@@ -90,6 +90,7 @@ def recovery_fit_from_inference_result(
 
     for key in (
         "likelihood_evaluations",
+        "calls",
         "ncall",
         "n_calls",
     ):

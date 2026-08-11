@@ -177,3 +177,55 @@ def test_workspace_preserves_native_observation_shapes(
         47,
         73,
     )
+
+
+def test_workspace_preserves_explicit_sampler_contract(
+    tmp_path,
+):
+    workspace = MultiObservationValidationWorkspace(
+        tmp_path
+    )
+
+    joint_path = workspace.write_case(
+        "case-pocomc",
+        make_truth(),
+        sampler={
+            "name": "pocomc",
+            "init": {
+                "n_effective": 512,
+                "n_active": 256,
+                "sample": "tpcn",
+                "random_state": 42,
+                "pool": 10,
+            },
+            "run": {
+                "n_total": 4096,
+                "n_evidence": 4096,
+            },
+        },
+    )
+
+    with joint_path.open() as stream:
+        joint = yaml.safe_load(
+            stream
+        )
+
+    assert joint["fit"]["sampler"] == {
+        "name": "pocomc",
+        "init": {
+            "n_effective": 512,
+            "n_active": 256,
+            "sample": "tpcn",
+            "random_state": 42,
+            "pool": 10,
+        },
+        "run": {
+            "n_total": 4096,
+            "n_evidence": 4096,
+        },
+    }
+
+    assert (
+        "mode"
+        not in joint["fit"]["sampler"]
+    )
