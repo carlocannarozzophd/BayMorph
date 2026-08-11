@@ -1,5 +1,12 @@
 """Scientific validation infrastructure for BayMorph."""
 
+from baymorph.validation.calibration import (
+    CalibrationCase,
+    ParameterCalibration,
+    calibration_from_inference_result,
+    load_calibration_case,
+    summarize_calibration,
+)
 from baymorph.validation.benchmark import BenchmarkResult, benchmark_call
 from baymorph.validation.experiment import (
     RecoveryExperiment,
@@ -23,6 +30,8 @@ from baymorph.validation.metrics import (
     interval_contains_truth,
     parameter_bias,
     scatter,
+    weighted_credible_interval,
+    weighted_posterior_rank,
 )
 from baymorph.validation.recovery import ParameterRecovery, RecoveryResult
 from baymorph.validation.report import summarize_recovery
@@ -36,6 +45,13 @@ from baymorph.validation.simulation import build_synthetic_observation
 from baymorph.validation.workspace import ValidationWorkspace
 
 __all__ = [
+    "weighted_posterior_rank",
+    "weighted_credible_interval",
+    "summarize_calibration",
+    "load_calibration_case",
+    "calibration_from_inference_result",
+    "ParameterCalibration",
+    "CalibrationCase",
     "MultiObservationNoiseCampaign",
     "PreparationFreeMultiObservationCase",
     "PreparationFreeMultiObservationNoiseCampaign",
