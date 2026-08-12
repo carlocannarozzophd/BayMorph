@@ -575,3 +575,556 @@ def test_runner_diagnostics_can_run_residuals_only(
 
     assert result is None
     assert calls == ["residual"]
+
+
+def _multi_observation_runner_config():
+    """Return a minimal structural multi-observation configuration."""
+    return {
+        "observations": {
+            "g": {
+                "config_path": "g.yaml",
+            },
+            "r": {
+                "config_path": "r.yaml",
+            },
+        },
+        "fit": {
+            "models": [
+                "single_sersic",
+            ],
+            "multiband": {
+                "parameters": {},
+            },
+        },
+    }
+
+
+def test_runner_identifies_multi_observation_workflow():
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    assert runner.workflow_mode == "multi_observation"
+    assert runner.is_multi_observation is True
+
+
+def test_runner_rejects_empty_multi_observation_mapping():
+    with pytest.raises(
+        ValueError,
+        match="non-empty 'observations' mapping",
+    ):
+        BayMorphRunner(
+            {
+                "observations": {},
+            },
+            verbose=False,
+        )
+
+
+def test_runner_prepares_all_multi_observation_images(
+    monkeypatch,
+):
+    observation_configs = {
+        "g": {
+            "object": {
+                "name": "galaxy_g",
+            },
+        },
+        "r": {
+            "object": {
+                "name": "galaxy_r",
+            },
+        },
+    }
+    expected = {
+        "g": object(),
+        "r": object(),
+    }
+
+    monkeypatch.setattr(
+        "baymorph.runner.resolve_multiband_observation_configs",
+        lambda config, base_dir=None: observation_configs,
+    )
+
+    def fake_prepare(config):
+        band = config["object"]["name"].rsplit("_", 1)[-1]
+        return expected[band]
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_image_preparation",
+        fake_prepare,
+    )
+
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    result = runner.prepare_image()
+
+    assert result == expected
+    assert runner.image == expected
+
+
+def test_runner_selects_psf_candidates_for_all_observations(
+    monkeypatch,
+):
+    observation_configs = {
+        "g": {
+            "object": {
+                "name": "galaxy_g",
+            },
+        },
+        "r": {
+            "object": {
+                "name": "galaxy_r",
+            },
+        },
+    }
+    expected = {
+        "g": object(),
+        "r": object(),
+    }
+
+    monkeypatch.setattr(
+        "baymorph.runner.resolve_multiband_observation_configs",
+        lambda config, base_dir=None: observation_configs,
+    )
+
+    def fake_select(config):
+        band = config["object"]["name"].rsplit("_", 1)[-1]
+        return expected[band]
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_psf_candidate_selection",
+        fake_select,
+    )
+
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    result = runner.select_psf_candidates()
+
+    assert result == expected
+    assert runner.psf_candidates == expected
+
+
+def test_runner_builds_psfs_for_all_observations(
+    monkeypatch,
+):
+    observation_configs = {
+        "g": {
+            "object": {
+                "name": "galaxy_g",
+            },
+        },
+        "r": {
+            "object": {
+                "name": "galaxy_r",
+            },
+        },
+    }
+    expected = {
+        "g": object(),
+        "r": object(),
+    }
+
+    monkeypatch.setattr(
+        "baymorph.runner.resolve_multiband_observation_configs",
+        lambda config, base_dir=None: observation_configs,
+    )
+
+    def fake_build(config):
+        band = config["object"]["name"].rsplit("_", 1)[-1]
+        return expected[band]
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_psf_construction",
+        fake_build,
+    )
+
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    result = runner.build_psf()
+
+    assert result == expected
+    assert runner.psf == expected
+
+
+def test_runner_runs_multi_observation_fit(
+    monkeypatch,
+):
+    expected = object()
+    captured = {}
+
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    def fake_fit(config):
+        captured["config"] = config
+        return expected
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_multi_observation_fit_from_config",
+        fake_fit,
+    )
+
+    result = runner.fit()
+
+    assert result is expected
+    assert runner.results is expected
+    assert captured["config"] is runner.config
+
+
+def test_runner_multi_observation_fit_preserves_config_path(
+    monkeypatch,
+    tmp_path,
+):
+    config_path = tmp_path / "joint.yaml"
+
+    import yaml
+
+    config_path.write_text(
+        yaml.safe_dump(
+            _multi_observation_runner_config(),
+            sort_keys=False,
+        )
+    )
+
+    expected = object()
+    captured = {}
+
+    def fake_fit(config):
+        captured["config"] = config
+        return expected
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_multi_observation_fit_from_config",
+        fake_fit,
+    )
+
+    runner = BayMorphRunner(
+        config_path,
+        verbose=False,
+    )
+
+    result = runner.fit()
+
+    assert result is expected
+    assert captured["config"] == config_path
+
+
+def test_runner_runs_multi_observation_workflow(
+    monkeypatch,
+):
+    observation_configs = {
+        "g": {
+            "object": {
+                "name": "galaxy_g",
+            },
+            "psf": {
+                "type": "empirical",
+            },
+        },
+        "r": {
+            "object": {
+                "name": "galaxy_r",
+            },
+            "psf": {
+                "type": "empirical",
+            },
+        },
+    }
+
+    expected_fit = object()
+    calls = []
+
+    monkeypatch.setattr(
+        "baymorph.runner.resolve_multiband_observation_configs",
+        lambda config, base_dir=None: observation_configs,
+    )
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_image_preparation",
+        lambda config: calls.append(
+            (
+                "prepare",
+                config["object"]["name"],
+            )
+        )
+        or object(),
+    )
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_psf_candidate_selection",
+        lambda config: calls.append(
+            (
+                "select",
+                config["object"]["name"],
+            )
+        )
+        or object(),
+    )
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_psf_construction",
+        lambda config: calls.append(
+            (
+                "build",
+                config["object"]["name"],
+            )
+        )
+        or object(),
+    )
+
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    monkeypatch.setattr(
+        runner,
+        "fit",
+        lambda: calls.append(
+            ("fit", None)
+        )
+        or expected_fit,
+    )
+
+    result = runner.run()
+
+    assert result is expected_fit
+    assert calls == [
+        ("prepare", "galaxy_g"),
+        ("prepare", "galaxy_r"),
+        ("select", "galaxy_g"),
+        ("select", "galaxy_r"),
+        ("build", "galaxy_g"),
+        ("build", "galaxy_r"),
+        ("fit", None),
+    ]
+
+
+def test_runner_multi_observation_run_skips_gaussian_psf(
+    monkeypatch,
+):
+    observation_configs = {
+        "g": {
+            "object": {
+                "name": "galaxy_g",
+            },
+            "psf": {
+                "type": "empirical",
+            },
+        },
+        "r": {
+            "object": {
+                "name": "galaxy_r",
+            },
+            "psf": {
+                "type": "gaussian",
+            },
+        },
+    }
+
+    selected = []
+    built = []
+
+    monkeypatch.setattr(
+        "baymorph.runner.resolve_multiband_observation_configs",
+        lambda config, base_dir=None: observation_configs,
+    )
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_image_preparation",
+        lambda config: object(),
+    )
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_psf_candidate_selection",
+        lambda config: selected.append(
+            config["object"]["name"]
+        )
+        or object(),
+    )
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_psf_construction",
+        lambda config: built.append(
+            config["object"]["name"]
+        )
+        or object(),
+    )
+
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    monkeypatch.setattr(
+        runner,
+        "fit",
+        lambda: object(),
+    )
+
+    runner.run()
+
+    assert selected == [
+        "galaxy_g",
+    ]
+    assert built == [
+        "galaxy_g",
+    ]
+
+
+def test_runner_multi_observation_run_calls_fit_once(
+    monkeypatch,
+):
+    observation_configs = {
+        "g": {
+            "psf": {
+                "type": "gaussian",
+            },
+        },
+        "r": {
+            "psf": {
+                "type": "gaussian",
+            },
+        },
+    }
+
+    monkeypatch.setattr(
+        "baymorph.runner.resolve_multiband_observation_configs",
+        lambda config, base_dir=None: observation_configs,
+    )
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_image_preparation",
+        lambda config: object(),
+    )
+
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    calls = []
+
+    monkeypatch.setattr(
+        runner,
+        "fit",
+        lambda: calls.append("fit") or object(),
+    )
+
+    runner.run()
+
+    assert calls == [
+        "fit",
+    ]
+
+
+def test_runner_multi_observation_run_with_diagnostics_is_deferred(
+    monkeypatch,
+):
+    observation_configs = {
+        "g": {
+            "psf": {
+                "type": "gaussian",
+            },
+        },
+        "r": {
+            "psf": {
+                "type": "gaussian",
+            },
+        },
+    }
+
+    monkeypatch.setattr(
+        "baymorph.runner.resolve_multiband_observation_configs",
+        lambda config, base_dir=None: observation_configs,
+    )
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_image_preparation",
+        lambda config: object(),
+    )
+
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    monkeypatch.setattr(
+        runner,
+        "fit",
+        lambda: object(),
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match="multi-observation",
+    ):
+        runner.run(
+            diagnostics=True
+        )
+
+
+def test_runner_preserves_arbitrary_observation_identifiers(
+    monkeypatch,
+):
+    """Observation identifiers must be opaque user-defined names."""
+    observation_configs = {
+        "hst_f814w_epoch1": {
+            "object": {
+                "name": "galaxy_hst",
+            },
+        },
+        "jwst_f444w_epoch2": {
+            "object": {
+                "name": "galaxy_jwst",
+            },
+        },
+    }
+
+    monkeypatch.setattr(
+        "baymorph.runner.resolve_multiband_observation_configs",
+        lambda config, base_dir=None: observation_configs,
+    )
+
+    seen = []
+
+    def fake_prepare(config):
+        seen.append(
+            config["object"]["name"]
+        )
+        return object()
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_image_preparation",
+        fake_prepare,
+    )
+
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    products = runner.prepare_image()
+
+    assert tuple(products) == (
+        "hst_f814w_epoch1",
+        "jwst_f444w_epoch2",
+    )
+
+    assert seen == [
+        "galaxy_hst",
+        "galaxy_jwst",
+    ]
