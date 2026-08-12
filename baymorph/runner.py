@@ -453,9 +453,6 @@ class BayMorphRunner:
 
     def residual_maps(self) -> None:
         """Generate residual-map diagnostics."""
-        self._require_single_observation(
-            "residual_maps"
-        )
         self._require_fit_result(
             "residual_maps"
         )
@@ -473,9 +470,6 @@ class BayMorphRunner:
 
     def radial_profile(self) -> Any:
         """Generate radial-profile diagnostics."""
-        self._require_single_observation(
-            "radial_profile"
-        )
         self._require_fit_result(
             "radial_profile"
         )
@@ -497,29 +491,63 @@ class BayMorphRunner:
 
     def diagnostics(self) -> Any:
         """Generate the diagnostics enabled by the configuration."""
-        self._require_single_observation(
-            "diagnostics"
-        )
         self._require_fit_result(
             "diagnostics"
         )
 
-        diagnostics_config = self.config[
-            "diagnostics"
-        ]
+        diagnostics_config = self.config.get(
+            "diagnostics",
+            {},
+        )
 
-        if diagnostics_config["corner"]:
+        if diagnostics_config is None:
+            diagnostics_config = {}
+
+        if not isinstance(
+            diagnostics_config,
+            Mapping,
+        ):
+            raise TypeError(
+                "diagnostics must be a mapping."
+            )
+
+        corner_enabled = bool(
+            diagnostics_config.get(
+                "corner",
+                True,
+            )
+        )
+
+        residual_enabled = bool(
+            diagnostics_config.get(
+                "residual",
+                True,
+            )
+        )
+
+        radial_setting = diagnostics_config.get(
+            "radial_profile",
+            True,
+        )
+
+        if isinstance(
+            radial_setting,
+            Mapping,
+        ):
+            radial_enabled = True
+        else:
+            radial_enabled = bool(
+                radial_setting
+            )
+
+        if corner_enabled:
             self.corner()
 
-        if diagnostics_config["residual"]:
+        if residual_enabled:
             self.residual_maps()
 
-        if diagnostics_config[
-            "radial_profile"
-        ]:
-            profile_bands = (
-                self.radial_profile()
-            )
+        if radial_enabled:
+            profile_bands = self.radial_profile()
         else:
             self.profile_bands = None
             profile_bands = None

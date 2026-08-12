@@ -1031,9 +1031,10 @@ def test_runner_multi_observation_run_calls_fit_once(
     ]
 
 
-def test_runner_multi_observation_run_with_diagnostics_is_deferred(
+def test_runner_multi_observation_run_can_generate_diagnostics(
     monkeypatch,
 ):
+    """Joint execution should run configured diagnostics after one fit."""
     observation_configs = {
         "g": {
             "psf": {
@@ -1062,19 +1063,220 @@ def test_runner_multi_observation_run_with_diagnostics_is_deferred(
         verbose=False,
     )
 
+    expected_result = object()
+    calls = []
+
     monkeypatch.setattr(
         runner,
         "fit",
-        lambda: object(),
+        lambda: calls.append(
+            "fit"
+        )
+        or expected_result,
     )
 
-    with pytest.raises(
-        NotImplementedError,
-        match="multi-observation",
+    monkeypatch.setattr(
+        runner,
+        "diagnostics",
+        lambda: calls.append(
+            "diagnostics"
+        ),
+    )
+
+    result = runner.run(
+        diagnostics=True,
+    )
+
+    assert result is expected_result
+    assert calls == [
+        "fit",
+        "diagnostics",
+    ]
+
+
+def test_runner_multi_observation_residual_maps_use_joint_result(
+    monkeypatch,
+):
+    """Runner should expose observation-specific residual diagnostics."""
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    fit_result = object()
+    runner.fit_result = fit_result
+
+    captured = {}
+
+    def fake_run_residual_map_diagnostics(
+        config,
+        result,
     ):
-        runner.run(
-            diagnostics=True
+        captured["config"] = config
+        captured["result"] = result
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.run_residual_map_diagnostics",
+        fake_run_residual_map_diagnostics,
+    )
+
+    runner.residual_maps()
+
+    assert captured["config"] is runner.config
+    assert captured["result"] is fit_result
+
+
+def test_runner_multi_observation_radial_profile_stores_observation_bands(
+    monkeypatch,
+):
+    """Runner should retain observation-indexed joint radial-profile bands."""
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    fit_result = object()
+    runner.fit_result = fit_result
+
+    expected_bands = {
+        "g": object(),
+        "r": object(),
+    }
+
+    captured = {}
+
+    def fake_run_radial_profile_diagnostics(
+        config,
+        result,
+    ):
+        captured["config"] = config
+        captured["result"] = result
+        return expected_bands
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.run_radial_profile_diagnostics",
+        fake_run_radial_profile_diagnostics,
+    )
+
+    result = runner.radial_profile()
+
+    assert result is expected_bands
+    assert runner.profile_bands is expected_bands
+    assert captured["config"] is runner.config
+    assert captured["result"] is fit_result
+
+
+def test_runner_multi_observation_diagnostics_default_to_all_products(
+    monkeypatch,
+):
+    """Missing joint diagnostic settings should enable standard diagnostics."""
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    runner.fit_result = object()
+
+    expected_bands = {
+        "g": object(),
+        "r": object(),
+    }
+
+    calls = []
+
+    monkeypatch.setattr(
+        runner,
+        "corner",
+        lambda: calls.append(
+            "corner"
+        ),
+    )
+
+    monkeypatch.setattr(
+        runner,
+        "residual_maps",
+        lambda: calls.append(
+            "residual"
+        ),
+    )
+
+    monkeypatch.setattr(
+        runner,
+        "radial_profile",
+        lambda: calls.append(
+            "radial"
         )
+        or expected_bands,
+    )
+
+    result = runner.diagnostics()
+
+    assert result is expected_bands
+    assert calls == [
+        "corner",
+        "residual",
+        "radial",
+    ]
+
+
+def test_runner_multi_observation_diagnostics_honor_toggles(
+    monkeypatch,
+):
+    """Joint diagnostics should honor independent output toggles."""
+    config = _multi_observation_runner_config()
+
+    config["diagnostics"] = {
+        "corner": False,
+        "residual": True,
+        "radial_profile": {},
+    }
+
+    runner = BayMorphRunner(
+        config,
+        verbose=False,
+    )
+
+    runner.fit_result = object()
+
+    expected_bands = {
+        "g": object(),
+        "r": object(),
+    }
+
+    calls = []
+
+    monkeypatch.setattr(
+        runner,
+        "corner",
+        lambda: calls.append(
+            "corner"
+        ),
+    )
+
+    monkeypatch.setattr(
+        runner,
+        "residual_maps",
+        lambda: calls.append(
+            "residual"
+        ),
+    )
+
+    monkeypatch.setattr(
+        runner,
+        "radial_profile",
+        lambda: calls.append(
+            "radial"
+        )
+        or expected_bands,
+    )
+
+    result = runner.diagnostics()
+
+    assert result is expected_bands
+    assert calls == [
+        "residual",
+        "radial",
+    ]
 
 
 def test_runner_preserves_arbitrary_observation_identifiers(
