@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import matplotlib.pyplot as plt
 
 from baymorph.pipeline.config import (
+    load_config,
     load_resolved_config,
     resolve_config,
 )
 from baymorph.pipeline.image_preparation import (
     load_image_preparation_products,
+)
+from baymorph.pipeline.multi_observation_outputs import (
+    multi_observation_paths,
+)
+from baymorph.pipeline.multiband_config import (
+    resolve_multiband_config,
 )
 from baymorph.pipeline.outputs import (
     pipeline_paths,
@@ -68,41 +77,106 @@ def _psf_to_image(psf, config=None):
     return None
 
 
-def run_residual_map_diagnostics(
-    config,
+def _resolve_residual_config(
+    config: str | Path | Mapping[str, Any],
+) -> tuple[
+    dict[str, Any],
+    bool,
+    Path,
+]:
+    """Resolve a diagnostic configuration and identify its workflow mode."""
+    if isinstance(
+        config,
+        (str, Path),
+    ):
+        path = Path(
+            config
+        )
+
+        raw_config = load_config(
+            path
+        )
+
+        if "observations" in raw_config:
+            return (
+                raw_config,
+                True,
+                path.parent,
+            )
+
+        return (
+            load_resolved_config(
+                path
+            ),
+            False,
+            path.parent,
+        )
+
+    if isinstance(
+        config,
+        Mapping,
+    ):
+        raw_config = dict(
+            config
+        )
+
+        if "observations" in raw_config:
+            return (
+                raw_config,
+                True,
+                Path.cwd(),
+            )
+
+        return (
+            resolve_config(
+                raw_config
+            ),
+            False,
+            Path.cwd(),
+        )
+
+    raise TypeError(
+        "config must be a path or a mapping."
+    )
+
+
+def _normalize_fit_results(
     fit_results,
-):
-    """Generate and save pipeline residual-map diagnostics.
+) -> dict[str, Any]:
+    """Return fit products as a model-name mapping."""
+    if isinstance(
+        fit_results,
+        dict,
+    ):
+        return fit_results
 
-    For each fitted model, this routine creates the standard BayMorph
-    residual-map summary, including the original image, original and
-    prepared cutouts, best-fit model, combined masks, PSF, residual map,
-    and noise-normalized residual map.
+    return {
+        fit_results.model_name: fit_results,
+    }
 
-    Parameters
-    ----------
-    config : dict, str, or pathlib.Path
-        Pipeline configuration dictionary or path to a YAML configuration
-        file.
 
-    fit_results : RealFitProducts or dict
-        Single fit result or mapping from model name to fit result. Each
-        fit result must expose at least
+def _multi_observation_title(
+    observation_config: Mapping[str, Any],
+    model_name: str,
+    observation_name: str,
+) -> str:
+    """Build a residual diagnostic title for one observation."""
+    base_title = _diagnostic_title(
+        observation_config,
+        model_name,
+    )
 
-        - ``model_name``
-        - ``best_model_image``
+    return (
+        f"{base_title} | observation: "
+        f"{observation_name}"
+    )
 
-    Returns
-    -------
-    None
-        Residual-map figures are written to the configured fitting-output
-        directories.
-    """
-    if isinstance(config, (str, Path)):
-        config = load_resolved_config(config)
-    else:
-        config = resolve_config(config)
 
+def _run_single_observation_residual_maps(
+    config: Mapping[str, Any],
+    fit_results,
+) -> None:
+    """Generate residual-map diagnostics for a single observation."""
     image_products = load_image_preparation_products(
         config,
     )
@@ -118,22 +192,21 @@ def run_residual_map_diagnostics(
     except FileNotFoundError:
         psf = None
 
-    if not isinstance(
-        fit_results,
-        dict,
-    ):
-        fit_results = {
-            fit_results.model_name: fit_results,
-        }
+    fits = _normalize_fit_results(
+        fit_results
+    )
 
-    for model_name, fit in fit_results.items():
+    for model_name, fit in fits.items():
         fig, _ = plot_pipeline_fit_maps(
             original_cutout=image_products.cutout,
             prepared_cutout=image_products.prepared_data,
             model=fit.best_model_image,
             noise=image_products.noise,
             segmentation=image_products.segmentation,
-            psf=_psf_to_image(psf, config),
+            psf=_psf_to_image(
+                psf,
+                config,
+            ),
             contaminant_mask=image_products.fitting_mask,
             target_mask=image_products.target_segment,
             original_image=image_products.original_image,
@@ -145,11 +218,200 @@ def run_residual_map_diagnostics(
             show=False,
         )
 
+        output_path = paths[
+            model_name
+        ][
+            "residual"
+        ]
+
+        output_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
         fig.savefig(
-            paths[model_name]["residual"],
+            output_path,
             bbox_inches="tight",
         )
 
         plt.close(
             fig,
         )
+
+
+def _run_multi_observation_residual_maps(
+    config: Mapping[str, Any],
+    fit_results,
+    *,
+    base_dir: Path,
+) -> None:
+    """Generate one residual-map diagnostic for each observation."""
+    observation_configs, _ = resolve_multiband_config(
+        config,
+        base_dir=base_dir,
+    )
+
+    paths = multi_observation_paths(
+        config
+    )[
+        "fits"
+    ]
+
+    fits = _normalize_fit_results(
+        fit_results
+    )
+
+    for model_name, fit in fits.items():
+        if not hasattr(
+            fit,
+            "observations",
+        ):
+            raise TypeError(
+                "Multi-observation residual diagnostics require fit "
+                "products exposing an 'observations' mapping."
+            )
+
+        fit_observations = fit.observations
+
+        if not isinstance(
+            fit_observations,
+            Mapping,
+        ):
+            raise TypeError(
+                "Multi-observation fit products must expose observations "
+                "as a mapping."
+            )
+
+        missing_observations = [
+            observation_name
+            for observation_name in observation_configs
+            if observation_name not in fit_observations
+        ]
+
+        if missing_observations:
+            missing_text = ", ".join(
+                repr(
+                    observation_name
+                )
+                for observation_name in missing_observations
+            )
+
+            raise ValueError(
+                "Fit products are missing observation products for "
+                f"{missing_text}."
+            )
+
+        observation_paths = paths[
+            model_name
+        ][
+            "observations"
+        ]
+
+        for (
+            observation_name,
+            observation_config,
+        ) in observation_configs.items():
+            image_products = (
+                load_image_preparation_products(
+                    observation_config
+                )
+            )
+
+            observation_fit = fit_observations[
+                observation_name
+            ]
+
+            try:
+                psf = load_empirical_psf(
+                    observation_config
+                )
+            except FileNotFoundError:
+                psf = None
+
+            fig, _ = plot_pipeline_fit_maps(
+                original_cutout=image_products.cutout,
+                prepared_cutout=image_products.prepared_data,
+                model=observation_fit.best_model_image,
+                noise=observation_fit.noise,
+                segmentation=image_products.segmentation,
+                psf=_psf_to_image(
+                    psf,
+                    observation_config,
+                ),
+                contaminant_mask=image_products.fitting_mask,
+                target_mask=image_products.target_segment,
+                original_image=image_products.original_image,
+                cutout_bounds=image_products.cutout_bounds,
+                title=_multi_observation_title(
+                    observation_config,
+                    model_name,
+                    observation_name,
+                ),
+                show=False,
+            )
+
+            output_path = observation_paths[
+                observation_name
+            ][
+                "residual_plot"
+            ]
+
+            output_path.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+            fig.savefig(
+                output_path,
+                bbox_inches="tight",
+            )
+
+            plt.close(
+                fig,
+            )
+
+
+def run_residual_map_diagnostics(
+    config,
+    fit_results,
+):
+    """Generate and save pipeline residual-map diagnostics.
+
+    Single-observation analyses generate the established BayMorph diagnostic
+    for each fitted model. Multi-observation analyses generate the same
+    diagnostic independently on every native observation grid while using
+    model products from the single joint posterior fit.
+
+    Parameters
+    ----------
+    config : dict, str, or pathlib.Path
+        Pipeline or joint multi-observation configuration.
+    fit_results : RealFitProducts, MultiObservationFitProducts, or dict
+        Fit products associated with the configuration.
+
+    Returns
+    -------
+    None
+        Residual-map figures are written to the configured fitting-output
+        directories.
+    """
+    (
+        resolved_config,
+        is_multi_observation,
+        base_dir,
+    ) = _resolve_residual_config(
+        config
+    )
+
+    if is_multi_observation:
+        _run_multi_observation_residual_maps(
+            resolved_config,
+            fit_results,
+            base_dir=base_dir,
+        )
+        return
+
+    _run_single_observation_residual_maps(
+        resolved_config,
+        fit_results,
+    )
