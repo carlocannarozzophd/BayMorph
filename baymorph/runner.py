@@ -436,9 +436,6 @@ class BayMorphRunner:
 
     def corner(self) -> None:
         """Generate corner-plot diagnostics."""
-        self._require_single_observation(
-            "corner"
-        )
         self._require_fit_result(
             "corner"
         )

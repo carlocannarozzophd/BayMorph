@@ -1128,3 +1128,37 @@ def test_runner_preserves_arbitrary_observation_identifiers(
         "galaxy_hst",
         "galaxy_jwst",
     ]
+
+
+def test_runner_multi_observation_corner_uses_joint_diagnostic(
+    monkeypatch,
+):
+    """Multi-observation runner should expose the joint corner diagnostic."""
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    fit_result = object()
+    runner.fit_result = fit_result
+
+    captured = {}
+
+    def fake_run_corner_diagnostics(
+        config,
+        result,
+    ):
+        captured["config"] = config
+        captured["result"] = result
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.run_corner_diagnostics",
+        fake_run_corner_diagnostics,
+    )
+
+    runner.corner()
+
+    assert captured["config"] is runner.config
+    assert captured["result"] is fit_result
+
+
