@@ -12,17 +12,7 @@ from baymorph.analysis.radial_profiles import radial_profile_from_image
 
 @dataclass(frozen=True)
 class ProfileBand:
-    """Percentile bands for one radial profile.
-
-    Parameters
-    ----------
-    p16 : ndarray
-        Sixteenth-percentile radial profile.
-    p50 : ndarray
-        Median radial profile.
-    p84 : ndarray
-        Eighty-fourth-percentile radial profile.
-    """
+    """Percentile bands for one radial profile."""
 
     p16: np.ndarray
     p50: np.ndarray
@@ -31,44 +21,21 @@ class ProfileBand:
 
 @dataclass(frozen=True)
 class PosteriorProfileResult:
-    """Posterior radial-profile summaries.
-
-    Parameters
-    ----------
-    radius : ndarray
-        Radial-bin centers.
-    total : ProfileBand
-        Posterior percentile bands for the total galaxy profile, excluding
-        any additive sky component.
-    components : dict of str to ProfileBand
-        Posterior percentile bands for each named galaxy component.
-    """
+    """Posterior radial-profile summaries."""
 
     radius: np.ndarray
     total: ProfileBand
     components: dict[str, ProfileBand]
 
 
-def _as_samples_array(posterior) -> np.ndarray:
-    """Return posterior samples as a two-dimensional array.
-
-    Parameters
-    ----------
-    posterior : object or array-like
-        Posterior container exposing a ``samples`` attribute, or a raw
-        two-dimensional sample array.
-
-    Returns
-    -------
-    ndarray
-        Posterior samples with shape ``(n_samples, n_parameters)``.
-
-    Raises
-    ------
-    ValueError
-        If the samples are not two-dimensional or contain no rows.
-    """
-    if hasattr(posterior, "samples"):
+def _as_samples_array(
+    posterior,
+) -> np.ndarray:
+    """Return posterior samples as a two-dimensional array."""
+    if hasattr(
+        posterior,
+        "samples",
+    ):
         samples = posterior.samples
     else:
         samples = posterior
@@ -97,32 +64,15 @@ def _select_sample_indices(
     max_samples: int | None,
     random_state: int | np.random.Generator | None,
 ) -> np.ndarray:
-    """Return posterior-sample indices used for profile estimation.
-
-    Parameters
-    ----------
-    n_samples : int
-        Total number of posterior samples.
-    max_samples : int, optional
-        Maximum number of samples to retain. If None, use all samples.
-    random_state : int or numpy.random.Generator, optional
-        Random-number state used for reproducible subsampling.
-
-    Returns
-    -------
-    ndarray
-        Sorted integer indices of selected posterior samples.
-
-    Raises
-    ------
-    ValueError
-        If ``max_samples`` is non-positive.
-    """
+    """Return posterior-sample indices used for profile estimation."""
     indices = np.arange(
         n_samples
     )
 
-    if max_samples is None or max_samples >= n_samples:
+    if (
+        max_samples is None
+        or max_samples >= n_samples
+    ):
         return indices
 
     if max_samples <= 0:
@@ -152,22 +102,14 @@ def _select_sample_indices(
 def _profile_band(
     profile_stack: np.ndarray,
 ) -> ProfileBand:
-    """Return 16th, 50th, and 84th percentile profile bands.
-
-    Parameters
-    ----------
-    profile_stack : ndarray
-        Stack of radial profiles with shape
-        ``(n_samples, n_radial_bins)``.
-
-    Returns
-    -------
-    ProfileBand
-        Posterior percentile bands.
-    """
+    """Return 16th, 50th, and 84th percentile profile bands."""
     p16, p50, p84 = np.nanpercentile(
         profile_stack,
-        [16.0, 50.0, 84.0],
+        [
+            16.0,
+            50.0,
+            84.0,
+        ],
         axis=0,
     )
 
@@ -185,33 +127,18 @@ def _radial_profile(
     center_y: float,
     radii: np.ndarray,
     mask: np.ndarray | None,
+    axis_ratio: float,
+    position_angle: float,
 ) -> np.ndarray:
-    """Return a median radial profile for one image.
-
-    Parameters
-    ----------
-    image : ndarray
-        Input image.
-    center_x : float
-        X-coordinate of the radial-profile center.
-    center_y : float
-        Y-coordinate of the radial-profile center.
-    radii : ndarray
-        Radial-bin edges.
-    mask : ndarray of bool, optional
-        Pixels excluded from the radial-profile calculation.
-
-    Returns
-    -------
-    ndarray
-        Median radial-profile values.
-    """
+    """Return one median elliptical radial profile."""
     return radial_profile_from_image(
         image,
         center_x=center_x,
         center_y=center_y,
         radii=radii,
         mask=mask,
+        axis_ratio=axis_ratio,
+        position_angle=position_angle,
     )
 
 
@@ -223,37 +150,44 @@ def compute_posterior_profile_bands(
     *,
     center_x: float,
     center_y: float,
+    axis_ratio: float = 1.0,
+    position_angle: float = 0.0,
     mask: np.ndarray | None = None,
     max_samples: int | None = 500,
     random_state: int | np.random.Generator | None = 0,
 ) -> PosteriorProfileResult:
-    """Compute posterior radial-profile percentile bands.
+    """Compute posterior percentile bands on fixed elliptical annuli.
 
-    For each selected posterior sample, the model components are rendered
-    individually. The total galaxy image is then constructed explicitly as
-    the sum of those components. Any additive sky term included by a wrapper
-    model is therefore excluded from both the total galaxy profile and the
-    component profiles.
+    For every selected posterior sample, galaxy components are rendered
+    individually and summed explicitly. Additive sky terms provided by model
+    wrappers are therefore excluded.
+
+    All posterior samples are measured on the same reference annuli defined
+    by ``center_x``, ``center_y``, ``axis_ratio``, and ``position_angle``.
+    This keeps the radial coordinate physically comparable between samples.
 
     Parameters
     ----------
     posterior : object or array-like
         Posterior samples or a posterior container exposing ``samples``.
     model_factory : callable
-        Callable that accepts one posterior sample and returns a model object
-        exposing ``render_components``.
+        Callable accepting one posterior sample and returning a model exposing
+        ``render_components``.
     image_shape : tuple of int
         Output image shape as ``(ny, nx)``.
     radii : ndarray
-        Radial-bin edges.
-    center_x : float
-        X-coordinate of the radial-profile center.
-    center_y : float
-        Y-coordinate of the radial-profile center.
+        Semi-major-axis radial-bin edges in pixels.
+    center_x, center_y : float
+        Detector-space centre of the reference annuli.
+    axis_ratio : float, default=1
+        Minor-to-major axis ratio of the fixed reference annuli.
+    position_angle : float, default=0
+        Counter-clockwise major-axis angle of the fixed reference annuli from
+        the positive detector x-axis, in radians.
     mask : ndarray of bool, optional
         Pixels excluded from profile measurements.
     max_samples : int, optional
-        Maximum number of posterior samples used to estimate profile bands.
+        Maximum number of posterior samples used for profile estimation.
     random_state : int or numpy.random.Generator, optional
         Random-number state used for reproducible posterior subsampling.
 
@@ -262,12 +196,6 @@ def compute_posterior_profile_bands(
     PosteriorProfileResult
         Posterior percentile bands for the total galaxy profile and each
         named component.
-
-    Raises
-    ------
-    ValueError
-        If model component names change between posterior samples, or if a
-        model returns no components.
     """
     samples = _as_samples_array(
         posterior
@@ -290,12 +218,21 @@ def compute_posterior_profile_bands(
     )
 
     total_profiles = []
-    component_profiles: dict[str, list[np.ndarray]] = {}
-    component_names: tuple[str, ...] | None = None
+    component_profiles: dict[
+        str,
+        list[np.ndarray],
+    ] = {}
+
+    component_names: tuple[
+        str,
+        ...,
+    ] | None = None
 
     for sample_index in sample_indices:
         model = model_factory(
-            samples[sample_index]
+            samples[
+                sample_index
+            ]
         )
 
         components = model.render_components(
@@ -313,10 +250,12 @@ def compute_posterior_profile_bands(
 
         if component_names is None:
             component_names = current_names
+
             component_profiles = {
                 name: []
                 for name in component_names
             }
+
         elif current_names != component_names:
             raise ValueError(
                 "model component names changed between posterior samples"
@@ -347,17 +286,23 @@ def compute_posterior_profile_bands(
                 center_y=center_y,
                 radii=radii,
                 mask=mask,
+                axis_ratio=axis_ratio,
+                position_angle=position_angle,
             )
         )
 
         for name, image in component_images.items():
-            component_profiles[name].append(
+            component_profiles[
+                name
+            ].append(
                 _radial_profile(
                     image,
                     center_x=center_x,
                     center_y=center_y,
                     radii=radii,
                     mask=mask,
+                    axis_ratio=axis_ratio,
+                    position_angle=position_angle,
                 )
             )
 

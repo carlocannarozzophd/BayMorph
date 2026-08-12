@@ -266,3 +266,78 @@ def test_compute_posterior_profile_bands_rejects_changing_component_names():
             center_y=10.0,
             max_samples=None,
         )
+
+def test_posterior_profile_bands_use_reference_elliptical_geometry():
+    from baymorph.analysis.radial_profiles import (
+        elliptical_radius_map,
+    )
+
+    shape = (
+        41,
+        41,
+    )
+
+    source_radius = elliptical_radius_map(
+        shape,
+        center_x=20.0,
+        center_y=20.0,
+        axis_ratio=0.4,
+        position_angle=0.5,
+    )
+
+    class FixedImageModel:
+        def render_components(
+            self,
+            shape,
+        ):
+            assert shape == source_radius.shape
+
+            return {
+                "galaxy": source_radius,
+            }
+
+    samples = np.asarray(
+        [
+            [
+                1.0,
+            ],
+        ]
+    )
+
+    radii = np.asarray(
+        [
+            0.0,
+            3.0,
+            6.0,
+            9.0,
+            12.0,
+        ]
+    )
+
+    elliptical = compute_posterior_profile_bands(
+        posterior=samples,
+        model_factory=lambda sample: FixedImageModel(),
+        image_shape=shape,
+        radii=radii,
+        center_x=20.0,
+        center_y=20.0,
+        axis_ratio=0.4,
+        position_angle=0.5,
+    )
+
+    circular = compute_posterior_profile_bands(
+        posterior=samples,
+        model_factory=lambda sample: FixedImageModel(),
+        image_shape=shape,
+        radii=radii,
+        center_x=20.0,
+        center_y=20.0,
+        axis_ratio=1.0,
+        position_angle=0.0,
+    )
+
+    assert not np.allclose(
+        elliptical.total.p50,
+        circular.total.p50,
+        equal_nan=True,
+    )
