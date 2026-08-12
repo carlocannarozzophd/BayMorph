@@ -32,6 +32,9 @@ from baymorph.observation.model_parameter_transforms import (
 from baymorph.pipeline.image_preparation import (
     load_image_preparation_products,
 )
+from baymorph.pipeline.multi_observation_persistence import (
+    save_multi_observation_fit_products,
+)
 from baymorph.pipeline.multiband_config import (
     multiband_parameter_frame,
     resolve_multiband_config,
@@ -158,11 +161,19 @@ def run_multi_observation_fit_from_config(
         problem=context.problem,
     )
 
-    return _build_multi_observation_fit_products(
+    products = _build_multi_observation_fit_products(
         context=context,
         inference_result=inference_result,
         model_name=model_name,
     )
+
+    if "outputs" in raw_config:
+        save_multi_observation_fit_products(
+            raw_config,
+            products,
+        )
+
+    return products
 
 
 def _run_multiband_inference(
