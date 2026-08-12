@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import math
+import os
+import re
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -11,13 +14,23 @@ import yaml
 
 from baymorph.core.observation import Observation
 from baymorph.pipeline.config import resolve_config
-
-
-TargetPosition = (
-    str
-    | Mapping[str, float]
-    | Sequence[float]
+from baymorph.pipeline.multiband_config import (
+    build_multiband_parameter_layout,
+    resolve_multiband_observation_configs,
 )
+
+
+TargetPosition = str | Mapping[str, float] | Sequence[float]
+
+
+_OBSERVATION_OPTION_KEYS = {
+    "object_name",
+    "overwrite",
+    "cutout_mode",
+    "fixed_size",
+    "psf_type",
+    "gaussian_fwhm_pixels",
+}
 
 
 def _finite_positive(
@@ -96,17 +109,13 @@ def _normalize_target_position(
             ]
         )
 
-    else:
-        if (
-            isinstance(
-                target_position,
-                (str, bytes),
-            )
-            or len(
-                target_position
-            )
-            != 2
-        ):
+    elif isinstance(
+        target_position,
+        Sequence,
+    ):
+        if len(
+            target_position
+        ) != 2:
             raise ValueError(
                 "Target-position sequences must contain exactly two values."
             )
@@ -120,6 +129,12 @@ def _normalize_target_position(
             target_position[
                 1
             ]
+        )
+
+    else:
+        raise TypeError(
+            "target_position must be 'center', an x/y mapping, "
+            "or a two-element sequence."
         )
 
     if not (
@@ -195,10 +210,7 @@ def _empirical_psf_config(
     pixel_scale: float | None,
 ) -> dict[str, Any]:
     """Build empirical-PSF configuration from deterministic metadata."""
-    candidate_selection: dict[
-        str,
-        Any,
-    ] = {
+    candidate_selection: dict[str, Any] = {
         "auto": True,
     }
 
@@ -230,9 +242,7 @@ def _empirical_psf_config(
     return {
         "type": "empirical",
         "empirical": {
-            "candidate_selection": (
-                candidate_selection
-            ),
+            "candidate_selection": candidate_selection,
         },
     }
 
@@ -275,6 +285,29 @@ def _gaussian_psf_config(
             ),
         },
     }
+
+
+def _write_yaml(
+    path: Path,
+    config: Mapping[str, Any],
+) -> None:
+    """Write one YAML configuration."""
+    path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    with path.open(
+        "w",
+        encoding="utf-8",
+    ) as stream:
+        yaml.safe_dump(
+            dict(
+                config
+            ),
+            stream,
+            sort_keys=False,
+        )
 
 
 def make_config_from_fits(
@@ -363,10 +396,8 @@ def make_config_from_fits(
         observation.metadata.pixel_scale
     )
 
-    normalized_target = (
-        _normalize_target_position(
-            target_position
-        )
+    normalized_target = _normalize_target_position(
+        target_position
     )
 
     cutout = _cutout_config(
@@ -388,9 +419,7 @@ def make_config_from_fits(
         psf = _gaussian_psf_config(
             observation,
             pixel_scale=pixel_scale,
-            gaussian_fwhm_pixels=(
-                gaussian_fwhm_pixels
-            ),
+            gaussian_fwhm_pixels=gaussian_fwhm_pixels,
         )
 
     else:
@@ -398,10 +427,7 @@ def make_config_from_fits(
             "psf_type must be 'empirical' or 'gaussian'."
         )
 
-    config: dict[
-        str,
-        Any,
-    ] = {
+    config: dict[str, Any] = {
         "object": {
             "name": resolved_name,
         },
@@ -410,9 +436,7 @@ def make_config_from_fits(
                 fits_path
             ),
             "pixel_scale": pixel_scale,
-            "target_position": (
-                normalized_target
-            ),
+            "target_position": normalized_target,
             "cutout": cutout,
         },
         "outputs": {
@@ -428,30 +452,600 @@ def make_config_from_fits(
         "psf": psf,
     }
 
-    # Validate compatibility with the established single-observation
-    # configuration contract without expanding the YAML with all defaults.
     resolve_config(
         config
     )
 
     if output_path is not None:
-        output_path = Path(
-            output_path
+        _write_yaml(
+            Path(
+                output_path
+            ),
+            config,
         )
-
-        output_path.parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-
-        with output_path.open(
-            "w",
-            encoding="utf-8",
-        ) as stream:
-            yaml.safe_dump(
-                config,
-                stream,
-                sort_keys=False,
-            )
 
     return config
+
+
+def _normalize_observations(
+    observations: Mapping[str, str | Path],
+) -> dict[str, Path]:
+    """Validate and normalize a multi-observation FITS mapping."""
+    if (
+        not isinstance(
+            observations,
+            Mapping,
+        )
+        or not observations
+    ):
+        raise ValueError(
+            "observations must be a non-empty mapping."
+        )
+
+    normalized: dict[str, Path] = {}
+
+    for name, fits_path in observations.items():
+        if (
+            not isinstance(
+                name,
+                str,
+            )
+            or not name
+        ):
+            raise ValueError(
+                "Observation identifiers must be non-empty strings."
+            )
+
+        path = Path(
+            fits_path
+        )
+
+        if not path.exists():
+            raise FileNotFoundError(
+                f"FITS file not found for observation '{name}': {path}"
+            )
+
+        normalized[
+            name
+        ] = path
+
+    return normalized
+
+
+def _normalize_target_positions(
+    target_positions: Mapping[str, TargetPosition],
+    *,
+    observation_names: tuple[str, ...],
+) -> dict[str, TargetPosition]:
+    """Require exactly one explicit target seed per observation."""
+    if not isinstance(
+        target_positions,
+        Mapping,
+    ):
+        raise TypeError(
+            "target_positions must be a mapping."
+        )
+
+    supplied = set(
+        target_positions
+    )
+    expected = set(
+        observation_names
+    )
+
+    if supplied != expected:
+        missing = sorted(
+            expected.difference(
+                supplied
+            )
+        )
+        extra = sorted(
+            supplied.difference(
+                expected
+            )
+        )
+
+        raise ValueError(
+            "target_positions must define exactly the configured "
+            f"observations. Missing: {missing}. Extra: {extra}."
+        )
+
+    return {
+        name: target_positions[
+            name
+        ]
+        for name in observation_names
+    }
+
+
+def _normalize_observation_options(
+    observation_options: Mapping[str, Mapping[str, Any]] | None,
+    *,
+    observation_names: tuple[str, ...],
+) -> dict[str, dict[str, Any]]:
+    """Normalize optional per-observation configuration overrides."""
+    if observation_options is None:
+        return {
+            name: {}
+            for name in observation_names
+        }
+
+    if not isinstance(
+        observation_options,
+        Mapping,
+    ):
+        raise TypeError(
+            "observation_options must be a mapping."
+        )
+
+    unknown_observations = sorted(
+        set(
+            observation_options
+        ).difference(
+            observation_names
+        )
+    )
+
+    if unknown_observations:
+        raise ValueError(
+            "observation_options contains unknown observation identifiers: "
+            f"{unknown_observations}."
+        )
+
+    normalized = {
+        name: {}
+        for name in observation_names
+    }
+
+    for name, options in observation_options.items():
+        if not isinstance(
+            options,
+            Mapping,
+        ):
+            raise TypeError(
+                f"Options for observation '{name}' must be a mapping."
+            )
+
+        unknown_keys = sorted(
+            set(
+                options
+            ).difference(
+                _OBSERVATION_OPTION_KEYS
+            )
+        )
+
+        if unknown_keys:
+            raise ValueError(
+                f"Unsupported options for observation '{name}': "
+                f"{unknown_keys}."
+            )
+
+        normalized[
+            name
+        ] = dict(
+            options
+        )
+
+    return normalized
+
+
+def _safe_observation_config_filename(
+    observation_name: str,
+) -> str:
+    """Return a filesystem-safe YAML filename for one observation."""
+    stem = re.sub(
+        r"[^A-Za-z0-9_.-]+",
+        "_",
+        observation_name,
+    ).strip(
+        "._"
+    )
+
+    if not stem:
+        stem = "observation"
+
+    return f"{stem}.yaml"
+
+
+def _observation_config_paths(
+    observation_names: tuple[str, ...],
+    *,
+    output_dir: Path,
+) -> dict[str, Path]:
+    """Return collision-free observation YAML paths."""
+    paths = {
+        name: (
+            output_dir
+            / _safe_observation_config_filename(
+                name
+            )
+        )
+        for name in observation_names
+    }
+
+    filenames = [
+        path.name
+        for path in paths.values()
+    ]
+
+    if len(
+        filenames
+    ) != len(
+        set(
+            filenames
+        )
+    ):
+        raise ValueError(
+            "Observation identifiers produce colliding configuration "
+            "filenames. Rename the affected observation identifiers."
+        )
+
+    return paths
+
+
+def _validate_sky_frame_wcs(
+    observations: Mapping[str, Path],
+) -> None:
+    """Require a WCS for every sky-frame observation."""
+    for name, fits_path in observations.items():
+        observation = Observation.from_fits(
+            fits_path
+        )
+
+        if observation.metadata.wcs is None:
+            raise ValueError(
+                "Sky-frame multi-observation configuration requires a "
+                f"valid WCS for observation '{name}'."
+            )
+
+
+def _relative_config_path(
+    path: Path,
+    *,
+    joint_directory: Path,
+) -> str:
+    """Return a YAML path relative to the declaring joint configuration."""
+    relative = os.path.relpath(
+        path,
+        start=joint_directory,
+    )
+
+    return Path(
+        relative
+    ).as_posix()
+
+
+def make_multi_observation_config(
+    observations: Mapping[str, str | Path],
+    *,
+    target_positions: Mapping[str, TargetPosition],
+    parameters: Mapping[str, Any],
+    output_dir: str | Path,
+    joint_output_path: str | Path | None = None,
+    analysis_name: str = "joint_analysis",
+    model_name: str = "single_sersic",
+    parameter_frame: str = "sky",
+    sampler: Mapping[str, Any] | None = None,
+    likelihood: Mapping[str, Any] | None = None,
+    outputs_root: str | Path = "runs",
+    overwrite: bool = True,
+    observation_options: Mapping[str, Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Generate observation YAML files and one joint BayMorph configuration.
+
+    Parameters
+    ----------
+    observations : mapping
+        Mapping from opaque user-defined observation identifiers to FITS
+        image paths.
+    target_positions : mapping
+        Explicit target-identification seed for every observation.
+    parameters : mapping
+        Complete multi-observation parameter specification. Coupling and
+        typed priors must be declared explicitly for every model parameter.
+    output_dir : str or pathlib.Path
+        Directory in which individual observation YAML files are written.
+    joint_output_path : str or pathlib.Path, optional
+        Joint YAML path. Defaults to ``output_dir / "joint.yaml"``.
+    analysis_name : str, default="joint_analysis"
+        Name of the joint analysis output tree.
+    model_name : str, default="single_sersic"
+        Registered BayMorph morphology model.
+    parameter_frame : {"sky", "detector"}, default="sky"
+        Inferential parameter frame. Sky coordinates are preferred for
+        heterogeneous native-grid observations of the same object.
+    sampler : mapping, optional
+        Explicit inference-backend configuration. If omitted, the standard
+        resolved BayMorph sampler configuration is reused.
+    likelihood : mapping, optional
+        Joint image-likelihood configuration. The default is a normalized
+        Gaussian image likelihood.
+    outputs_root : str or pathlib.Path, default="runs"
+        Shared output root for observation preparation and joint products.
+    overwrite : bool, default=True
+        Default overwrite policy for individual observation products.
+    observation_options : mapping, optional
+        Per-observation overrides accepted by ``make_config_from_fits``:
+        ``object_name``, ``overwrite``, ``cutout_mode``, ``fixed_size``,
+        ``psf_type``, and ``gaussian_fwhm_pixels``.
+
+    Returns
+    -------
+    dict
+        Joint multi-observation configuration.
+
+    Notes
+    -----
+    Observation identifiers remain opaque and are never interpreted as bands,
+    instruments, filters, or epochs.
+
+    The function does not estimate morphological priors from the image data.
+    Parameter coupling and prior distributions are supplied explicitly through
+    ``parameters``.
+
+    When ``parameter_frame="sky"``, every FITS observation must contain a
+    valid WCS because the production inference problem transforms the shared
+    physical geometry onto each native detector grid.
+    """
+    normalized_observations = _normalize_observations(
+        observations
+    )
+
+    observation_names = tuple(
+        normalized_observations
+    )
+
+    normalized_targets = _normalize_target_positions(
+        target_positions,
+        observation_names=observation_names,
+    )
+
+    normalized_options = _normalize_observation_options(
+        observation_options,
+        observation_names=observation_names,
+    )
+
+    if not isinstance(
+        parameters,
+        Mapping,
+    ):
+        raise TypeError(
+            "parameters must be a mapping."
+        )
+
+    analysis_name = str(
+        analysis_name
+    ).strip()
+
+    if not analysis_name:
+        raise ValueError(
+            "analysis_name must be non-empty."
+        )
+
+    parameter_frame = str(
+        parameter_frame
+    ).strip().lower()
+
+    if parameter_frame not in {
+        "sky",
+        "detector",
+    }:
+        raise ValueError(
+            "parameter_frame must be 'sky' or 'detector'."
+        )
+
+    if parameter_frame == "sky":
+        _validate_sky_frame_wcs(
+            normalized_observations
+        )
+
+    output_dir = Path(
+        output_dir
+    )
+
+    joint_path = (
+        output_dir
+        / "joint.yaml"
+        if joint_output_path is None
+        else Path(
+            joint_output_path
+        )
+    )
+
+    observation_paths = _observation_config_paths(
+        observation_names,
+        output_dir=output_dir,
+    )
+
+    observation_configs: dict[
+        str,
+        dict[str, Any],
+    ] = {}
+
+    for name in observation_names:
+        options = normalized_options[
+            name
+        ]
+
+        observation_configs[
+            name
+        ] = make_config_from_fits(
+            normalized_observations[
+                name
+            ],
+            target_position=normalized_targets[
+                name
+            ],
+            object_name=options.get(
+                "object_name"
+            ),
+            outputs_root=outputs_root,
+            overwrite=bool(
+                options.get(
+                    "overwrite",
+                    overwrite,
+                )
+            ),
+            cutout_mode=str(
+                options.get(
+                    "cutout_mode",
+                    "auto",
+                )
+            ),
+            fixed_size=options.get(
+                "fixed_size"
+            ),
+            psf_type=str(
+                options.get(
+                    "psf_type",
+                    "empirical",
+                )
+            ),
+            gaussian_fwhm_pixels=options.get(
+                "gaussian_fwhm_pixels"
+            ),
+        )
+
+    object_names = [
+        config[
+            "object"
+        ][
+            "name"
+        ]
+        for config in observation_configs.values()
+    ]
+
+    if len(
+        object_names
+    ) != len(
+        set(
+            object_names
+        )
+    ):
+        raise ValueError(
+            "Individual observation configurations must have distinct "
+            "object names so their preparation products do not collide. "
+            "Use observation_options to provide explicit object_name values."
+        )
+
+    if sampler is None:
+        first_config = observation_configs[
+            observation_names[
+                0
+            ]
+        ]
+
+        resolved_first = resolve_config(
+            first_config
+        )
+
+        sampler_config = deepcopy(
+            resolved_first[
+                "fit"
+            ][
+                "sampler"
+            ]
+        )
+
+    else:
+        if not isinstance(
+            sampler,
+            Mapping,
+        ):
+            raise TypeError(
+                "sampler must be a mapping."
+            )
+
+        sampler_config = deepcopy(
+            dict(
+                sampler
+            )
+        )
+
+    if likelihood is None:
+        likelihood_config = {
+            "type": "gaussian",
+            "include_normalization": True,
+        }
+
+    else:
+        if not isinstance(
+            likelihood,
+            Mapping,
+        ):
+            raise TypeError(
+                "likelihood must be a mapping."
+            )
+
+        likelihood_config = deepcopy(
+            dict(
+                likelihood
+            )
+        )
+
+    joint_config: dict[str, Any] = {
+        "observations": {
+            name: {
+                "config_path": _relative_config_path(
+                    observation_paths[
+                        name
+                    ],
+                    joint_directory=joint_path.parent,
+                ),
+            }
+            for name in observation_names
+        },
+        "outputs": {
+            "root": str(
+                Path(
+                    outputs_root
+                )
+            ),
+            "analysis_name": analysis_name,
+        },
+        "fit": {
+            "models": [
+                str(
+                    model_name
+                )
+            ],
+            "likelihood": likelihood_config,
+            "sampler": sampler_config,
+            "multiband": {
+                "parameter_frame": parameter_frame,
+                "parameters": deepcopy(
+                    dict(
+                        parameters
+                    )
+                ),
+            },
+        },
+    }
+
+    # Validate the complete statistical contract before creating any YAML file.
+    build_multiband_parameter_layout(
+        joint_config
+    )
+
+    for name in observation_names:
+        _write_yaml(
+            observation_paths[
+                name
+            ],
+            observation_configs[
+                name
+            ],
+        )
+
+    _write_yaml(
+        joint_path,
+        joint_config,
+    )
+
+    # Verify that all relative paths are consumable from the joint YAML.
+    resolve_multiband_observation_configs(
+        joint_config,
+        base_dir=joint_path.parent,
+    )
+
+    return joint_config
