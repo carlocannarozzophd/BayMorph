@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import yaml
 
 from baymorph.core.observation import Observation
@@ -38,7 +40,19 @@ from baymorph.pipeline.real_fit import (
     _load_psf_from_config,
     _resolve_model_factory,
 )
-from baymorph.results import InferenceResult
+from baymorph.results import (
+    InferenceResult,
+    MultiObservationFitProducts,
+    ObservationFitProducts,
+)
+
+
+@dataclass(frozen=True)
+class _MultiBandBuildContext:
+    """Internal products required by joint inference and fit diagnostics."""
+
+    problem: MultiBandInferenceProblem
+    image_products: dict[str, Any]
 
 
 def build_multiband_problem_from_config(
@@ -75,7 +89,11 @@ def build_multiband_problem_from_config(
 def run_multiband_fit_from_config(
     config: str | Path | Mapping[str, Any],
 ) -> InferenceResult:
-    """Run production joint multi-observation image inference.
+    """Run joint multi-observation inference and return its posterior result.
+
+    This function preserves the inference-only contract used by validation
+    workflows. User-facing analyses should normally use
+    :func:`run_multi_observation_fit_from_config`.
 
     Parameters
     ----------
@@ -86,23 +104,74 @@ def run_multiband_fit_from_config(
     -------
     InferenceResult
         Canonical joint inference result produced by the configured backend.
-
-    Raises
-    ------
-    TypeError
-        If the configuration is not a mapping or filesystem path.
-    ValueError
-        If the joint configuration or required sky-frame geometry is invalid.
-    FileNotFoundError
-        If required image-preparation, PSF, or source-image products are
-        unavailable.
     """
     raw_config, base_dir = _load_multiband_config(
         config
     )
 
     fit_config = raw_config["fit"]
+    model_name = fit_config["models"][0]
 
+    problem = _build_multiband_problem(
+        raw_config,
+        base_dir=base_dir,
+    )
+
+    return _run_multiband_inference(
+        fit_config=fit_config,
+        model_name=model_name,
+        problem=problem,
+    )
+
+
+def run_multi_observation_fit_from_config(
+    config: str | Path | Mapping[str, Any],
+) -> MultiObservationFitProducts:
+    """Run a joint multi-observation analysis and build fit products.
+
+    Parameters
+    ----------
+    config : mapping, str, or pathlib.Path
+        Joint multi-observation configuration or path to its YAML file.
+
+    Returns
+    -------
+    MultiObservationFitProducts
+        Joint posterior together with observation-specific model images,
+        residuals, normalized residuals, and fit diagnostics.
+    """
+    raw_config, base_dir = _load_multiband_config(
+        config
+    )
+
+    fit_config = raw_config["fit"]
+    model_name = fit_config["models"][0]
+
+    context = _build_multiband_context(
+        raw_config,
+        base_dir=base_dir,
+    )
+
+    inference_result = _run_multiband_inference(
+        fit_config=fit_config,
+        model_name=model_name,
+        problem=context.problem,
+    )
+
+    return _build_multi_observation_fit_products(
+        context=context,
+        inference_result=inference_result,
+        model_name=model_name,
+    )
+
+
+def _run_multiband_inference(
+    *,
+    fit_config: Mapping[str, Any],
+    model_name: str,
+    problem: MultiBandInferenceProblem,
+) -> InferenceResult:
+    """Execute the configured inference backend for one joint problem."""
     sampler_config = fit_config.get(
         "sampler"
     )
@@ -115,14 +184,6 @@ def run_multiband_fit_from_config(
             "Multi-observation fit configuration requires a "
             "'sampler' mapping."
         )
-
-    models = fit_config["models"]
-    model_name = models[0]
-
-    problem = _build_multiband_problem(
-        raw_config,
-        base_dir=base_dir,
-    )
 
     backend = make_sampler(
         sampler_config,
@@ -142,6 +203,18 @@ def _build_multiband_problem(
     base_dir: str | Path,
 ) -> MultiBandInferenceProblem:
     """Build a multi-observation problem from an already loaded config."""
+    return _build_multiband_context(
+        raw_config,
+        base_dir=base_dir,
+    ).problem
+
+
+def _build_multiband_context(
+    raw_config: Mapping[str, Any],
+    *,
+    base_dir: str | Path,
+) -> _MultiBandBuildContext:
+    """Build the inference problem and retain observation data products."""
     observation_configs, parameter_layout = (
         resolve_multiband_config(
             raw_config,
@@ -230,11 +303,242 @@ def _build_multiband_problem(
         parameter_transforms=parameter_transforms,
     )
 
-    return MultiBandInferenceProblem(
+    problem = MultiBandInferenceProblem(
         representation_factory=representation_factory,
         parameter_layout=parameter_layout,
         likelihood=likelihood,
     )
+
+    return _MultiBandBuildContext(
+        problem=problem,
+        image_products=image_products,
+    )
+
+
+def _build_multi_observation_fit_products(
+    *,
+    context: _MultiBandBuildContext,
+    inference_result: InferenceResult,
+    model_name: str,
+) -> MultiObservationFitProducts:
+    """Build observation and joint diagnostics at the best posterior sample."""
+    problem = context.problem
+
+    best_sample = np.asarray(
+        inference_result.best_sample,
+        dtype=float,
+    )
+
+    model_images = problem.render_models(
+        best_sample
+    )
+
+    routed_parameters = problem.routed_parameters(
+        best_sample
+    )
+
+    observation_products = {}
+
+    joint_chi2 = 0.0
+    total_valid_pixels = 0
+
+    for observation_name in problem.parameter_layout.bands:
+        products = context.image_products[
+            observation_name
+        ]
+
+        parameters = dict(
+            routed_parameters[
+                observation_name
+            ]
+        )
+
+        transform = (
+            problem
+            .representation_factory
+            .parameter_transforms
+            .get(
+                observation_name
+            )
+        )
+
+        if transform is not None:
+            parameters = dict(
+                transform(
+                    parameters
+                )
+            )
+
+        diagnostics = _observation_fit_diagnostics(
+            data=products.prepared_data,
+            model_image=model_images[
+                observation_name
+            ],
+            noise=products.noise,
+            mask=products.fitting_mask,
+        )
+
+        joint_chi2 += diagnostics[
+            "chi2"
+        ]
+        total_valid_pixels += diagnostics[
+            "n_valid_pixels"
+        ]
+
+        observation_products[
+            observation_name
+        ] = ObservationFitProducts(
+            parameters=parameters,
+            best_model_image=model_images[
+                observation_name
+            ],
+            residual=diagnostics[
+                "residual"
+            ],
+            norm_residual=diagnostics[
+                "norm_residual"
+            ],
+            chi2=diagnostics[
+                "chi2"
+            ],
+            n_valid_pixels=diagnostics[
+                "n_valid_pixels"
+            ],
+            noise=products.noise,
+        )
+
+    ndof = (
+        total_valid_pixels
+        - problem.ndim
+    )
+
+    reduced_chi2 = (
+        float(
+            joint_chi2
+            / ndof
+        )
+        if ndof > 0
+        else np.nan
+    )
+
+    return MultiObservationFitProducts(
+        model_name=model_name,
+        posterior=inference_result,
+        best_parameters=dict(
+            inference_result.best_parameters
+        ),
+        observations=observation_products,
+        chi2=joint_chi2,
+        ndof=ndof,
+        reduced_chi2=reduced_chi2,
+    )
+
+
+def _observation_fit_diagnostics(
+    *,
+    data: np.ndarray,
+    model_image: np.ndarray,
+    noise: np.ndarray,
+    mask: np.ndarray | None,
+) -> dict[str, Any]:
+    """Compute observation-level residual and chi-squared diagnostics."""
+    data_array = np.asarray(
+        data,
+        dtype=float,
+    )
+    model_array = np.asarray(
+        model_image,
+        dtype=float,
+    )
+    noise_array = np.asarray(
+        noise,
+        dtype=float,
+    )
+
+    if (
+        model_array.shape != data_array.shape
+        or noise_array.shape != data_array.shape
+    ):
+        raise ValueError(
+            "Data, model, and noise arrays must have matching shapes."
+        )
+
+    valid = (
+        np.isfinite(
+            data_array
+        )
+        & np.isfinite(
+            model_array
+        )
+        & np.isfinite(
+            noise_array
+        )
+        & (
+            noise_array > 0.0
+        )
+    )
+
+    if mask is not None:
+        mask_array = np.asarray(
+            mask,
+            dtype=bool,
+        )
+
+        if mask_array.shape != data_array.shape:
+            raise ValueError(
+                "Mask must match the observation image shape."
+            )
+
+        valid &= ~mask_array
+
+    if not np.any(
+        valid
+    ):
+        raise ValueError(
+            "Observation diagnostics require at least one valid pixel."
+        )
+
+    residual = (
+        data_array
+        - model_array
+    )
+
+    norm_residual = np.full_like(
+        residual,
+        np.nan,
+        dtype=float,
+    )
+
+    norm_residual[
+        valid
+    ] = (
+        residual[
+            valid
+        ]
+        / noise_array[
+            valid
+        ]
+    )
+
+    chi2 = float(
+        np.sum(
+            norm_residual[
+                valid
+            ]
+            ** 2
+        )
+    )
+
+    return {
+        "residual": residual,
+        "norm_residual": norm_residual,
+        "chi2": chi2,
+        "n_valid_pixels": int(
+            np.sum(
+                valid
+            )
+        ),
+    }
 
 
 def _build_sky_parameter_transforms(

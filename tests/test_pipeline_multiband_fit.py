@@ -573,3 +573,219 @@ def test_build_sky_parameter_transforms_requires_cutout_bounds(
                 model_name="single_sersic",
             )
         )
+
+
+def test_multi_observation_fit_builds_joint_and_observation_products(
+    monkeypatch,
+):
+    """Production joint fitting should preserve one posterior and many grids."""
+    from baymorph.results import (
+        InferenceResult,
+        MultiObservationFitProducts,
+        PosteriorSamples,
+    )
+
+    observation_configs = {
+        "g": {},
+        "r": {},
+    }
+
+    layout = _layout()
+
+    monkeypatch.setattr(
+        multiband_fit,
+        "resolve_multiband_config",
+        lambda config, base_dir: (
+            observation_configs,
+            layout,
+        ),
+    )
+
+    products = {
+        id(
+            observation_configs["g"]
+        ): _products(
+            (11, 11)
+        ),
+        id(
+            observation_configs["r"]
+        ): _products(
+            (13, 17)
+        ),
+    }
+
+    monkeypatch.setattr(
+        multiband_fit,
+        "load_image_preparation_products",
+        lambda config: products[
+            id(
+                config
+            )
+        ],
+    )
+
+    monkeypatch.setattr(
+        multiband_fit,
+        "_load_psf_from_config",
+        lambda config: np.ones(
+            (3, 3),
+            dtype=float,
+        )
+        / 9.0,
+    )
+
+    class ConstantModel:
+        def __init__(
+            self,
+            **kwargs,
+        ):
+            del kwargs
+
+        def render(
+            self,
+            shape,
+        ):
+            return np.ones(
+                shape,
+                dtype=float,
+            )
+
+    monkeypatch.setattr(
+        multiband_fit,
+        "_resolve_model_factory",
+        lambda model_name: ConstantModel,
+    )
+
+    names = layout.parameter_set.names
+
+    values_by_name = {
+        "re": 5.0,
+        "flux__g": 50.0,
+        "flux__r": 80.0,
+        "n": 2.0,
+        "q": 0.7,
+        "theta": 0.0,
+        "x0": 5.0,
+        "y0": 5.0,
+        "sky__g": 0.0,
+        "sky__r": 0.0,
+    }
+
+    sample = np.asarray(
+        [
+            values_by_name[
+                name
+            ]
+            for name in names
+        ],
+        dtype=float,
+    )
+
+    inference_result = InferenceResult(
+        posterior=PosteriorSamples(
+            samples=sample[
+                None,
+                :,
+            ],
+            weights=np.asarray(
+                [
+                    1.0,
+                ]
+            ),
+            parameter_names=list(
+                names
+            ),
+            log_likelihood=np.asarray(
+                [
+                    -1.0,
+                ]
+            ),
+        ),
+        diagnostics={},
+        provenance={
+            "backend": "test",
+        },
+    )
+
+    backend = DummyBackend(
+        inference_result
+    )
+
+    monkeypatch.setattr(
+        multiband_fit,
+        "make_sampler",
+        lambda config, *, problem: backend,
+    )
+
+    result = (
+        multiband_fit
+        .run_multi_observation_fit_from_config(
+            _config()
+        )
+    )
+
+    assert isinstance(
+        result,
+        MultiObservationFitProducts,
+    )
+
+    assert result.posterior is inference_result
+
+    assert tuple(
+        result.observations
+    ) == (
+        "g",
+        "r",
+    )
+
+    assert result.observations[
+        "g"
+    ].best_model_image.shape == (
+        11,
+        11,
+    )
+
+    assert result.observations[
+        "r"
+    ].best_model_image.shape == (
+        13,
+        17,
+    )
+
+    assert result.observations[
+        "g"
+    ].n_valid_pixels == 121
+
+    assert result.observations[
+        "r"
+    ].n_valid_pixels == 221
+
+    assert result.observations[
+        "g"
+    ].chi2 == pytest.approx(
+        121.0
+    )
+
+    assert result.observations[
+        "r"
+    ].chi2 == pytest.approx(
+        221.0
+    )
+
+    assert result.chi2 == pytest.approx(
+        342.0
+    )
+
+    assert result.ndof == (
+        342
+        - layout.ndim
+    )
+
+    assert result.reduced_chi2 == pytest.approx(
+        result.chi2
+        / result.ndof
+    )
+
+    assert result.best_parameters == (
+        inference_result.best_parameters
+    )
