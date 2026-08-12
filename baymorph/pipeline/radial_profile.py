@@ -12,6 +12,9 @@ from baymorph.analysis import (
     radial_bins,
     radial_profile_from_image,
 )
+from baymorph.analysis.radial_profiles import (
+    radial_profile_statistics_from_image,
+)
 from baymorph.pipeline.config import (
     load_resolved_config,
     resolve_config,
@@ -29,7 +32,9 @@ from baymorph.pipeline.real_fit import (
     _diagnostic_title,
     _make_model_factory,
 )
-from baymorph.plotting.radial import plot_radial_profile_diagnostics
+from baymorph.plotting.radial import (
+    plot_radial_profile_diagnostics,
+)
 from baymorph.simulation.psf import GaussianPSF
 
 
@@ -53,7 +58,9 @@ def _load_psf_from_config(config):
 
         return GaussianPSF(
             fwhm=float(
-                gaussian_cfg["fwhm"]
+                gaussian_cfg[
+                    "fwhm"
+                ]
             )
         )
 
@@ -95,10 +102,13 @@ def _make_sample_model_factory(
 
     def sample_model_factory(sample):
         parameters = {
-            name: float(value)
+            name: float(
+                value
+            )
             for name, value in zip(
                 parameter_names,
                 sample,
+                strict=True,
             )
         }
 
@@ -118,9 +128,11 @@ def _compute_posterior_profiles(
     *,
     center_x,
     center_y,
+    axis_ratio,
+    position_angle,
     mask,
 ):
-    """Compute model-agnostic posterior radial-profile bands."""
+    """Compute posterior profiles on fixed best-fit elliptical annuli."""
     if fit.posterior is None:
         return None
 
@@ -147,6 +159,8 @@ def _compute_posterior_profiles(
         radii=radii,
         center_x=center_x,
         center_y=center_y,
+        axis_ratio=axis_ratio,
+        position_angle=position_angle,
         mask=mask,
     )
 
@@ -155,7 +169,12 @@ def run_radial_profile_diagnostics(
     config,
     fit_results,
 ):
-    """Generate and save radial-profile diagnostics for fitted models.
+    """Generate and save elliptical radial-profile diagnostics.
+
+    The profile geometry is defined by the maximum-likelihood detector-space
+    centre, axis ratio, and position angle. Data, maximum-likelihood model,
+    model components, and posterior samples are measured on the same fixed
+    set of elliptical annuli.
 
     Parameters
     ----------
@@ -195,7 +214,9 @@ def run_radial_profile_diagnostics(
 
     paths = pipeline_paths(
         config,
-    )["fits"]
+    )[
+        "fits"
+    ]
 
     diagnostics_cfg = config.get(
         "diagnostics",
@@ -209,9 +230,15 @@ def run_radial_profile_diagnostics(
 
     if radial_cfg is True:
         radial_cfg = {}
-    elif radial_cfg in (False, None):
+    elif radial_cfg in (
+        False,
+        None,
+    ):
         return {}
-    elif not isinstance(radial_cfg, dict):
+    elif not isinstance(
+        radial_cfg,
+        dict,
+    ):
         raise TypeError(
             "diagnostics.radial_profile must be a boolean or mapping."
         )
@@ -229,10 +256,29 @@ def run_radial_profile_diagnostics(
 
     for model_name, fit in fit_results.items():
         center_x = float(
-            fit.best_parameters["x0"]
+            fit.best_parameters[
+                "x0"
+            ]
         )
+
         center_y = float(
-            fit.best_parameters["y0"]
+            fit.best_parameters[
+                "y0"
+            ]
+        )
+
+        axis_ratio = float(
+            fit.best_parameters.get(
+                "q",
+                1.0,
+            )
+        )
+
+        position_angle = float(
+            fit.best_parameters.get(
+                "theta",
+                0.0,
+            )
         )
 
         max_radius = 0.5 * min(
@@ -263,11 +309,7 @@ def run_radial_profile_diagnostics(
                     40,
                 )
             ),
-        )
-
-        radius = 0.5 * (
-            radii[:-1]
-            + radii[1:]
+            axis_ratio=axis_ratio,
         )
 
         model_factory = _make_model_factory(
@@ -321,13 +363,18 @@ def run_radial_profile_diagnostics(
             - best_sky
         )
 
-        profile_data = radial_profile_from_image(
+        data_statistics = radial_profile_statistics_from_image(
             sky_subtracted_data,
             center_x=center_x,
             center_y=center_y,
             radii=radii,
             mask=image_products.fitting_mask,
+            axis_ratio=axis_ratio,
+            position_angle=position_angle,
         )
+
+        radius = data_statistics.radius
+        profile_data = data_statistics.median
 
         profile_model = radial_profile_from_image(
             galaxy_model_image,
@@ -335,11 +382,15 @@ def run_radial_profile_diagnostics(
             center_y=center_y,
             radii=radii,
             mask=image_products.fitting_mask,
+            axis_ratio=axis_ratio,
+            position_angle=position_angle,
         )
 
         component_profiles = None
 
-        if len(component_images) > 1:
+        if len(
+            component_images
+        ) > 1:
             component_profiles = {
                 name: radial_profile_from_image(
                     image,
@@ -347,6 +398,8 @@ def run_radial_profile_diagnostics(
                     center_y=center_y,
                     radii=radii,
                     mask=image_products.fitting_mask,
+                    axis_ratio=axis_ratio,
+                    position_angle=position_angle,
                 )
                 for name, image in component_images.items()
             }
@@ -369,15 +422,22 @@ def run_radial_profile_diagnostics(
                 radii=radii,
                 center_x=center_x,
                 center_y=center_y,
+                axis_ratio=axis_ratio,
+                position_angle=position_angle,
                 mask=image_products.fitting_mask,
             )
 
-        profile_results[model_name] = profile_bands
+        profile_results[
+            model_name
+        ] = profile_bands
 
         fig, _ = plot_radial_profile_diagnostics(
             radius=radius,
             profile_data=profile_data,
             profile_model=profile_model,
+            profile_data_p16=data_statistics.p16,
+            profile_data_p84=data_statistics.p84,
+            profile_data_mean=data_statistics.mean,
             posterior_profiles=profile_bands,
             component_profiles=component_profiles,
             legend_title=_diagnostic_title(
@@ -386,8 +446,19 @@ def run_radial_profile_diagnostics(
             ),
         )
 
+        output_path = paths[
+            model_name
+        ][
+            "radial_profile"
+        ]
+
+        output_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
         fig.savefig(
-            paths[model_name]["radial_profile"],
+            output_path,
             bbox_inches="tight",
         )
 
