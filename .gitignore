@@ -81,3 +81,6 @@ outputs/
 # Logs
 *.log
 baymorph.egg-info/
+
+# MkDocs build output
+site/
