@@ -7,6 +7,8 @@ import shutil
 from importlib import metadata, resources
 from pathlib import Path
 
+from baymorph.pipeline.config_maker import make_config_from_fits
+
 
 _RESOURCE_PACKAGE = "baymorph.resources"
 
@@ -123,6 +125,87 @@ def _command_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def _target_position_from_args(
+    args: argparse.Namespace,
+):
+    """Return the explicit target seed requested on the command line."""
+    if args.target_center:
+        if (
+            args.target_x is not None
+            or args.target_y is not None
+        ):
+            raise ValueError(
+                "--target-center cannot be combined with "
+                "--target-x or --target-y."
+            )
+
+        return "center"
+
+    if (
+        args.target_x is None
+        and args.target_y is None
+    ):
+        raise ValueError(
+            "Specify either --target-center or both "
+            "--target-x and --target-y."
+        )
+
+    if (
+        args.target_x is None
+        or args.target_y is None
+    ):
+        raise ValueError(
+            "--target-x and --target-y must be supplied together."
+        )
+
+    return (
+        float(args.target_x),
+        float(args.target_y),
+    )
+
+
+def _command_config(
+    args: argparse.Namespace,
+) -> int:
+    """Generate a BayMorph YAML configuration from one FITS image."""
+    fits_path = Path(
+        args.fits_path
+    ).expanduser()
+
+    if args.output is None:
+        output_path = Path(
+            f"{fits_path.stem}.yaml"
+        )
+    else:
+        output_path = Path(
+            args.output
+        ).expanduser()
+
+    target_position = _target_position_from_args(
+        args
+    )
+
+    make_config_from_fits(
+        fits_path,
+        target_position=target_position,
+        output_path=output_path,
+        object_name=args.object_name,
+        outputs_root=args.outputs_root,
+        overwrite=not args.no_overwrite,
+        cutout_mode=args.cutout_mode,
+        fixed_size=args.cutout_size,
+        psf_type=args.psf,
+        gaussian_fwhm_pixels=args.gaussian_fwhm_pixels,
+    )
+
+    print(
+        "BayMorph configuration written to:\n"
+        f"{output_path.resolve()}"
+    )
+
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Build the BayMorph argument parser."""
     parser = argparse.ArgumentParser(
@@ -182,6 +265,101 @@ def _build_parser() -> argparse.ArgumentParser:
         handler=_command_init,
     )
 
+    config_parser = subparsers.add_parser(
+        "config",
+        help="Generate a BayMorph YAML configuration from a FITS image.",
+    )
+
+    config_parser.add_argument(
+        "fits_path",
+        help="Input astronomical FITS image.",
+    )
+
+    config_parser.add_argument(
+        "--output",
+        help=(
+            "Output YAML path. "
+            "Default: <FITS stem>.yaml in the current directory."
+        ),
+    )
+
+    config_parser.add_argument(
+        "--object-name",
+        help="Analysis object name. Default: FITS filename stem.",
+    )
+
+    config_parser.add_argument(
+        "--target-center",
+        action="store_true",
+        help=(
+            "Explicitly use the detector centre as the target-identification "
+            "seed."
+        ),
+    )
+
+    config_parser.add_argument(
+        "--target-x",
+        type=float,
+        help="Target-identification seed x coordinate in zero-based pixels.",
+    )
+
+    config_parser.add_argument(
+        "--target-y",
+        type=float,
+        help="Target-identification seed y coordinate in zero-based pixels.",
+    )
+
+    config_parser.add_argument(
+        "--cutout-mode",
+        choices=(
+            "auto",
+            "fixed",
+        ),
+        default="auto",
+        help="Cutout strategy. Default: auto.",
+    )
+
+    config_parser.add_argument(
+        "--cutout-size",
+        type=int,
+        help="Fixed cutout size in pixels when --cutout-mode=fixed.",
+    )
+
+    config_parser.add_argument(
+        "--psf",
+        choices=(
+            "empirical",
+            "gaussian",
+        ),
+        default="empirical",
+        help="PSF strategy. Default: empirical.",
+    )
+
+    config_parser.add_argument(
+        "--gaussian-fwhm-pixels",
+        type=float,
+        help=(
+            "Gaussian PSF FWHM in pixels. Required only when it cannot "
+            "be derived from FITS metadata."
+        ),
+    )
+
+    config_parser.add_argument(
+        "--outputs-root",
+        default="runs",
+        help="BayMorph output root. Default: runs.",
+    )
+
+    config_parser.add_argument(
+        "--no-overwrite",
+        action="store_true",
+        help="Disable overwriting of existing BayMorph run products.",
+    )
+
+    config_parser.set_defaults(
+        handler=_command_config,
+    )
+
     return parser
 
 
@@ -192,7 +370,13 @@ def main() -> int:
 
     try:
         return int(args.handler(args))
-    except (FileExistsError, RuntimeError) as error:
+    except (
+        FileExistsError,
+        FileNotFoundError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ) as error:
         parser.error(str(error))
 
     return 1

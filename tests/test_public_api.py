@@ -20,6 +20,7 @@ EXPECTED_PUBLIC_API = {
     "InferenceResult",
     "PosteriorSamples",
     "RealFitProducts",
+    "make_config_from_fits",
 }
 
 

@@ -11,6 +11,9 @@ from baymorph.models import (
     DoubleSersicModel,
     SersicModel,
 )
+from baymorph.pipeline.config_maker import (
+    make_config_from_fits,
+)
 from baymorph.results import (
     EvidenceEstimate,
     InferenceResult,
@@ -33,15 +36,16 @@ __all__ = [
     "ConvolvedModel",
     "DoubleSersicModel",
     "EmpiricalPSF",
+    "EvidenceEstimate",
     "GaussianPSF",
     "ImageData",
+    "InferenceResult",
     "Observation",
     "ObservationMetadata",
-    "EvidenceEstimate",
-    "InferenceResult",
     "PosteriorSamples",
     "RealFitProducts",
     "SersicModel",
     "SyntheticObservation",
     "SyntheticSersic",
+    "make_config_from_fits",
 ]
