@@ -212,7 +212,7 @@ def test_noise_diagnostic_precedes_sampler(
 
     monkeypatch.setattr(
         multi_observation_fit,
-        "_load_multiband_config",
+        "_load_multi_observation_config",
         lambda config: (
             raw_config,
             Path("."),
@@ -221,7 +221,7 @@ def test_noise_diagnostic_precedes_sampler(
 
     monkeypatch.setattr(
         multi_observation_fit,
-        "_build_multiband_context",
+        "_build_multi_observation_context",
         lambda config, base_dir: context,
     )
 
@@ -268,7 +268,7 @@ def test_noise_diagnostic_precedes_sampler(
 
     monkeypatch.setattr(
         multi_observation_fit,
-        "_run_multiband_inference",
+        "_run_multi_observation_inference",
         fake_sampler,
     )
 
