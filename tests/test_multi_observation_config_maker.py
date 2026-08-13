@@ -12,9 +12,9 @@ from astropy.io import fits
 from baymorph.pipeline.config_maker import (
     make_multi_observation_config,
 )
-from baymorph.pipeline.multiband_config import (
-    build_multiband_parameter_layout,
-    resolve_multiband_observation_configs,
+from baymorph.pipeline.multi_observation_config import (
+    build_multi_observation_parameter_layout,
+    resolve_multi_observation_observation_configs,
 )
 from baymorph.runner import BayMorphRunner
 
@@ -254,7 +254,7 @@ def test_multi_observation_config_maker_writes_complete_workspace(
     assert joint[
         "fit"
     ][
-        "multiband"
+        "multi_observation"
     ][
         "parameter_frame"
     ] == "sky"
@@ -306,7 +306,7 @@ def test_multi_observation_config_maker_writes_complete_workspace(
         2.5
     )
 
-    resolved_observations = resolve_multiband_observation_configs(
+    resolved_observations = resolve_multi_observation_observation_configs(
         joint,
         base_dir=joint_path.parent,
     )
@@ -315,7 +315,7 @@ def test_multi_observation_config_maker_writes_complete_workspace(
         resolved_observations
     ) == observation_names
 
-    layout = build_multiband_parameter_layout(
+    layout = build_multi_observation_parameter_layout(
         joint
     )
 

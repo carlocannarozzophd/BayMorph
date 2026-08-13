@@ -14,9 +14,9 @@ import yaml
 
 from baymorph.core.observation import Observation
 from baymorph.pipeline.config import resolve_config
-from baymorph.pipeline.multiband_config import (
-    build_multiband_parameter_layout,
-    resolve_multiband_observation_configs,
+from baymorph.pipeline.multi_observation_config import (
+    build_multi_observation_parameter_layout,
+    resolve_multi_observation_observation_configs,
 )
 
 
@@ -1081,7 +1081,7 @@ def make_multi_observation_config(
             ],
             "likelihood": likelihood_config,
             "sampler": sampler_config,
-            "multiband": {
+            "multi_observation": {
                 "parameter_frame": parameter_frame,
                 "parameters": deepcopy(
                     dict(
@@ -1093,7 +1093,7 @@ def make_multi_observation_config(
     }
 
     # Validate the complete statistical contract before creating any YAML file.
-    build_multiband_parameter_layout(
+    build_multi_observation_parameter_layout(
         joint_config
     )
 
@@ -1113,7 +1113,7 @@ def make_multi_observation_config(
     )
 
     # Verify that all relative paths are consumable from the joint YAML.
-    resolve_multiband_observation_configs(
+    resolve_multi_observation_observation_configs(
         joint_config,
         base_dir=joint_path.parent,
     )
