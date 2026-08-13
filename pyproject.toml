@@ -47,7 +47,7 @@ dependencies = [
     "matplotlib",
     "pyyaml",
     "dynesty>=3.0,<4",
-"pocomc>=1.2.6,<2",
+    "pocomc>=1.2.6,<2",
 ]
 
 [project.optional-dependencies]
@@ -59,6 +59,9 @@ dev = [
     "ruff==0.15.16",
     "build",
     "twine",
+]
+nautilus = [
+    "nautilus-sampler>=1.0.6,<2",
 ]
 
 [project.urls]
@@ -89,3 +92,6 @@ line-length = 88
 
 [tool.black]
 line-length = 88
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

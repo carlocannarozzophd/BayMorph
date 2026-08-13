@@ -11,6 +11,7 @@ from baymorph.fitting.backend import (
 )
 from baymorph.fitting.backends import (
     DynestyBackend,
+    NautilusBackend,
     PocoMCBackend,
     register_builtin_backends,
 )
@@ -215,6 +216,48 @@ def test_pocomc_backend_rejects_mode():
         )
 
 
+def test_nautilus_backend_preserves_native_config():
+    backend = NautilusBackend(
+        problem=ScalarProblem(),
+        config={
+            "name": "nautilus",
+            "init": {
+                "n_live": 500,
+                "seed": 42,
+            },
+            "run": {
+                "n_eff": 1000,
+            },
+        },
+    )
+
+    assert backend.name == "nautilus"
+
+    assert backend.config == {
+        "name": "nautilus",
+        "init": {
+            "n_live": 500,
+            "seed": 42,
+        },
+        "run": {
+            "n_eff": 1000,
+        },
+    }
+
+
+def test_nautilus_backend_rejects_flat_native_option():
+    with pytest.raises(
+        ValueError,
+        match="placed under 'init' or 'run'",
+    ):
+        NautilusBackend(
+            problem=ScalarProblem(),
+            config={
+                "n_live": 500,
+            },
+        )
+
+
 def test_builtin_backends_register_cleanly():
     registry = BackendRegistry()
 
@@ -224,6 +267,7 @@ def test_builtin_backends_register_cleanly():
 
     assert registry.names == (
         "dynesty",
+        "nautilus",
         "pocomc",
     )
 
@@ -258,6 +302,37 @@ def test_registry_constructs_dynesty_backend():
         InferenceBackend,
     )
     assert backend.mode == "dynamic"
+
+
+def test_registry_constructs_nautilus_backend():
+    registry = BackendRegistry()
+
+    register_builtin_backends(
+        registry
+    )
+
+    backend = registry.create(
+        "nautilus",
+        problem=ScalarProblem(),
+        config={
+            "init": {
+                "n_live": 500,
+                "seed": 42,
+            },
+            "run": {
+                "n_eff": 1000,
+            },
+        },
+    )
+
+    assert isinstance(
+        backend,
+        NautilusBackend,
+    )
+    assert isinstance(
+        backend,
+        InferenceBackend,
+    )
 
 
 def test_registry_constructs_pocomc_backend():

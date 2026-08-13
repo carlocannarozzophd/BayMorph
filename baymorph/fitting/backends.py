@@ -11,6 +11,7 @@ from baymorph.fitting.backend import (
     backend_registry,
 )
 from baymorph.fitting.dynesty import DynestyFitter
+from baymorph.fitting.nautilus import NautilusFitter
 from baymorph.fitting.pocomc import PocoMCFitter
 from baymorph.fitting.problem import InferenceProblem
 from baymorph.results import InferenceResult
@@ -229,6 +230,88 @@ class PocoMCBackend(InferenceBackend):
         )
 
 
+class NautilusBackend(InferenceBackend):
+    """Backend-neutral adapter for Nautilus inference.
+
+    Entries under ``init`` and ``run`` retain their native Nautilus names
+    and semantics.
+    """
+
+    def __init__(
+        self,
+        *,
+        problem: InferenceProblem,
+        config: Mapping[str, Any] | None = None,
+    ) -> None:
+        raw = (
+            {}
+            if config is None
+            else dict(config)
+        )
+
+        allowed_envelope = {
+            "name",
+            "init",
+            "run",
+        }
+
+        unknown = sorted(
+            set(raw)
+            - allowed_envelope
+        )
+
+        if unknown:
+            names = ", ".join(
+                unknown
+            )
+            raise ValueError(
+                "Nautilus configuration options must be placed under "
+                f"'init' or 'run'. Unexpected top-level option(s): {names}."
+            )
+
+        resolved = {
+            "name": "nautilus",
+            "init": _mapping_section(
+                raw,
+                "init",
+            ),
+            "run": _mapping_section(
+                raw,
+                "run",
+            ),
+        }
+
+        super().__init__(
+            problem=problem,
+            config=resolved,
+        )
+
+    @property
+    def name(self) -> str:
+        """Return the stable backend identifier."""
+        return "nautilus"
+
+    def fit(
+        self,
+        *,
+        progress_label: str | None = None,
+    ) -> InferenceResult:
+        """Run Nautilus with native constructor and run keyword arguments."""
+        fitter = NautilusFitter(
+            problem=self.problem
+        )
+
+        return fitter.run(
+            init_kwargs=self.config[
+                "init"
+            ],
+            run_kwargs=self.config[
+                "run"
+            ],
+            progress_label=progress_label,
+        )
+
+
 def _make_dynesty_backend(
     problem: InferenceProblem,
     config: Mapping[str, Any],
@@ -251,6 +334,17 @@ def _make_pocomc_backend(
     )
 
 
+def _make_nautilus_backend(
+    problem: InferenceProblem,
+    config: Mapping[str, Any],
+) -> InferenceBackend:
+    """Construct the built-in Nautilus backend."""
+    return NautilusBackend(
+        problem=problem,
+        config=config,
+    )
+
+
 def register_builtin_backends(
     registry: BackendRegistry = backend_registry,
     *,
@@ -260,6 +354,12 @@ def register_builtin_backends(
     registry.register(
         "dynesty",
         _make_dynesty_backend,
+        replace=replace,
+    )
+
+    registry.register(
+        "nautilus",
+        _make_nautilus_backend,
         replace=replace,
     )
 
