@@ -6,32 +6,32 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from baymorph.fitting.multiband import (
-    MultiBandParameterLayout,
-    MultiBandParameterSpec,
+from baymorph.fitting.multi_observation import (
+    MultiObservationParameterLayout,
+    MultiObservationParameterSpec,
 )
-from baymorph.fitting.multiband_problem import (
-    MultiBandInferenceProblem,
+from baymorph.fitting.multi_observation_problem import (
+    MultiObservationInferenceProblem,
 )
 from baymorph.fitting.parameters import Parameter
-from baymorph.pipeline import multiband_fit
+from baymorph.pipeline import multi_observation_fit
 
 
 def _layout():
-    return MultiBandParameterLayout(
+    return MultiObservationParameterLayout(
         bands=[
             "g",
             "r",
         ],
         specifications=[
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     "re",
                     lower=1.0,
                     upper=10.0,
                 )
             ),
-            MultiBandParameterSpec.independent(
+            MultiObservationParameterSpec.independent(
                 "flux",
                 {
                     "g": Parameter(
@@ -73,7 +73,7 @@ def _products():
     )
 
 
-def test_build_multiband_problem_does_not_run_sampler(
+def test_build_multi_observation_problem_does_not_run_sampler(
     monkeypatch,
 ):
     config = {
@@ -81,7 +81,7 @@ def test_build_multiband_problem_does_not_run_sampler(
             "models": [
                 "single_sersic",
             ],
-            "multiband": {
+            "multi_observation": {
                 "parameter_frame": "detector",
             },
         },
@@ -93,8 +93,8 @@ def test_build_multiband_problem_does_not_run_sampler(
     }
 
     monkeypatch.setattr(
-        multiband_fit,
-        "resolve_multiband_config",
+        multi_observation_fit,
+        "resolve_multi_observation_config",
         lambda raw_config, base_dir: (
             observation_configs,
             _layout(),
@@ -102,19 +102,19 @@ def test_build_multiband_problem_does_not_run_sampler(
     )
 
     monkeypatch.setattr(
-        multiband_fit,
+        multi_observation_fit,
         "load_image_preparation_products",
         lambda observation_config: _products(),
     )
 
     monkeypatch.setattr(
-        multiband_fit,
+        multi_observation_fit,
         "_load_psf_from_config",
         lambda observation_config: object(),
     )
 
     monkeypatch.setattr(
-        multiband_fit,
+        multi_observation_fit,
         "_resolve_model_factory",
         lambda model_name: (
             lambda **parameters: parameters
@@ -127,21 +127,21 @@ def test_build_multiband_problem_does_not_run_sampler(
         )
 
     monkeypatch.setattr(
-        multiband_fit,
+        multi_observation_fit,
         "make_sampler",
         fail_if_sampler_is_built,
     )
 
     problem = (
-        multiband_fit
-        .build_multiband_problem_from_config(
+        multi_observation_fit
+        .build_multi_observation_problem_from_config(
             config
         )
     )
 
     assert isinstance(
         problem,
-        MultiBandInferenceProblem,
+        MultiObservationInferenceProblem,
     )
 
     assert problem.parameter_layout.bands == (

@@ -7,12 +7,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from baymorph.fitting.multiband import (
-    MultiBandParameterLayout,
-    MultiBandParameterSpec,
+from baymorph.fitting.multi_observation import (
+    MultiObservationParameterLayout,
+    MultiObservationParameterSpec,
 )
 from baymorph.fitting.parameters import Parameter
-from baymorph.pipeline import multiband_fit
+from baymorph.pipeline import multi_observation_fit
 
 
 class DummyBackend:
@@ -34,20 +34,20 @@ class DummyBackend:
 
 
 def _layout():
-    return MultiBandParameterLayout(
+    return MultiObservationParameterLayout(
         bands=(
             "g",
             "r",
         ),
         specifications=[
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     "re",
                     lower=1.0,
                     upper=10.0,
                 )
             ),
-            MultiBandParameterSpec.independent(
+            MultiObservationParameterSpec.independent(
                 "flux",
                 {
                     "g": Parameter(
@@ -62,42 +62,42 @@ def _layout():
                     ),
                 },
             ),
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     "n",
                     lower=0.5,
                     upper=6.0,
                 )
             ),
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     "q",
                     lower=0.2,
                     upper=1.0,
                 )
             ),
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     "theta",
                     lower=-1.57,
                     upper=1.57,
                 )
             ),
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     "x0",
                     lower=2.0,
                     upper=8.0,
                 )
             ),
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     "y0",
                     lower=2.0,
                     upper=8.0,
                 )
             ),
-            MultiBandParameterSpec.independent(
+            MultiObservationParameterSpec.independent(
                 "sky",
                 {
                     "g": Parameter(
@@ -159,17 +159,17 @@ def _config():
                 "seed": 4,
                 "n_processes": 1,
             },
-            "multiband": {
+            "multi_observation": {
                 "parameters": {},
             },
         },
     }
 
 
-def test_run_multiband_fit_builds_problem_and_returns_result(
+def test_run_multi_observation_inference_builds_problem_and_returns_result(
     monkeypatch,
 ):
-    expected_result = object()
+    expected_result = SimpleNamespace(diagnostics={})
     backend = DummyBackend(
         expected_result
     )
@@ -184,8 +184,8 @@ def test_run_multiband_fit_builds_problem_and_returns_result(
     }
 
     monkeypatch.setattr(
-        multiband_fit,
-        "resolve_multiband_config",
+        multi_observation_fit,
+        "resolve_multi_observation_config",
         lambda config, base_dir: (
             observation_configs,
             _layout(),
@@ -193,13 +193,13 @@ def test_run_multiband_fit_builds_problem_and_returns_result(
     )
 
     monkeypatch.setattr(
-        multiband_fit,
+        multi_observation_fit,
         "load_image_preparation_products",
         lambda config: _products(),
     )
 
     monkeypatch.setattr(
-        multiband_fit,
+        multi_observation_fit,
         "_load_psf_from_config",
         lambda config: np.ones(
             (3, 3),
@@ -220,14 +220,14 @@ def test_run_multiband_fit_builds_problem_and_returns_result(
         return backend
 
     monkeypatch.setattr(
-        multiband_fit,
+        multi_observation_fit,
         "make_sampler",
         fake_make_sampler,
     )
 
     result = (
-        multiband_fit
-        .run_multiband_fit_from_config(
+        multi_observation_fit
+        .run_multi_observation_inference_from_config(
             _config()
         )
     )
@@ -251,7 +251,7 @@ def test_run_multiband_fit_builds_problem_and_returns_result(
     }
 
 
-def test_run_multiband_fit_supports_different_observation_shapes(
+def test_run_multi_observation_inference_supports_different_observation_shapes(
     monkeypatch,
 ):
     observation_configs = {
@@ -260,8 +260,8 @@ def test_run_multiband_fit_supports_different_observation_shapes(
     }
 
     monkeypatch.setattr(
-        multiband_fit,
-        "resolve_multiband_config",
+        multi_observation_fit,
+        "resolve_multi_observation_config",
         lambda config, base_dir: (
             observation_configs,
             _layout(),
@@ -282,7 +282,7 @@ def test_run_multiband_fit_supports_different_observation_shapes(
     }
 
     monkeypatch.setattr(
-        multiband_fit,
+        multi_observation_fit,
         "load_image_preparation_products",
         lambda config: products[
             id(
@@ -292,7 +292,7 @@ def test_run_multiband_fit_supports_different_observation_shapes(
     )
 
     monkeypatch.setattr(
-        multiband_fit,
+        multi_observation_fit,
         "_load_psf_from_config",
         lambda config: np.ones(
             (3, 3),
@@ -301,7 +301,7 @@ def test_run_multiband_fit_supports_different_observation_shapes(
         / 9.0,
     )
 
-    expected_result = object()
+    expected_result = SimpleNamespace(diagnostics={})
     backend = DummyBackend(
         expected_result
     )
@@ -316,14 +316,14 @@ def test_run_multiband_fit_supports_different_observation_shapes(
         return backend
 
     monkeypatch.setattr(
-        multiband_fit,
+        multi_observation_fit,
         "make_sampler",
         fake_make_sampler,
     )
 
     result = (
-        multiband_fit
-        .run_multiband_fit_from_config(
+        multi_observation_fit
+        .run_multi_observation_inference_from_config(
             _config()
         )
     )
@@ -415,13 +415,13 @@ def test_build_sky_parameter_transforms_uses_each_cutout_wcs(
     }
 
     monkeypatch.setattr(
-        multiband_fit.Observation,
+        multi_observation_fit.Observation,
         "from_fits",
         lambda path: observations[path],
     )
 
     transforms = (
-        multiband_fit
+        multi_observation_fit
         ._build_sky_parameter_transforms(
             observation_configs=observation_configs,
             image_products=products,
@@ -489,7 +489,7 @@ def test_build_sky_parameter_transforms_requires_wcs(
     }
 
     monkeypatch.setattr(
-        multiband_fit.Observation,
+        multi_observation_fit.Observation,
         "from_fits",
         lambda path: SimpleNamespace(
             metadata=SimpleNamespace(
@@ -503,7 +503,7 @@ def test_build_sky_parameter_transforms_requires_wcs(
         match="valid celestial WCS",
     ):
         (
-            multiband_fit
+            multi_observation_fit
             ._build_sky_parameter_transforms(
                 observation_configs=observation_configs,
                 image_products=products,
@@ -552,7 +552,7 @@ def test_build_sky_parameter_transforms_requires_cutout_bounds(
     }
 
     monkeypatch.setattr(
-        multiband_fit.Observation,
+        multi_observation_fit.Observation,
         "from_fits",
         lambda path: SimpleNamespace(
             metadata=SimpleNamespace(
@@ -566,7 +566,7 @@ def test_build_sky_parameter_transforms_requires_cutout_bounds(
         match="saved cutout bounds",
     ):
         (
-            multiband_fit
+            multi_observation_fit
             ._build_sky_parameter_transforms(
                 observation_configs=observation_configs,
                 image_products=products,
@@ -593,8 +593,8 @@ def test_multi_observation_fit_builds_joint_and_observation_products(
     layout = _layout()
 
     monkeypatch.setattr(
-        multiband_fit,
-        "resolve_multiband_config",
+        multi_observation_fit,
+        "resolve_multi_observation_config",
         lambda config, base_dir: (
             observation_configs,
             layout,
@@ -615,7 +615,7 @@ def test_multi_observation_fit_builds_joint_and_observation_products(
     }
 
     monkeypatch.setattr(
-        multiband_fit,
+        multi_observation_fit,
         "load_image_preparation_products",
         lambda config: products[
             id(
@@ -625,7 +625,7 @@ def test_multi_observation_fit_builds_joint_and_observation_products(
     )
 
     monkeypatch.setattr(
-        multiband_fit,
+        multi_observation_fit,
         "_load_psf_from_config",
         lambda config: np.ones(
             (3, 3),
@@ -651,7 +651,7 @@ def test_multi_observation_fit_builds_joint_and_observation_products(
             )
 
     monkeypatch.setattr(
-        multiband_fit,
+        multi_observation_fit,
         "_resolve_model_factory",
         lambda model_name: ConstantModel,
     )
@@ -712,13 +712,13 @@ def test_multi_observation_fit_builds_joint_and_observation_products(
     )
 
     monkeypatch.setattr(
-        multiband_fit,
+        multi_observation_fit,
         "make_sampler",
         lambda config, *, problem: backend,
     )
 
     result = (
-        multiband_fit
+        multi_observation_fit
         .run_multi_observation_fit_from_config(
             _config()
         )

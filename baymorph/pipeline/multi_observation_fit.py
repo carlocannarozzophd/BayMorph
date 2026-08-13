@@ -42,7 +42,6 @@ from baymorph.pipeline.multi_observation_persistence import (
 from baymorph.pipeline.multi_observation_config import (
     multi_observation_parameter_frame,
     resolve_multi_observation_config,
-    resolve_multi_observation_observation_configs,
 )
 from baymorph.pipeline.real_fit import (
     _load_psf_from_config,
@@ -61,6 +60,7 @@ class _MultiObservationBuildContext:
 
     problem: MultiObservationInferenceProblem
     image_products: dict[str, Any]
+    observation_configs: dict[str, dict[str, Any]]
 
 
 def build_multi_observation_problem_from_config(
@@ -115,17 +115,10 @@ def run_multi_observation_inference_from_config(
         base_dir=base_dir,
     )
 
-    observation_configs = (
-        resolve_multi_observation_observation_configs(
-            raw_config,
-            base_dir=base_dir,
-        )
-    )
-
     noise_diagnostics = (
         _estimate_pre_fit_noise_diagnostics(
             context=context,
-            observation_configs=observation_configs,
+            observation_configs=context.observation_configs,
         )
     )
 
@@ -162,17 +155,10 @@ def run_multi_observation_fit_from_config(
         base_dir=base_dir,
     )
 
-    observation_configs = (
-        resolve_multi_observation_observation_configs(
-            raw_config,
-            base_dir=base_dir,
-        )
-    )
-
     noise_diagnostics = (
         _estimate_pre_fit_noise_diagnostics(
             context=context,
-            observation_configs=observation_configs,
+            observation_configs=context.observation_configs,
         )
     )
 
@@ -366,6 +352,7 @@ def _build_multi_observation_context(
     return _MultiObservationBuildContext(
         problem=problem,
         image_products=image_products,
+        observation_configs=observation_configs,
     )
 
 

@@ -208,6 +208,7 @@ def test_noise_diagnostic_precedes_sampler(
     context = SimpleNamespace(
         problem=object(),
         image_products={},
+        observation_configs={},
     )
 
     monkeypatch.setattr(
@@ -223,12 +224,6 @@ def test_noise_diagnostic_precedes_sampler(
         multi_observation_fit,
         "_build_multi_observation_context",
         lambda config, base_dir: context,
-    )
-
-    monkeypatch.setattr(
-        multi_observation_fit,
-        "resolve_multi_observation_observation_configs",
-        lambda config, base_dir: {},
     )
 
     def fake_diagnostic(
