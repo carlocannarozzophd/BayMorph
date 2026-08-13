@@ -215,11 +215,60 @@ Arguments under `init` and `run` retain their native upstream names and
 semantics. Sampler-specific numerical options should therefore be taken from
 the documentation corresponding to the installed pocoMC or Dynesty version.
 
+## Configuration builders
+
+BayMorph exposes three public helpers for constructing reproducible analysis
+configurations without requiring users to assemble internal pipeline objects.
+
+### `make_config_from_fits`
+
+`make_config_from_fits` creates a runnable single-observation configuration
+from one FITS image.
+
+The public scientific controls include:
+
+- an explicit target-identification seed;
+- `model_name`, selecting the registered morphology model;
+- `sampler`, accepting either a simple sampler name such as `"pocomc"` or
+  `"dynesty"`, or an advanced sampler configuration mapping;
+- cutout and PSF strategy;
+- output location.
+
+The Config Maker may use deterministic FITS metadata where appropriate, but it
+does not infer morphology priors from image intensities.
+
+### `make_multi_observation_config`
+
+`make_multi_observation_config` creates one configuration for each observation
+plus the joint configuration required for correlated multi-observation
+inference.
+
+Observation identifiers are opaque user-defined labels. BayMorph does not
+infer filters, instruments, epochs, or parameter coupling from their names.
+
+The same `model_name` and `sampler` contract used by the single-observation
+Config Maker applies to the joint workflow.
+
+### `make_multi_parameters`
+
+`make_multi_parameters` constructs the parameter specification for a registered
+morphology model across multiple observations.
+
+Parameter structure is obtained from the model registry. Shared,
+observation-specific, and fixed parameters remain explicit modelling choices.
+
+Explicit prior bounds are required where they cannot be defined safely from
+the scientific model and deterministic observation metadata. Data-scaled
+morphology priors are never generated silently.
+
 ## Public top-level namespace
 
 The stable top-level public namespace currently contains:
 
 - `BayMorphRunner`
+- `make_config_from_fits`
+- `make_multi_observation_config`
+- `make_multi_parameters`
 - `Observation`
 - `ObservationMetadata`
 - `ImageData`

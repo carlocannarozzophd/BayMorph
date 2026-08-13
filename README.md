@@ -347,9 +347,18 @@ The recommended starting point is:
 The tutorial demonstrates the complete scientific workflow from configuration
 through posterior inference and diagnostics.
 
-The observed-galaxy workflow is available in:
+The observed single-observation workflow is available in:
 
     notebooks/02_Observed_Galaxy_Analysis.ipynb
+
+Joint inference from correlated observations of the same astronomical object
+is demonstrated in:
+
+    notebooks/03_MultiObservation_ConfigMaker_and_Joint_Fit.ipynb
+
+The public Config Maker helpers allow these workflows to select the morphology
+model and inference sampler explicitly while keeping backend-specific machinery
+out of the notebook.
 
 ## Documentation
 

@@ -68,11 +68,18 @@ Chronological record of important architectural decisions together with their ra
 
 ---
 
-## Research Notes
+## Multi-Observation Inference
 
-**[`research/MULTIBAND_PROBABILISTIC_INFERENCE.md`](research/MULTIBAND_PROBABILISTIC_INFERENCE.md)**
+**[`architecture/MULTI_OBSERVATION_PUBLIC_WORKFLOW.md`](architecture/MULTI_OBSERVATION_PUBLIC_WORKFLOW.md)**
 
-Statistical foundation and validation strategy for probabilistic multi-band morphological inference using explicit band-specific parameters and configurable joint priors.
+Defines the public workflow for Bayesian inference from correlated observations
+of the same astronomical object.
+
+The underlying probabilistic formulation is developed in
+[`research/MULTIBAND_FORMULATION.md`](research/MULTIBAND_FORMULATION.md).
+The historical filename reflects legacy implementation terminology; the
+scientific abstraction is multi-observation rather than intrinsically
+multi-band.
 
 ---
 
@@ -116,11 +123,11 @@ which orchestrates the complete scientific workflow.
 
 # Official Examples
 
-BayMorph includes complete notebooks covering
+BayMorph includes three canonical public notebooks covering
 
-- simulated galaxies;
-- real observations;
-- batch processing.
+- a simulated single-observation fit;
+- an observed single-observation analysis;
+- a correlated multi-observation joint fit.
 
 Install them with
 
