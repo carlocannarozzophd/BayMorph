@@ -433,3 +433,112 @@ def test_config_maker_accepts_explicit_gaussian_fwhm(
     ] == pytest.approx(
         2.75
     )
+
+
+def test_config_maker_exposes_model_and_sampler(
+    tmp_path,
+):
+    """Public scientific model and sampler choices must be explicit."""
+    fits_path = tmp_path / "galaxy.fits"
+
+    _write_test_fits(
+        fits_path
+    )
+
+    config = make_config_from_fits(
+        fits_path,
+        target_position="center",
+        model_name="single_sersic",
+        sampler="dynesty",
+    )
+
+    assert config["fit"]["models"] == [
+        "single_sersic",
+    ]
+
+    assert config["fit"]["sampler"] == {
+        "name": "dynesty",
+    }
+
+    resolved = resolve_config(
+        config
+    )
+
+    assert resolved["fit"]["models"] == [
+        "single_sersic",
+    ]
+
+    assert (
+        resolved["fit"]["sampler"]["name"]
+        == "dynesty"
+    )
+
+
+def test_config_maker_defaults_to_single_sersic_and_pocomc(
+    tmp_path,
+):
+    """The simple Config Maker workflow must expose stable defaults."""
+    fits_path = tmp_path / "galaxy.fits"
+
+    _write_test_fits(
+        fits_path
+    )
+
+    config = make_config_from_fits(
+        fits_path,
+        target_position="center",
+    )
+
+    assert config["fit"]["models"] == [
+        "single_sersic",
+    ]
+
+    assert config["fit"]["sampler"] == {
+        "name": "pocomc",
+    }
+
+
+def test_config_maker_accepts_advanced_sampler_mapping(
+    tmp_path,
+):
+    """Advanced sampler configuration must remain available."""
+    fits_path = tmp_path / "galaxy.fits"
+
+    _write_test_fits(
+        fits_path
+    )
+
+    config = make_config_from_fits(
+        fits_path,
+        target_position="center",
+        sampler={
+            "name": "dynesty",
+            "mode": "dynamic",
+        },
+    )
+
+    assert config["fit"]["sampler"] == {
+        "name": "dynesty",
+        "mode": "dynamic",
+    }
+
+
+def test_config_maker_rejects_invalid_sampler_type(
+    tmp_path,
+):
+    """Sampler specifications must use the public string-or-mapping contract."""
+    fits_path = tmp_path / "galaxy.fits"
+
+    _write_test_fits(
+        fits_path
+    )
+
+    with pytest.raises(
+        TypeError,
+        match="sampler must be a string, mapping, or None",
+    ):
+        make_config_from_fits(
+            fits_path,
+            target_position="center",
+            sampler=3,
+        )

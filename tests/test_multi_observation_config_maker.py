@@ -548,3 +548,69 @@ def test_multi_observation_config_rejects_filename_collisions(
                 / "configs"
             ),
         )
+
+
+def test_multi_observation_config_accepts_sampler_name(
+    tmp_path: Path,
+) -> None:
+    """The joint Config Maker must share the single-observation sampler API."""
+    first_fits = tmp_path / "first.fits"
+    second_fits = tmp_path / "second.fits"
+
+    _write_fits(
+        first_fits
+    )
+    _write_fits(
+        second_fits
+    )
+
+    observations = {
+        "first": first_fits,
+        "second": second_fits,
+    }
+
+    joint = make_multi_observation_config(
+        observations,
+        target_positions={
+            "first": "center",
+            "second": "center",
+        },
+        parameters=_sky_parameters(
+            observations
+        ),
+        output_dir=tmp_path / "configs",
+        model_name="single_sersic",
+        sampler="dynesty",
+        outputs_root=tmp_path / "runs",
+    )
+
+    assert joint["fit"]["models"] == [
+        "single_sersic",
+    ]
+
+    assert joint["fit"]["sampler"] == {
+        "name": "dynesty",
+    }
+
+    for name in observations:
+        config_path = (
+            tmp_path
+            / "configs"
+            / f"{name}.yaml"
+        )
+
+        with config_path.open(
+            "r",
+            encoding="utf-8",
+        ) as stream:
+            observation_config = yaml.safe_load(
+                stream
+            )
+
+        assert observation_config["fit"]["models"] == [
+            "single_sersic",
+        ]
+
+        assert observation_config["fit"]["sampler"] == {
+            "name": "dynesty",
+        }

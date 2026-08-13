@@ -300,12 +300,65 @@ def _write_yaml(
         )
 
 
+def _normalize_sampler_config(
+    sampler: str | Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Normalize a public sampler specification."""
+    if sampler is None:
+        return None
+
+    if isinstance(
+        sampler,
+        str,
+    ):
+        name = sampler.strip().lower()
+
+        if not name:
+            raise ValueError(
+                "sampler must be a non-empty string."
+            )
+
+        return {
+            "name": name,
+        }
+
+    if not isinstance(
+        sampler,
+        Mapping,
+    ):
+        raise TypeError(
+            "sampler must be a string, mapping, or None."
+        )
+
+    config = deepcopy(
+        dict(
+            sampler
+        )
+    )
+
+    if "name" in config:
+        name = str(
+            config["name"]
+        ).strip().lower()
+
+        if not name:
+            raise ValueError(
+                "sampler.name must be non-empty."
+            )
+
+        config["name"] = name
+
+    return config
+
+
 def make_config_from_fits(
     fits_path: str | Path,
     *,
     target_position: TargetPosition | None = None,
     output_path: str | Path | None = None,
     object_name: str | None = None,
+    model_name: str = "single_sersic",
+    sampler: str | Mapping[str, Any] | None = "pocomc",
     outputs_root: str | Path = "runs",
     overwrite: bool = True,
     cutout_mode: str = "auto",
@@ -416,6 +469,28 @@ def make_config_from_fits(
             "psf_type must be 'empirical' or 'gaussian'."
         )
 
+    model_name = str(
+        model_name
+    ).strip()
+
+    if not model_name:
+        raise ValueError(
+            "model_name must be non-empty."
+        )
+
+    sampler_config = _normalize_sampler_config(
+        sampler
+    )
+
+    fit_config: dict[str, Any] = {
+        "models": [
+            model_name,
+        ],
+    }
+
+    if sampler_config is not None:
+        fit_config["sampler"] = sampler_config
+
     config: dict[str, Any] = {
         "object": {
             "name": resolved_name,
@@ -439,6 +514,7 @@ def make_config_from_fits(
             ),
         },
         "psf": psf,
+        "fit": fit_config,
     }
 
     resolve_config(
@@ -714,7 +790,7 @@ def make_multi_observation_config(
     analysis_name: str = "joint_analysis",
     model_name: str = "single_sersic",
     parameter_frame: str = "sky",
-    sampler: Mapping[str, Any] | None = None,
+    sampler: str | Mapping[str, Any] | None = "pocomc",
     likelihood: Mapping[str, Any] | None = None,
     outputs_root: str | Path = "runs",
     overwrite: bool = True,
@@ -810,6 +886,19 @@ def make_multi_observation_config(
         raise ValueError(
             "analysis_name must be non-empty."
         )
+    model_name = str(
+        model_name
+    ).strip()
+
+    if not model_name:
+        raise ValueError(
+            "model_name must be non-empty."
+        )
+
+    normalized_sampler = _normalize_sampler_config(
+        sampler
+    )
+
 
     parameter_frame = str(
         parameter_frame
@@ -868,6 +957,8 @@ def make_multi_observation_config(
             object_name=options.get(
                 "object_name"
             ),
+                model_name=model_name,
+                sampler=normalized_sampler,
             outputs_root=outputs_root,
             overwrite=bool(
                 options.get(
@@ -917,7 +1008,7 @@ def make_multi_observation_config(
             "Use observation_options to provide explicit object_name values."
         )
 
-    if sampler is None:
+    if normalized_sampler is None:
         first_config = observation_configs[
             observation_names[
                 0
@@ -937,18 +1028,8 @@ def make_multi_observation_config(
         )
 
     else:
-        if not isinstance(
-            sampler,
-            Mapping,
-        ):
-            raise TypeError(
-                "sampler must be a mapping."
-            )
-
         sampler_config = deepcopy(
-            dict(
-                sampler
-            )
+            normalized_sampler
         )
 
     if likelihood is None:
