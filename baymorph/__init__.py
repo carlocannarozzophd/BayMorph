@@ -15,6 +15,7 @@ from baymorph.pipeline.config_maker import (
     make_config_from_fits,
     make_multi_observation_config,
 )
+from baymorph.pipeline.multi_parameters import make_multi_parameters
 from baymorph.results import (
     EvidenceEstimate,
     InferenceResult,
@@ -50,4 +51,5 @@ __all__ = [
     "SyntheticSersic",
     "make_config_from_fits",
     "make_multi_observation_config",
+    "make_multi_parameters",
 ]
