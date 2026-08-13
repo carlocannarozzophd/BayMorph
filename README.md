@@ -220,7 +220,48 @@ python -m pytest -q
 
 BayMorph analyses are driven by YAML configuration files.
 
-The recommended high-level workflow is:
+For a new analysis, the optional `init` command creates a minimal scientific
+workspace:
+
+~~~bash
+baymorph init my_analysis
+cd my_analysis
+~~~
+
+The initialized workspace contains the public notebooks, the canonical
+simulated-example configuration, and directories for user data and run
+products. It is only a convenience: BayMorph does not require a special
+project format and can also be used directly inside an existing working
+directory.
+
+The recommended first workflow is notebook-based:
+
+    notebooks/01_Simulated_SingleSersic_SingleBand_Fit.ipynb
+
+The same configured analysis can be executed non-interactively:
+
+~~~bash
+baymorph run configs/simulated_galaxy.yaml
+~~~
+
+For an observed FITS image, a configuration can be generated explicitly from
+the command line:
+
+~~~bash
+baymorph config data/galaxy.fits \
+  --target-x 500 \
+  --target-y 500 \
+  --model single_sersic \
+  --sampler pocomc \
+  --output configs/galaxy.yaml
+
+baymorph run configs/galaxy.yaml
+~~~
+
+`--target-center` may be used instead of explicit pixel coordinates when the
+detector centre is intentionally chosen as the target-identification seed.
+
+The equivalent Python workflow is:
 
 ~~~python
 from baymorph import BayMorphRunner
@@ -253,8 +294,8 @@ runner.diagnostics()
 For configurations using an empirical PSF, candidate selection precedes PSF
 construction. The high-level `run()` workflow handles this automatically.
 
-Resolved configurations and scientific products are written to a structured run
-directory to preserve reproducibility.
+Resolved configurations and scientific products are written to a structured
+run directory to preserve reproducibility.
 
 ## Inference backends
 
