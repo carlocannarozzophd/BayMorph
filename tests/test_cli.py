@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
+import subprocess
+import sys
 
 import numpy as np
 import pytest
@@ -438,3 +441,70 @@ def test_run_command_can_disable_diagnostics(
 
     assert calls["config"] == config_path
     assert calls["diagnostics"] is False
+
+
+
+def test_init_notebooks_are_portable_outside_repository(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Initialized notebooks must not depend on the BayMorph repository."""
+    project = tmp_path / "analysis"
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "baymorph",
+            "init",
+            str(project),
+        ],
+    )
+
+    assert main() == 0
+
+    notebooks = sorted(
+        (project / "notebooks").glob(
+            "*.ipynb"
+        )
+    )
+
+    assert notebooks
+
+    for notebook_path in notebooks:
+        notebook = json.loads(
+            notebook_path.read_text(
+                encoding="utf-8"
+            )
+        )
+
+        first_code = next(
+            "".join(
+                cell["source"]
+            )
+            for cell in notebook["cells"]
+            if cell["cell_type"] == "code"
+        )
+
+        assert "pyproject.toml" not in first_code
+
+        for working_directory in (
+            project,
+            project / "notebooks",
+        ):
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    first_code,
+                ],
+                cwd=working_directory,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            assert completed.returncode == 0, (
+                f"{notebook_path.name} failed from "
+                f"{working_directory}:\n"
+                f"{completed.stderr}"
+            )
