@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from numbers import Real
+
 import numpy as np
 import pytest
 import yaml
@@ -153,17 +155,12 @@ def test_config_maker_builds_minimal_runnable_config(
         "auto"
     ] is True
 
-    assert candidate[
-        "min_half_size"
-    ] == "auto"
+    assert candidate["max_peak"] == pytest.approx(
+        50000.0
+    )
 
-    assert candidate[
-        "max_half_size"
-    ] == "auto"
-
-    assert candidate[
-        "max_peak"
-    ] == "auto"
+    assert "min_half_size" not in candidate
+    assert "max_half_size" not in candidate
 
     resolved = resolve_config(
         config
@@ -192,6 +189,69 @@ def test_config_maker_builds_minimal_runnable_config(
         )
 
     assert loaded == config
+
+
+def test_config_maker_empirical_psf_resolves_numeric_candidate_limits(
+    tmp_path,
+):
+    """Generated empirical-PSF thresholds must be numerically consumable."""
+    fits_path = tmp_path / "galaxy.fits"
+
+    _write_test_fits(
+        fits_path
+    )
+
+    config = make_config_from_fits(
+        fits_path,
+        target_position="center",
+    )
+
+    resolved = resolve_config(
+        config
+    )
+
+    candidate = resolved[
+        "psf"
+    ][
+        "empirical"
+    ][
+        "candidate_selection"
+    ]
+
+    numeric_keys = (
+        "target_n_candidates",
+        "min_area",
+        "max_area",
+        "min_peak",
+        "max_peak",
+        "max_eccentricity",
+        "max_elongation",
+        "edge_margin",
+        "sigma_factor",
+        "size_margin",
+        "min_half_size",
+        "max_half_size",
+        "isolation_margin",
+    )
+
+    for key in numeric_keys:
+        assert isinstance(
+            candidate[key],
+            Real,
+        ), (
+            f"Resolved PSF candidate field {key!r} must be numeric, "
+            f"got {candidate[key]!r}."
+        )
+
+    assert candidate["max_peak"] == pytest.approx(
+        50000.0
+    )
+
+    assert candidate["min_half_size"] > 0
+    assert (
+        candidate["max_half_size"]
+        >= candidate["min_half_size"]
+    )
 
 
 def test_config_maker_center_is_explicit(

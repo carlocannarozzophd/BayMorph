@@ -204,40 +204,30 @@ def _cutout_config(
     )
 
 
+
 def _empirical_psf_config(
     observation: Observation,
-    *,
-    pixel_scale: float | None,
 ) -> dict[str, Any]:
-    """Build empirical-PSF configuration from deterministic metadata."""
+    """Build empirical-PSF configuration from deterministic metadata.
+
+    The automatic-selection flag enables BayMorph's automatic candidate
+    workflow. Numerical candidate-selection thresholds remain numerical:
+    unspecified thresholds are supplied by the standard configuration
+    resolver.
+
+    When finite positive detector saturation metadata are available, the
+    saturation level is used directly as the numerical maximum-peak limit.
+    """
     candidate_selection: dict[str, Any] = {
         "auto": True,
     }
-
-    seeing = _finite_positive(
-        observation.metadata.seeing_fwhm
-    )
-
-    if (
-        seeing is not None
-        and pixel_scale is not None
-    ):
-        candidate_selection[
-            "min_half_size"
-        ] = "auto"
-
-        candidate_selection[
-            "max_half_size"
-        ] = "auto"
 
     saturation = _finite_positive(
         observation.metadata.saturation
     )
 
     if saturation is not None:
-        candidate_selection[
-            "max_peak"
-        ] = "auto"
+        candidate_selection["max_peak"] = saturation
 
     return {
         "type": "empirical",
@@ -412,7 +402,6 @@ def make_config_from_fits(
     if normalized_psf_type == "empirical":
         psf = _empirical_psf_config(
             observation,
-            pixel_scale=pixel_scale,
         )
 
     elif normalized_psf_type == "gaussian":
