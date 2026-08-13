@@ -298,3 +298,143 @@ def test_make_config_from_fits_is_top_level_public_api() -> None:
     assert callable(
         baymorph.make_config_from_fits
     )
+
+
+def test_config_command_exposes_model_and_sampler(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The CLI must expose the public model and sampler choices."""
+    fits_path = tmp_path / "galaxy.fits"
+    output_path = tmp_path / "galaxy.yaml"
+
+    _write_fits(
+        fits_path
+    )
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "baymorph",
+            "config",
+            str(fits_path),
+            "--target-center",
+            "--model",
+            "double_sersic",
+            "--sampler",
+            "dynesty",
+            "--output",
+            str(output_path),
+        ],
+    )
+
+    assert main() == 0
+
+    with output_path.open(
+        "r",
+        encoding="utf-8",
+    ) as stream:
+        config = yaml.safe_load(
+            stream
+        )
+
+    assert config["fit"]["models"] == [
+        "double_sersic",
+    ]
+
+    assert config["fit"]["sampler"] == {
+        "name": "dynesty",
+    }
+
+
+def test_run_command_delegates_to_runner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The CLI run command must delegate to BayMorphRunner."""
+    config_path = tmp_path / "analysis.yaml"
+
+    calls = {}
+
+    class FakeRunner:
+        def __init__(
+            self,
+            config,
+            *,
+            verbose=True,
+        ):
+            calls["config"] = config
+            calls["verbose"] = verbose
+
+        def run(
+            self,
+            *,
+            diagnostics=False,
+        ):
+            calls["diagnostics"] = diagnostics
+
+    monkeypatch.setattr(
+        "baymorph.cli.BayMorphRunner",
+        FakeRunner,
+    )
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "baymorph",
+            "run",
+            str(config_path),
+        ],
+    )
+
+    assert main() == 0
+
+    assert calls["config"] == config_path
+    assert calls["verbose"] is True
+    assert calls["diagnostics"] is True
+
+
+def test_run_command_can_disable_diagnostics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CLI diagnostics may be disabled without changing the workflow."""
+    config_path = tmp_path / "analysis.yaml"
+
+    calls = {}
+
+    class FakeRunner:
+        def __init__(
+            self,
+            config,
+            *,
+            verbose=True,
+        ):
+            calls["config"] = config
+
+        def run(
+            self,
+            *,
+            diagnostics=False,
+        ):
+            calls["diagnostics"] = diagnostics
+
+    monkeypatch.setattr(
+        "baymorph.cli.BayMorphRunner",
+        FakeRunner,
+    )
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "baymorph",
+            "run",
+            str(config_path),
+            "--no-diagnostics",
+        ],
+    )
+
+    assert main() == 0
+
+    assert calls["config"] == config_path
+    assert calls["diagnostics"] is False

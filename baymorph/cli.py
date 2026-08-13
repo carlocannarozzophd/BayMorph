@@ -8,6 +8,7 @@ from importlib import metadata, resources
 from pathlib import Path
 
 from baymorph.pipeline.config_maker import make_config_from_fits
+from baymorph.runner import BayMorphRunner
 
 
 _RESOURCE_PACKAGE = "baymorph.resources"
@@ -190,6 +191,8 @@ def _command_config(
         target_position=target_position,
         output_path=output_path,
         object_name=args.object_name,
+        model_name=args.model,
+        sampler=args.sampler,
         outputs_root=args.outputs_root,
         overwrite=not args.no_overwrite,
         cutout_mode=args.cutout_mode,
@@ -204,6 +207,31 @@ def _command_config(
     )
 
     return 0
+
+
+
+def _command_run(
+    args: argparse.Namespace,
+) -> int:
+    """Run a BayMorph analysis from a YAML configuration."""
+    config_path = Path(
+        args.config_path
+    ).expanduser()
+
+    runner = BayMorphRunner(
+        config_path,
+    )
+
+    runner.run(
+        diagnostics=not args.no_diagnostics,
+    )
+
+    print(
+        "BayMorph analysis completed."
+    )
+
+    return 0
+
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -289,6 +317,24 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     config_parser.add_argument(
+        "--model",
+        default="single_sersic",
+        help=(
+            "Registered morphology model. "
+            "Default: single_sersic."
+        ),
+    )
+
+    config_parser.add_argument(
+        "--sampler",
+        default="pocomc",
+        help=(
+            "Inference sampler name. "
+            "Default: pocomc."
+        ),
+    )
+
+    config_parser.add_argument(
         "--target-center",
         action="store_true",
         help=(
@@ -358,6 +404,29 @@ def _build_parser() -> argparse.ArgumentParser:
 
     config_parser.set_defaults(
         handler=_command_config,
+    )
+
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run a BayMorph analysis from a YAML configuration.",
+    )
+
+    run_parser.add_argument(
+        "config_path",
+        help="BayMorph YAML configuration to execute.",
+    )
+
+    run_parser.add_argument(
+        "--no-diagnostics",
+        action="store_true",
+        help=(
+            "Run inference without generating the configured "
+            "post-fit diagnostics."
+        ),
+    )
+
+    run_parser.set_defaults(
+        handler=_command_run,
     )
 
     return parser
