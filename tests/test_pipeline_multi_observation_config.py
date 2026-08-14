@@ -615,13 +615,14 @@ def test_sky_frame_uses_registered_model_geometry_contract():
     )
 
 
-def test_effective_radius_can_be_hierarchical_log_normal():
+def test_effective_radius_can_be_hierarchical():
     import math
 
     config = _multi_observation_config()
 
     config["fit"]["multi_observation"]["parameters"]["re"] = {
-        "coupling": "hierarchical_log_normal",
+        "coupling": "hierarchical",
+        "transform": "exp",
         "location_prior": {
             "type": "uniform",
             "lower": math.log(1.0),
@@ -642,8 +643,8 @@ def test_effective_radius_can_be_hierarchical_log_normal():
     assert "re__g" not in layout.parameter_set.all_names
     assert "re__r" not in layout.parameter_set.all_names
 
-    assert "re__mu_log" in layout.parameter_set.names
-    assert "re__tau_log" in layout.parameter_set.names
+    assert "re__eta_mu" in layout.parameter_set.names
+    assert "re__eta_tau" in layout.parameter_set.names
     assert "re__z__g" in layout.parameter_set.names
     assert "re__z__r" in layout.parameter_set.names
 
@@ -651,8 +652,8 @@ def test_effective_radius_can_be_hierarchical_log_normal():
         {
             "flux__g": 500.0,
             "flux__r": 900.0,
-            "re__mu_log": math.log(5.0),
-            "re__tau_log": 0.2,
+            "re__eta_mu": math.log(5.0),
+            "re__eta_tau": 0.2,
             "re__z__g": -1.0,
             "re__z__r": 1.0,
             "q": 0.7,
@@ -674,13 +675,14 @@ def test_effective_radius_can_be_hierarchical_log_normal():
     assert routed["r"]["re"] > 0.0
 
 
-def test_hierarchical_log_normal_rejects_negative_scale_support():
+def test_hierarchical_rejects_negative_scale_support():
     import math
 
     config = _multi_observation_config()
 
     config["fit"]["multi_observation"]["parameters"]["re"] = {
-        "coupling": "hierarchical_log_normal",
+        "coupling": "hierarchical",
+        "transform": "exp",
         "location_prior": {
             "type": "uniform",
             "lower": math.log(1.0),
@@ -702,13 +704,14 @@ def test_hierarchical_log_normal_rejects_negative_scale_support():
         )
 
 
-def test_hierarchical_log_normal_rejects_extra_fields():
+def test_hierarchical_rejects_extra_fields():
     import math
 
     config = _multi_observation_config()
 
     config["fit"]["multi_observation"]["parameters"]["re"] = {
-        "coupling": "hierarchical_log_normal",
+        "coupling": "hierarchical",
+        "transform": "exp",
         "location_prior": {
             "type": "uniform",
             "lower": math.log(1.0),

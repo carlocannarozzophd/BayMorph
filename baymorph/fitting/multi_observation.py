@@ -8,6 +8,9 @@ from typing import Literal
 
 import numpy as np
 
+from baymorph.fitting.hierarchical import (
+    HierarchicalDomainTransform,
+)
 from baymorph.fitting.parameters import Parameter, ParameterSet
 from baymorph.fitting.priors import (
     FixedPrior,
@@ -19,7 +22,7 @@ from baymorph.fitting.routing import ProjectionParameterRouter
 CouplingMode = Literal[
     "shared",
     "independent",
-    "hierarchical_log_normal",
+    "hierarchical",
 ]
 
 
@@ -33,6 +36,7 @@ class MultiObservationParameterSpec:
     by_observation: Mapping[str, Parameter] | None = None
     location: Parameter | None = None
     scale: Parameter | None = None
+    transform: HierarchicalDomainTransform | None = None
 
     @classmethod
     def shared_parameter(
@@ -72,26 +76,28 @@ class MultiObservationParameterSpec:
         )
 
     @classmethod
-    def hierarchical_log_normal(
+    def hierarchical(
         cls,
         name: str,
         *,
         location: Parameter,
         scale: Parameter,
+        transform: HierarchicalDomainTransform,
     ) -> MultiObservationParameterSpec:
-        """Create a non-centred log-normal hierarchical specification.
+        """Create a non-centred hierarchical parameter specification.
 
-        The sampled state contains one location coordinate, one non-negative
-        scale coordinate, and one standard-normal latent coordinate per
-        observation. Observation-level physical values are derived as
+        The sampled state contains one latent-space location, one
+        non-negative latent-space scale, and one standard-normal coordinate
+        per observation. The observation-level physical parameter is
 
-        ``exp(location + scale * latent)``.
+        ``transform.from_latent(location + scale * latent)``.
         """
         return cls(
             name=name,
-            coupling="hierarchical_log_normal",
+            coupling="hierarchical",
             location=location,
             scale=scale,
+            transform=transform,
         )
 
 
@@ -141,6 +147,7 @@ class MultiObservationParameterLayout:
 
             assert specification.location is not None
             assert specification.scale is not None
+            assert specification.transform is not None
 
             global_parameters.extend(
                 [
@@ -170,7 +177,7 @@ class MultiObservationParameterLayout:
             )
             for specification in self._specifications
             if specification.coupling
-            == "hierarchical_log_normal"
+            == "hierarchical"
             for observation in self._observations
         }
 
@@ -304,7 +311,7 @@ class MultiObservationParameterLayout:
         for specification in self._specifications:
             if (
                 specification.coupling
-                != "hierarchical_log_normal"
+                != "hierarchical"
             ):
                 continue
 
@@ -355,28 +362,24 @@ class MultiObservationParameterLayout:
                         f"'{observation}' must be finite."
                     )
 
-                log_value = (
+                latent_value = (
                     location
                     + scale * latent
                 )
 
-                with np.errstate(
-                    over="ignore",
-                    invalid="ignore",
-                ):
-                    value = float(
-                        np.exp(log_value)
-                    )
+                assert specification.transform is not None
 
-                if (
-                    not np.isfinite(value)
-                    or value <= 0.0
-                ):
+                value = float(
+                    specification.transform.from_latent(
+                        latent_value
+                    )
+                )
+
+                if not np.isfinite(value):
                     raise ValueError(
                         f"Derived hierarchical value for "
                         f"'{specification.name}' in observation "
-                        f"'{observation}' must be finite "
-                        "and positive."
+                        f"'{observation}' must be finite."
                     )
 
                 complete[
@@ -450,9 +453,9 @@ class MultiObservationParameterLayout:
 
             if (
                 specification.coupling
-                == "hierarchical_log_normal"
+                == "hierarchical"
             ):
-                self._validate_hierarchical_log_normal(
+                self._validate_hierarchical(
                     specification
                 )
                 continue
@@ -487,6 +490,7 @@ class MultiObservationParameterLayout:
         if (
             specification.location is not None
             or specification.scale is not None
+            or specification.transform is not None
         ):
             raise ValueError(
                 f"Shared parameter '{specification.name}' "
@@ -513,6 +517,7 @@ class MultiObservationParameterLayout:
         if (
             specification.location is not None
             or specification.scale is not None
+            or specification.transform is not None
         ):
             raise ValueError(
                 f"Independent parameter '{specification.name}' "
@@ -542,11 +547,11 @@ class MultiObservationParameterLayout:
                     f"'{specification.name}'."
                 )
 
-    def _validate_hierarchical_log_normal(
+    def _validate_hierarchical(
         self,
         specification: MultiObservationParameterSpec,
     ) -> None:
-        """Validate one non-centred log-normal hierarchy."""
+        """Validate one non-centred hierarchical parameter specification."""
         if specification.shared is not None:
             raise ValueError(
                 f"Hierarchical parameter '{specification.name}' "
@@ -569,6 +574,22 @@ class MultiObservationParameterLayout:
             raise ValueError(
                 f"Hierarchical parameter '{specification.name}' "
                 "requires a scale hyperparameter."
+            )
+
+        if specification.transform is None:
+            raise ValueError(
+                f"Hierarchical parameter '{specification.name}' "
+                "requires a domain transform."
+            )
+
+        if not isinstance(
+            specification.transform,
+            HierarchicalDomainTransform,
+        ):
+            raise TypeError(
+                f"Hierarchical transform for "
+                f"'{specification.name}' must be a "
+                "HierarchicalDomainTransform."
             )
 
         if (

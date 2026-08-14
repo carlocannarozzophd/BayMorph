@@ -564,11 +564,16 @@ def _parse_parameter_specification(
             )
         )
 
-    if coupling == "hierarchical_log_normal":
+    if coupling == "hierarchical":
+        from baymorph.fitting.hierarchical import (
+            hierarchical_domain_transform_from_name,
+        )
+
         _require_exact_keys(
             config,
             {
                 "coupling",
+                "transform",
                 "location_prior",
                 "scale_prior",
             },
@@ -580,10 +585,10 @@ def _parse_parameter_specification(
 
         return (
             MultiObservationParameterSpec
-            .hierarchical_log_normal(
+            .hierarchical(
                 name,
                 location=Parameter(
-                    f"{name}__mu_log",
+                    f"{name}__eta_mu",
                     prior=parse_prior_config(
                         config[
                             "location_prior"
@@ -591,12 +596,19 @@ def _parse_parameter_specification(
                     ),
                 ),
                 scale=Parameter(
-                    f"{name}__tau_log",
+                    f"{name}__eta_tau",
                     prior=parse_prior_config(
                         config[
                             "scale_prior"
                         ]
                     ),
+                ),
+                transform=(
+                    hierarchical_domain_transform_from_name(
+                        config[
+                            "transform"
+                        ]
+                    )
                 ),
             )
         )
@@ -604,7 +616,7 @@ def _parse_parameter_specification(
     raise ValueError(
         f"Parameter '{name}' coupling must be "
         "'shared', 'independent', or "
-        "'hierarchical_log_normal'."
+        "'hierarchical'."
     )
 
 
