@@ -592,7 +592,7 @@ def _multi_observation_runner_config():
             "models": [
                 "single_sersic",
             ],
-            "multiband": {
+            "multi_observation": {
                 "parameters": {},
             },
         },

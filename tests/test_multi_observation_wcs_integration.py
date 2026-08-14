@@ -9,19 +9,19 @@ from astropy.wcs import WCS
 from baymorph.fitting.model_factories import (
     make_single_sersic_psf_sky_model,
 )
-from baymorph.fitting.multiband import (
-    MultiBandParameterLayout,
-    MultiBandParameterSpec,
+from baymorph.fitting.multi_observation import (
+    MultiObservationParameterLayout,
+    MultiObservationParameterSpec,
 )
-from baymorph.fitting.multiband_problem import (
-    MultiBandInferenceProblem,
+from baymorph.fitting.multi_observation_problem import (
+    MultiObservationInferenceProblem,
 )
 from baymorph.fitting.parameters import Parameter
 from baymorph.fitting.representations import (
     RepresentationFactory,
 )
 from baymorph.likelihood import GaussianImageLikelihood
-from baymorph.likelihood.multiband import MultiBandLikelihood
+from baymorph.likelihood.multi_observation import MultiObservationLikelihood
 from baymorph.models.geometry import get_model_geometry
 from baymorph.observation.model_parameter_transforms import (
     SkyModelParameterTransform,
@@ -86,14 +86,14 @@ def _make_wcs(
     return wcs
 
 
-def _layout() -> MultiBandParameterLayout:
-    return MultiBandParameterLayout(
-        bands=[
+def _layout() -> MultiObservationParameterLayout:
+    return MultiObservationParameterLayout(
+        observations=[
             "g",
             "r",
         ],
         specifications=[
-            MultiBandParameterSpec.independent(
+            MultiObservationParameterSpec.independent(
                 "flux",
                 {
                     "g": Parameter(
@@ -108,49 +108,49 @@ def _layout() -> MultiBandParameterLayout:
                     ),
                 },
             ),
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     "re_arcsec",
                     lower=0.2,
                     upper=3.0,
                 )
             ),
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     "n",
                     lower=0.5,
                     upper=5.0,
                 )
             ),
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     "q",
                     lower=0.3,
                     upper=1.0,
                 )
             ),
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     "position_angle",
                     lower=-1.5,
                     upper=1.5,
                 )
             ),
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     "ra",
                     lower=149.999,
                     upper=150.001,
                 )
             ),
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     "dec",
                     lower=29.999,
                     upper=30.001,
                 )
             ),
-            MultiBandParameterSpec.independent(
+            MultiObservationParameterSpec.independent(
                 "sky",
                 {
                     "g": Parameter(
@@ -206,7 +206,7 @@ def _factory(
 
 
 def _truth_vector(
-    layout: MultiBandParameterLayout,
+    layout: MultiObservationParameterLayout,
 ) -> np.ndarray:
     values = {
         "flux__g": 900.0,
@@ -312,7 +312,7 @@ def test_heterogeneous_wcs_joint_likelihood_prefers_truth():
         layout
     )
 
-    temporary_likelihood = MultiBandLikelihood(
+    temporary_likelihood = MultiObservationLikelihood(
         {
             "g": GaussianImageLikelihood(
                 data=np.zeros(
@@ -333,7 +333,7 @@ def test_heterogeneous_wcs_joint_likelihood_prefers_truth():
         }
     )
 
-    generator = MultiBandInferenceProblem(
+    generator = MultiObservationInferenceProblem(
         representation_factory=factory,
         parameter_layout=layout,
         likelihood=temporary_likelihood,
@@ -352,7 +352,7 @@ def test_heterogeneous_wcs_joint_likelihood_prefers_truth():
         73,
     )
 
-    likelihood = MultiBandLikelihood(
+    likelihood = MultiObservationLikelihood(
         {
             "g": GaussianImageLikelihood(
                 data=truth_images["g"],
@@ -369,7 +369,7 @@ def test_heterogeneous_wcs_joint_likelihood_prefers_truth():
         }
     )
 
-    problem = MultiBandInferenceProblem(
+    problem = MultiObservationInferenceProblem(
         representation_factory=factory,
         parameter_layout=layout,
         likelihood=likelihood,

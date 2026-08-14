@@ -6,15 +6,15 @@ import numpy as np
 import pytest
 
 from baymorph.fitting import make_sampler
-from baymorph.fitting.multiband import (
-    MultiBandParameterLayout,
-    MultiBandParameterSpec,
+from baymorph.fitting.multi_observation import (
+    MultiObservationParameterLayout,
+    MultiObservationParameterSpec,
 )
-from baymorph.fitting.multiband_problem import MultiBandInferenceProblem
+from baymorph.fitting.multi_observation_problem import MultiObservationInferenceProblem
 from baymorph.fitting.parameters import Parameter
 from baymorph.fitting.representations import RepresentationFactory
 from baymorph.likelihood import GaussianImageLikelihood
-from baymorph.likelihood.multiband import MultiBandLikelihood
+from baymorph.likelihood.multi_observation import MultiObservationLikelihood
 from baymorph.models import SersicModel
 
 
@@ -35,7 +35,7 @@ def make_model(
     )
 
 
-def test_multiband_posterior_recovers_shared_radius_and_local_fluxes():
+def test_multi_observation_posterior_recovers_shared_radius_and_local_fluxes():
     """Joint inference should recover a controlled two-band Sérsic model."""
     rng = np.random.default_rng(20260804)
 
@@ -70,17 +70,17 @@ def test_multiband_posterior_recovers_shared_radius_and_local_fluxes():
         size=shape,
     )
 
-    layout = MultiBandParameterLayout(
-        bands=["g", "r"],
+    layout = MultiObservationParameterLayout(
+        observations=["g", "r"],
         specifications=[
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     name="re",
                     lower=2.0,
                     upper=8.0,
                 )
             ),
-            MultiBandParameterSpec.band_specific(
+            MultiObservationParameterSpec.independent(
                 name="flux",
                 parameters={
                     "g": Parameter(
@@ -98,7 +98,7 @@ def test_multiband_posterior_recovers_shared_radius_and_local_fluxes():
         ],
     )
 
-    likelihood = MultiBandLikelihood(
+    likelihood = MultiObservationLikelihood(
         {
             "g": GaussianImageLikelihood(
                 data=data_g,
@@ -125,7 +125,7 @@ def test_multiband_posterior_recovers_shared_radius_and_local_fluxes():
         },
     )
 
-    problem = MultiBandInferenceProblem(
+    problem = MultiObservationInferenceProblem(
         representation_factory=representation_factory,
         parameter_layout=layout,
         likelihood=likelihood,

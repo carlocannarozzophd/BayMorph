@@ -3,15 +3,15 @@
 import numpy as np
 import pytest
 
-from baymorph.fitting.multiband import (
-    MultiBandParameterLayout,
-    MultiBandParameterSpec,
+from baymorph.fitting.multi_observation import (
+    MultiObservationParameterLayout,
+    MultiObservationParameterSpec,
 )
-from baymorph.fitting.multiband_problem import MultiBandInferenceProblem
+from baymorph.fitting.multi_observation_problem import MultiObservationInferenceProblem
 from baymorph.fitting.parameters import Parameter
 from baymorph.fitting.representations import RepresentationFactory
 from baymorph.likelihood import GaussianImageLikelihood
-from baymorph.likelihood.multiband import MultiBandLikelihood
+from baymorph.likelihood.multi_observation import MultiObservationLikelihood
 from baymorph.models import SersicModel
 
 
@@ -33,18 +33,18 @@ def make_base_factory(
     )
 
 
-def make_problem() -> MultiBandInferenceProblem:
-    layout = MultiBandParameterLayout(
-        bands=["g", "r"],
+def make_problem() -> MultiObservationInferenceProblem:
+    layout = MultiObservationParameterLayout(
+        observations=["g", "r"],
         specifications=[
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     name="re",
                     lower=2.0,
                     upper=10.0,
                 )
             ),
-            MultiBandParameterSpec.band_specific(
+            MultiObservationParameterSpec.independent(
                 name="flux",
                 parameters={
                     "g": Parameter(
@@ -62,7 +62,7 @@ def make_problem() -> MultiBandInferenceProblem:
         ],
     )
 
-    likelihood = MultiBandLikelihood(
+    likelihood = MultiObservationLikelihood(
         {
             "g": GaussianImageLikelihood(
                 data=np.zeros((15, 15)),
@@ -87,14 +87,14 @@ def make_problem() -> MultiBandInferenceProblem:
         },
     )
 
-    return MultiBandInferenceProblem(
+    return MultiObservationInferenceProblem(
         representation_factory=representation_factory,
         parameter_layout=layout,
         likelihood=likelihood,
     )
 
 
-def test_multiband_problem_exposes_global_parameters():
+def test_multi_observation_problem_exposes_global_parameters():
     problem = make_problem()
 
     assert problem.ndim == 3
@@ -105,7 +105,7 @@ def test_multiband_problem_exposes_global_parameters():
     ]
 
 
-def test_multiband_problem_routes_and_renders_each_band():
+def test_multi_observation_problem_routes_and_renders_each_band():
     problem = make_problem()
 
     rendered = problem.render_models(
@@ -127,7 +127,7 @@ def test_multiband_problem_routes_and_renders_each_band():
     )
 
 
-def test_multiband_problem_evaluates_joint_likelihood():
+def test_multi_observation_problem_evaluates_joint_likelihood():
     problem = make_problem()
 
     value = problem.log_likelihood(
@@ -143,7 +143,7 @@ def test_multiband_problem_evaluates_joint_likelihood():
     assert np.isfinite(value)
 
 
-def test_multiband_problem_rejects_representation_band_mismatch():
+def test_multi_observation_problem_rejects_representation_band_mismatch():
     problem = make_problem()
 
     representation_factory = RepresentationFactory(
@@ -159,18 +159,18 @@ def test_multiband_problem_rejects_representation_band_mismatch():
         ValueError,
         match="must match",
     ):
-        MultiBandInferenceProblem(
+        MultiObservationInferenceProblem(
             representation_factory=representation_factory,
             parameter_layout=problem.parameter_layout,
             likelihood=problem.likelihood,
         )
 
 
-def test_multiband_problem_rejects_likelihood_band_mismatch():
-    layout = MultiBandParameterLayout(
-        bands=["g"],
+def test_multi_observation_problem_rejects_likelihood_band_mismatch():
+    layout = MultiObservationParameterLayout(
+        observations=["g"],
         specifications=[
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     name="re",
                     lower=1.0,
@@ -189,7 +189,7 @@ def test_multiband_problem_rejects_likelihood_band_mismatch():
         },
     )
 
-    likelihood = MultiBandLikelihood(
+    likelihood = MultiObservationLikelihood(
         {
             "r": GaussianImageLikelihood(
                 data=np.zeros((3, 3)),
@@ -202,7 +202,7 @@ def test_multiband_problem_rejects_likelihood_band_mismatch():
         ValueError,
         match="bands must match",
     ):
-        MultiBandInferenceProblem(
+        MultiObservationInferenceProblem(
             representation_factory=representation_factory,
             parameter_layout=layout,
             likelihood=likelihood,

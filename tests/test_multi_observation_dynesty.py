@@ -3,15 +3,15 @@
 import numpy as np
 
 from baymorph.fitting import make_sampler
-from baymorph.fitting.multiband import (
-    MultiBandParameterLayout,
-    MultiBandParameterSpec,
+from baymorph.fitting.multi_observation import (
+    MultiObservationParameterLayout,
+    MultiObservationParameterSpec,
 )
-from baymorph.fitting.multiband_problem import MultiBandInferenceProblem
+from baymorph.fitting.multi_observation_problem import MultiObservationInferenceProblem
 from baymorph.fitting.parameters import Parameter
 from baymorph.fitting.representations import RepresentationFactory
 from baymorph.likelihood import GaussianImageLikelihood
-from baymorph.likelihood.multiband import MultiBandLikelihood
+from baymorph.likelihood.multi_observation import MultiObservationLikelihood
 from baymorph.models import SersicModel
 
 
@@ -32,7 +32,7 @@ def make_model(
     )
 
 
-def test_dynesty_runs_multiband_problem():
+def test_dynesty_runs_multi_observation_problem():
     """Dynesty should sample one joint multi-band posterior."""
     shape = (15, 15)
 
@@ -46,17 +46,17 @@ def test_dynesty_runs_multiband_problem():
         re=4.0,
     ).render(shape=shape)
 
-    layout = MultiBandParameterLayout(
-        bands=["g", "r"],
+    layout = MultiObservationParameterLayout(
+        observations=["g", "r"],
         specifications=[
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     name="re",
                     lower=2.0,
                     upper=8.0,
                 )
             ),
-            MultiBandParameterSpec.band_specific(
+            MultiObservationParameterSpec.independent(
                 name="flux",
                 parameters={
                     "g": Parameter(
@@ -74,7 +74,7 @@ def test_dynesty_runs_multiband_problem():
         ],
     )
 
-    likelihood = MultiBandLikelihood(
+    likelihood = MultiObservationLikelihood(
         {
             "g": GaussianImageLikelihood(
                 data=data_g,
@@ -95,7 +95,7 @@ def test_dynesty_runs_multiband_problem():
         },
     )
 
-    problem = MultiBandInferenceProblem(
+    problem = MultiObservationInferenceProblem(
         representation_factory=representation_factory,
         parameter_layout=layout,
         likelihood=likelihood,

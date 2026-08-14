@@ -1,24 +1,24 @@
 import pytest
 
-from baymorph.fitting.multiband import (
-    MultiBandParameterLayout,
-    MultiBandParameterSpec,
+from baymorph.fitting.multi_observation import (
+    MultiObservationParameterLayout,
+    MultiObservationParameterSpec,
 )
 from baymorph.fitting.parameters import Parameter
 
 
-def make_layout() -> MultiBandParameterLayout:
-    return MultiBandParameterLayout(
-        bands=["g", "r"],
+def make_layout() -> MultiObservationParameterLayout:
+    return MultiObservationParameterLayout(
+        observations=["g", "r"],
         specifications=[
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     name="re",
                     lower=1.0,
                     upper=20.0,
                 )
             ),
-            MultiBandParameterSpec.band_specific(
+            MultiObservationParameterSpec.independent(
                 name="flux",
                 parameters={
                     "g": Parameter(
@@ -96,8 +96,8 @@ def test_layout_rejects_duplicate_bands():
         ValueError,
         match="unique",
     ):
-        MultiBandParameterLayout(
-            bands=["g", "g"],
+        MultiObservationParameterLayout(
+            observations=["g", "g"],
             specifications=[],
         )
 
@@ -107,10 +107,10 @@ def test_layout_rejects_incomplete_band_specific_definition():
         ValueError,
         match="exactly the configured bands",
     ):
-        MultiBandParameterLayout(
-            bands=["g", "r"],
+        MultiObservationParameterLayout(
+            observations=["g", "r"],
             specifications=[
-                MultiBandParameterSpec.band_specific(
+                MultiObservationParameterSpec.independent(
                     name="flux",
                     parameters={
                         "g": Parameter(
@@ -129,17 +129,17 @@ def test_layout_rejects_parameter_name_mismatch():
         ValueError,
         match="does not match",
     ):
-        MultiBandParameterLayout(
-            bands=["g"],
+        MultiObservationParameterLayout(
+            observations=["g"],
             specifications=[
-                MultiBandParameterSpec.shared_parameter(
+                MultiObservationParameterSpec.shared_parameter(
                     Parameter(
                         name="radius",
                         lower=1.0,
                         upper=10.0,
                     )
                 ),
-                MultiBandParameterSpec.band_specific(
+                MultiObservationParameterSpec.independent(
                     name="flux",
                     parameters={
                         "g": Parameter(

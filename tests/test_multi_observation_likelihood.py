@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from baymorph.likelihood import GaussianImageLikelihood
-from baymorph.likelihood.multiband import MultiBandLikelihood
+from baymorph.likelihood.multi_observation import MultiObservationLikelihood
 
 
 def make_likelihoods() -> dict[str, GaussianImageLikelihood]:
@@ -20,12 +20,12 @@ def make_likelihoods() -> dict[str, GaussianImageLikelihood]:
     }
 
 
-def test_multiband_likelihood_exposes_bands_and_shapes():
-    likelihood = MultiBandLikelihood(
+def test_multi_observation_likelihood_exposes_bands_and_shapes():
+    likelihood = MultiObservationLikelihood(
         make_likelihoods()
     )
 
-    assert likelihood.bands == (
+    assert likelihood.observations == (
         "g",
         "r",
     )
@@ -35,10 +35,10 @@ def test_multiband_likelihood_exposes_bands_and_shapes():
     }
 
 
-def test_multiband_likelihood_sums_image_factors():
+def test_multi_observation_likelihood_sums_image_factors():
     likelihoods = make_likelihoods()
 
-    joint = MultiBandLikelihood(
+    joint = MultiObservationLikelihood(
         likelihoods
     )
 
@@ -55,8 +55,8 @@ def test_multiband_likelihood_sums_image_factors():
     assert joint(images) == pytest.approx(expected)
 
 
-def test_multiband_likelihood_requires_exact_bands():
-    likelihood = MultiBandLikelihood(
+def test_multi_observation_likelihood_requires_exact_bands():
+    likelihood = MultiObservationLikelihood(
         make_likelihoods()
     )
 

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
-
 import pytest
 
 from baymorph.fitting.multi_observation import (
@@ -126,45 +124,6 @@ def test_canonical_multi_observation_section_builds_layout():
         "g",
         "r",
     )
-
-
-def test_legacy_multiband_section_remains_supported():
-    layout = (
-        build_multi_observation_parameter_layout(
-            _config(
-                section_name="multiband"
-            )
-        )
-    )
-
-    assert layout.observations == (
-        "g",
-        "r",
-    )
-
-
-def test_canonical_and_legacy_sections_cannot_coexist():
-    config = _config()
-
-    config[
-        "fit"
-    ][
-        "multiband"
-    ] = deepcopy(
-        config[
-            "fit"
-        ][
-            "multi_observation"
-        ]
-    )
-
-    with pytest.raises(
-        ValueError,
-        match="cannot define both",
-    ):
-        build_multi_observation_parameter_layout(
-            config
-        )
 
 
 def test_parameter_frame_reads_canonical_section():

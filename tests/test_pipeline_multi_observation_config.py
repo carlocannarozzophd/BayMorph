@@ -12,10 +12,10 @@ from baymorph.fitting import (
     NormalPrior,
     UniformPrior,
 )
-from baymorph.pipeline.multiband_config import (
-    build_multiband_parameter_layout,
+from baymorph.pipeline.multi_observation_config import (
+    build_multi_observation_parameter_layout,
     parse_prior_config,
-    resolve_multiband_observation_configs,
+    resolve_multi_observation_observation_configs,
 )
 
 
@@ -100,7 +100,7 @@ def _parameter_config() -> dict:
     }
 
 
-def _multiband_config() -> dict:
+def _multi_observation_config() -> dict:
     return {
         "observations": {
             "g": {
@@ -114,7 +114,7 @@ def _multiband_config() -> dict:
             "models": [
                 "single_sersic",
             ],
-            "multiband": {
+            "multi_observation": {
                 "parameters": (
                     _parameter_config()
                 ),
@@ -189,12 +189,12 @@ def test_parse_prior_config_rejects_extra_fields():
 
 def test_build_layout_preserves_order_and_typed_priors():
     layout = (
-        build_multiband_parameter_layout(
-            _multiband_config()
+        build_multi_observation_parameter_layout(
+            _multi_observation_config()
         )
     )
 
-    assert layout.bands == (
+    assert layout.observations == (
         "g",
         "r",
     )
@@ -239,12 +239,12 @@ def test_build_layout_preserves_order_and_typed_priors():
 
 def test_build_layout_requires_every_model_parameter():
     config = (
-        _multiband_config()
+        _multi_observation_config()
     )
 
     del (
         config["fit"]
-        ["multiband"]
+        ["multi_observation"]
         ["parameters"]
         ["sky"]
     )
@@ -253,19 +253,19 @@ def test_build_layout_requires_every_model_parameter():
         ValueError,
         match=r"Missing: \['sky'\]",
     ):
-        build_multiband_parameter_layout(
+        build_multi_observation_parameter_layout(
             config
         )
 
 
 def test_independent_parameter_requires_every_observation():
     config = (
-        _multiband_config()
+        _multi_observation_config()
     )
 
     del (
         config["fit"]
-        ["multiband"]
+        ["multi_observation"]
         ["parameters"]
         ["flux"]
         ["priors"]
@@ -279,14 +279,14 @@ def test_independent_parameter_requires_every_observation():
             "observations"
         ),
     ):
-        build_multiband_parameter_layout(
+        build_multi_observation_parameter_layout(
             config
         )
 
 
 def test_layout_rejects_multiple_model_set():
     config = (
-        _multiband_config()
+        _multi_observation_config()
     )
 
     config["fit"]["models"] = [
@@ -298,7 +298,7 @@ def test_layout_rejects_multiple_model_set():
         ValueError,
         match="exactly one registered model",
     ):
-        build_multiband_parameter_layout(
+        build_multi_observation_parameter_layout(
             config
         )
 
@@ -336,8 +336,8 @@ def test_resolve_observation_configs_loads_pipeline_configs(
         )
 
     resolved = (
-        resolve_multiband_observation_configs(
-            _multiband_config(),
+        resolve_multi_observation_observation_configs(
+            _multi_observation_config(),
             base_dir=tmp_path,
         )
     )
@@ -373,9 +373,9 @@ def test_resolve_observation_configs_loads_pipeline_configs(
 
 
 def test_effective_radius_can_be_observation_specific():
-    config = _multiband_config()
+    config = _multi_observation_config()
 
-    config["fit"]["multiband"]["parameters"]["re"] = {
+    config["fit"]["multi_observation"]["parameters"]["re"] = {
         "coupling": "independent",
         "priors": {
             "g": {
@@ -391,7 +391,7 @@ def test_effective_radius_can_be_observation_specific():
         },
     }
 
-    layout = build_multiband_parameter_layout(
+    layout = build_multi_observation_parameter_layout(
         config
     )
 
@@ -472,16 +472,16 @@ def _sky_parameter_config() -> dict:
 
 
 def test_sky_parameter_frame_builds_distinct_scientific_state():
-    config = _multiband_config()
+    config = _multi_observation_config()
 
-    config["fit"]["multiband"][
+    config["fit"]["multi_observation"][
         "parameter_frame"
     ] = "sky"
-    config["fit"]["multiband"][
+    config["fit"]["multi_observation"][
         "parameters"
     ] = _sky_parameter_config()
 
-    layout = build_multiband_parameter_layout(
+    layout = build_multi_observation_parameter_layout(
         config
     )
 
@@ -504,9 +504,9 @@ def test_sky_parameter_frame_builds_distinct_scientific_state():
 
 
 def test_detector_parameter_frame_remains_default():
-    config = _multiband_config()
+    config = _multi_observation_config()
 
-    layout = build_multiband_parameter_layout(
+    layout = build_multi_observation_parameter_layout(
         config
     )
 
@@ -520,10 +520,10 @@ def test_detector_parameter_frame_remains_default():
     assert "dec" not in layout.parameter_set.all_names
 
 
-def test_multiband_parameter_frame_rejects_unknown_frame():
-    config = _multiband_config()
+def test_multi_observation_parameter_frame_rejects_unknown_frame():
+    config = _multi_observation_config()
 
-    config["fit"]["multiband"][
+    config["fit"]["multi_observation"][
         "parameter_frame"
     ] = "physical"
 
@@ -531,7 +531,7 @@ def test_multiband_parameter_frame_rejects_unknown_frame():
         ValueError,
         match="parameter_frame",
     ):
-        build_multiband_parameter_layout(
+        build_multi_observation_parameter_layout(
             config
         )
 
@@ -539,7 +539,7 @@ def test_multiband_parameter_frame_rejects_unknown_frame():
 def test_detector_frame_uses_registered_model_parameter_contract():
     from baymorph.models import get_model
 
-    config = _multiband_config()
+    config = _multi_observation_config()
 
     config["fit"]["models"] = [
         "bulge_disk",
@@ -551,7 +551,7 @@ def test_detector_frame_uses_registered_model_parameter_contract():
         ).parameter_names
     )
 
-    config["fit"]["multiband"][
+    config["fit"]["multi_observation"][
         "parameters"
     ] = {
         name: {
@@ -565,7 +565,7 @@ def test_detector_frame_uses_registered_model_parameter_contract():
         for name in model_parameters
     }
 
-    layout = build_multiband_parameter_layout(
+    layout = build_multi_observation_parameter_layout(
         config
     )
 
@@ -579,12 +579,12 @@ def test_sky_frame_uses_registered_model_geometry_contract():
         sky_parameter_names,
     )
 
-    config = _multiband_config()
+    config = _multi_observation_config()
 
     config["fit"]["models"] = [
         "bulge_disk",
     ]
-    config["fit"]["multiband"][
+    config["fit"]["multi_observation"][
         "parameter_frame"
     ] = "sky"
 
@@ -592,7 +592,7 @@ def test_sky_frame_uses_registered_model_geometry_contract():
         "bulge_disk"
     )
 
-    config["fit"]["multiband"][
+    config["fit"]["multi_observation"][
         "parameters"
     ] = {
         name: {
@@ -606,7 +606,7 @@ def test_sky_frame_uses_registered_model_geometry_contract():
         for name in names
     }
 
-    layout = build_multiband_parameter_layout(
+    layout = build_multi_observation_parameter_layout(
         config
     )
 

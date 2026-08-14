@@ -11,17 +11,17 @@ from baymorph.fitting import (
     Parameter,
     UniformPrior,
 )
-from baymorph.fitting.multiband import (
-    MultiBandParameterLayout,
-    MultiBandParameterSpec,
+from baymorph.fitting.multi_observation import (
+    MultiObservationParameterLayout,
+    MultiObservationParameterSpec,
 )
 
 
 def test_layout_supports_shared_and_independent_parameters():
-    layout = MultiBandParameterLayout(
-        bands=["g", "r"],
+    layout = MultiObservationParameterLayout(
+        observations=["g", "r"],
         specifications=[
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     "re",
                     prior=UniformPrior(
@@ -30,7 +30,7 @@ def test_layout_supports_shared_and_independent_parameters():
                     ),
                 )
             ),
-            MultiBandParameterSpec.independent(
+            MultiObservationParameterSpec.independent(
                 "flux",
                 {
                     "g": Parameter(
@@ -62,10 +62,10 @@ def test_layout_supports_shared_and_independent_parameters():
 
 
 def test_layout_routes_fixed_parameters_without_sampling_them():
-    layout = MultiBandParameterLayout(
-        bands=["g", "r"],
+    layout = MultiObservationParameterLayout(
+        observations=["g", "r"],
         specifications=[
-            MultiBandParameterSpec.shared_parameter(
+            MultiObservationParameterSpec.shared_parameter(
                 Parameter(
                     "x0",
                     prior=FixedPrior(
@@ -73,7 +73,7 @@ def test_layout_routes_fixed_parameters_without_sampling_them():
                     ),
                 )
             ),
-            MultiBandParameterSpec.independent(
+            MultiObservationParameterSpec.independent(
                 "sky",
                 {
                     "g": Parameter(
@@ -118,10 +118,10 @@ def test_layout_routes_fixed_parameters_without_sampling_them():
 
 
 def test_independent_prior_types_are_preserved():
-    layout = MultiBandParameterLayout(
-        bands=["g", "r"],
+    layout = MultiObservationParameterLayout(
+        observations=["g", "r"],
         specifications=[
-            MultiBandParameterSpec.independent(
+            MultiObservationParameterSpec.independent(
                 "flux",
                 {
                     "g": Parameter(
@@ -163,7 +163,7 @@ def test_independent_prior_types_are_preserved():
 
 
 def test_legacy_band_specific_alias_builds_independent_specification():
-    specification = MultiBandParameterSpec.band_specific(
+    specification = MultiObservationParameterSpec.independent(
         "flux",
         {
             "g": Parameter(

@@ -255,7 +255,7 @@ def build_multi_observation_parameter_layout(
         model_name
     )
 
-    multi_observation_config, _ = (
+    multi_observation_config = (
         _multi_observation_fit_section(
             fit_config
         )
@@ -375,7 +375,7 @@ def multi_observation_parameter_frame(
             "Multi-observation configuration requires a 'fit' mapping."
         )
 
-    section, section_name = (
+    section = (
         _multi_observation_fit_section(
             fit_config
         )
@@ -393,7 +393,7 @@ def multi_observation_parameter_frame(
         "sky",
     }:
         raise ValueError(
-            f"fit.{section_name}.parameter_frame must be "
+            "fit.multi_observation.parameter_frame must be "
             "'detector' or 'sky'."
         )
 
@@ -402,60 +402,22 @@ def multi_observation_parameter_frame(
 
 def _multi_observation_fit_section(
     fit_config: Mapping[str, Any],
-) -> tuple[
-    Mapping[str, Any],
-    str,
-]:
-    """Return the canonical or legacy multi-observation fit section."""
-    has_canonical = (
+) -> Mapping[str, Any]:
+    """Return the canonical multi-observation fit configuration."""
+    section = fit_config.get(
         "multi_observation"
-        in fit_config
     )
-    has_legacy = (
-        "multiband"
-        in fit_config
-    )
-
-    if (
-        has_canonical
-        and has_legacy
-    ):
-        raise ValueError(
-            "Fit configuration cannot define both "
-            "'multi_observation' and legacy 'multiband' mappings."
-        )
-
-    if has_canonical:
-        section_name = (
-            "multi_observation"
-        )
-    elif has_legacy:
-        section_name = (
-            "multiband"
-        )
-    else:
-        raise ValueError(
-            "Fit configuration requires a "
-            "'multi_observation' mapping."
-        )
-
-    section = fit_config[
-        section_name
-    ]
 
     if not isinstance(
         section,
         Mapping,
     ):
-        raise ValueError(
-            f"fit.{section_name} must be a mapping."
+        raise TypeError(
+            "Fit configuration requires a "
+            "'multi_observation' mapping."
         )
 
-    return (
-        section,
-        section_name,
-    )
-
+    return section
 
 def _observation_names(
     config: Mapping[str, Any],
