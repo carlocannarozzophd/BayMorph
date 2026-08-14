@@ -10,6 +10,10 @@ import numpy as np
 
 from baymorph.fitting.hierarchical import (
     physical_prior_copula_values,
+    physical_prior_copula_values_from_matrix,
+)
+from baymorph.fitting.observation_covariates import (
+    wavelength_reference_correlation_matrix,
 )
 from baymorph.fitting.parameters import (
     Parameter,
@@ -31,6 +35,7 @@ CouplingMode = Literal[
     "shared",
     "independent",
     "hierarchical",
+    "wavelength",
 ]
 
 
@@ -111,6 +116,37 @@ class MultiObservationParameterSpec:
             correlation_prior=correlation_prior,
         )
 
+    @classmethod
+    def wavelength(
+        cls,
+        name: str,
+        *,
+        prior: Prior,
+        reference_correlation_prior: Prior | None = None,
+    ) -> MultiObservationParameterSpec:
+        """Create physical-prior-preserving wavelength coupling.
+
+        The physical marginal prior is supplied directly by ``prior``.
+        Dependence is represented by a Gaussian copula whose correlation
+        decreases smoothly with logarithmic wavelength separation.
+
+        The latent correlation assigned to a factor-two wavelength
+        separation uses a Beta(2, 2) reference prior unless explicitly
+        overridden through the advanced interface.
+        """
+        if reference_correlation_prior is None:
+            reference_correlation_prior = BetaPrior(
+                alpha=2.0,
+                beta=2.0,
+            )
+
+        return cls(
+            name=name,
+            coupling="wavelength",
+            physical_prior=prior,
+            correlation_prior=reference_correlation_prior,
+        )
+
 
 class MultiObservationParameterLayout:
     """Map one sampled state to physical parameters for every observation."""
@@ -120,12 +156,21 @@ class MultiObservationParameterLayout:
         observations: tuple[str, ...] | list[str],
         specifications: tuple[MultiObservationParameterSpec, ...]
         | list[MultiObservationParameterSpec] = (),
+        wavelength_coordinates: Mapping[str, float] | None = None,
     ) -> None:
         self._observations = tuple(
             observations
         )
         self._specifications = tuple(
             specifications
+        )
+        self._wavelength_coordinates = (
+            None
+            if wavelength_coordinates is None
+            else {
+                str(name): float(value)
+                for name, value in wavelength_coordinates.items()
+            }
         )
 
         self._validate()
@@ -163,15 +208,26 @@ class MultiObservationParameterLayout:
 
                 continue
 
-            assert specification.coupling == "hierarchical"
+            assert specification.coupling in {
+                "hierarchical",
+                "wavelength",
+            }
             assert specification.physical_prior is not None
             assert specification.correlation_prior is not None
 
+            dependence_name = (
+                self.correlation_name(
+                    specification.name
+                )
+                if specification.coupling == "hierarchical"
+                else self.reference_correlation_name(
+                    specification.name
+                )
+            )
+
             global_parameters.append(
                 Parameter(
-                    name=self.correlation_name(
-                        specification.name
-                    ),
+                    name=dependence_name,
                     prior=specification.correlation_prior,
                 )
             )
@@ -196,7 +252,10 @@ class MultiObservationParameterLayout:
                 observation,
             )
             for specification in self._specifications
-            if specification.coupling == "hierarchical"
+            if specification.coupling in {
+                "hierarchical",
+                "wavelength",
+            }
             for observation in self._observations
         }
 
@@ -231,14 +290,18 @@ class MultiObservationParameterLayout:
         for specification in self._specifications:
             if specification.coupling == "shared":
                 for observation in self._observations:
-                    routes[observation][
+                    routes[
+                        observation
+                    ][
                         specification.name
                     ] = specification.name
 
                 continue
 
             for observation in self._observations:
-                routes[observation][
+                routes[
+                    observation
+                ][
                     specification.name
                 ] = self.global_name(
                     specification.name,
@@ -289,6 +352,13 @@ class MultiObservationParameterLayout:
         return f"{name}__z__{observation}"
 
     @staticmethod
+    def reference_correlation_name(
+        name: str,
+    ) -> str:
+        """Return the wavelength reference-correlation parameter name."""
+        return f"{name}__rstar"
+
+    @staticmethod
     def correlation_name(
         name: str,
     ) -> str:
@@ -326,39 +396,98 @@ class MultiObservationParameterLayout:
             )
 
         for specification in self._specifications:
-            if specification.coupling != "hierarchical":
+            if specification.coupling not in {
+                "hierarchical",
+                "wavelength",
+            }:
                 continue
 
             assert specification.physical_prior is not None
 
-            correlation = float(
-                complete[
-                    self.correlation_name(
-                        specification.name
-                    )
-                ]
-            )
-
             latent_values = np.asarray(
                 [
-                    complete[
-                        self.latent_name(
-                            specification.name,
-                            observation,
-                        )
-                    ]
+                    float(
+                        complete[
+                            self.latent_name(
+                                specification.name,
+                                observation,
+                            )
+                        ]
+                    )
                     for observation in self._observations
                 ],
                 dtype=float,
             )
 
-            physical_values = (
-                physical_prior_copula_values(
-                    specification.physical_prior,
-                    latent_values,
-                    correlation,
+            if not np.all(
+                np.isfinite(
+                    latent_values
                 )
-            )
+            ):
+                raise ValueError(
+                    f"Latent coordinates for dependent parameter "
+                    f"'{specification.name}' must be finite."
+                )
+
+            if specification.coupling == "hierarchical":
+                correlation = float(
+                    complete[
+                        self.correlation_name(
+                            specification.name
+                        )
+                    ]
+                )
+
+                physical_values = (
+                    physical_prior_copula_values(
+                        specification.physical_prior,
+                        latent_values,
+                        correlation,
+                    )
+                )
+            else:
+                assert self._wavelength_coordinates is not None
+
+                reference_correlation = float(
+                    complete[
+                        self.reference_correlation_name(
+                            specification.name
+                        )
+                    ]
+                )
+
+                observation_entries = {
+                    observation: {
+                        "covariates": {
+                            "wavelength": {
+                                "value": float(
+                                    np.exp(
+                                        self._wavelength_coordinates[
+                                            observation
+                                        ]
+                                    )
+                                ),
+                                "unit": "m",
+                            }
+                        }
+                    }
+                    for observation in self._observations
+                }
+
+                _, correlation_matrix = (
+                    wavelength_reference_correlation_matrix(
+                        observation_entries,
+                        reference_correlation=reference_correlation,
+                    )
+                )
+
+                physical_values = (
+                    physical_prior_copula_values_from_matrix(
+                        specification.physical_prior,
+                        latent_values,
+                        correlation_matrix,
+                    )
+                )
 
             for observation, value in zip(
                 self._observations,
@@ -436,6 +565,12 @@ class MultiObservationParameterLayout:
 
             if specification.coupling == "hierarchical":
                 self._validate_hierarchical(
+                    specification
+                )
+                continue
+
+            if specification.coupling == "wavelength":
+                self._validate_wavelength(
                     specification
                 )
                 continue
@@ -529,28 +664,89 @@ class MultiObservationParameterLayout:
         self,
         specification: MultiObservationParameterSpec,
     ) -> None:
-        """Validate physical-prior-preserving hierarchical coupling."""
+        """Validate physical-prior-preserving exchangeable coupling."""
+        self._validate_copula_specification(
+            specification,
+            label="Hierarchical",
+        )
+
+    def _validate_wavelength(
+        self,
+        specification: MultiObservationParameterSpec,
+    ) -> None:
+        """Validate physical-prior-preserving wavelength coupling."""
+        self._validate_copula_specification(
+            specification,
+            label="Wavelength",
+        )
+
+        if self._wavelength_coordinates is None:
+            raise ValueError(
+                f"Wavelength parameter '{specification.name}' "
+                "requires wavelength coordinates."
+            )
+
+        supplied = set(
+            self._wavelength_coordinates
+        )
+        expected = set(
+            self._observations
+        )
+
+        if supplied != expected:
+            raise ValueError(
+                f"Wavelength parameter '{specification.name}' "
+                "requires coordinates for exactly the configured "
+                "observations."
+            )
+
+        values = np.asarray(
+            [
+                self._wavelength_coordinates[
+                    observation
+                ]
+                for observation in self._observations
+            ],
+            dtype=float,
+        )
+
+        if not np.all(
+            np.isfinite(
+                values
+            )
+        ):
+            raise ValueError(
+                "Wavelength coordinates must be finite."
+            )
+
+    def _validate_copula_specification(
+        self,
+        specification: MultiObservationParameterSpec,
+        *,
+        label: str,
+    ) -> None:
+        """Validate one physical-prior-preserving Gaussian-copula coupling."""
         if len(self._observations) < 2:
             raise ValueError(
-                f"Hierarchical parameter '{specification.name}' "
+                f"{label} parameter '{specification.name}' "
                 "requires at least two observations."
             )
 
         if specification.shared is not None:
             raise ValueError(
-                f"Hierarchical parameter '{specification.name}' "
+                f"{label} parameter '{specification.name}' "
                 "cannot define a shared parameter."
             )
 
         if specification.by_observation is not None:
             raise ValueError(
-                f"Hierarchical parameter '{specification.name}' "
+                f"{label} parameter '{specification.name}' "
                 "cannot define independent parameters."
             )
 
         if specification.physical_prior is None:
             raise ValueError(
-                f"Hierarchical parameter '{specification.name}' "
+                f"{label} parameter '{specification.name}' "
                 "requires a physical prior."
             )
 
@@ -559,13 +755,13 @@ class MultiObservationParameterLayout:
             Prior,
         ):
             raise TypeError(
-                f"Physical prior for hierarchical parameter "
+                f"Physical prior for {label.lower()} parameter "
                 f"'{specification.name}' must be a Prior."
             )
 
         if specification.physical_prior.is_fixed:
             raise ValueError(
-                f"Hierarchical parameter '{specification.name}' "
+                f"{label} parameter '{specification.name}' "
                 "cannot use a fixed physical prior."
             )
 
@@ -575,7 +771,7 @@ class MultiObservationParameterLayout:
 
         if correlation_prior is None:
             raise ValueError(
-                f"Hierarchical parameter '{specification.name}' "
+                f"{label} parameter '{specification.name}' "
                 "requires a latent correlation prior."
             )
 
@@ -588,7 +784,7 @@ class MultiObservationParameterLayout:
                 or correlation_prior.value > 1.0
             ):
                 raise ValueError(
-                    f"Hierarchical correlation prior for "
+                    f"{label} correlation prior for "
                     f"'{specification.name}' must lie in [0, 1]."
                 )
 
@@ -603,7 +799,7 @@ class MultiObservationParameterLayout:
                 or correlation_prior.upper > 1.0
             ):
                 raise ValueError(
-                    f"Hierarchical correlation prior for "
+                    f"{label} correlation prior for "
                     f"'{specification.name}' must have support "
                     "inside [0, 1]."
                 )
@@ -619,7 +815,7 @@ class MultiObservationParameterLayout:
                 or correlation_prior.upper > 1.0
             ):
                 raise ValueError(
-                    f"Hierarchical correlation prior for "
+                    f"{label} correlation prior for "
                     f"'{specification.name}' must have support "
                     "inside [0, 1]."
                 )
@@ -627,7 +823,7 @@ class MultiObservationParameterLayout:
             return
 
         raise TypeError(
-            f"Hierarchical correlation prior for "
+            f"{label} correlation prior for "
             f"'{specification.name}' must have known support "
             "inside [0, 1]. FixedPrior, UniformPrior, and "
             "BetaPrior are currently supported."

@@ -10,6 +10,9 @@ from baymorph.fitting.multi_observation import (
     MultiObservationParameterLayout,
     MultiObservationParameterSpec,
 )
+from baymorph.fitting.observation_covariates import (
+    wavelength_covariate,
+)
 from baymorph.fitting.parameters import Parameter
 from baymorph.fitting.priors import (
     BetaPrior,
@@ -209,13 +212,35 @@ def resolve_multi_observation_observation_configs(
                 "must be a mapping."
             )
 
-        _require_exact_keys(
-            observation_config,
-            {
-                "config_path",
-            },
-            context=f"Observation '{observation}'",
+        supplied_keys = set(
+            observation_config
         )
+        allowed_keys = {
+            "config_path",
+            "covariates",
+        }
+
+        if (
+            "config_path" not in supplied_keys
+            or not supplied_keys.issubset(
+                allowed_keys
+            )
+        ):
+            missing = (
+                []
+                if "config_path" in supplied_keys
+                else ["config_path"]
+            )
+            extra = sorted(
+                supplied_keys.difference(
+                    allowed_keys
+                )
+            )
+
+            raise ValueError(
+                f"Observation '{observation}' configuration keys "
+                f"are invalid. Missing: {missing}. Extra: {extra}."
+            )
 
         config_path = Path(
             observation_config[
@@ -364,9 +389,31 @@ def build_multi_observation_parameter_layout(
         for name in parameter_names
     ]
 
+    uses_wavelength_coupling = any(
+        specification.coupling == "wavelength"
+        for specification in specifications
+    )
+
+    wavelength_coordinates = None
+
+    if uses_wavelength_coupling:
+        observation_entries = config.get(
+            "observations"
+        )
+
+        assert isinstance(
+            observation_entries,
+            Mapping,
+        )
+
+        wavelength_coordinates = wavelength_covariate(
+            observation_entries
+        )
+
     return MultiObservationParameterLayout(
         observations=observations,
         specifications=specifications,
+        wavelength_coordinates=wavelength_coordinates,
     )
 
 
@@ -623,10 +670,30 @@ def _parse_parameter_specification(
             ),
         )
 
+    if coupling == "wavelength":
+        _require_exact_keys(
+            config,
+            {
+                "coupling",
+                "prior",
+            },
+            context=(
+                f"Wavelength parameter "
+                f"'{name}'"
+            ),
+        )
+
+        return MultiObservationParameterSpec.wavelength(
+            name,
+            prior=parse_prior_config(
+                config["prior"]
+            ),
+        )
+
     raise ValueError(
         f"Parameter '{name}' coupling must be "
-        "'shared', 'independent', or "
-        "'hierarchical'."
+        "'shared', 'independent', 'hierarchical', or "
+        "'wavelength'."
     )
 
 

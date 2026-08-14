@@ -962,3 +962,153 @@ def test_beta_prior_config_requires_both_scaled_bounds():
                 "lower": 0.0,
             }
         )
+
+
+def test_wavelength_coupling_builds_from_observation_covariates():
+    config = _multi_observation_config()
+
+    config["observations"]["g"]["covariates"] = {
+        "wavelength": {
+            "value": 4770.0,
+            "unit": "Angstrom",
+        }
+    }
+
+    config["observations"]["r"]["covariates"] = {
+        "wavelength": {
+            "value": 6231.0,
+            "unit": "Angstrom",
+        }
+    }
+
+    parameters = (
+        config["fit"]
+        ["multi_observation"]
+        ["parameters"]
+    )
+
+    parameters["re"] = {
+        "coupling": "wavelength",
+        "prior": {
+            "type": "uniform",
+            "lower": 0.5,
+            "upper": 30.0,
+        },
+    }
+
+    layout = build_multi_observation_parameter_layout(
+        config
+    )
+
+    assert "re__rstar" in layout.parameter_set.names
+    assert "re__z__g" in layout.parameter_set.names
+    assert "re__z__r" in layout.parameter_set.names
+
+    routed = layout.route(
+        {
+            name: 0.0
+            for name in layout.parameter_set.names
+        }
+        | {
+            "flux__g": 500.0,
+            "flux__r": 900.0,
+            "re__rstar": 0.5,
+            "re__z__g": -0.5,
+            "re__z__r": 0.5,
+            "q": 0.7,
+            "theta": 0.0,
+            "x0": 15.0,
+            "y0": 15.0,
+            "sky__r": 0.0,
+        }
+    )
+
+    assert 0.5 <= routed["g"]["re"] <= 30.0
+    assert 0.5 <= routed["r"]["re"] <= 30.0
+
+
+def test_wavelength_coupling_requires_explicit_wavelength_metadata():
+    config = _multi_observation_config()
+
+    parameters = (
+        config["fit"]
+        ["multi_observation"]
+        ["parameters"]
+    )
+
+    parameters["re"] = {
+        "coupling": "wavelength",
+        "prior": {
+            "type": "uniform",
+            "lower": 0.5,
+            "upper": 30.0,
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="covariates",
+    ):
+        build_multi_observation_parameter_layout(
+            config
+        )
+
+
+def test_observation_config_resolution_accepts_covariates(
+    tmp_path,
+    monkeypatch,
+):
+    calls = []
+
+    def fake_load_resolved_config(path):
+        calls.append(
+            Path(path)
+        )
+        return {
+            "resolved_path": str(path),
+        }
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.multi_observation_config.load_resolved_config",
+        fake_load_resolved_config,
+    )
+
+    config = {
+        "observations": {
+            "g": {
+                "config_path": "g.yaml",
+                "covariates": {
+                    "wavelength": {
+                        "value": 4770.0,
+                        "unit": "Angstrom",
+                    }
+                },
+            },
+            "r": {
+                "config_path": "r.yaml",
+                "covariates": {
+                    "wavelength": {
+                        "value": 6231.0,
+                        "unit": "Angstrom",
+                    }
+                },
+            },
+        }
+    }
+
+    resolved = (
+        resolve_multi_observation_observation_configs(
+            config,
+            base_dir=tmp_path,
+        )
+    )
+
+    assert set(resolved) == {
+        "g",
+        "r",
+    }
+
+    assert calls == [
+        tmp_path / "g.yaml",
+        tmp_path / "r.yaml",
+    ]
