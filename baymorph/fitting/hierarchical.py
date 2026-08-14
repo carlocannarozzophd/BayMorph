@@ -96,6 +96,36 @@ class LogisticHierarchicalTransform(
         )
 
 
+class AxialAngleHierarchicalTransform(
+    HierarchicalDomainTransform
+):
+    """Wrap an axial angle into the canonical interval [-pi/2, pi/2)."""
+
+    def from_latent(self, value: float) -> float:
+        value = float(value)
+
+        if not np.isfinite(value):
+            raise ValueError(
+                "Hierarchical latent value must be finite."
+            )
+
+        half_period = float(
+            np.pi / 2.0
+        )
+        period = float(
+            np.pi
+        )
+
+        return float(
+            (
+                value
+                + half_period
+            )
+            % period
+            - half_period
+        )
+
+
 def hierarchical_domain_transform_from_name(
     name: str,
 ) -> HierarchicalDomainTransform:
@@ -111,7 +141,10 @@ def hierarchical_domain_transform_from_name(
     if normalized == "logistic":
         return LogisticHierarchicalTransform()
 
+    if normalized == "axial_angle":
+        return AxialAngleHierarchicalTransform()
+
     raise ValueError(
         "Hierarchical transform must be "
-        "'identity', 'exp', or 'logistic'."
+        "'identity', 'exp', 'logistic', or 'axial_angle'."
     )

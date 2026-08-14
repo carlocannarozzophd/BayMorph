@@ -330,3 +330,113 @@ def test_hierarchical_logistic_routes_axis_ratios():
 
     assert 0.0 < routed["g"]["q"] < 1.0
     assert 0.0 < routed["r"]["q"] < 1.0
+
+
+def test_axial_angle_transform_wraps_one_pi_period():
+    from baymorph.fitting.hierarchical import (
+        AxialAngleHierarchicalTransform,
+    )
+
+    transform = AxialAngleHierarchicalTransform()
+
+    half_pi = np.pi / 2.0
+
+    for value in (
+        -4.1,
+        -1.2,
+        0.0,
+        1.2,
+        4.1,
+    ):
+        wrapped = transform.from_latent(
+            value
+        )
+        equivalent = transform.from_latent(
+            value + np.pi
+        )
+
+        assert -half_pi <= wrapped < half_pi
+        assert equivalent == pytest.approx(
+            wrapped
+        )
+
+    assert transform.from_latent(
+        half_pi
+    ) == pytest.approx(
+        -half_pi
+    )
+
+    assert transform.from_latent(
+        -half_pi
+    ) == pytest.approx(
+        -half_pi
+    )
+
+
+def test_hierarchical_axial_angle_wraps_across_boundary():
+    from baymorph.fitting.hierarchical import (
+        AxialAngleHierarchicalTransform,
+    )
+
+    spec = MultiObservationParameterSpec.hierarchical(
+        "theta",
+        location=Parameter(
+            "theta__eta_mu",
+            lower=-np.pi / 2.0,
+            upper=np.pi / 2.0,
+        ),
+        scale=Parameter(
+            "theta__eta_tau",
+            lower=0.0,
+            upper=0.5,
+        ),
+        transform=AxialAngleHierarchicalTransform(),
+    )
+
+    layout = MultiObservationParameterLayout(
+        observations=["g", "r"],
+        specifications=[
+            spec,
+        ],
+    )
+
+    location = 1.5
+    scale = 0.2
+
+    routed = layout.route(
+        {
+            "theta__eta_mu": location,
+            "theta__eta_tau": scale,
+            "theta__z__g": -1.0,
+            "theta__z__r": 1.0,
+        }
+    )
+
+    expected_g = (
+        (
+            location
+            - scale
+            + np.pi / 2.0
+        )
+        % np.pi
+        - np.pi / 2.0
+    )
+    expected_r = (
+        (
+            location
+            + scale
+            + np.pi / 2.0
+        )
+        % np.pi
+        - np.pi / 2.0
+    )
+
+    assert routed["g"]["theta"] == pytest.approx(
+        expected_g
+    )
+    assert routed["r"]["theta"] == pytest.approx(
+        expected_r
+    )
+
+    assert -np.pi / 2.0 <= routed["g"]["theta"] < np.pi / 2.0
+    assert -np.pi / 2.0 <= routed["r"]["theta"] < np.pi / 2.0
