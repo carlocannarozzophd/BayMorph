@@ -10,8 +10,8 @@ import yaml
 from baymorph.pipeline.image_preparation import (
     prepare_real_image_from_config,
 )
-from baymorph.pipeline.multiband_fit import (
-    build_multiband_problem_from_config,
+from baymorph.pipeline.multi_observation_fit import (
+    build_multi_observation_problem_from_config,
 )
 from baymorph.validation import (
     MultiObservationGroundTruth,
@@ -130,7 +130,7 @@ def test_multi_observation_validation_case_builds_and_scores_truth(
         joint_path
     )
 
-    problem = build_multiband_problem_from_config(
+    problem = build_multi_observation_problem_from_config(
         joint_path
     )
 
@@ -192,7 +192,7 @@ def test_multi_observation_validation_truth_beats_perturbed_geometry(
         joint_path
     )
 
-    problem = build_multiband_problem_from_config(
+    problem = build_multi_observation_problem_from_config(
         joint_path
     )
 

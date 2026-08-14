@@ -190,7 +190,7 @@ def test_multi_observation_radial_profiles_use_detector_geometries(
 
     monkeypatch.setattr(
         radial_pipeline,
-        "_build_multiband_context",
+        "_build_multi_observation_context",
         lambda config, base_dir: context,
     )
 
@@ -458,7 +458,7 @@ def test_multi_observation_radial_profiles_validate_products_before_build(
 
     monkeypatch.setattr(
         radial_pipeline,
-        "_build_multiband_context",
+        "_build_multi_observation_context",
         lambda config, base_dir: pytest.fail(
             "Context must not be built before validating observation products."
         ),

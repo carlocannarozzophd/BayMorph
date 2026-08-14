@@ -115,7 +115,7 @@ def test_multi_observation_residual_maps_use_native_products_and_paths(
 
     monkeypatch.setattr(
         residual_maps,
-        "resolve_multiband_config",
+        "resolve_multi_observation_config",
         lambda config, base_dir: (
             observation_configs,
             object(),
@@ -393,7 +393,7 @@ def test_multi_observation_residual_maps_require_every_observation_product(
 
     monkeypatch.setattr(
         residual_maps,
-        "resolve_multiband_config",
+        "resolve_multi_observation_config",
         lambda config, base_dir: (
             observation_configs,
             object(),

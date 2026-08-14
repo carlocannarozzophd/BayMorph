@@ -7,8 +7,8 @@ from typing import Any
 
 import numpy as np
 
-from baymorph.fitting.multiband import MultiBandParameterLayout
-from baymorph.pipeline.multiband_config import build_multiband_parameter_layout
+from baymorph.fitting.multi_observation import MultiObservationParameterLayout
+from baymorph.pipeline.multi_observation_config import build_multi_observation_parameter_layout
 from baymorph.validation.multi_observation_preparation_free import (
     PreparationFreeMultiObservationCase,
     build_preparation_free_multi_observation_case,
@@ -25,7 +25,7 @@ class MultiObservationSBCTruthDraw:
 
     truth: MultiObservationGroundTruth
     unit_cube: np.ndarray
-    parameter_layout: MultiBandParameterLayout
+    parameter_layout: MultiObservationParameterLayout
     truth_seed: int
 
 
@@ -123,14 +123,14 @@ def draw_multi_observation_sbc_truth(
         },
         "fit": {
             "models": [reference_truth.model_name],
-            "multiband": {
+            "multi_observation": {
                 "parameter_frame": "sky",
                 "parameters": parameter_config,
             },
         },
     }
 
-    parameter_layout = build_multiband_parameter_layout(layout_config)
+    parameter_layout = build_multi_observation_parameter_layout(layout_config)
 
     truth_seed = truth_seed_base + index
     rng = np.random.default_rng(truth_seed)

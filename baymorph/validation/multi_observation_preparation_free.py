@@ -12,15 +12,15 @@ import numpy as np
 from astropy.wcs import WCS
 
 from baymorph.fitting import make_sampler, make_single_sersic_psf_sky_model
-from baymorph.fitting.multiband_problem import MultiBandInferenceProblem
+from baymorph.fitting.multi_observation_problem import MultiObservationInferenceProblem
 from baymorph.fitting.representations import RepresentationFactory
 from baymorph.likelihood import GaussianImageLikelihood
-from baymorph.likelihood.multiband import MultiBandLikelihood
+from baymorph.likelihood.multi_observation import MultiObservationLikelihood
 from baymorph.models.geometry import get_model_geometry
 from baymorph.observation.model_parameter_transforms import (
     SkyModelParameterTransform,
 )
-from baymorph.pipeline.multiband_config import build_multiband_parameter_layout
+from baymorph.pipeline.multi_observation_config import build_multi_observation_parameter_layout
 from baymorph.results import InferenceResult
 from baymorph.simulation.psf import GaussianPSF
 from baymorph.validation.multi_observation_campaign import (
@@ -45,7 +45,7 @@ class PreparationFreeMultiObservationCase:
     """
 
     truth: MultiObservationGroundTruth
-    problem: MultiBandInferenceProblem
+    problem: MultiObservationInferenceProblem
     noiseless_images: Mapping[str, np.ndarray]
     observed_images: Mapping[str, np.ndarray]
     noise_maps: Mapping[str, np.ndarray]
@@ -109,7 +109,7 @@ def build_preparation_free_multi_observation_case(
             "only the single_sersic reference model."
         )
 
-    parameter_layout = build_multiband_parameter_layout(
+    parameter_layout = build_multi_observation_parameter_layout(
         _layout_config(
             truth,
             parameter_config=parameter_config,
@@ -201,7 +201,7 @@ def build_preparation_free_multi_observation_case(
         observed_images[observation_name] = observed
         noise_maps[observation_name] = noise_map
 
-    likelihood = MultiBandLikelihood(
+    likelihood = MultiObservationLikelihood(
         {
             observation_name: GaussianImageLikelihood(
                 data=observed_images[observation_name],
@@ -212,7 +212,7 @@ def build_preparation_free_multi_observation_case(
             for observation_name in parameter_layout.bands
         }
     )
-    problem = MultiBandInferenceProblem(
+    problem = MultiObservationInferenceProblem(
         representation_factory=representation_factory,
         parameter_layout=parameter_layout,
         likelihood=likelihood,
@@ -406,7 +406,7 @@ def _layout_config(
         },
         "fit": {
             "models": [truth.model_name],
-            "multiband": {
+            "multi_observation": {
                 "parameter_frame": "sky",
                 "parameters": parameters,
             },

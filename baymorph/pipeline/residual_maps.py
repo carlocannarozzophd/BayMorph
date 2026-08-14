@@ -19,8 +19,8 @@ from baymorph.pipeline.image_preparation import (
 from baymorph.pipeline.multi_observation_outputs import (
     multi_observation_paths,
 )
-from baymorph.pipeline.multiband_config import (
-    resolve_multiband_config,
+from baymorph.pipeline.multi_observation_config import (
+    resolve_multi_observation_config,
 )
 from baymorph.pipeline.outputs import (
     pipeline_paths,
@@ -246,7 +246,7 @@ def _run_multi_observation_residual_maps(
     base_dir: Path,
 ) -> None:
     """Generate one residual-map diagnostic for each observation."""
-    observation_configs, _ = resolve_multiband_config(
+    observation_configs, _ = resolve_multi_observation_config(
         config,
         base_dir=base_dir,
     )

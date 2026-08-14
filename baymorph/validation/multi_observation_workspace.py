@@ -348,7 +348,7 @@ class MultiObservationValidationWorkspace:
                     truth.model_name
                 ],
                 "sampler": sampler_config,
-                "multiband": {
+                "multi_observation": {
                     "parameter_frame": "sky",
                     "parameters": self._parameter_config(
                         truth

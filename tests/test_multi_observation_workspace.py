@@ -123,7 +123,7 @@ def test_workspace_writes_heterogeneous_joint_case(
     assert joint[
         "fit"
     ][
-        "multiband"
+        "multi_observation"
     ][
         "parameter_frame"
     ] == "sky"

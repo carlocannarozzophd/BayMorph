@@ -11,8 +11,8 @@ import yaml
 from baymorph.pipeline.image_preparation import (
     prepare_real_image_from_config,
 )
-from baymorph.pipeline.multiband_fit import (
-    run_multiband_fit_from_config,
+from baymorph.pipeline.multi_observation_fit import (
+    run_multi_observation_inference_from_config,
 )
 from baymorph.results import InferenceResult
 from baymorph.validation.baymorph_adapter import (
@@ -167,7 +167,7 @@ class MultiObservationNoiseCampaign:
 
         try:
             inference_result = (
-                run_multiband_fit_from_config(
+                run_multi_observation_inference_from_config(
                     joint_path
                 )
             )

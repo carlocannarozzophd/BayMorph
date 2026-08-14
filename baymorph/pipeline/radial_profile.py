@@ -28,8 +28,8 @@ from baymorph.pipeline.image_preparation import (
 from baymorph.pipeline.multi_observation_outputs import (
     multi_observation_paths,
 )
-from baymorph.pipeline.multiband_fit import (
-    _build_multiband_context,
+from baymorph.pipeline.multi_observation_fit import (
+    _build_multi_observation_context,
 )
 from baymorph.pipeline.outputs import (
     pipeline_paths,
@@ -685,7 +685,7 @@ def _run_multi_observation_radial_profiles(
                 f"{missing_text}."
             )
 
-    context = _build_multiband_context(
+    context = _build_multi_observation_context(
         config,
         base_dir=base_dir,
     )
