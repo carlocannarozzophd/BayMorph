@@ -565,17 +565,11 @@ def _parse_parameter_specification(
         )
 
     if coupling == "hierarchical":
-        from baymorph.fitting.hierarchical import (
-            hierarchical_domain_transform_from_name,
-        )
-
         _require_exact_keys(
             config,
             {
                 "coupling",
-                "transform",
-                "location_prior",
-                "scale_prior",
+                "prior",
             },
             context=(
                 f"Hierarchical parameter "
@@ -583,34 +577,11 @@ def _parse_parameter_specification(
             ),
         )
 
-        return (
-            MultiObservationParameterSpec
-            .hierarchical(
-                name,
-                location=Parameter(
-                    f"{name}__eta_mu",
-                    prior=parse_prior_config(
-                        config[
-                            "location_prior"
-                        ]
-                    ),
-                ),
-                scale=Parameter(
-                    f"{name}__eta_tau",
-                    prior=parse_prior_config(
-                        config[
-                            "scale_prior"
-                        ]
-                    ),
-                ),
-                transform=(
-                    hierarchical_domain_transform_from_name(
-                        config[
-                            "transform"
-                        ]
-                    )
-                ),
-            )
+        return MultiObservationParameterSpec.hierarchical(
+            name,
+            prior=parse_prior_config(
+                config["prior"]
+            ),
         )
 
     raise ValueError(

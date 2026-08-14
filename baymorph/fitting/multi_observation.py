@@ -9,15 +9,22 @@ from typing import Literal
 import numpy as np
 
 from baymorph.fitting.hierarchical import (
-    HierarchicalDomainTransform,
+    physical_prior_copula_values,
 )
-from baymorph.fitting.parameters import Parameter, ParameterSet
+from baymorph.fitting.parameters import (
+    Parameter,
+    ParameterSet,
+)
 from baymorph.fitting.priors import (
     FixedPrior,
     NormalPrior,
+    Prior,
     UniformPrior,
 )
-from baymorph.fitting.routing import ProjectionParameterRouter
+from baymorph.fitting.routing import (
+    ProjectionParameterRouter,
+)
+
 
 CouplingMode = Literal[
     "shared",
@@ -28,15 +35,14 @@ CouplingMode = Literal[
 
 @dataclass(frozen=True)
 class MultiObservationParameterSpec:
-    """Define the coupling and prior structure of one model parameter."""
+    """Define the cross-observation coupling of one physical parameter."""
 
     name: str
     coupling: CouplingMode
     shared: Parameter | None = None
     by_observation: Mapping[str, Parameter] | None = None
-    location: Parameter | None = None
-    scale: Parameter | None = None
-    transform: HierarchicalDomainTransform | None = None
+    physical_prior: Prior | None = None
+    correlation_prior: Prior | None = None
 
     @classmethod
     def shared_parameter(
@@ -80,29 +86,34 @@ class MultiObservationParameterSpec:
         cls,
         name: str,
         *,
-        location: Parameter,
-        scale: Parameter,
-        transform: HierarchicalDomainTransform,
+        prior: Prior,
+        correlation_prior: Prior | None = None,
     ) -> MultiObservationParameterSpec:
-        """Create a non-centred hierarchical parameter specification.
+        """Create physical-prior-preserving hierarchical coupling.
 
-        The sampled state contains one latent-space location, one
-        non-negative latent-space scale, and one standard-normal coordinate
-        per observation. The observation-level physical parameter is
+        The physical marginal prior is supplied directly by ``prior``.
 
-        ``transform.from_latent(location + scale * latent)``.
+        Cross-observation dependence is represented by an equicorrelated
+        Gaussian copula. Unless overridden internally or through an advanced
+        interface, the latent correlation uses a Uniform(0, 1) reference
+        prior.
         """
+        if correlation_prior is None:
+            correlation_prior = UniformPrior(
+                lower=0.0,
+                upper=1.0,
+            )
+
         return cls(
             name=name,
             coupling="hierarchical",
-            location=location,
-            scale=scale,
-            transform=transform,
+            physical_prior=prior,
+            correlation_prior=correlation_prior,
         )
 
 
 class MultiObservationParameterLayout:
-    """Map one sampled state to complete parameters for every observation."""
+    """Map one sampled state to physical parameters for every observation."""
 
     def __init__(
         self,
@@ -110,8 +121,12 @@ class MultiObservationParameterLayout:
         specifications: tuple[MultiObservationParameterSpec, ...]
         | list[MultiObservationParameterSpec] = (),
     ) -> None:
-        self._observations = tuple(observations)
-        self._specifications = tuple(specifications)
+        self._observations = tuple(
+            observations
+        )
+        self._specifications = tuple(
+            specifications
+        )
 
         self._validate()
 
@@ -120,6 +135,7 @@ class MultiObservationParameterLayout:
         for specification in self._specifications:
             if specification.coupling == "shared":
                 assert specification.shared is not None
+
                 global_parameters.append(
                     specification.shared
                 )
@@ -129,9 +145,11 @@ class MultiObservationParameterLayout:
                 assert specification.by_observation is not None
 
                 for observation in self._observations:
-                    parameter = specification.by_observation[
-                        observation
-                    ]
+                    parameter = (
+                        specification.by_observation[
+                            observation
+                        ]
+                    )
 
                     global_parameters.append(
                         Parameter(
@@ -145,15 +163,17 @@ class MultiObservationParameterLayout:
 
                 continue
 
-            assert specification.location is not None
-            assert specification.scale is not None
-            assert specification.transform is not None
+            assert specification.coupling == "hierarchical"
+            assert specification.physical_prior is not None
+            assert specification.correlation_prior is not None
 
-            global_parameters.extend(
-                [
-                    specification.location,
-                    specification.scale,
-                ]
+            global_parameters.append(
+                Parameter(
+                    name=self.correlation_name(
+                        specification.name
+                    ),
+                    prior=specification.correlation_prior,
+                )
             )
 
             for observation in self._observations:
@@ -176,8 +196,7 @@ class MultiObservationParameterLayout:
                 observation,
             )
             for specification in self._specifications
-            if specification.coupling
-            == "hierarchical"
+            if specification.coupling == "hierarchical"
             for observation in self._observations
         }
 
@@ -215,16 +234,7 @@ class MultiObservationParameterLayout:
                     routes[observation][
                         specification.name
                     ] = specification.name
-                continue
 
-            if specification.coupling == "independent":
-                for observation in self._observations:
-                    routes[observation][
-                        specification.name
-                    ] = self.global_name(
-                        specification.name,
-                        observation,
-                    )
                 continue
 
             for observation in self._observations:
@@ -275,8 +285,15 @@ class MultiObservationParameterLayout:
         name: str,
         observation: str,
     ) -> str:
-        """Return the standardized hierarchical latent-coordinate name."""
+        """Return an independent standard-normal latent-coordinate name."""
         return f"{name}__z__{observation}"
+
+    @staticmethod
+    def correlation_name(
+        name: str,
+    ) -> str:
+        """Return the latent Gaussian correlation parameter name."""
+        return f"{name}__rho"
 
     def complete_global_values(
         self,
@@ -309,85 +326,51 @@ class MultiObservationParameterLayout:
             )
 
         for specification in self._specifications:
-            if (
-                specification.coupling
-                != "hierarchical"
-            ):
+            if specification.coupling != "hierarchical":
                 continue
 
-            assert specification.location is not None
-            assert specification.scale is not None
+            assert specification.physical_prior is not None
 
-            location = float(
+            correlation = float(
                 complete[
-                    specification.location.name
-                ]
-            )
-            scale = float(
-                complete[
-                    specification.scale.name
+                    self.correlation_name(
+                        specification.name
+                    )
                 ]
             )
 
-            if not np.isfinite(location):
-                raise ValueError(
-                    f"Hierarchical location for "
-                    f"'{specification.name}' must be finite."
-                )
-
-            if (
-                not np.isfinite(scale)
-                or scale < 0.0
-            ):
-                raise ValueError(
-                    f"Hierarchical scale for "
-                    f"'{specification.name}' must be finite "
-                    "and non-negative."
-                )
-
-            for observation in self._observations:
-                latent = float(
+            latent_values = np.asarray(
+                [
                     complete[
                         self.latent_name(
                             specification.name,
                             observation,
                         )
                     ]
+                    for observation in self._observations
+                ],
+                dtype=float,
+            )
+
+            physical_values = (
+                physical_prior_copula_values(
+                    specification.physical_prior,
+                    latent_values,
+                    correlation,
                 )
+            )
 
-                if not np.isfinite(latent):
-                    raise ValueError(
-                        f"Hierarchical latent coordinate for "
-                        f"'{specification.name}' in observation "
-                        f"'{observation}' must be finite."
-                    )
-
-                latent_value = (
-                    location
-                    + scale * latent
-                )
-
-                assert specification.transform is not None
-
-                value = float(
-                    specification.transform.from_latent(
-                        latent_value
-                    )
-                )
-
-                if not np.isfinite(value):
-                    raise ValueError(
-                        f"Derived hierarchical value for "
-                        f"'{specification.name}' in observation "
-                        f"'{observation}' must be finite."
-                    )
-
+            for observation, value in zip(
+                self._observations,
+                physical_values,
+                strict=True,
+            ):
                 complete[
                     self.global_name(
                         specification.name,
                         observation,
                     )
-                ] = value
+                ] = float(value)
 
         return complete
 
@@ -395,7 +378,7 @@ class MultiObservationParameterLayout:
         self,
         values: Mapping[str, float],
     ) -> dict[str, dict[str, float]]:
-        """Route global values to complete parameters for every observation."""
+        """Route global values to physical parameters for every observation."""
         complete = self.complete_global_values(
             values
         )
@@ -451,10 +434,7 @@ class MultiObservationParameterLayout:
                 )
                 continue
 
-            if (
-                specification.coupling
-                == "hierarchical"
-            ):
+            if specification.coupling == "hierarchical":
                 self._validate_hierarchical(
                     specification
                 )
@@ -469,7 +449,7 @@ class MultiObservationParameterLayout:
         self,
         specification: MultiObservationParameterSpec,
     ) -> None:
-        """Validate one shared parameter specification."""
+        """Validate one exactly shared parameter."""
         if specification.shared is None:
             raise ValueError(
                 f"Shared parameter '{specification.name}' "
@@ -488,20 +468,19 @@ class MultiObservationParameterLayout:
             )
 
         if (
-            specification.location is not None
-            or specification.scale is not None
-            or specification.transform is not None
+            specification.physical_prior is not None
+            or specification.correlation_prior is not None
         ):
             raise ValueError(
                 f"Shared parameter '{specification.name}' "
-                "cannot define hierarchical hyperparameters."
+                "cannot define hierarchical priors."
             )
 
     def _validate_independent(
         self,
         specification: MultiObservationParameterSpec,
     ) -> None:
-        """Validate one observation-specific parameter specification."""
+        """Validate one observation-specific parameter."""
         if specification.shared is not None:
             raise ValueError(
                 f"Independent parameter '{specification.name}' "
@@ -515,13 +494,12 @@ class MultiObservationParameterLayout:
             )
 
         if (
-            specification.location is not None
-            or specification.scale is not None
-            or specification.transform is not None
+            specification.physical_prior is not None
+            or specification.correlation_prior is not None
         ):
             raise ValueError(
                 f"Independent parameter '{specification.name}' "
-                "cannot define hierarchical hyperparameters."
+                "cannot define hierarchical priors."
             )
 
         supplied = set(
@@ -551,7 +529,13 @@ class MultiObservationParameterLayout:
         self,
         specification: MultiObservationParameterSpec,
     ) -> None:
-        """Validate one non-centred hierarchical parameter specification."""
+        """Validate physical-prior-preserving hierarchical coupling."""
+        if len(self._observations) < 2:
+            raise ValueError(
+                f"Hierarchical parameter '{specification.name}' "
+                "requires at least two observations."
+            )
+
         if specification.shared is not None:
             raise ValueError(
                 f"Hierarchical parameter '{specification.name}' "
@@ -564,74 +548,71 @@ class MultiObservationParameterLayout:
                 "cannot define independent parameters."
             )
 
-        if specification.location is None:
+        if specification.physical_prior is None:
             raise ValueError(
                 f"Hierarchical parameter '{specification.name}' "
-                "requires a location hyperparameter."
-            )
-
-        if specification.scale is None:
-            raise ValueError(
-                f"Hierarchical parameter '{specification.name}' "
-                "requires a scale hyperparameter."
-            )
-
-        if specification.transform is None:
-            raise ValueError(
-                f"Hierarchical parameter '{specification.name}' "
-                "requires a domain transform."
+                "requires a physical prior."
             )
 
         if not isinstance(
-            specification.transform,
-            HierarchicalDomainTransform,
+            specification.physical_prior,
+            Prior,
         ):
             raise TypeError(
-                f"Hierarchical transform for "
-                f"'{specification.name}' must be a "
-                "HierarchicalDomainTransform."
+                f"Physical prior for hierarchical parameter "
+                f"'{specification.name}' must be a Prior."
             )
 
-        if (
-            specification.location.name
-            == specification.scale.name
-        ):
+        if specification.physical_prior.is_fixed:
             raise ValueError(
                 f"Hierarchical parameter '{specification.name}' "
-                "requires distinct location and scale names."
+                "cannot use a fixed physical prior."
             )
 
-        scale_prior = specification.scale.prior
+        correlation_prior = (
+            specification.correlation_prior
+        )
+
+        if correlation_prior is None:
+            raise ValueError(
+                f"Hierarchical parameter '{specification.name}' "
+                "requires a latent correlation prior."
+            )
 
         if isinstance(
-            scale_prior,
+            correlation_prior,
             FixedPrior,
         ):
-            if scale_prior.value < 0.0:
+            if (
+                correlation_prior.value < 0.0
+                or correlation_prior.value > 1.0
+            ):
                 raise ValueError(
-                    f"Hierarchical scale prior for "
-                    f"'{specification.name}' must have "
-                    "non-negative support."
+                    f"Hierarchical correlation prior for "
+                    f"'{specification.name}' must lie in [0, 1]."
                 )
 
             return
 
         if isinstance(
-            scale_prior,
+            correlation_prior,
             UniformPrior,
         ):
-            if scale_prior.lower < 0.0:
+            if (
+                correlation_prior.lower < 0.0
+                or correlation_prior.upper > 1.0
+            ):
                 raise ValueError(
-                    f"Hierarchical scale prior for "
-                    f"'{specification.name}' must have "
-                    "non-negative support."
+                    f"Hierarchical correlation prior for "
+                    f"'{specification.name}' must have support "
+                    "inside [0, 1]."
                 )
 
             return
 
         raise TypeError(
-            f"Hierarchical scale prior for "
-            f"'{specification.name}' must have known "
-            "non-negative support. FixedPrior and "
-            "UniformPrior are currently supported."
+            f"Hierarchical correlation prior for "
+            f"'{specification.name}' must have known support "
+            "inside [0, 1]. FixedPrior and UniformPrior are "
+            "currently supported."
         )

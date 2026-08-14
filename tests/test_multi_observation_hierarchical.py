@@ -1,442 +1,266 @@
-"""Tests for hierarchical multi-observation parameter coupling."""
+"""Tests for physical-prior-preserving hierarchical coupling."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from baymorph.fitting.hierarchical import (
-    ExpHierarchicalTransform,
-    IdentityHierarchicalTransform,
-)
 from baymorph.fitting.multi_observation import (
     MultiObservationParameterLayout,
     MultiObservationParameterSpec,
 )
-from baymorph.fitting.parameters import Parameter
+from baymorph.fitting.priors import (
+    FixedPrior,
+    UniformPrior,
+)
 
 
-def _positive_spec(
-    name: str = "re",
+def _hierarchical_spec(
+    name: str = "n",
 ) -> MultiObservationParameterSpec:
     return MultiObservationParameterSpec.hierarchical(
         name,
-        location=Parameter(
-            f"{name}__eta_mu",
-            lower=np.log(2.0),
-            upper=np.log(8.0),
+        prior=UniformPrior(
+            lower=0.1,
+            upper=6.0,
         ),
-        scale=Parameter(
-            f"{name}__eta_tau",
-            lower=0.0,
-            upper=1.0,
-        ),
-        transform=ExpHierarchicalTransform(),
     )
 
 
-def test_hierarchical_dimension_and_names():
+@pytest.mark.parametrize(
+    "observations",
+    [
+        ["g", "r"],
+        ["u", "g", "r", "i", "z"],
+        [
+            "obs_0",
+            "obs_1",
+            "obs_2",
+            "obs_3",
+            "obs_4",
+            "obs_5",
+            "obs_6",
+            "obs_7",
+            "obs_8",
+            "obs_9",
+        ],
+    ],
+)
+def test_hierarchical_layout_is_n_observation_native(
+    observations,
+):
     layout = MultiObservationParameterLayout(
-        observations=["g", "r"],
+        observations=observations,
         specifications=[
-            _positive_spec(),
+            _hierarchical_spec(),
         ],
     )
 
-    assert layout.ndim == 4
-    assert layout.parameter_set.names == [
-        "re__eta_mu",
-        "re__eta_tau",
-        "re__z__g",
-        "re__z__r",
+    assert layout.ndim == (
+        1 + len(observations)
+    )
+
+    assert layout.parameter_set.names[0] == (
+        "n__rho"
+    )
+
+    assert layout.parameter_set.names[1:] == [
+        f"n__z__{observation}"
+        for observation in observations
     ]
 
 
-def test_hierarchical_exp_routes_positive_physical_values():
+def test_zero_correlation_routes_independent_quantiles():
     layout = MultiObservationParameterLayout(
         observations=["g", "r"],
         specifications=[
-            _positive_spec(),
+            _hierarchical_spec(),
         ],
     )
 
     routed = layout.route(
         {
-            "re__eta_mu": np.log(5.0),
-            "re__eta_tau": 0.2,
-            "re__z__g": -1.0,
-            "re__z__r": 1.0,
+            "n__rho": 0.0,
+            "n__z__g": -1.0,
+            "n__z__r": 1.0,
         }
     )
 
-    assert routed["g"]["re"] == pytest.approx(
-        5.0 * np.exp(-0.2)
+    assert 0.1 < routed["g"]["n"] < 6.0
+    assert 0.1 < routed["r"]["n"] < 6.0
+    assert routed["g"]["n"] != pytest.approx(
+        routed["r"]["n"]
     )
-    assert routed["r"]["re"] == pytest.approx(
-        5.0 * np.exp(0.2)
-    )
-    assert routed["g"]["re"] > 0.0
-    assert routed["r"]["re"] > 0.0
 
 
-def test_hierarchical_identity_routes_real_values():
-    spec = MultiObservationParameterSpec.hierarchical(
-        "background",
-        location=Parameter(
-            "background__eta_mu",
-            lower=-10.0,
-            upper=10.0,
-        ),
-        scale=Parameter(
-            "background__eta_tau",
-            lower=0.0,
-            upper=5.0,
-        ),
-        transform=IdentityHierarchicalTransform(),
-    )
+def test_unit_correlation_produces_common_physical_value_for_n_observations():
+    observations = [
+        "u",
+        "g",
+        "r",
+        "i",
+        "z",
+    ]
 
     layout = MultiObservationParameterLayout(
-        observations=["g", "r"],
+        observations=observations,
         specifications=[
-            spec,
+            _hierarchical_spec(),
+        ],
+    )
+
+    values = {
+        "n__rho": 1.0,
+        "n__z__u": -2.0,
+        "n__z__g": -1.0,
+        "n__z__r": 0.0,
+        "n__z__i": 1.0,
+        "n__z__z": 2.0,
+    }
+
+    routed = layout.route(
+        values
+    )
+
+    physical = np.asarray(
+        [
+            routed[observation]["n"]
+            for observation in observations
+        ]
+    )
+
+    assert physical == pytest.approx(
+        np.full(
+            len(observations),
+            physical[0],
+        )
+    )
+
+
+def test_physical_prior_bounds_are_preserved():
+    layout = MultiObservationParameterLayout(
+        observations=[
+            "u",
+            "g",
+            "r",
+            "i",
+            "z",
+        ],
+        specifications=[
+            _hierarchical_spec(),
         ],
     )
 
     routed = layout.route(
         {
-            "background__eta_mu": 2.0,
-            "background__eta_tau": 0.5,
-            "background__z__g": -1.0,
-            "background__z__r": 1.0,
-        }
-    )
-
-    assert routed["g"]["background"] == pytest.approx(
-        1.5
-    )
-    assert routed["r"]["background"] == pytest.approx(
-        2.5
-    )
-
-
-def test_zero_scale_collapses_observation_values():
-    layout = MultiObservationParameterLayout(
-        observations=["g", "r", "i"],
-        specifications=[
-            _positive_spec(),
-        ],
-    )
-
-    routed = layout.route(
-        {
-            "re__eta_mu": np.log(4.0),
-            "re__eta_tau": 0.0,
-            "re__z__g": -2.0,
-            "re__z__r": 0.5,
-            "re__z__i": 3.0,
+            "n__rho": 0.75,
+            "n__z__u": -10.0,
+            "n__z__g": -2.0,
+            "n__z__r": 0.0,
+            "n__z__i": 2.0,
+            "n__z__z": 10.0,
         }
     )
 
     for observation in layout.observations:
-        assert routed[observation]["re"] == pytest.approx(
-            4.0
+        assert (
+            0.1
+            <= routed[observation]["n"]
+            <= 6.0
         )
 
 
-def test_hierarchical_rejects_negative_scale():
+def test_hierarchical_can_use_bounded_effective_radius_prior():
     layout = MultiObservationParameterLayout(
-        observations=["g", "r"],
+        observations=["g", "r", "i"],
         specifications=[
-            _positive_spec(),
+            MultiObservationParameterSpec.hierarchical(
+                "re",
+                prior=UniformPrior(
+                    lower=0.5,
+                    upper=30.0,
+                ),
+            ),
         ],
     )
 
+    routed = layout.route(
+        {
+            "re__rho": 0.6,
+            "re__z__g": -1.0,
+            "re__z__r": 0.0,
+            "re__z__i": 1.0,
+        }
+    )
+
+    for observation in layout.observations:
+        assert (
+            0.5
+            <= routed[observation]["re"]
+            <= 30.0
+        )
+
+
+def test_hierarchical_is_parameter_name_agnostic():
+    layout = MultiObservationParameterLayout(
+        observations=["a", "b"],
+        specifications=[
+            MultiObservationParameterSpec.hierarchical(
+                "future_component_scale",
+                prior=UniformPrior(
+                    lower=2.0,
+                    upper=12.0,
+                ),
+            ),
+        ],
+    )
+
+    routed = layout.route(
+        {
+            "future_component_scale__rho": 0.5,
+            "future_component_scale__z__a": -0.3,
+            "future_component_scale__z__b": 0.8,
+        }
+    )
+
+    assert (
+        2.0
+        <= routed["a"]["future_component_scale"]
+        <= 12.0
+    )
+    assert (
+        2.0
+        <= routed["b"]["future_component_scale"]
+        <= 12.0
+    )
+
+
+def test_hierarchical_rejects_fixed_physical_prior():
     with pytest.raises(
         ValueError,
-        match="scale.*non-negative",
+        match="fixed physical prior",
     ):
-        layout.route(
-            {
-                "re__eta_mu": np.log(5.0),
-                "re__eta_tau": -0.1,
-                "re__z__g": 0.0,
-                "re__z__r": 0.0,
-            }
-        )
-
-
-def test_hierarchical_coexists_with_existing_couplings():
-    layout = MultiObservationParameterLayout(
-        observations=["g", "r"],
-        specifications=[
-            MultiObservationParameterSpec.shared_parameter(
-                Parameter(
+        MultiObservationParameterLayout(
+            observations=["g", "r"],
+            specifications=[
+                MultiObservationParameterSpec.hierarchical(
                     "n",
-                    lower=0.5,
-                    upper=6.0,
-                )
-            ),
-            MultiObservationParameterSpec.independent(
-                "flux",
-                {
-                    "g": Parameter(
-                        "flux",
-                        lower=100.0,
-                        upper=1000.0,
+                    prior=FixedPrior(
+                        value=2.0
                     ),
-                    "r": Parameter(
-                        "flux",
-                        lower=100.0,
-                        upper=1000.0,
-                    ),
-                },
-            ),
-            _positive_spec(),
-        ],
-    )
-
-    routed = layout.route(
-        {
-            "n": 2.5,
-            "flux__g": 400.0,
-            "flux__r": 600.0,
-            "re__eta_mu": np.log(3.0),
-            "re__eta_tau": 0.1,
-            "re__z__g": -1.0,
-            "re__z__r": 1.0,
-        }
-    )
-
-    assert routed["g"]["n"] == pytest.approx(2.5)
-    assert routed["r"]["n"] == pytest.approx(2.5)
-    assert routed["g"]["flux"] == pytest.approx(400.0)
-    assert routed["r"]["flux"] == pytest.approx(600.0)
-    assert routed["g"]["re"] == pytest.approx(
-        3.0 * np.exp(-0.1)
-    )
-    assert routed["r"]["re"] == pytest.approx(
-        3.0 * np.exp(0.1)
-    )
-
-
-def test_hierarchical_latent_prior_is_standard_normal():
-    layout = MultiObservationParameterLayout(
-        observations=["g", "r"],
-        specifications=[
-            _positive_spec(),
-        ],
-    )
-
-    transformed = layout.parameter_set.transform(
-        np.array(
-            [
-                0.5,
-                0.25,
-                0.5,
-                0.5,
-            ]
+                ),
+            ],
         )
-    )
-
-    assert transformed[2] == pytest.approx(0.0)
-    assert transformed[3] == pytest.approx(0.0)
 
 
-def test_logistic_hierarchical_transform_maps_to_open_unit_interval():
-    from baymorph.fitting.hierarchical import (
-        LogisticHierarchicalTransform,
-    )
-
-    transform = LogisticHierarchicalTransform()
-
-    assert transform.from_latent(0.0) == pytest.approx(
-        0.5
-    )
-
-    for value in (
-        -1000.0,
-        -10.0,
-        0.0,
-        10.0,
-        1000.0,
+def test_hierarchical_requires_at_least_two_observations():
+    with pytest.raises(
+        ValueError,
+        match="at least two observations",
     ):
-        physical = transform.from_latent(
-            value
+        MultiObservationParameterLayout(
+            observations=["g"],
+            specifications=[
+                _hierarchical_spec(),
+            ],
         )
-        assert 0.0 < physical < 1.0
-
-
-def test_hierarchical_logistic_routes_axis_ratios():
-    from baymorph.fitting.hierarchical import (
-        LogisticHierarchicalTransform,
-    )
-
-    central_q = 0.7
-    central_eta = np.log(
-        central_q
-        / (1.0 - central_q)
-    )
-
-    spec = MultiObservationParameterSpec.hierarchical(
-        "q",
-        location=Parameter(
-            "q__eta_mu",
-            lower=central_eta - 1.0,
-            upper=central_eta + 1.0,
-        ),
-        scale=Parameter(
-            "q__eta_tau",
-            lower=0.0,
-            upper=1.0,
-        ),
-        transform=LogisticHierarchicalTransform(),
-    )
-
-    layout = MultiObservationParameterLayout(
-        observations=["g", "r"],
-        specifications=[
-            spec,
-        ],
-    )
-
-    routed = layout.route(
-        {
-            "q__eta_mu": central_eta,
-            "q__eta_tau": 0.3,
-            "q__z__g": -1.0,
-            "q__z__r": 1.0,
-        }
-    )
-
-    expected_g = 1.0 / (
-        1.0
-        + np.exp(
-            -(central_eta - 0.3)
-        )
-    )
-    expected_r = 1.0 / (
-        1.0
-        + np.exp(
-            -(central_eta + 0.3)
-        )
-    )
-
-    assert routed["g"]["q"] == pytest.approx(
-        expected_g
-    )
-    assert routed["r"]["q"] == pytest.approx(
-        expected_r
-    )
-
-    assert 0.0 < routed["g"]["q"] < 1.0
-    assert 0.0 < routed["r"]["q"] < 1.0
-
-
-def test_axial_angle_transform_wraps_one_pi_period():
-    from baymorph.fitting.hierarchical import (
-        AxialAngleHierarchicalTransform,
-    )
-
-    transform = AxialAngleHierarchicalTransform()
-
-    half_pi = np.pi / 2.0
-
-    for value in (
-        -4.1,
-        -1.2,
-        0.0,
-        1.2,
-        4.1,
-    ):
-        wrapped = transform.from_latent(
-            value
-        )
-        equivalent = transform.from_latent(
-            value + np.pi
-        )
-
-        assert -half_pi <= wrapped < half_pi
-        assert equivalent == pytest.approx(
-            wrapped
-        )
-
-    assert transform.from_latent(
-        half_pi
-    ) == pytest.approx(
-        -half_pi
-    )
-
-    assert transform.from_latent(
-        -half_pi
-    ) == pytest.approx(
-        -half_pi
-    )
-
-
-def test_hierarchical_axial_angle_wraps_across_boundary():
-    from baymorph.fitting.hierarchical import (
-        AxialAngleHierarchicalTransform,
-    )
-
-    spec = MultiObservationParameterSpec.hierarchical(
-        "theta",
-        location=Parameter(
-            "theta__eta_mu",
-            lower=-np.pi / 2.0,
-            upper=np.pi / 2.0,
-        ),
-        scale=Parameter(
-            "theta__eta_tau",
-            lower=0.0,
-            upper=0.5,
-        ),
-        transform=AxialAngleHierarchicalTransform(),
-    )
-
-    layout = MultiObservationParameterLayout(
-        observations=["g", "r"],
-        specifications=[
-            spec,
-        ],
-    )
-
-    location = 1.5
-    scale = 0.2
-
-    routed = layout.route(
-        {
-            "theta__eta_mu": location,
-            "theta__eta_tau": scale,
-            "theta__z__g": -1.0,
-            "theta__z__r": 1.0,
-        }
-    )
-
-    expected_g = (
-        (
-            location
-            - scale
-            + np.pi / 2.0
-        )
-        % np.pi
-        - np.pi / 2.0
-    )
-    expected_r = (
-        (
-            location
-            + scale
-            + np.pi / 2.0
-        )
-        % np.pi
-        - np.pi / 2.0
-    )
-
-    assert routed["g"]["theta"] == pytest.approx(
-        expected_g
-    )
-    assert routed["r"]["theta"] == pytest.approx(
-        expected_r
-    )
-
-    assert -np.pi / 2.0 <= routed["g"]["theta"] < np.pi / 2.0
-    assert -np.pi / 2.0 <= routed["r"]["theta"] < np.pi / 2.0

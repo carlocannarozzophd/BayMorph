@@ -615,23 +615,23 @@ def test_sky_frame_uses_registered_model_geometry_contract():
     )
 
 
-def test_effective_radius_can_be_hierarchical():
-    import math
+def test_effective_radius_can_use_physical_prior_hierarchically():
+    from scipy.special import ndtr
 
     config = _multi_observation_config()
 
-    config["fit"]["multi_observation"]["parameters"]["re"] = {
+    parameters = (
+        config["fit"]
+        ["multi_observation"]
+        ["parameters"]
+    )
+
+    parameters["re"] = {
         "coupling": "hierarchical",
-        "transform": "exp",
-        "location_prior": {
+        "prior": {
             "type": "uniform",
-            "lower": math.log(1.0),
-            "upper": math.log(20.0),
-        },
-        "scale_prior": {
-            "type": "uniform",
-            "lower": 0.0,
-            "upper": 0.5,
+            "lower": 0.5,
+            "upper": 30.0,
         },
     }
 
@@ -643,8 +643,7 @@ def test_effective_radius_can_be_hierarchical():
     assert "re__g" not in layout.parameter_set.all_names
     assert "re__r" not in layout.parameter_set.all_names
 
-    assert "re__eta_mu" in layout.parameter_set.names
-    assert "re__eta_tau" in layout.parameter_set.names
+    assert "re__rho" in layout.parameter_set.names
     assert "re__z__g" in layout.parameter_set.names
     assert "re__z__r" in layout.parameter_set.names
 
@@ -652,10 +651,10 @@ def test_effective_radius_can_be_hierarchical():
         {
             "flux__g": 500.0,
             "flux__r": 900.0,
-            "re__eta_mu": math.log(5.0),
-            "re__eta_tau": 0.2,
+            "re__rho": 0.0,
             "re__z__g": -1.0,
             "re__z__r": 1.0,
+            "n": 2.5,
             "q": 0.7,
             "theta": 0.2,
             "x0": 15.0,
@@ -664,65 +663,47 @@ def test_effective_radius_can_be_hierarchical():
         }
     )
 
+    expected_g = (
+        0.5
+        + (30.0 - 0.5) * float(ndtr(-1.0))
+    )
+    expected_r = (
+        0.5
+        + (30.0 - 0.5) * float(ndtr(1.0))
+    )
+
     assert routed["g"]["re"] == pytest.approx(
-        5.0 * math.exp(-0.2)
+        expected_g
     )
     assert routed["r"]["re"] == pytest.approx(
-        5.0 * math.exp(0.2)
+        expected_r
     )
 
-    assert routed["g"]["re"] > 0.0
-    assert routed["r"]["re"] > 0.0
+    assert 0.5 <= routed["g"]["re"] <= 30.0
+    assert 0.5 <= routed["r"]["re"] <= 30.0
 
 
-def test_hierarchical_rejects_negative_scale_support():
-    import math
-
+def test_hierarchical_rejects_extra_configuration_fields():
     config = _multi_observation_config()
 
-    config["fit"]["multi_observation"]["parameters"]["re"] = {
+    parameters = (
+        config["fit"]
+        ["multi_observation"]
+        ["parameters"]
+    )
+
+    parameters["re"] = {
         "coupling": "hierarchical",
-        "transform": "exp",
-        "location_prior": {
+        "prior": {
             "type": "uniform",
-            "lower": math.log(1.0),
-            "upper": math.log(20.0),
+            "lower": 0.5,
+            "upper": 30.0,
         },
-        "scale_prior": {
-            "type": "uniform",
-            "lower": -0.1,
-            "upper": 0.5,
-        },
-    }
-
-    with pytest.raises(
-        ValueError,
-        match="non-negative support",
-    ):
-        build_multi_observation_parameter_layout(
-            config
-        )
-
-
-def test_hierarchical_rejects_extra_fields():
-    import math
-
-    config = _multi_observation_config()
-
-    config["fit"]["multi_observation"]["parameters"]["re"] = {
-        "coupling": "hierarchical",
-        "transform": "exp",
-        "location_prior": {
-            "type": "uniform",
-            "lower": math.log(1.0),
-            "upper": math.log(20.0),
-        },
-        "scale_prior": {
+        "correlation_prior": {
             "type": "uniform",
             "lower": 0.0,
-            "upper": 0.5,
+            "upper": 1.0,
         },
-        "latent_priors": {},
     }
 
     with pytest.raises(
@@ -734,17 +715,8 @@ def test_hierarchical_rejects_extra_fields():
         )
 
 
-
-def test_positive_radius_and_axis_ratio_can_be_hierarchical_together():
-    import math
-
+def test_radius_and_axis_ratio_preserve_physical_priors_hierarchically():
     config = _multi_observation_config()
-
-    central_q = 0.7
-    central_q_eta = math.log(
-        central_q
-        / (1.0 - central_q)
-    )
 
     parameters = (
         config["fit"]
@@ -754,31 +726,19 @@ def test_positive_radius_and_axis_ratio_can_be_hierarchical_together():
 
     parameters["re"] = {
         "coupling": "hierarchical",
-        "transform": "exp",
-        "location_prior": {
+        "prior": {
             "type": "uniform",
-            "lower": math.log(1.0),
-            "upper": math.log(20.0),
-        },
-        "scale_prior": {
-            "type": "uniform",
-            "lower": 0.0,
-            "upper": 0.5,
+            "lower": 0.5,
+            "upper": 30.0,
         },
     }
 
     parameters["q"] = {
         "coupling": "hierarchical",
-        "transform": "logistic",
-        "location_prior": {
+        "prior": {
             "type": "uniform",
-            "lower": central_q_eta - 1.0,
-            "upper": central_q_eta + 1.0,
-        },
-        "scale_prior": {
-            "type": "uniform",
-            "lower": 0.0,
-            "upper": 0.5,
+            "lower": 0.2,
+            "upper": 1.0,
         },
     }
 
@@ -787,12 +747,10 @@ def test_positive_radius_and_axis_ratio_can_be_hierarchical_together():
     )
 
     for name in (
-        "re__eta_mu",
-        "re__eta_tau",
+        "re__rho",
         "re__z__g",
         "re__z__r",
-        "q__eta_mu",
-        "q__eta_tau",
+        "q__rho",
         "q__z__g",
         "q__z__r",
     ):
@@ -802,12 +760,11 @@ def test_positive_radius_and_axis_ratio_can_be_hierarchical_together():
         {
             "flux__g": 500.0,
             "flux__r": 900.0,
-            "re__eta_mu": math.log(5.0),
-            "re__eta_tau": 0.2,
+            "re__rho": 0.7,
             "re__z__g": -1.0,
             "re__z__r": 1.0,
-            "q__eta_mu": central_q_eta,
-            "q__eta_tau": 0.3,
+            "n": 2.5,
+            "q__rho": 0.7,
             "q__z__g": -1.0,
             "q__z__r": 1.0,
             "theta": 0.2,
@@ -817,23 +774,20 @@ def test_positive_radius_and_axis_ratio_can_be_hierarchical_together():
         }
     )
 
-    assert routed["g"]["re"] == pytest.approx(
-        5.0 * math.exp(-0.2)
-    )
-    assert routed["r"]["re"] == pytest.approx(
-        5.0 * math.exp(0.2)
-    )
+    for observation in ("g", "r"):
+        assert (
+            0.5
+            <= routed[observation]["re"]
+            <= 30.0
+        )
+        assert (
+            0.2
+            <= routed[observation]["q"]
+            <= 1.0
+        )
 
-    assert 0.0 < routed["g"]["q"] < 1.0
-    assert 0.0 < routed["r"]["q"] < 1.0
 
-    assert routed["g"]["q"] < central_q
-    assert routed["r"]["q"] > central_q
-
-
-def test_morphology_geometry_can_be_hierarchical_together():
-    import math
-
+def test_re_n_q_can_be_hierarchical_with_shared_axial_angle():
     config = _multi_observation_config()
 
     parameters = (
@@ -842,227 +796,39 @@ def test_morphology_geometry_can_be_hierarchical_together():
         ["parameters"]
     )
 
-    central_q = 0.7
-    central_q_eta = math.log(
-        central_q
-        / (1.0 - central_q)
-    )
-
     parameters["re"] = {
         "coupling": "hierarchical",
-        "transform": "exp",
-        "location_prior": {
+        "prior": {
             "type": "uniform",
-            "lower": math.log(1.0),
-            "upper": math.log(20.0),
-        },
-        "scale_prior": {
-            "type": "uniform",
-            "lower": 0.0,
-            "upper": 0.5,
-        },
-    }
-
-    parameters["q"] = {
-        "coupling": "hierarchical",
-        "transform": "logistic",
-        "location_prior": {
-            "type": "uniform",
-            "lower": central_q_eta - 1.0,
-            "upper": central_q_eta + 1.0,
-        },
-        "scale_prior": {
-            "type": "uniform",
-            "lower": 0.0,
-            "upper": 0.5,
-        },
-    }
-
-    parameters["theta"] = {
-        "coupling": "hierarchical",
-        "transform": "axial_angle",
-        "location_prior": {
-            "type": "uniform",
-            "lower": -math.pi / 2.0,
-            "upper": math.pi / 2.0,
-        },
-        "scale_prior": {
-            "type": "uniform",
-            "lower": 0.0,
-            "upper": 0.5,
-        },
-    }
-
-    layout = build_multi_observation_parameter_layout(
-        config
-    )
-
-    expected_hierarchical_names = {
-        "re__eta_mu",
-        "re__eta_tau",
-        "re__z__g",
-        "re__z__r",
-        "q__eta_mu",
-        "q__eta_tau",
-        "q__z__g",
-        "q__z__r",
-        "theta__eta_mu",
-        "theta__eta_tau",
-        "theta__z__g",
-        "theta__z__r",
-    }
-
-    assert expected_hierarchical_names.issubset(
-        layout.parameter_set.names
-    )
-
-    theta_location = 1.5
-    theta_scale = 0.2
-
-    routed = layout.route(
-        {
-            "flux__g": 500.0,
-            "flux__r": 900.0,
-            "re__eta_mu": math.log(5.0),
-            "re__eta_tau": 0.2,
-            "re__z__g": -1.0,
-            "re__z__r": 1.0,
-            "q__eta_mu": central_q_eta,
-            "q__eta_tau": 0.3,
-            "q__z__g": -1.0,
-            "q__z__r": 1.0,
-            "theta__eta_mu": theta_location,
-            "theta__eta_tau": theta_scale,
-            "theta__z__g": -1.0,
-            "theta__z__r": 1.0,
-            "x0": 15.0,
-            "y0": 15.0,
-            "sky__r": 1.0,
-        }
-    )
-
-    assert routed["g"]["re"] == pytest.approx(
-        5.0 * math.exp(-0.2)
-    )
-    assert routed["r"]["re"] == pytest.approx(
-        5.0 * math.exp(0.2)
-    )
-
-    assert 0.0 < routed["g"]["q"] < 1.0
-    assert 0.0 < routed["r"]["q"] < 1.0
-
-    expected_theta_g = (
-        (
-            theta_location
-            - theta_scale
-            + math.pi / 2.0
-        )
-        % math.pi
-        - math.pi / 2.0
-    )
-    expected_theta_r = (
-        (
-            theta_location
-            + theta_scale
-            + math.pi / 2.0
-        )
-        % math.pi
-        - math.pi / 2.0
-    )
-
-    assert routed["g"]["theta"] == pytest.approx(
-        expected_theta_g
-    )
-    assert routed["r"]["theta"] == pytest.approx(
-        expected_theta_r
-    )
-
-    assert (
-        -math.pi / 2.0
-        <= routed["g"]["theta"]
-        < math.pi / 2.0
-    )
-    assert (
-        -math.pi / 2.0
-        <= routed["r"]["theta"]
-        < math.pi / 2.0
-    )
-
-
-def test_full_morphology_can_use_domain_aware_hierarchical_coupling():
-    import math
-
-    config = _multi_observation_config()
-
-    parameters = (
-        config["fit"]
-        ["multi_observation"]
-        ["parameters"]
-    )
-
-    central_q = 0.7
-    central_q_eta = math.log(
-        central_q
-        / (1.0 - central_q)
-    )
-
-    parameters["re"] = {
-        "coupling": "hierarchical",
-        "transform": "exp",
-        "location_prior": {
-            "type": "uniform",
-            "lower": math.log(1.0),
-            "upper": math.log(20.0),
-        },
-        "scale_prior": {
-            "type": "uniform",
-            "lower": 0.0,
-            "upper": 0.5,
+            "lower": 0.5,
+            "upper": 30.0,
         },
     }
 
     parameters["n"] = {
         "coupling": "hierarchical",
-        "transform": "exp",
-        "location_prior": {
+        "prior": {
             "type": "uniform",
-            "lower": math.log(0.5),
-            "upper": math.log(8.0),
-        },
-        "scale_prior": {
-            "type": "uniform",
-            "lower": 0.0,
-            "upper": 0.5,
+            "lower": 0.1,
+            "upper": 6.0,
         },
     }
 
     parameters["q"] = {
         "coupling": "hierarchical",
-        "transform": "logistic",
-        "location_prior": {
+        "prior": {
             "type": "uniform",
-            "lower": central_q_eta - 1.0,
-            "upper": central_q_eta + 1.0,
-        },
-        "scale_prior": {
-            "type": "uniform",
-            "lower": 0.0,
-            "upper": 0.5,
+            "lower": 0.2,
+            "upper": 1.0,
         },
     }
 
     parameters["theta"] = {
-        "coupling": "hierarchical",
-        "transform": "axial_angle",
-        "location_prior": {
+        "coupling": "shared",
+        "prior": {
             "type": "uniform",
-            "lower": -math.pi / 2.0,
-            "upper": math.pi / 2.0,
-        },
-        "scale_prior": {
-            "type": "uniform",
-            "lower": 0.0,
-            "upper": 0.5,
+            "lower": -1.5707963267948966,
+            "upper": 1.5707963267948966,
         },
     }
 
@@ -1070,26 +836,37 @@ def test_full_morphology_can_use_domain_aware_hierarchical_coupling():
         config
     )
 
+    expected_names = {
+        "re__rho",
+        "re__z__g",
+        "re__z__r",
+        "n__rho",
+        "n__z__g",
+        "n__z__r",
+        "q__rho",
+        "q__z__g",
+        "q__z__r",
+        "theta",
+    }
+
+    assert expected_names.issubset(
+        layout.parameter_set.all_names
+    )
+
     routed = layout.route(
         {
             "flux__g": 500.0,
             "flux__r": 900.0,
-            "re__eta_mu": math.log(5.0),
-            "re__eta_tau": 0.2,
+            "re__rho": 1.0,
             "re__z__g": -1.0,
             "re__z__r": 1.0,
-            "n__eta_mu": math.log(2.5),
-            "n__eta_tau": 0.1,
-            "n__z__g": -1.0,
-            "n__z__r": 1.0,
-            "q__eta_mu": central_q_eta,
-            "q__eta_tau": 0.3,
-            "q__z__g": -1.0,
-            "q__z__r": 1.0,
-            "theta__eta_mu": 1.5,
-            "theta__eta_tau": 0.2,
-            "theta__z__g": -1.0,
-            "theta__z__r": 1.0,
+            "n__rho": 1.0,
+            "n__z__g": -0.5,
+            "n__z__r": 0.5,
+            "q__rho": 1.0,
+            "q__z__g": -2.0,
+            "q__z__r": 2.0,
+            "theta": 0.3,
             "x0": 15.0,
             "y0": 15.0,
             "sky__r": 1.0,
@@ -1097,27 +874,35 @@ def test_full_morphology_can_use_domain_aware_hierarchical_coupling():
     )
 
     assert routed["g"]["re"] == pytest.approx(
-        5.0 * math.exp(-0.2)
+        routed["r"]["re"]
     )
-    assert routed["r"]["re"] == pytest.approx(
-        5.0 * math.exp(0.2)
-    )
-
     assert routed["g"]["n"] == pytest.approx(
-        2.5 * math.exp(-0.1)
+        routed["r"]["n"]
     )
-    assert routed["r"]["n"] == pytest.approx(
-        2.5 * math.exp(0.1)
+    assert routed["g"]["q"] == pytest.approx(
+        routed["r"]["q"]
     )
-    assert routed["g"]["n"] > 0.0
-    assert routed["r"]["n"] > 0.0
 
-    assert 0.0 < routed["g"]["q"] < 1.0
-    assert 0.0 < routed["r"]["q"] < 1.0
+    assert routed["g"]["theta"] == pytest.approx(
+        0.3
+    )
+    assert routed["r"]["theta"] == pytest.approx(
+        0.3
+    )
 
     for observation in ("g", "r"):
         assert (
-            -math.pi / 2.0
-            <= routed[observation]["theta"]
-            < math.pi / 2.0
+            0.5
+            <= routed[observation]["re"]
+            <= 30.0
+        )
+        assert (
+            0.1
+            <= routed[observation]["n"]
+            <= 6.0
+        )
+        assert (
+            0.2
+            <= routed[observation]["q"]
+            <= 1.0
         )
