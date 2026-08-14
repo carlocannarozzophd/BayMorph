@@ -564,9 +564,47 @@ def _parse_parameter_specification(
             )
         )
 
+    if coupling == "hierarchical_log_normal":
+        _require_exact_keys(
+            config,
+            {
+                "coupling",
+                "location_prior",
+                "scale_prior",
+            },
+            context=(
+                f"Hierarchical parameter "
+                f"'{name}'"
+            ),
+        )
+
+        return (
+            MultiObservationParameterSpec
+            .hierarchical_log_normal(
+                name,
+                location=Parameter(
+                    f"{name}__mu_log",
+                    prior=parse_prior_config(
+                        config[
+                            "location_prior"
+                        ]
+                    ),
+                ),
+                scale=Parameter(
+                    f"{name}__tau_log",
+                    prior=parse_prior_config(
+                        config[
+                            "scale_prior"
+                        ]
+                    ),
+                ),
+            )
+        )
+
     raise ValueError(
         f"Parameter '{name}' coupling must be "
-        "'shared' or 'independent'."
+        "'shared', 'independent', or "
+        "'hierarchical_log_normal'."
     )
 
 

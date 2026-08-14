@@ -613,3 +613,120 @@ def test_sky_frame_uses_registered_model_geometry_contract():
     assert layout.parameter_set.all_names == list(
         names
     )
+
+
+def test_effective_radius_can_be_hierarchical_log_normal():
+    import math
+
+    config = _multi_observation_config()
+
+    config["fit"]["multi_observation"]["parameters"]["re"] = {
+        "coupling": "hierarchical_log_normal",
+        "location_prior": {
+            "type": "uniform",
+            "lower": math.log(1.0),
+            "upper": math.log(20.0),
+        },
+        "scale_prior": {
+            "type": "uniform",
+            "lower": 0.0,
+            "upper": 0.5,
+        },
+    }
+
+    layout = build_multi_observation_parameter_layout(
+        config
+    )
+
+    assert "re" not in layout.parameter_set.all_names
+    assert "re__g" not in layout.parameter_set.all_names
+    assert "re__r" not in layout.parameter_set.all_names
+
+    assert "re__mu_log" in layout.parameter_set.names
+    assert "re__tau_log" in layout.parameter_set.names
+    assert "re__z__g" in layout.parameter_set.names
+    assert "re__z__r" in layout.parameter_set.names
+
+    routed = layout.route(
+        {
+            "flux__g": 500.0,
+            "flux__r": 900.0,
+            "re__mu_log": math.log(5.0),
+            "re__tau_log": 0.2,
+            "re__z__g": -1.0,
+            "re__z__r": 1.0,
+            "q": 0.7,
+            "theta": 0.2,
+            "x0": 15.0,
+            "y0": 15.0,
+            "sky__r": 1.0,
+        }
+    )
+
+    assert routed["g"]["re"] == pytest.approx(
+        5.0 * math.exp(-0.2)
+    )
+    assert routed["r"]["re"] == pytest.approx(
+        5.0 * math.exp(0.2)
+    )
+
+    assert routed["g"]["re"] > 0.0
+    assert routed["r"]["re"] > 0.0
+
+
+def test_hierarchical_log_normal_rejects_negative_scale_support():
+    import math
+
+    config = _multi_observation_config()
+
+    config["fit"]["multi_observation"]["parameters"]["re"] = {
+        "coupling": "hierarchical_log_normal",
+        "location_prior": {
+            "type": "uniform",
+            "lower": math.log(1.0),
+            "upper": math.log(20.0),
+        },
+        "scale_prior": {
+            "type": "uniform",
+            "lower": -0.1,
+            "upper": 0.5,
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="non-negative support",
+    ):
+        build_multi_observation_parameter_layout(
+            config
+        )
+
+
+def test_hierarchical_log_normal_rejects_extra_fields():
+    import math
+
+    config = _multi_observation_config()
+
+    config["fit"]["multi_observation"]["parameters"]["re"] = {
+        "coupling": "hierarchical_log_normal",
+        "location_prior": {
+            "type": "uniform",
+            "lower": math.log(1.0),
+            "upper": math.log(20.0),
+        },
+        "scale_prior": {
+            "type": "uniform",
+            "lower": 0.0,
+            "upper": 0.5,
+        },
+        "latent_priors": {},
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="Extra",
+    ):
+        build_multi_observation_parameter_layout(
+            config
+        )
+
