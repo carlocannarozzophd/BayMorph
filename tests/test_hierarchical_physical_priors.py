@@ -327,3 +327,254 @@ def test_increasing_latent_correlation_increases_dependence():
 
     assert high_correlation > low_correlation
     assert high_correlation > 0.8
+
+
+@pytest.mark.parametrize(
+    "n_observations",
+    [
+        2,
+        3,
+        5,
+        10,
+    ],
+)
+@pytest.mark.parametrize(
+    "correlation",
+    [
+        0.0,
+        0.3,
+        0.7,
+        0.95,
+    ],
+)
+def test_n_observation_latent_covariance_matches_target(
+    n_observations,
+    correlation,
+):
+    rng = np.random.default_rng(
+        61937
+        + n_observations
+    )
+
+    n_draws = 8000
+
+    samples = np.asarray(
+        [
+            equicorrelated_gaussian_latents(
+                rng.normal(
+                    size=n_observations
+                ),
+                correlation,
+            )
+            for _ in range(
+                n_draws
+            )
+        ],
+        dtype=float,
+    )
+
+    marginal_variances = np.var(
+        samples,
+        axis=0,
+    )
+
+    assert marginal_variances == pytest.approx(
+        np.ones(
+            n_observations
+        ),
+        abs=0.05,
+    )
+
+    correlation_matrix = np.corrcoef(
+        samples,
+        rowvar=False,
+    )
+
+    off_diagonal = correlation_matrix[
+        ~np.eye(
+            n_observations,
+            dtype=bool,
+        )
+    ]
+
+    assert np.mean(
+        off_diagonal
+    ) == pytest.approx(
+        correlation,
+        abs=0.035,
+    )
+
+
+@pytest.mark.parametrize(
+    (
+        "parameter_name",
+        "lower",
+        "upper",
+    ),
+    [
+        (
+            "n",
+            0.1,
+            6.0,
+        ),
+        (
+            "re",
+            0.5,
+            30.0,
+        ),
+        (
+            "q",
+            0.2,
+            1.0,
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "n_observations",
+    [
+        2,
+        5,
+        10,
+    ],
+)
+def test_n_observation_physical_uniform_marginal_is_preserved(
+    parameter_name,
+    lower,
+    upper,
+    n_observations,
+):
+    del parameter_name
+
+    rng = np.random.default_rng(
+        27183
+        + n_observations
+    )
+
+    prior = UniformPrior(
+        lower=lower,
+        upper=upper,
+    )
+
+    n_draws = 6000
+
+    samples = np.asarray(
+        [
+            physical_prior_copula_values(
+                prior,
+                rng.normal(
+                    size=n_observations
+                ),
+                correlation=0.8,
+            )
+            for _ in range(
+                n_draws
+            )
+        ],
+        dtype=float,
+    )
+
+    expected_mean = (
+        lower + upper
+    ) / 2.0
+
+    expected_quantiles = np.asarray(
+        [
+            lower
+            + 0.1 * (
+                upper - lower
+            ),
+            lower
+            + 0.5 * (
+                upper - lower
+            ),
+            lower
+            + 0.9 * (
+                upper - lower
+            ),
+        ]
+    )
+
+    mean_tolerance = (
+        0.03
+        * (
+            upper - lower
+        )
+    )
+    quantile_tolerance = (
+        0.04
+        * (
+            upper - lower
+        )
+    )
+
+    for observation in range(
+        n_observations
+    ):
+        marginal = samples[
+            :,
+            observation,
+        ]
+
+        assert np.min(
+            marginal
+        ) >= lower
+        assert np.max(
+            marginal
+        ) <= upper
+
+        assert np.mean(
+            marginal
+        ) == pytest.approx(
+            expected_mean,
+            abs=mean_tolerance,
+        )
+
+        assert np.quantile(
+            marginal,
+            [
+                0.1,
+                0.5,
+                0.9,
+            ],
+        ) == pytest.approx(
+            expected_quantiles,
+            abs=quantile_tolerance,
+        )
+
+
+@pytest.mark.parametrize(
+    "n_observations",
+    [
+        2,
+        3,
+        5,
+        10,
+    ],
+)
+def test_unit_latent_correlation_collapses_all_n_observations(
+    n_observations,
+):
+    rng = np.random.default_rng(
+        91827
+        + n_observations
+    )
+
+    prior = UniformPrior(
+        lower=0.1,
+        upper=6.0,
+    )
+
+    values = physical_prior_copula_values(
+        prior,
+        rng.normal(
+            size=n_observations
+        ),
+        correlation=1.0,
+    )
+
+    assert values == pytest.approx(
+        np.full(
+            n_observations,
+            values[0],
+        )
+    )
