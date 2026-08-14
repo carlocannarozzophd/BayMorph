@@ -35,7 +35,7 @@ class DummyBackend:
 
 def _layout():
     return MultiObservationParameterLayout(
-        bands=(
+        observations=(
             "g",
             "r",
         ),
@@ -233,11 +233,11 @@ def test_run_multi_observation_inference_builds_problem_and_returns_result(
     )
 
     assert result is expected_result
-    assert captured["problem"].parameter_layout.bands == (
+    assert captured["problem"].parameter_layout.observations == (
         "g",
         "r",
     )
-    assert captured["problem"].likelihood.bands == (
+    assert captured["problem"].likelihood.observations == (
         "g",
         "r",
     )

@@ -160,18 +160,3 @@ def test_independent_prior_types_are_preserved():
             ]
         )
     )
-
-
-def test_legacy_band_specific_alias_builds_independent_specification():
-    specification = MultiObservationParameterSpec.independent(
-        "flux",
-        {
-            "g": Parameter(
-                "flux",
-                1.0,
-                2.0,
-            )
-        },
-    )
-
-    assert specification.coupling == "independent"

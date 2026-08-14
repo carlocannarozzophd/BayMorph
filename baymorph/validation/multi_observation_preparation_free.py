@@ -70,7 +70,7 @@ class PreparationFreeMultiObservationCase:
             "truth_vector": self.truth_vector,
         }
 
-        for observation in self.problem.parameter_layout.bands:
+        for observation in self.problem.parameter_layout.observations:
             arrays[f"noiseless__{observation}"] = np.asarray(
                 self.noiseless_images[observation], dtype=float
             )
@@ -179,7 +179,7 @@ def build_preparation_free_multi_observation_case(
     observed_images: dict[str, np.ndarray] = {}
     noise_maps: dict[str, np.ndarray] = {}
 
-    for observation_name in parameter_layout.bands:
+    for observation_name in parameter_layout.observations:
         shape = truth.observations[observation_name].image_shape
         noiseless = np.asarray(
             representations[observation_name].render(shape=shape),
@@ -209,7 +209,7 @@ def build_preparation_free_multi_observation_case(
                 mask=None,
                 include_normalization=True,
             )
-            for observation_name in parameter_layout.bands
+            for observation_name in parameter_layout.observations
         }
     )
     problem = MultiObservationInferenceProblem(

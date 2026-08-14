@@ -53,7 +53,7 @@ def test_layout_builds_global_parameter_set():
     }
 
 
-def test_layout_routes_shared_and_band_specific_values():
+def test_layout_routes_shared_and_observation_specific_values():
     layout = make_layout()
 
     routed = layout.route(
@@ -102,10 +102,10 @@ def test_layout_rejects_duplicate_bands():
         )
 
 
-def test_layout_rejects_incomplete_band_specific_definition():
+def test_layout_rejects_incomplete_observation_specific_definition():
     with pytest.raises(
         ValueError,
-        match="exactly the configured bands",
+        match="exactly the configured observations",
     ):
         MultiObservationParameterLayout(
             observations=["g", "r"],

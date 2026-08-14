@@ -139,7 +139,7 @@ def test_multi_observation_validation_case_builds_and_scores_truth(
         truth,
     )
 
-    assert problem.parameter_layout.bands == (
+    assert problem.parameter_layout.observations == (
         "g",
         "r",
     )

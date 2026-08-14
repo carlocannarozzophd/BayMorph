@@ -319,7 +319,7 @@ def test_multi_observation_config_maker_writes_complete_workspace(
         joint
     )
 
-    assert layout.bands == observation_names
+    assert layout.observations == observation_names
 
     assert "flux__image_A" in layout.parameter_set.names
     assert "flux__repeat 02" in layout.parameter_set.names

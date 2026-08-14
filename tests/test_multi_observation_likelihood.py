@@ -55,14 +55,14 @@ def test_multi_observation_likelihood_sums_image_factors():
     assert joint(images) == pytest.approx(expected)
 
 
-def test_multi_observation_likelihood_requires_exact_bands():
+def test_multi_observation_likelihood_requires_exact_observations():
     likelihood = MultiObservationLikelihood(
         make_likelihoods()
     )
 
     with pytest.raises(
         ValueError,
-        match="exactly the configured bands",
+        match="exactly the configured observations",
     ):
         likelihood(
             {

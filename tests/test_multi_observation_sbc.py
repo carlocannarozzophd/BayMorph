@@ -200,7 +200,7 @@ def test_preparation_free_sbc_case_closes_at_drawn_truth():
         case.truth_vector
     )
 
-    for observation in case.problem.parameter_layout.bands:
+    for observation in case.problem.parameter_layout.observations:
         np.testing.assert_allclose(
             rendered[observation],
             case.noiseless_images[observation],

@@ -66,7 +66,7 @@ class MultiObservationInferenceProblem(InferenceProblem):
             != likelihood.observations
         ):
             raise ValueError(
-                "Parameter layout and likelihood bands must match "
+                "Parameter layout and likelihood observations must match "
                 "in both names and order."
             )
 

@@ -166,7 +166,7 @@ def test_multi_observation_problem_rejects_representation_band_mismatch():
         )
 
 
-def test_multi_observation_problem_rejects_likelihood_band_mismatch():
+def test_multi_observation_problem_rejects_likelihood_observation_mismatch():
     layout = MultiObservationParameterLayout(
         observations=["g"],
         specifications=[
@@ -200,7 +200,7 @@ def test_multi_observation_problem_rejects_likelihood_band_mismatch():
 
     with pytest.raises(
         ValueError,
-        match="bands must match",
+        match="observations must match",
     ):
         MultiObservationInferenceProblem(
             representation_factory=representation_factory,

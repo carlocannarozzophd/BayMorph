@@ -58,45 +58,15 @@ class MultiObservationParameterSpec:
             parameters=parameters,
         )
 
-    @classmethod
-    def band_specific(
-        cls,
-        name: str,
-        parameters: Mapping[str, Parameter],
-    ) -> MultiObservationParameterSpec:
-        """Create an observation-specific specification through a legacy alias."""
-        return cls.independent(
-            name=name,
-            parameters=parameters,
-        )
-
-    @property
-    def by_band(self) -> Mapping[str, Parameter] | None:
-        """Return observation-specific parameters through the legacy name."""
-        return self.by_observation
-
-
 class MultiObservationParameterLayout:
     """Map one sampled state to complete parameters for every observation."""
 
     def __init__(
         self,
-        observations: tuple[str, ...] | list[str] | None = None,
+        observations: tuple[str, ...] | list[str],
         specifications: tuple[MultiObservationParameterSpec, ...]
         | list[MultiObservationParameterSpec] = (),
-        *,
-        bands: tuple[str, ...] | list[str] | None = None,
     ) -> None:
-        if observations is None:
-            observations = bands
-        elif bands is not None:
-            raise ValueError(
-                "Specify observations or the legacy bands argument, not both."
-            )
-
-        if observations is None:
-            observations = ()
-
         self._observations = tuple(observations)
         self._specifications = tuple(specifications)
 
@@ -162,11 +132,6 @@ class MultiObservationParameterLayout:
     @property
     def observations(self) -> tuple[str, ...]:
         """Return observation identifiers in deterministic routing order."""
-        return self._observations
-
-    @property
-    def bands(self) -> tuple[str, ...]:
-        """Return observation identifiers through the legacy name."""
         return self._observations
 
     @property
@@ -340,7 +305,7 @@ class MultiObservationParameterLayout:
         if supplied != expected:
             raise ValueError(
                 f"Independent parameter '{specification.name}' "
-                "must define exactly the configured bands/observations."
+                "must define exactly the configured observations."
             )
 
         for observation, parameter in (

@@ -91,7 +91,7 @@ def test_preparation_free_case_uses_native_grids_and_known_noise():
     truth = _truth()
     case = build_preparation_free_multi_observation_case(truth)
 
-    assert case.problem.parameter_layout.bands == ("g", "r")
+    assert case.problem.parameter_layout.observations == ("g", "r")
     assert case.problem.likelihood.image_shapes == {
         "g": (61, 61),
         "r": (47, 73),
@@ -113,7 +113,7 @@ def test_preparation_free_data_are_exact_model_plus_seeded_noise():
     truth = _truth()
     case = build_preparation_free_multi_observation_case(truth)
 
-    for observation in case.problem.parameter_layout.bands:
+    for observation in case.problem.parameter_layout.observations:
         sigma = truth.observations[observation].noise_metadata["sigma"]
         shape = truth.observations[observation].image_shape
         expected_noise = np.random.default_rng(
@@ -135,7 +135,7 @@ def test_preparation_free_problem_closes_at_injected_truth():
     case = build_preparation_free_multi_observation_case(_truth())
     rendered = case.problem.render_models(case.truth_vector)
 
-    for observation in case.problem.parameter_layout.bands:
+    for observation in case.problem.parameter_layout.observations:
         np.testing.assert_allclose(
             rendered[observation],
             case.noiseless_images[observation],

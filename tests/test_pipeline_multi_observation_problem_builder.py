@@ -19,7 +19,7 @@ from baymorph.pipeline import multi_observation_fit
 
 def _layout():
     return MultiObservationParameterLayout(
-        bands=[
+        observations=[
             "g",
             "r",
         ],
@@ -144,12 +144,12 @@ def test_build_multi_observation_problem_does_not_run_sampler(
         MultiObservationInferenceProblem,
     )
 
-    assert problem.parameter_layout.bands == (
+    assert problem.parameter_layout.observations == (
         "g",
         "r",
     )
 
-    assert problem.likelihood.bands == (
+    assert problem.likelihood.observations == (
         "g",
         "r",
     )

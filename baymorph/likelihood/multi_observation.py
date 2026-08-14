@@ -88,7 +88,7 @@ class MultiObservationLikelihood:
         if supplied != expected:
             raise ValueError(
                 "Model images must define exactly the configured "
-                "bands/observations."
+                "observations."
             )
 
         total = 0.0
