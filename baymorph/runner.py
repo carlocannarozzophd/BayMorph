@@ -18,7 +18,7 @@ from baymorph.pipeline.config import (
     resolve_config,
 )
 from baymorph.pipeline.multi_observation_config import (
-    resolve_multi_observation_observation_configs as resolve_multiband_observation_configs,
+    resolve_multi_observation_observation_configs,
 )
 from baymorph.pipeline.multi_observation_fit import (
     run_multi_observation_fit_from_config,
@@ -268,7 +268,7 @@ class BayMorphRunner:
         """
         if self.is_multi_observation:
             observation_configs = (
-                resolve_multiband_observation_configs(
+                resolve_multi_observation_observation_configs(
                     self.config,
                     base_dir=self.config_base_dir,
                 )
@@ -311,7 +311,7 @@ class BayMorphRunner:
         """
         if self.is_multi_observation:
             observation_configs = (
-                resolve_multiband_observation_configs(
+                resolve_multi_observation_observation_configs(
                     self.config,
                     base_dir=self.config_base_dir,
                 )
@@ -363,7 +363,7 @@ class BayMorphRunner:
         """
         if self.is_multi_observation:
             observation_configs = (
-                resolve_multiband_observation_configs(
+                resolve_multi_observation_observation_configs(
                     self.config,
                     base_dir=self.config_base_dir,
                 )
@@ -579,7 +579,7 @@ class BayMorphRunner:
 
         if self.is_multi_observation:
             observation_configs = (
-                resolve_multiband_observation_configs(
+                resolve_multi_observation_observation_configs(
                     self.config,
                     base_dir=self.config_base_dir,
                 )

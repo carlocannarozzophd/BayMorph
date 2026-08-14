@@ -562,7 +562,7 @@ def make_multi_parameters(
     Returns
     -------
     dict
-        YAML-compatible ``fit.multiband.parameters`` mapping.
+        YAML-compatible ``fit.multi_observation.parameters`` mapping.
 
     Notes
     -----

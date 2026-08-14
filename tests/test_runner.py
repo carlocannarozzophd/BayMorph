@@ -643,7 +643,7 @@ def test_runner_prepares_all_multi_observation_images(
     }
 
     monkeypatch.setattr(
-        "baymorph.runner.resolve_multiband_observation_configs",
+        "baymorph.runner.resolve_multi_observation_observation_configs",
         lambda config, base_dir=None: observation_configs,
     )
 
@@ -688,7 +688,7 @@ def test_runner_selects_psf_candidates_for_all_observations(
     }
 
     monkeypatch.setattr(
-        "baymorph.runner.resolve_multiband_observation_configs",
+        "baymorph.runner.resolve_multi_observation_observation_configs",
         lambda config, base_dir=None: observation_configs,
     )
 
@@ -733,7 +733,7 @@ def test_runner_builds_psfs_for_all_observations(
     }
 
     monkeypatch.setattr(
-        "baymorph.runner.resolve_multiband_observation_configs",
+        "baymorph.runner.resolve_multi_observation_observation_configs",
         lambda config, base_dir=None: observation_configs,
     )
 
@@ -848,7 +848,7 @@ def test_runner_runs_multi_observation_workflow(
     calls = []
 
     monkeypatch.setattr(
-        "baymorph.runner.resolve_multiband_observation_configs",
+        "baymorph.runner.resolve_multi_observation_observation_configs",
         lambda config, base_dir=None: observation_configs,
     )
 
@@ -939,7 +939,7 @@ def test_runner_multi_observation_run_skips_gaussian_psf(
     built = []
 
     monkeypatch.setattr(
-        "baymorph.runner.resolve_multiband_observation_configs",
+        "baymorph.runner.resolve_multi_observation_observation_configs",
         lambda config, base_dir=None: observation_configs,
     )
 
@@ -1002,7 +1002,7 @@ def test_runner_multi_observation_run_calls_fit_once(
     }
 
     monkeypatch.setattr(
-        "baymorph.runner.resolve_multiband_observation_configs",
+        "baymorph.runner.resolve_multi_observation_observation_configs",
         lambda config, base_dir=None: observation_configs,
     )
 
@@ -1049,7 +1049,7 @@ def test_runner_multi_observation_run_can_generate_diagnostics(
     }
 
     monkeypatch.setattr(
-        "baymorph.runner.resolve_multiband_observation_configs",
+        "baymorph.runner.resolve_multi_observation_observation_configs",
         lambda config, base_dir=None: observation_configs,
     )
 
@@ -1297,7 +1297,7 @@ def test_runner_preserves_arbitrary_observation_identifiers(
     }
 
     monkeypatch.setattr(
-        "baymorph.runner.resolve_multiband_observation_configs",
+        "baymorph.runner.resolve_multi_observation_observation_configs",
         lambda config, base_dir=None: observation_configs,
     )
 
