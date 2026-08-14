@@ -733,3 +733,99 @@ def test_hierarchical_rejects_extra_fields():
             config
         )
 
+
+
+def test_positive_radius_and_axis_ratio_can_be_hierarchical_together():
+    import math
+
+    config = _multi_observation_config()
+
+    central_q = 0.7
+    central_q_eta = math.log(
+        central_q
+        / (1.0 - central_q)
+    )
+
+    parameters = (
+        config["fit"]
+        ["multi_observation"]
+        ["parameters"]
+    )
+
+    parameters["re"] = {
+        "coupling": "hierarchical",
+        "transform": "exp",
+        "location_prior": {
+            "type": "uniform",
+            "lower": math.log(1.0),
+            "upper": math.log(20.0),
+        },
+        "scale_prior": {
+            "type": "uniform",
+            "lower": 0.0,
+            "upper": 0.5,
+        },
+    }
+
+    parameters["q"] = {
+        "coupling": "hierarchical",
+        "transform": "logistic",
+        "location_prior": {
+            "type": "uniform",
+            "lower": central_q_eta - 1.0,
+            "upper": central_q_eta + 1.0,
+        },
+        "scale_prior": {
+            "type": "uniform",
+            "lower": 0.0,
+            "upper": 0.5,
+        },
+    }
+
+    layout = build_multi_observation_parameter_layout(
+        config
+    )
+
+    for name in (
+        "re__eta_mu",
+        "re__eta_tau",
+        "re__z__g",
+        "re__z__r",
+        "q__eta_mu",
+        "q__eta_tau",
+        "q__z__g",
+        "q__z__r",
+    ):
+        assert name in layout.parameter_set.names
+
+    routed = layout.route(
+        {
+            "flux__g": 500.0,
+            "flux__r": 900.0,
+            "re__eta_mu": math.log(5.0),
+            "re__eta_tau": 0.2,
+            "re__z__g": -1.0,
+            "re__z__r": 1.0,
+            "q__eta_mu": central_q_eta,
+            "q__eta_tau": 0.3,
+            "q__z__g": -1.0,
+            "q__z__r": 1.0,
+            "theta": 0.2,
+            "x0": 15.0,
+            "y0": 15.0,
+            "sky__r": 1.0,
+        }
+    )
+
+    assert routed["g"]["re"] == pytest.approx(
+        5.0 * math.exp(-0.2)
+    )
+    assert routed["r"]["re"] == pytest.approx(
+        5.0 * math.exp(0.2)
+    )
+
+    assert 0.0 < routed["g"]["q"] < 1.0
+    assert 0.0 < routed["r"]["q"] < 1.0
+
+    assert routed["g"]["q"] < central_q
+    assert routed["r"]["q"] > central_q

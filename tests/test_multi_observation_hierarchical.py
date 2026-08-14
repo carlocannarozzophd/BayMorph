@@ -240,3 +240,93 @@ def test_hierarchical_latent_prior_is_standard_normal():
 
     assert transformed[2] == pytest.approx(0.0)
     assert transformed[3] == pytest.approx(0.0)
+
+
+def test_logistic_hierarchical_transform_maps_to_open_unit_interval():
+    from baymorph.fitting.hierarchical import (
+        LogisticHierarchicalTransform,
+    )
+
+    transform = LogisticHierarchicalTransform()
+
+    assert transform.from_latent(0.0) == pytest.approx(
+        0.5
+    )
+
+    for value in (
+        -1000.0,
+        -10.0,
+        0.0,
+        10.0,
+        1000.0,
+    ):
+        physical = transform.from_latent(
+            value
+        )
+        assert 0.0 < physical < 1.0
+
+
+def test_hierarchical_logistic_routes_axis_ratios():
+    from baymorph.fitting.hierarchical import (
+        LogisticHierarchicalTransform,
+    )
+
+    central_q = 0.7
+    central_eta = np.log(
+        central_q
+        / (1.0 - central_q)
+    )
+
+    spec = MultiObservationParameterSpec.hierarchical(
+        "q",
+        location=Parameter(
+            "q__eta_mu",
+            lower=central_eta - 1.0,
+            upper=central_eta + 1.0,
+        ),
+        scale=Parameter(
+            "q__eta_tau",
+            lower=0.0,
+            upper=1.0,
+        ),
+        transform=LogisticHierarchicalTransform(),
+    )
+
+    layout = MultiObservationParameterLayout(
+        observations=["g", "r"],
+        specifications=[
+            spec,
+        ],
+    )
+
+    routed = layout.route(
+        {
+            "q__eta_mu": central_eta,
+            "q__eta_tau": 0.3,
+            "q__z__g": -1.0,
+            "q__z__r": 1.0,
+        }
+    )
+
+    expected_g = 1.0 / (
+        1.0
+        + np.exp(
+            -(central_eta - 0.3)
+        )
+    )
+    expected_r = 1.0 / (
+        1.0
+        + np.exp(
+            -(central_eta + 0.3)
+        )
+    )
+
+    assert routed["g"]["q"] == pytest.approx(
+        expected_g
+    )
+    assert routed["r"]["q"] == pytest.approx(
+        expected_r
+    )
+
+    assert 0.0 < routed["g"]["q"] < 1.0
+    assert 0.0 < routed["r"]["q"] < 1.0

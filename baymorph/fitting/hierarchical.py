@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 import numpy as np
+from scipy.special import expit
 
 
 class HierarchicalDomainTransform(ABC):
@@ -60,6 +61,41 @@ class ExpHierarchicalTransform(HierarchicalDomainTransform):
         return result
 
 
+class LogisticHierarchicalTransform(
+    HierarchicalDomainTransform
+):
+    """Logistic mapping for physical parameters restricted to (0, 1)."""
+
+    def from_latent(self, value: float) -> float:
+        value = float(value)
+
+        if not np.isfinite(value):
+            raise ValueError(
+                "Hierarchical latent value must be finite."
+            )
+
+        result = float(
+            expit(value)
+        )
+
+        lower_open = np.nextafter(
+            0.0,
+            1.0,
+        )
+        upper_open = np.nextafter(
+            1.0,
+            0.0,
+        )
+
+        return float(
+            np.clip(
+                result,
+                lower_open,
+                upper_open,
+            )
+        )
+
+
 def hierarchical_domain_transform_from_name(
     name: str,
 ) -> HierarchicalDomainTransform:
@@ -72,6 +108,10 @@ def hierarchical_domain_transform_from_name(
     if normalized == "exp":
         return ExpHierarchicalTransform()
 
+    if normalized == "logistic":
+        return LogisticHierarchicalTransform()
+
     raise ValueError(
-        "Hierarchical transform must be 'identity' or 'exp'."
+        "Hierarchical transform must be "
+        "'identity', 'exp', or 'logistic'."
     )
