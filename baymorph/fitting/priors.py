@@ -6,7 +6,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.stats import norm
+from scipy.stats import (
+    beta as beta_distribution,
+    norm,
+)
 
 
 class Prior(ABC):
@@ -121,6 +124,79 @@ class NormalPrior(Prior):
             self.mean
             + self.sigma * norm.ppf(clipped)
         )
+
+
+
+@dataclass(frozen=True)
+class BetaPrior(Prior):
+    """Beta prior scaled to a finite physical interval."""
+
+    alpha: float
+    beta: float
+    lower: float = 0.0
+    upper: float = 1.0
+
+    def __post_init__(self) -> None:
+        alpha = float(self.alpha)
+        beta = float(self.beta)
+        lower = float(self.lower)
+        upper = float(self.upper)
+
+        if not np.isfinite(alpha) or alpha <= 0.0:
+            raise ValueError(
+                "Beta prior alpha must be finite and positive."
+            )
+
+        if not np.isfinite(beta) or beta <= 0.0:
+            raise ValueError(
+                "Beta prior beta must be finite and positive."
+            )
+
+        if not np.isfinite(lower) or not np.isfinite(upper):
+            raise ValueError(
+                "Beta prior bounds must be finite."
+            )
+
+        if upper <= lower:
+            raise ValueError(
+                "Beta prior upper bound must be greater than its "
+                "lower bound."
+            )
+
+        object.__setattr__(self, "alpha", alpha)
+        object.__setattr__(self, "beta", beta)
+        object.__setattr__(self, "lower", lower)
+        object.__setattr__(self, "upper", upper)
+
+    def transform(self, unit_value: float) -> float:
+        """Map one unit-cube coordinate through the scaled beta quantile."""
+        value = _validate_unit_value(
+            unit_value
+        )
+
+        quantile = float(
+            beta_distribution.ppf(
+                value,
+                a=self.alpha,
+                b=self.beta,
+            )
+        )
+
+        result = (
+            self.lower
+            + quantile
+            * (
+                self.upper
+                - self.lower
+            )
+        )
+
+        if not np.isfinite(result):
+            raise ValueError(
+                "Beta prior transform produced a non-finite value."
+            )
+
+        return float(result)
 
 
 def _validate_unit_value(

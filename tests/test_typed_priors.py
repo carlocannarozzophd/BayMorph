@@ -129,3 +129,82 @@ def test_parameter_rejects_mixed_prior_interfaces():
                 upper=1.0,
             ),
         )
+
+
+def test_beta_prior_maps_symmetric_median_to_interval_midpoint():
+    from baymorph.fitting import BetaPrior
+
+    prior = BetaPrior(
+        alpha=2.0,
+        beta=2.0,
+        lower=2.0,
+        upper=8.0,
+    )
+
+    assert prior.transform(
+        0.5
+    ) == pytest.approx(
+        5.0
+    )
+
+
+def test_beta_prior_respects_scaled_endpoints():
+    from baymorph.fitting import BetaPrior
+
+    prior = BetaPrior(
+        alpha=2.0,
+        beta=3.0,
+        lower=0.2,
+        upper=1.0,
+    )
+
+    assert prior.transform(
+        0.0
+    ) == pytest.approx(
+        0.2
+    )
+    assert prior.transform(
+        1.0
+    ) == pytest.approx(
+        1.0
+    )
+
+
+@pytest.mark.parametrize(
+    (
+        "alpha",
+        "beta_parameter",
+    ),
+    [
+        (
+            0.0,
+            2.0,
+        ),
+        (
+            -1.0,
+            2.0,
+        ),
+        (
+            2.0,
+            0.0,
+        ),
+        (
+            2.0,
+            -1.0,
+        ),
+    ],
+)
+def test_beta_prior_rejects_non_positive_shapes(
+    alpha,
+    beta_parameter,
+):
+    from baymorph.fitting import BetaPrior
+
+    with pytest.raises(
+        ValueError,
+        match="positive",
+    ):
+        BetaPrior(
+            alpha=alpha,
+            beta=beta_parameter,
+        )

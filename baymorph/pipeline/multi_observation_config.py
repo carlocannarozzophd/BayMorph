@@ -12,6 +12,7 @@ from baymorph.fitting.multi_observation import (
 )
 from baymorph.fitting.parameters import Parameter
 from baymorph.fitting.priors import (
+    BetaPrior,
     FixedPrior,
     NormalPrior,
     Prior,
@@ -88,6 +89,44 @@ def parse_prior_config(
             ],
         )
 
+    if prior_type == "beta":
+        has_lower = "lower" in config
+        has_upper = "upper" in config
+
+        if has_lower or has_upper:
+            expected = {
+                "type",
+                "alpha",
+                "beta",
+                "lower",
+                "upper",
+            }
+        else:
+            expected = {
+                "type",
+                "alpha",
+                "beta",
+            }
+
+        _require_exact_keys(
+            config,
+            expected,
+            context="Beta prior",
+        )
+
+        return BetaPrior(
+            alpha=config["alpha"],
+            beta=config["beta"],
+            lower=config.get(
+                "lower",
+                0.0,
+            ),
+            upper=config.get(
+                "upper",
+                1.0,
+            ),
+        )
+
     if prior_type == "normal":
         _require_exact_keys(
             config,
@@ -110,7 +149,7 @@ def parse_prior_config(
 
     raise ValueError(
         "Prior type must be one of "
-        "'fixed', 'uniform', or 'normal'."
+        "'fixed', 'uniform', 'beta', or 'normal'."
     )
 
 

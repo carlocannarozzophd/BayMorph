@@ -4,11 +4,19 @@ from __future__ import annotations
 
 
 import numpy as np
-from scipy.stats import norm, uniform
+from scipy.stats import (
+    beta as beta_distribution,
+    norm,
+    uniform,
+)
 
 from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.fitting.parameters import ParameterSet
-from baymorph.fitting.priors import NormalPrior, UniformPrior
+from baymorph.fitting.priors import (
+    BetaPrior,
+    NormalPrior,
+    UniformPrior,
+)
 from baymorph.fitting.problem import InferenceProblem
 from baymorph.likelihood import ImageLikelihood
 from baymorph.results import (
@@ -409,6 +417,23 @@ def _build_pocomc_prior(
 
         if isinstance(
             prior,
+            BetaPrior,
+        ):
+            distributions.append(
+                beta_distribution(
+                    a=prior.alpha,
+                    b=prior.beta,
+                    loc=prior.lower,
+                    scale=(
+                        prior.upper
+                        - prior.lower
+                    ),
+                )
+            )
+            continue
+
+        if isinstance(
+            prior,
             NormalPrior,
         ):
             distributions.append(
@@ -420,8 +445,8 @@ def _build_pocomc_prior(
             continue
 
         raise TypeError(
-            "pocoMC currently supports BayMorph UniformPrior and "
-            "NormalPrior sampled parameters. "
+            "pocoMC currently supports BayMorph UniformPrior, "
+            "BetaPrior, and NormalPrior sampled parameters. "
             f"Parameter '{parameter.name}' uses "
             f"'{type(prior).__name__}'."
         )

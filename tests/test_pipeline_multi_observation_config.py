@@ -906,3 +906,59 @@ def test_re_n_q_can_be_hierarchical_with_shared_axial_angle():
             <= routed[observation]["q"]
             <= 1.0
         )
+
+
+def test_parse_beta_prior_config():
+    from baymorph.fitting.priors import BetaPrior
+    from baymorph.pipeline.multi_observation_config import (
+        parse_prior_config,
+    )
+
+    standard = parse_prior_config(
+        {
+            "type": "beta",
+            "alpha": 2.0,
+            "beta": 2.0,
+        }
+    )
+
+    scaled = parse_prior_config(
+        {
+            "type": "beta",
+            "alpha": 2.0,
+            "beta": 5.0,
+            "lower": 0.2,
+            "upper": 1.0,
+        }
+    )
+
+    assert standard == BetaPrior(
+        alpha=2.0,
+        beta=2.0,
+    )
+
+    assert scaled == BetaPrior(
+        alpha=2.0,
+        beta=5.0,
+        lower=0.2,
+        upper=1.0,
+    )
+
+
+def test_beta_prior_config_requires_both_scaled_bounds():
+    from baymorph.pipeline.multi_observation_config import (
+        parse_prior_config,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Missing",
+    ):
+        parse_prior_config(
+            {
+                "type": "beta",
+                "alpha": 2.0,
+                "beta": 2.0,
+                "lower": 0.0,
+            }
+        )

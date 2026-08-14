@@ -16,6 +16,7 @@ from baymorph.fitting.parameters import (
     ParameterSet,
 )
 from baymorph.fitting.priors import (
+    BetaPrior,
     FixedPrior,
     NormalPrior,
     Prior,
@@ -95,13 +96,12 @@ class MultiObservationParameterSpec:
 
         Cross-observation dependence is represented by an equicorrelated
         Gaussian copula. Unless overridden internally or through an advanced
-        interface, the latent correlation uses a Uniform(0, 1) reference
-        prior.
+        interface, the latent correlation uses a Beta(2, 2) reference prior.
         """
         if correlation_prior is None:
-            correlation_prior = UniformPrior(
-                lower=0.0,
-                upper=1.0,
+            correlation_prior = BetaPrior(
+                alpha=2.0,
+                beta=2.0,
             )
 
         return cls(
@@ -610,9 +610,25 @@ class MultiObservationParameterLayout:
 
             return
 
+        if isinstance(
+            correlation_prior,
+            BetaPrior,
+        ):
+            if (
+                correlation_prior.lower < 0.0
+                or correlation_prior.upper > 1.0
+            ):
+                raise ValueError(
+                    f"Hierarchical correlation prior for "
+                    f"'{specification.name}' must have support "
+                    "inside [0, 1]."
+                )
+
+            return
+
         raise TypeError(
             f"Hierarchical correlation prior for "
             f"'{specification.name}' must have known support "
-            "inside [0, 1]. FixedPrior and UniformPrior are "
-            "currently supported."
+            "inside [0, 1]. FixedPrior, UniformPrior, and "
+            "BetaPrior are currently supported."
         )

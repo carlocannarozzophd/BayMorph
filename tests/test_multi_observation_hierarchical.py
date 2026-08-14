@@ -264,3 +264,22 @@ def test_hierarchical_requires_at_least_two_observations():
                 _hierarchical_spec(),
             ],
         )
+
+
+def test_hierarchical_reference_dependence_prior_is_beta_2_2():
+    from baymorph.fitting.priors import BetaPrior
+
+    specification = (
+        MultiObservationParameterSpec.hierarchical(
+            "future_parameter",
+            prior=UniformPrior(
+                lower=1.0,
+                upper=5.0,
+            ),
+        )
+    )
+
+    assert specification.correlation_prior == BetaPrior(
+        alpha=2.0,
+        beta=2.0,
+    )

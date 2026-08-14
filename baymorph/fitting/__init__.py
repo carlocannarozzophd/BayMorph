@@ -23,6 +23,7 @@ from baymorph.fitting.pocomc import (
     PocoMCFitter,
 )
 from baymorph.fitting.priors import (
+    BetaPrior,
     FixedPrior,
     NormalPrior,
     Prior,
@@ -31,6 +32,7 @@ from baymorph.fitting.priors import (
 from baymorph.fitting.sampler_factory import make_sampler
 
 __all__ = [
+    "BetaPrior",
     "DynestyFitter",
     "FixedPrior",
     "GridSearchResult",
