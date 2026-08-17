@@ -115,10 +115,6 @@ DEFAULT_CONFIG = {
         },
         "priors": {
             "single_sersic": {
-                "flux": {
-                    "min_factor": 0.0,
-                    "max_factor": 2.0,
-                },
                 "re": {
                     "type": "uniform",
                     "lower": 1.0,
@@ -158,10 +154,6 @@ DEFAULT_CONFIG = {
                 },
             },
             "double_sersic": {
-                "flux_bulge": {
-                    "min_factor": 0.0,
-                    "max_factor": 1.0,
-                },
                 "re_bulge": {
                     "type": "uniform",
                     "lower": 1.0,
@@ -171,10 +163,6 @@ DEFAULT_CONFIG = {
                     "type": "uniform",
                     "lower": 1.5,
                     "upper": 6.0,
-                },
-                "flux_disk": {
-                    "min_factor": 0.0,
-                    "max_factor": 2.0,
                 },
                 "re_disk": {
                     "type": "uniform",
@@ -215,10 +203,6 @@ DEFAULT_CONFIG = {
                 },
             },
             "sersic_point_source": {
-                "flux_sersic": {
-                    "min_factor": 0.0,
-                    "max_factor": 2.0,
-                },
                 "re": {
                     "type": "uniform",
                     "lower": 1.0,
@@ -239,10 +223,6 @@ DEFAULT_CONFIG = {
                     "lower": "-pi/2",
                     "upper": "pi/2",
                 },
-                "flux_point_source": {
-                    "min_factor": 0.0,
-                    "max_factor": 2.0,
-                },
                 "x0": {
                     "type": "uniform",
                     "lower": -8.0,
@@ -262,10 +242,6 @@ DEFAULT_CONFIG = {
                 },
             },
             "bulge_disk": {
-                "flux_bulge": {
-                    "min_factor": 0.0,
-                    "max_factor": 1.0,
-                },
                 "re_bulge": {
                     "type": "uniform",
                     "lower": 1.0,
@@ -285,10 +261,6 @@ DEFAULT_CONFIG = {
                     "type": "uniform",
                     "lower": "-pi/2",
                     "upper": "pi/2",
-                },
-                "flux_disk": {
-                    "min_factor": 0.0,
-                    "max_factor": 2.0,
                 },
                 "re_disk": {
                     "type": "uniform",
@@ -497,6 +469,83 @@ def validate_config(config: dict[str, Any]) -> None:
             "'preparation.detection.npixels'. "
             "Use 'preparation.detection.n_pixels' instead."
         )
+
+
+
+def validate_fit_priors(
+    config: dict[str, Any],
+) -> None:
+    """Validate that every sampled morphology parameter has a typed prior."""
+    from baymorph.models import get_model
+    from baymorph.pipeline.prior_config import (
+        parse_prior_config,
+        prior_config_for_parameter,
+    )
+
+    fit_config = config.get(
+        "fit",
+        {},
+    )
+
+    configured_priors = fit_config.get(
+        "priors",
+        {},
+    )
+
+    references = {
+        "target_x": 0.0,
+        "target_y": 0.0,
+    }
+
+    for model_name in fit_config.get(
+        "models",
+        [],
+    ):
+        if model_name not in configured_priors:
+            raise ValueError(
+                f"Missing prior configuration for model: {model_name}"
+            )
+
+        model_priors = configured_priors[
+            model_name
+        ]
+
+        model_definition = get_model(
+            model_name
+        )
+
+        missing = []
+
+        for parameter_name in model_definition.parameter_names:
+            if parameter_name == "sky":
+                continue
+
+            try:
+                prior = prior_config_for_parameter(
+                    parameter_name,
+                    model_priors,
+                )
+            except ValueError:
+                missing.append(
+                    parameter_name
+                )
+                continue
+
+            parse_prior_config(
+                prior,
+                references=references,
+            )
+
+        if missing:
+            names = ", ".join(
+                missing
+            )
+
+            raise ValueError(
+                f"Missing prior configuration for model "
+                f"{model_name!r}: {names}."
+            )
+
 
 
 def resolve_config(config: dict[str, Any]) -> dict[str, Any]:

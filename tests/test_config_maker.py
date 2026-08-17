@@ -13,8 +13,61 @@ from baymorph.pipeline.config import (
     resolve_config,
 )
 from baymorph.pipeline.config_maker import (
-    make_config_from_fits,
+    make_config_from_fits as _make_config_from_fits,
 )
+
+
+
+_TEST_FLUX_PARAMETERS = {
+    "single_sersic": (
+        "flux",
+    ),
+    "double_sersic": (
+        "flux_bulge",
+        "flux_disk",
+    ),
+    "sersic_point_source": (
+        "flux_sersic",
+        "flux_point_source",
+    ),
+    "bulge_disk": (
+        "flux_bulge",
+        "flux_disk",
+    ),
+}
+
+
+def make_config_from_fits(
+    *args,
+    **kwargs,
+):
+    """Call the production maker with explicit scientific test flux priors."""
+    if "model_priors" not in kwargs:
+        model_name = kwargs.get(
+            "model_name",
+            "single_sersic",
+        )
+
+        flux_parameters = _TEST_FLUX_PARAMETERS.get(
+            model_name
+        )
+
+        if flux_parameters is not None:
+            kwargs[
+                "model_priors"
+            ] = {
+                parameter_name: {
+                    "type": "uniform",
+                    "lower": 1.0,
+                    "upper": 1000.0,
+                }
+                for parameter_name in flux_parameters
+            }
+
+    return _make_config_from_fits(
+        *args,
+        **kwargs,
+    )
 
 
 def _write_test_fits(

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 import numpy as np
 import pytest
 
@@ -18,6 +20,34 @@ from baymorph.pipeline.real_fit import (
     _build_parameter_set,
     _make_model_factory,
 )
+
+
+
+def _single_sersic_priors() -> dict:
+    """Return Single-Sérsic defaults plus an explicit test flux prior."""
+    priors = deepcopy(
+        DEFAULT_CONFIG["fit"]["priors"]
+    )
+
+    priors[
+        "single_sersic"
+    ][
+        "flux"
+    ] = {
+        "type": "uniform",
+        "lower": 1.0,
+        "upper": 1000.0,
+    }
+
+    return priors
+
+
+def _prior_references() -> dict[str, float]:
+    """Return explicit target-seed references for background tests."""
+    return {
+        "target_x": 10.0,
+        "target_y": 10.0,
+    }
 
 
 class DeltaPSF:
@@ -105,27 +135,11 @@ def test_unknown_background_model_is_rejected():
 
 def test_constant_background_parameter_contract_replaces_legacy_sky():
     """Single-band inference must separate background from morphology."""
-    shape = (
-        21,
-        21,
-    )
-
-    parameter_names, parameters, _, _ = _build_parameter_set(
+    parameter_names, parameters = _build_parameter_set(
         "single_sersic",
-        data_fit=np.ones(
-            shape,
-            dtype=float,
-        ),
-        noise_fit=np.ones(
-            shape,
-            dtype=float,
-        ),
-        mask_fit=np.zeros(
-            shape,
-            dtype=bool,
-        ),
-        target_x=10.0,
-        target_y=10.0,
+        prior_cfg=_single_sersic_priors(),
+        background_cfg=DEFAULT_CONFIG["fit"]["background"],
+        references=_prior_references(),
     )
 
     assert "sky" not in parameter_names
@@ -138,11 +152,6 @@ def test_constant_background_parameter_contract_replaces_legacy_sky():
 
 def test_plane_background_parameter_contract_adds_two_gradients():
     """Plane inference must sample level and detector-frame gradients."""
-    shape = (
-        21,
-        21,
-    )
-
     background_cfg = {
         "model": "plane",
         "priors": DEFAULT_CONFIG[
@@ -154,23 +163,11 @@ def test_plane_background_parameter_contract_adds_two_gradients():
         ],
     }
 
-    parameter_names, parameters, _, _ = _build_parameter_set(
+    parameter_names, parameters = _build_parameter_set(
         "single_sersic",
-        data_fit=np.ones(
-            shape,
-            dtype=float,
-        ),
-        noise_fit=np.ones(
-            shape,
-            dtype=float,
-        ),
-        mask_fit=np.zeros(
-            shape,
-            dtype=bool,
-        ),
-        target_x=10.0,
-        target_y=10.0,
+        prior_cfg=_single_sersic_priors(),
         background_cfg=background_cfg,
+        references=_prior_references(),
     )
 
     assert "sky" not in parameter_names

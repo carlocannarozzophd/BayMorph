@@ -252,6 +252,56 @@ def _require_exact_keys(
         )
 
 
+
+
+_PARAMETER_PRIOR_ALIASES = {
+    "q_bulge": "q",
+    "q_disk": "q",
+    "theta_bulge": "theta",
+    "theta_disk": "theta",
+}
+
+
+def prior_config_for_parameter(
+    name: str,
+    priors: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    """Return the configured prior for one model parameter."""
+    if name in priors:
+        config = priors[name]
+
+        if not isinstance(config, Mapping):
+            raise TypeError(
+                f"Prior configuration for parameter {name!r} "
+                "must be a mapping."
+            )
+
+        return config
+
+    alias = _PARAMETER_PRIOR_ALIASES.get(
+        name
+    )
+
+    if (
+        alias is not None
+        and alias in priors
+    ):
+        config = priors[alias]
+
+        if not isinstance(config, Mapping):
+            raise TypeError(
+                f"Prior configuration for parameter {alias!r} "
+                "must be a mapping."
+            )
+
+        return config
+
+    raise ValueError(
+        f"Missing prior configuration for parameter: {name}"
+    )
+
+
 __all__ = [
     "parse_prior_config",
+    "prior_config_for_parameter",
 ]

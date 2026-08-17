@@ -165,6 +165,48 @@ def _target_position_from_args(
     )
 
 
+def _model_priors_from_args(
+    args: argparse.Namespace,
+) -> dict[str, dict[str, float | str]] | None:
+    """Build explicit uniform model priors supplied on the command line."""
+    entries = args.uniform_prior
+
+    if not entries:
+        return None
+
+    priors: dict[
+        str,
+        dict[str, float | str],
+    ] = {}
+
+    for parameter_name, lower, upper in entries:
+        name = str(
+            parameter_name
+        ).strip()
+
+        if not name:
+            raise ValueError(
+                "Prior parameter names must be non-empty."
+            )
+
+        if name in priors:
+            raise ValueError(
+                f"Duplicate prior supplied for parameter {name!r}."
+            )
+
+        priors[name] = {
+            "type": "uniform",
+            "lower": float(
+                lower
+            ),
+            "upper": float(
+                upper
+            ),
+        }
+
+    return priors
+
+
 def _command_config(
     args: argparse.Namespace,
 ) -> int:
@@ -192,6 +234,9 @@ def _command_config(
         output_path=output_path,
         object_name=args.object_name,
         model_name=args.model,
+        model_priors=_model_priors_from_args(
+            args
+        ),
         sampler=args.sampler,
         outputs_root=args.outputs_root,
         overwrite=not args.no_overwrite,
@@ -333,6 +378,24 @@ def _build_parser() -> argparse.ArgumentParser:
             "Default: pocomc."
         ),
     )
+
+    config_parser.add_argument(
+        "--uniform-prior",
+        action="append",
+        nargs=3,
+        metavar=(
+            "PARAMETER",
+            "LOWER",
+            "UPPER",
+        ),
+        default=[],
+        help=(
+            "Explicit uniform scientific prior. "
+            "Repeat for multiple parameters, for example "
+            "'--uniform-prior flux 100 1000000'."
+        ),
+    )
+
 
     config_parser.add_argument(
         "--target-center",

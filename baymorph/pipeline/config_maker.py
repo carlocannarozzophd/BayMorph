@@ -13,7 +13,11 @@ from typing import Any
 import yaml
 
 from baymorph.core.observation import Observation
-from baymorph.pipeline.config import resolve_config
+from baymorph.pipeline.prior_config import parse_prior_config
+from baymorph.pipeline.config import (
+    resolve_config,
+    validate_fit_priors,
+)
 from baymorph.pipeline.multi_observation_config import (
     build_multi_observation_parameter_layout,
     resolve_multi_observation_observation_configs,
@@ -351,6 +355,52 @@ def _normalize_sampler_config(
     return config
 
 
+def _normalize_model_priors(
+    priors: Mapping[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    """Normalize explicit scientific model-prior overrides."""
+    if priors is None:
+        return {}
+
+    if not isinstance(priors, Mapping):
+        raise TypeError(
+            "model_priors must be a mapping."
+        )
+
+    normalized: dict[str, dict[str, Any]] = {}
+
+    for parameter_name, prior_config in priors.items():
+        name = str(parameter_name).strip()
+
+        if not name:
+            raise ValueError(
+                "Model-prior parameter names must be non-empty."
+            )
+
+        if not isinstance(prior_config, Mapping):
+            raise TypeError(
+                f"Prior configuration for {name!r} must be a mapping."
+            )
+
+        prior_mapping = dict(prior_config)
+        relative_to = prior_mapping.get("relative_to")
+        references = None
+
+        if relative_to == "target_x":
+            references = {"target_x": 0.0}
+        elif relative_to == "target_y":
+            references = {"target_y": 0.0}
+
+        parse_prior_config(
+            prior_mapping,
+            references=references,
+        )
+
+        normalized[name] = prior_mapping
+
+    return normalized
+
+
 def make_config_from_fits(
     fits_path: str | Path,
     *,
@@ -358,6 +408,7 @@ def make_config_from_fits(
     output_path: str | Path | None = None,
     object_name: str | None = None,
     model_name: str = "single_sersic",
+    model_priors: Mapping[str, Any] | None = None,
     sampler: str | Mapping[str, Any] | None = "pocomc",
     outputs_root: str | Path = "runs",
     overwrite: bool = True,
@@ -365,6 +416,7 @@ def make_config_from_fits(
     fixed_size: int | None = None,
     psf_type: str = "empirical",
     gaussian_fwhm_pixels: float | None = None,
+    _require_complete_priors: bool = True,
 ) -> dict[str, Any]:
     """Create a runnable BayMorph configuration from one FITS image.
 
@@ -482,11 +534,20 @@ def make_config_from_fits(
         sampler
     )
 
+    normalized_model_priors = _normalize_model_priors(
+        model_priors
+    )
+
     fit_config: dict[str, Any] = {
         "models": [
             model_name,
         ],
     }
+
+    if normalized_model_priors:
+        fit_config["priors"] = {
+            model_name: normalized_model_priors,
+        }
 
     if sampler_config is not None:
         fit_config["sampler"] = sampler_config
@@ -517,9 +578,14 @@ def make_config_from_fits(
         "fit": fit_config,
     }
 
-    resolve_config(
+    resolved = resolve_config(
         config
     )
+
+    if _require_complete_priors:
+        validate_fit_priors(
+            resolved
+        )
 
     if output_path is not None:
         _write_yaml(
@@ -959,6 +1025,7 @@ def make_multi_observation_config(
             ),
                 model_name=model_name,
                 sampler=normalized_sampler,
+                _require_complete_priors=False,
             outputs_root=outputs_root,
             overwrite=bool(
                 options.get(

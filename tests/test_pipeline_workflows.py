@@ -49,6 +49,27 @@ def test_run_real_fit_accepts_dict_config_and_requires_preparation(
     tmp_path,
 ):
     config = minimal_config(tmp_path)
+    config.setdefault(
+        "fit",
+        {},
+    ).setdefault(
+        "priors",
+        {},
+    )[
+        "double_sersic"
+    ] = {
+        "flux_bulge": {
+            "type": "uniform",
+            "lower": 1.0,
+            "upper": 1000.0,
+        },
+        "flux_disk": {
+            "type": "uniform",
+            "lower": 1.0,
+            "upper": 1000.0,
+        },
+    }
+
 
     with pytest.raises(
         FileNotFoundError,

@@ -28,6 +28,7 @@ from baymorph.pipeline.config import (
     DEFAULT_CONFIG,
     load_resolved_config,
     resolve_config,
+    validate_fit_priors,
 )
 from baymorph.pipeline.image_preparation import load_image_preparation_products
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
@@ -36,7 +37,10 @@ from baymorph.pipeline.outputs import (
     pipeline_paths,
     save_resolved_config,
 )
-from baymorph.pipeline.prior_config import parse_prior_config
+from baymorph.pipeline.prior_config import (
+    parse_prior_config,
+    prior_config_for_parameter,
+)
 from baymorph.pipeline.psf_construction import load_empirical_psf
 from baymorph.results.inference import json_compatible_metadata
 from baymorph.results import InferenceResult, RealFitProducts
@@ -51,6 +55,10 @@ def run_real_fit_from_config(
         resolved = load_resolved_config(config)
     else:
         resolved = resolve_config(config)
+
+    validate_fit_priors(
+        resolved
+    )
 
     make_output_tree(resolved)
     save_resolved_config(resolved)
@@ -80,6 +88,14 @@ def run_real_fit_from_config(
     except FileNotFoundError:
         observation = None
 
+    prior_references = _target_reference_coordinates(
+        target_position=resolved["data"].get(
+            "target_position"
+        ),
+        cutout_bounds=image_products.cutout_bounds,
+        observation=observation,
+    )
+
     likelihood_cfg = resolved["fit"].get(
         "likelihood",
         None,
@@ -98,6 +114,7 @@ def run_real_fit_from_config(
                 "background",
                 DEFAULT_CONFIG["fit"]["background"],
             ),
+            references=prior_references,
             likelihood_cfg=likelihood_cfg,
             sampler_cfg=sampler_cfg,
         )
@@ -144,20 +161,17 @@ def _execute_single_model_fit(
     psf,
     prior_cfg,
     background_cfg,
+    references,
     likelihood_cfg,
     sampler_cfg,
 ):
     """Execute one complete Bayesian fit for one morphology model."""
 
-    parameter_names, parameters, _, _ = _build_parameter_set(
+    parameter_names, parameters = _build_parameter_set(
         model_name,
-        data_fit=image_products.prepared_data,
-        noise_fit=image_products.noise,
-        mask_fit=image_products.fitting_mask,
-        target_x=image_products.target_x,
-        target_y=image_products.target_y,
         prior_cfg=prior_cfg,
         background_cfg=background_cfg,
+        references=references,
     )
 
     model_factory = _make_model_factory(
@@ -441,132 +455,101 @@ def _load_psf_from_config(
     )
 
 
-def _parse_prior_value(value):
-    """Parse numeric prior values, including symbolic pi/2 strings."""
-    if isinstance(value, str):
-        if value == "pi/2":
-            return float(np.pi / 2)
-
-        if value == "-pi/2":
-            return float(-np.pi / 2)
-
-    return float(value)
-
-
-def _bounds_from_prior(
-    name: str,
-    cfg: dict,
+def _target_reference_coordinates(
     *,
-    flux_total: float,
-    target_x: float,
-    target_y: float,
-):
-    """Resolve parameter bounds from a prior configuration entry."""
-    if "min_factor" in cfg or "max_factor" in cfg:
-        return (
-            float(cfg["min_factor"]) * flux_total,
-            float(cfg["max_factor"]) * flux_total,
+    target_position,
+    cutout_bounds,
+    observation,
+) -> dict[str, float]:
+    """Transform an explicit target seed into cutout coordinates.
+
+    The transformation depends only on the caller-declared detector position
+    and the deterministic cutout geometry. Image-derived morphology estimates
+    are intentionally excluded from prior construction.
+    """
+    if target_position == "center":
+        if observation is None:
+            raise ValueError(
+                "Target position 'center' cannot be resolved without the "
+                "original observation metadata."
+            )
+
+        full_x = float(
+            observation.metadata.center_x
+        )
+        full_y = float(
+            observation.metadata.center_y
         )
 
-    if "offset" in cfg:
-        offset = float(cfg["offset"])
-
-        if name == "x0":
-            return (
-                float(target_x - offset),
-                float(target_x + offset),
+    elif isinstance(
+        target_position,
+        dict,
+    ):
+        try:
+            full_x = float(
+                target_position["x"]
             )
-
-        if name == "y0":
-            return (
-                float(target_y - offset),
-                float(target_y + offset),
+            full_y = float(
+                target_position["y"]
             )
+        except KeyError as exc:
+            raise ValueError(
+                "Target-position mapping must define 'x' and 'y'."
+            ) from exc
 
+    else:
         raise ValueError(
-            f"Offset prior is only supported for x0/y0, got {name}."
+            "Fitting requires an explicit target position or 'center'."
         )
 
-    return (
-        _parse_prior_value(cfg["min"]),
-        _parse_prior_value(cfg["max"]),
-    )
+    if cutout_bounds is None:
+        raise ValueError(
+            "Prepared observation is missing cutout_bounds. "
+            "Explicit cutout geometry is required to transform the target "
+            "seed into fitting coordinates."
+        )
 
+    try:
+        xmin = float(
+            cutout_bounds["xmin"]
+        )
+        ymin = float(
+            cutout_bounds["ymin"]
+        )
+    except (KeyError, TypeError) as exc:
+        raise ValueError(
+            "cutout_bounds must define 'xmin' and 'ymin'."
+        ) from exc
 
-def _prior_entry_for_parameter(
-    name: str,
-    prior_cfg: dict,
-) -> dict:
-    """Return prior configuration for a parameter, including legacy aliases."""
-    if name in prior_cfg:
-        return prior_cfg[name]
-
-    aliases = {
-        "q_bulge": "q",
-        "q_disk": "q",
-        "theta_bulge": "theta",
-        "theta_disk": "theta",
+    return {
+        "target_x": full_x - xmin,
+        "target_y": full_y - ymin,
     }
-
-    alias = aliases.get(name)
-
-    if alias is not None and alias in prior_cfg:
-        return prior_cfg[alias]
-
-    raise ValueError(
-        f"Missing prior configuration for parameter: {name}"
-    )
 
 
 def _build_parameter_list(
     parameter_names: list[str],
     prior_cfg: dict,
     *,
-    flux_total: float,
-    target_x: float,
-    target_y: float,
+    references: dict[str, float],
 ) -> ParameterSet:
-    """Build a ParameterSet from ordered model parameter names.
-
-    Typed prior configurations are resolved directly into BayMorph ``Prior``
-    objects. Legacy single-observation prior syntax remains temporarily
-    supported until the repository-wide prior migration is complete.
-    """
+    """Build parameters exclusively from typed scientific priors."""
     parameters = []
 
-    references = {
-        "target_x": float(target_x),
-        "target_y": float(target_y),
-    }
-
     for name in parameter_names:
-        cfg = _prior_entry_for_parameter(
+        cfg = prior_config_for_parameter(
             name,
             prior_cfg,
         )
 
-        if "type" in cfg:
-            parameter = Parameter(
+        parameters.append(
+            Parameter(
                 name,
                 prior=parse_prior_config(
                     cfg,
                     references=references,
                 ),
             )
-        else:
-            parameter = Parameter(
-                name,
-                *_bounds_from_prior(
-                    name,
-                    cfg,
-                    flux_total=flux_total,
-                    target_x=target_x,
-                    target_y=target_y,
-                ),
-            )
-
-        parameters.append(
-            parameter
         )
 
     return ParameterSet(
@@ -602,41 +585,20 @@ def _background_parameter_names(
 
 def _build_parameter_set(
     model_name: str,
-    data_fit: np.ndarray,
-    noise_fit: np.ndarray,
-    mask_fit: np.ndarray,
-    target_x: float,
-    target_y: float,
-    prior_cfg=None,
-    background_cfg=None,
-):
-    """Build morphology and residual-background fit parameters."""
-    if prior_cfg is None:
-        prior_cfg = DEFAULT_CONFIG["fit"]["priors"]
-
-    if background_cfg is None:
-        background_cfg = DEFAULT_CONFIG["fit"]["background"]
-
-    valid_for_flux = (
-        (~mask_fit)
-        & np.isfinite(data_fit)
-        & np.isfinite(noise_fit)
-        & (noise_fit > 0)
-    )
-
-    flux_total = np.nansum(
-        np.clip(
-            data_fit[valid_for_flux],
-            0.0,
-            None,
+    *,
+    prior_cfg: dict,
+    background_cfg: dict,
+    references: dict[str, float],
+) -> tuple[list[str], ParameterSet]:
+    """Build morphology and background parameters from typed priors only."""
+    if model_name not in prior_cfg:
+        raise ValueError(
+            f"Missing prior configuration for model: {model_name}"
         )
-    )
 
-    background_guess = np.nanmedian(
-        data_fit[valid_for_flux],
-    )
-
-    model_prior_cfg = prior_cfg[model_name]
+    model_prior_cfg = prior_cfg[
+        model_name
+    ]
 
     model_definition = get_model(
         model_name
@@ -651,9 +613,7 @@ def _build_parameter_set(
     morphology_parameters = _build_parameter_list(
         morphology_parameter_names,
         model_prior_cfg,
-        flux_total=flux_total,
-        target_x=target_x,
-        target_y=target_y,
+        references=references,
     )
 
     background_parameter_names = _background_parameter_names(
@@ -663,9 +623,7 @@ def _build_parameter_set(
     background_parameters = _build_parameter_list(
         background_parameter_names,
         background_cfg["priors"],
-        flux_total=flux_total,
-        target_x=target_x,
-        target_y=target_y,
+        references=references,
     )
 
     parameter_names = (
@@ -681,10 +639,7 @@ def _build_parameter_set(
     return (
         parameter_names,
         parameters,
-        flux_total,
-        background_guess,
     )
-
 
 
 def _resolve_model_factory(

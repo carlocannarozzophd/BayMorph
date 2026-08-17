@@ -618,8 +618,8 @@ def make_multi_parameters(
         Explicit uniform-prior bounds keyed by parameter name. Shared
         parameters accept one ``(lower, upper)`` pair. Independent parameters
         accept either one common pair or an observation-indexed mapping.
-        Bounds are required whenever BayMorph's standard single-observation
-        prior is data-scaled rather than absolute.
+        Bounds are required whenever BayMorph has no standard
+        data-independent prior for the parameter.
     shared : sequence of str
         Parameters explicitly coupled across observations. Every remaining
         parameter is independent.
@@ -636,9 +636,9 @@ def make_multi_parameters(
     This function is model-agnostic. Parameter names and geometric roles are
     obtained from the registered model definition.
 
-    Data-dependent prior scales are never inferred here. Parameters whose
-    standard single-observation priors use ``min_factor`` or ``max_factor``
-    require explicit ``prior_bounds``.
+    Data-dependent prior scales are never inferred here. Parameters
+    without a standard data-independent prior require explicit
+    ``prior_bounds``.
 
     Detector-space radius defaults are converted to arcseconds independently
     for each observation in sky-frame inference. A shared sky-frame radius

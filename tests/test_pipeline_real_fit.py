@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 
 from types import SimpleNamespace
 
@@ -16,7 +17,10 @@ from baymorph.results import (
     PosteriorSamples,
 )
 from baymorph.likelihood import GaussianImageLikelihood
-from baymorph.pipeline.config import resolve_config
+from baymorph.pipeline.config import (
+    DEFAULT_CONFIG,
+    resolve_config,
+)
 
 from baymorph.pipeline.real_fit import (
     RealFitProducts,
@@ -33,6 +37,57 @@ from baymorph.pipeline.real_fit import (
 
 
 
+
+def _prior_config_with_explicit_fluxes(
+    model_name: str,
+) -> dict:
+    """Return package defaults plus explicit test flux priors."""
+    priors = deepcopy(
+        DEFAULT_CONFIG["fit"]["priors"]
+    )
+
+    flux_parameters = {
+        "single_sersic": (
+            "flux",
+        ),
+        "double_sersic": (
+            "flux_bulge",
+            "flux_disk",
+        ),
+        "sersic_point_source": (
+            "flux_sersic",
+            "flux_point_source",
+        ),
+        "bulge_disk": (
+            "flux_bulge",
+            "flux_disk",
+        ),
+    }
+
+    for parameter_name in flux_parameters[
+        model_name
+    ]:
+        priors[
+            model_name
+        ][
+            parameter_name
+        ] = {
+            "type": "uniform",
+            "lower": 1.0,
+            "upper": 1000.0,
+        }
+
+    return priors
+
+
+def _test_prior_references() -> dict[str, float]:
+    """Return explicit detector-seed references for builder tests."""
+    return {
+        "target_x": 5.0,
+        "target_y": 5.0,
+    }
+
+
 def test_run_real_fit_requires_image_preparation_products(
     monkeypatch,
 ):
@@ -43,6 +98,10 @@ def test_run_real_fit_requires_image_preparation_products(
     monkeypatch.setattr(
         "baymorph.pipeline.real_fit.resolve_config",
         lambda config: resolved,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.validate_fit_priors",
+        lambda config: None,
     )
     monkeypatch.setattr(
         "baymorph.pipeline.real_fit.make_output_tree",
@@ -79,6 +138,10 @@ def test_run_real_fit_requires_psf_products(
     monkeypatch.setattr(
         "baymorph.pipeline.real_fit.resolve_config",
         lambda config: resolved,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.validate_fit_priors",
+        lambda config: None,
     )
     monkeypatch.setattr(
         "baymorph.pipeline.real_fit.make_output_tree",
@@ -323,15 +386,13 @@ def test_compute_fit_statistics_uses_unmasked_valid_pixels():
 
 
 def test_build_parameter_set_single_sersic():
-    parameter_names, parameters, _, _ = (
-        _build_parameter_set(
-            "single_sersic",
-            data_fit=np.ones((10, 10)),
-            noise_fit=np.ones((10, 10)),
-            mask_fit=np.zeros((10, 10), dtype=bool),
-            target_x=5,
-            target_y=5,
-        )
+    parameter_names, parameters = _build_parameter_set(
+        "single_sersic",
+        prior_cfg=_prior_config_with_explicit_fluxes(
+            "single_sersic"
+        ),
+        background_cfg=DEFAULT_CONFIG["fit"]["background"],
+        references=_test_prior_references(),
     )
 
     assert len(parameter_names) == 8
@@ -340,15 +401,13 @@ def test_build_parameter_set_single_sersic():
 
 
 def test_build_parameter_set_double_sersic():
-    parameter_names, parameters, _, _ = (
-        _build_parameter_set(
-            "double_sersic",
-            data_fit=np.ones((10, 10)),
-            noise_fit=np.ones((10, 10)),
-            mask_fit=np.zeros((10, 10), dtype=bool),
-            target_x=5,
-            target_y=5,
-        )
+    parameter_names, parameters = _build_parameter_set(
+        "double_sersic",
+        prior_cfg=_prior_config_with_explicit_fluxes(
+            "double_sersic"
+        ),
+        background_cfg=DEFAULT_CONFIG["fit"]["background"],
+        references=_test_prior_references(),
     )
 
     assert len(parameter_names) == 13
@@ -591,12 +650,25 @@ def _run_two_model_fit_for_comparison_test(
         },
     }
 
-    image_products = SimpleNamespace()
+    image_products = SimpleNamespace(
+        cutout_bounds=None,
+    )
     saved_comparisons = []
 
     monkeypatch.setattr(
         "baymorph.pipeline.real_fit.resolve_config",
         lambda config: resolved,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.validate_fit_priors",
+        lambda config: None,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit._target_reference_coordinates",
+        lambda **kwargs: {
+            "target_x": 0.0,
+            "target_y": 0.0,
+        },
     )
     monkeypatch.setattr(
         "baymorph.pipeline.real_fit.make_output_tree",
@@ -700,15 +772,13 @@ def test_model_comparison_rejects_unknown_metric(
 
 def test_build_parameter_set_sersic_point_source():
     """Build the Sérsic plus point-source parameter set."""
-    parameter_names, parameters, _, _ = (
-        _build_parameter_set(
-            "sersic_point_source",
-            data_fit=np.ones((10, 10)),
-            noise_fit=np.ones((10, 10)),
-            mask_fit=np.zeros((10, 10), dtype=bool),
-            target_x=5,
-            target_y=5,
-        )
+    parameter_names, parameters = _build_parameter_set(
+        "sersic_point_source",
+        prior_cfg=_prior_config_with_explicit_fluxes(
+            "sersic_point_source"
+        ),
+        background_cfg=DEFAULT_CONFIG["fit"]["background"],
+        references=_test_prior_references(),
     )
 
     assert parameter_names == [
@@ -753,15 +823,13 @@ def test_make_model_factory_sersic_point_source():
 
 def test_build_parameter_set_bulge_disk():
     """Build the Sérsic-bulge plus exponential-disc parameter set."""
-    parameter_names, parameters, _, _ = (
-        _build_parameter_set(
-            "bulge_disk",
-            data_fit=np.ones((10, 10)),
-            noise_fit=np.ones((10, 10)),
-            mask_fit=np.zeros((10, 10), dtype=bool),
-            target_x=5,
-            target_y=5,
-        )
+    parameter_names, parameters = _build_parameter_set(
+        "bulge_disk",
+        prior_cfg=_prior_config_with_explicit_fluxes(
+            "bulge_disk"
+        ),
+        background_cfg=DEFAULT_CONFIG["fit"]["background"],
+        references=_test_prior_references(),
     )
 
     assert parameter_names == [

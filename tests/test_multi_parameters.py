@@ -234,7 +234,7 @@ def test_double_sersic_uses_same_generic_builder(
     )
 
 
-def test_data_scaled_default_requires_explicit_bounds(
+def test_missing_standard_prior_requires_explicit_bounds(
     tmp_path,
 ):
     fits_path = tmp_path / "image.fits"
@@ -246,7 +246,7 @@ def test_data_scaled_default_requires_explicit_bounds(
 
     with pytest.raises(
         ValueError,
-        match="data-scaled",
+        match=r"No standard prior.*flux.*explicit prior_bounds",
     ):
         make_multi_parameters(
             model="single_sersic",

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-import numpy as np
+import inspect
+
+import pytest
 
 from baymorph.fitting.priors import UniformPrior
 from baymorph.pipeline.real_fit import _build_parameter_set
@@ -34,8 +36,8 @@ def _typed_single_sersic_priors() -> dict:
             },
             "theta": {
                 "type": "uniform",
-                "lower": -1.5707963267948966,
-                "upper": 1.5707963267948966,
+                "lower": "-pi/2",
+                "upper": "pi/2",
             },
             "x0": {
                 "type": "uniform",
@@ -67,80 +69,42 @@ def _typed_background() -> dict:
     }
 
 
-def test_typed_single_band_priors_are_independent_of_image_values() -> None:
-    """Image intensities must not alter explicitly configured typed priors."""
-    shape = (
-        21,
-        21,
-    )
-
-    common = {
-        "model_name": "single_sersic",
-        "noise_fit": np.ones(
-            shape,
-            dtype=float,
-        ),
-        "mask_fit": np.zeros(
-            shape,
-            dtype=bool,
-        ),
-        "target_x": 10.0,
-        "target_y": 11.0,
-        "prior_cfg": _typed_single_sersic_priors(),
-        "background_cfg": _typed_background(),
+def _references() -> dict[str, float]:
+    """Return deterministic target-seed references in cutout coordinates."""
+    return {
+        "target_x": 100.0,
+        "target_y": 200.0,
     }
 
-    _, parameters_low, _, _ = _build_parameter_set(
-        data_fit=np.zeros(
-            shape,
-            dtype=float,
-        ),
-        **common,
+
+def test_parameter_builder_has_no_image_inputs() -> None:
+    """Scientific prior construction must be structurally independent of pixels."""
+    signature = inspect.signature(
+        _build_parameter_set
     )
 
-    _, parameters_high, _, _ = _build_parameter_set(
-        data_fit=np.full(
-            shape,
-            1.0e9,
-            dtype=float,
-        ),
-        **common,
-    )
+    forbidden = {
+        "data_fit",
+        "noise_fit",
+        "mask_fit",
+        "flux_total",
+        "background_guess",
+        "target_x",
+        "target_y",
+    }
 
-    assert [
-        parameter.prior
-        for parameter in parameters_low.all_parameters
-    ] == [
-        parameter.prior
-        for parameter in parameters_high.all_parameters
-    ]
+    assert forbidden.isdisjoint(
+        signature.parameters
+    )
 
 
 def test_relative_centroid_priors_resolve_from_explicit_reference() -> None:
-    """Relative centroid priors must resolve around the supplied reference."""
-    shape = (
-        21,
-        21,
-    )
-
-    _, parameters, _, _ = _build_parameter_set(
+    """Relative centroid priors must resolve around the supplied seed."""
+    _, parameters = _build_parameter_set(
         "single_sersic",
-        data_fit=np.ones(
-            shape,
-            dtype=float,
-        ),
-        noise_fit=np.ones(
-            shape,
-            dtype=float,
-        ),
-        mask_fit=np.zeros(
-            shape,
-            dtype=bool,
-        ),
-        target_x=100.0,
-        target_y=200.0,
         prior_cfg=_typed_single_sersic_priors(),
         background_cfg=_typed_background(),
+        references=_references(),
     )
 
     by_name = {
@@ -160,31 +124,12 @@ def test_relative_centroid_priors_resolve_from_explicit_reference() -> None:
 
 
 def test_typed_flux_prior_is_absolute() -> None:
-    """Typed total-flux priors must not depend on an image-derived scale."""
-    shape = (
-        21,
-        21,
-    )
-
-    _, parameters, _, _ = _build_parameter_set(
+    """Total-flux support must be exactly the explicitly configured support."""
+    _, parameters = _build_parameter_set(
         "single_sersic",
-        data_fit=np.full(
-            shape,
-            1.0e12,
-            dtype=float,
-        ),
-        noise_fit=np.ones(
-            shape,
-            dtype=float,
-        ),
-        mask_fit=np.zeros(
-            shape,
-            dtype=bool,
-        ),
-        target_x=10.0,
-        target_y=10.0,
         prior_cfg=_typed_single_sersic_priors(),
         background_cfg=_typed_background(),
+        references=_references(),
     )
 
     flux = next(
@@ -197,3 +142,24 @@ def test_typed_flux_prior_is_absolute() -> None:
         lower=100.0,
         upper=1000.0,
     )
+
+
+def test_missing_flux_prior_fails_explicitly() -> None:
+    """A missing non-universal flux prior must not be silently synthesized."""
+    priors = _typed_single_sersic_priors()
+    del priors[
+        "single_sersic"
+    ][
+        "flux"
+    ]
+
+    with pytest.raises(
+        ValueError,
+        match="Missing prior configuration for parameter: flux",
+    ):
+        _build_parameter_set(
+            "single_sersic",
+            prior_cfg=priors,
+            background_cfg=_typed_background(),
+            references=_references(),
+        )
