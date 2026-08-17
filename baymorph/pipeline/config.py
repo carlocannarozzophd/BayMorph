@@ -25,6 +25,11 @@ SAMPLER_DEFAULTS = {
         "init": {},
         "run": {},
     },
+    "nautilus": {
+        "name": "nautilus",
+        "init": {},
+        "run": {},
+    },
 }
 
 
