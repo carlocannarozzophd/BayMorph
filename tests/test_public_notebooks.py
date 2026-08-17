@@ -100,3 +100,15 @@ def test_observed_notebook_uses_config_maker() -> None:
     assert "pool=" not in source
     assert "min_factor" not in source
     assert "max_factor" not in source
+
+def test_public_notebooks_use_repository_root_relative_paths() -> None:
+    """Canonical notebooks must not depend on notebook-directory working paths."""
+    for name in EXPECTED_NOTEBOOKS:
+        source = _notebook_source(
+            NOTEBOOK_DIRECTORY
+            / name
+        )
+
+        assert "../configs/" not in source
+        assert "../data/" not in source
+        assert "../runs" not in source
