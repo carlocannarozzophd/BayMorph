@@ -113,9 +113,12 @@ def test_sersic_point_source_recovers_extended_and_unresolved_fluxes() -> None:
                     12345
                 ),
             },
+            "execution": {
+                "processes": 1,
+                "progress": False,
+            },
             "run": {
                 "dlogz": 0.5,
-                "print_progress": False,
             },
         },
         problem=problem,

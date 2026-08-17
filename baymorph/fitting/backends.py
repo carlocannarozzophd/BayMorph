@@ -11,6 +11,7 @@ from baymorph.fitting.backend import (
     backend_registry,
 )
 from baymorph.fitting.dynesty import DynestyFitter
+from baymorph.fitting.execution import resolve_sampler_execution
 from baymorph.fitting.nautilus import NautilusFitter
 from baymorph.fitting.pocomc import PocoMCFitter
 from baymorph.fitting.problem import InferenceProblem
@@ -63,6 +64,7 @@ class DynestyBackend(InferenceBackend):
         allowed_envelope = {
             "name",
             "mode",
+            "execution",
             "init",
             "run",
         }
@@ -99,6 +101,10 @@ class DynestyBackend(InferenceBackend):
         resolved = {
             "name": "dynesty",
             "mode": mode,
+            "execution": _mapping_section(
+                raw,
+                "execution",
+            ),
             "init": _mapping_section(
                 raw,
                 "init",
@@ -144,6 +150,11 @@ class DynestyBackend(InferenceBackend):
             run_kwargs=self.config[
                 "run"
             ],
+            execution=resolve_sampler_execution(
+                self.config[
+                    "execution"
+                ]
+            ),
             progress_label=progress_label,
         )
 
@@ -169,6 +180,7 @@ class PocoMCBackend(InferenceBackend):
 
         allowed_envelope = {
             "name",
+            "execution",
             "init",
             "run",
         }
@@ -189,6 +201,10 @@ class PocoMCBackend(InferenceBackend):
 
         resolved = {
             "name": "pocomc",
+            "execution": _mapping_section(
+                raw,
+                "execution",
+            ),
             "init": _mapping_section(
                 raw,
                 "init",
@@ -226,6 +242,11 @@ class PocoMCBackend(InferenceBackend):
             run_kwargs=self.config[
                 "run"
             ],
+            execution=resolve_sampler_execution(
+                self.config[
+                    "execution"
+                ]
+            ),
             progress_label=progress_label,
         )
 
@@ -251,6 +272,7 @@ class NautilusBackend(InferenceBackend):
 
         allowed_envelope = {
             "name",
+            "execution",
             "init",
             "run",
         }
@@ -271,6 +293,10 @@ class NautilusBackend(InferenceBackend):
 
         resolved = {
             "name": "nautilus",
+            "execution": _mapping_section(
+                raw,
+                "execution",
+            ),
             "init": _mapping_section(
                 raw,
                 "init",
@@ -308,6 +334,11 @@ class NautilusBackend(InferenceBackend):
             run_kwargs=self.config[
                 "run"
             ],
+            execution=resolve_sampler_execution(
+                self.config[
+                    "execution"
+                ]
+            ),
             progress_label=progress_label,
         )
 

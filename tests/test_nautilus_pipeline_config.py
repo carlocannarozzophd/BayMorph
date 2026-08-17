@@ -30,6 +30,10 @@ def test_nautilus_is_registered_as_pipeline_sampler() -> None:
     """The production configuration layer must expose Nautilus."""
     assert SAMPLER_DEFAULTS["nautilus"] == {
         "name": "nautilus",
+        "execution": {
+            "processes": "auto",
+            "progress": True,
+        },
         "init": {},
         "run": {},
     }
@@ -51,6 +55,10 @@ def test_resolve_config_accepts_nautilus_name() -> None:
 
     assert resolved["fit"]["sampler"] == {
         "name": "nautilus",
+        "execution": {
+            "processes": "auto",
+            "progress": True,
+        },
         "init": {},
         "run": {},
     }
@@ -79,6 +87,10 @@ def test_resolve_config_preserves_native_nautilus_options() -> None:
 
     assert resolved["fit"]["sampler"] == {
         "name": "nautilus",
+        "execution": {
+            "processes": "auto",
+            "progress": True,
+        },
         "init": {
             "n_live": 500,
             "seed": 42,

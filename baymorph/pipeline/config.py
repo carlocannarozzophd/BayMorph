@@ -10,23 +10,36 @@ from typing import Any
 import yaml
 
 from baymorph.core.observation import Observation
+from baymorph.fitting.execution import resolve_sampler_execution
 
 REQUIRED_TOP_LEVEL_KEYS = ("object", "data", "outputs")
 
 SAMPLER_DEFAULTS = {
     "pocomc": {
         "name": "pocomc",
+        "execution": {
+            "processes": "auto",
+            "progress": True,
+        },
         "init": {},
         "run": {},
     },
     "dynesty": {
         "name": "dynesty",
         "mode": "static",
+        "execution": {
+            "processes": "auto",
+            "progress": True,
+        },
         "init": {},
         "run": {},
     },
     "nautilus": {
         "name": "nautilus",
+        "execution": {
+            "processes": "auto",
+            "progress": True,
+        },
         "init": {},
         "run": {},
     },
@@ -901,6 +914,23 @@ def validate_sampler_config(
         raise TypeError(
             "fit.sampler.run must be a mapping."
         )
+
+    execution_config = sampler_config.get(
+        "execution",
+        {},
+    )
+
+    if not isinstance(
+        execution_config,
+        dict,
+    ):
+        raise TypeError(
+            "fit.sampler.execution must be a mapping."
+        )
+
+    resolve_sampler_execution(
+        execution_config
+    )
 
     if name == "dynesty":
         mode = str(

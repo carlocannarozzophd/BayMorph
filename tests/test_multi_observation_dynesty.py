@@ -111,9 +111,12 @@ def test_dynesty_runs_multi_observation_problem():
                     123
                 ),
             },
+            "execution": {
+                "processes": 1,
+                "progress": False,
+            },
             "run": {
                 "dlogz": 5.0,
-                "print_progress": False,
             },
         },
         problem=problem,

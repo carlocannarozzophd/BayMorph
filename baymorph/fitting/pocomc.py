@@ -10,6 +10,10 @@ from scipy.stats import (
     uniform,
 )
 
+from baymorph.fitting.execution import (
+    SamplerExecution,
+    sampler_pool,
+)
 from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.fitting.parameters import ParameterSet
 from baymorph.fitting.priors import (
@@ -111,6 +115,7 @@ class PocoMCFitter:
         *,
         init_kwargs=None,
         run_kwargs=None,
+        execution: SamplerExecution | None = None,
         progress_label: str | None = None,
     ) -> InferenceResult:
         """Run pocoMC using native constructor and run keyword arguments.
@@ -168,6 +173,19 @@ class PocoMCFitter:
                 f"cannot be configured explicitly: {names}."
             )
 
+        if execution is not None:
+            if "pool" in init_config:
+                raise ValueError(
+                    "pocoMC constructor option 'pool' is owned by "
+                    "fit.sampler.execution.processes."
+                )
+
+            if "progress" in run_config:
+                raise ValueError(
+                    "pocoMC run option 'progress' is owned by "
+                    "fit.sampler.execution.progress."
+                )
+
         try:
             import pocomc as pc
         except ImportError as exc:
@@ -200,16 +218,42 @@ class PocoMCFitter:
                 "────────────────────────────────────────────────────"
             )
 
-        sampler = pc.Sampler(
-            prior=prior,
-            likelihood=self.loglikelihood,
-            n_dim=self.ndim,
-            **init_config,
+        runtime_init_config = dict(
+            init_config
+        )
+        runtime_run_config = dict(
+            run_config
         )
 
-        sampler.run(
-            **run_config
+        processes = (
+            1
+            if execution is None
+            else execution.processes
         )
+
+        if execution is not None:
+            runtime_run_config[
+                "progress"
+            ] = execution.progress
+
+        with sampler_pool(
+            processes
+        ) as pool:
+            if pool is not None:
+                runtime_init_config[
+                    "pool"
+                ] = pool
+
+            sampler = pc.Sampler(
+                prior=prior,
+                likelihood=self.loglikelihood,
+                n_dim=self.ndim,
+                **runtime_init_config,
+            )
+
+            sampler.run(
+                **runtime_run_config
+            )
 
         samples, weights, logl, logp = (
             sampler.posterior()
@@ -256,6 +300,14 @@ class PocoMCFitter:
             logz
         )
 
+        logz_error_value = (
+            None
+            if logzerr is None
+            else float(
+                logzerr
+            )
+        )
+
         native_results = dict(
             sampler.results
         )
@@ -300,7 +352,12 @@ class PocoMCFitter:
                 f"logZ={logz_value:.6g}"
             )
             print(
-                f"logZerr={float(logzerr):.6g}"
+                "logZerr="
+                + (
+                    "unavailable"
+                    if logz_error_value is None
+                    else f"{logz_error_value:.6g}"
+                )
             )
 
             if diagnostics["calls"] is not None:
@@ -327,13 +384,20 @@ class PocoMCFitter:
             "run": run_config,
         }
 
+        if execution is not None:
+            sampler_configuration[
+                "execution"
+            ] = execution.as_dict()
+
         evidence = EvidenceEstimate(
             logz=logz_value,
-            uncertainty=float(
-                logzerr
-            ),
+            uncertainty=logz_error_value,
             method="pocomc",
-            uncertainty_kind="importance_sampling_internal",
+            uncertainty_kind=(
+                "importance_sampling_internal"
+                if logz_error_value is not None
+                else None
+            ),
             provenance={
                 "backend": "pocomc",
                 "sampler": sampler_configuration,

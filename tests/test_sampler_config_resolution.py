@@ -29,6 +29,10 @@ def test_default_sampler_is_pocomc():
 
     assert resolved["fit"]["sampler"] == {
         "name": "pocomc",
+        "execution": {
+            "processes": "auto",
+            "progress": True,
+        },
         "init": {},
         "run": {},
     }
@@ -58,9 +62,15 @@ def test_pocomc_native_kwargs_are_preserved_verbatim():
         config
     )
 
-    assert resolved["fit"]["sampler"] == config[
-        "fit"
-    ]["sampler"]
+    expected = dict(
+        config["fit"]["sampler"]
+    )
+    expected["execution"] = {
+        "processes": "auto",
+        "progress": True,
+    }
+
+    assert resolved["fit"]["sampler"] == expected
 
 
 def test_dynesty_static_native_kwargs_are_preserved_verbatim():
@@ -87,9 +97,15 @@ def test_dynesty_static_native_kwargs_are_preserved_verbatim():
         config
     )
 
-    assert resolved["fit"]["sampler"] == config[
-        "fit"
-    ]["sampler"]
+    expected = dict(
+        config["fit"]["sampler"]
+    )
+    expected["execution"] = {
+        "processes": "auto",
+        "progress": True,
+    }
+
+    assert resolved["fit"]["sampler"] == expected
 
 
 def test_dynesty_dynamic_native_kwargs_are_preserved_verbatim():
@@ -115,9 +131,15 @@ def test_dynesty_dynamic_native_kwargs_are_preserved_verbatim():
         config
     )
 
-    assert resolved["fit"]["sampler"] == config[
-        "fit"
-    ]["sampler"]
+    expected = dict(
+        config["fit"]["sampler"]
+    )
+    expected["execution"] = {
+        "processes": "auto",
+        "progress": True,
+    }
+
+    assert resolved["fit"]["sampler"] == expected
 
 
 def test_dynesty_defaults_to_static_mode():
@@ -136,6 +158,10 @@ def test_dynesty_defaults_to_static_mode():
     assert resolved["fit"]["sampler"] == {
         "name": "dynesty",
         "mode": "static",
+        "execution": {
+            "processes": "auto",
+            "progress": True,
+        },
         "init": {},
         "run": {},
     }
@@ -199,3 +225,27 @@ def test_sampler_native_sections_must_be_mappings(
         match=rf"sampler\.{section}.*mapping",
     ):
         resolve_config(config)
+
+
+def test_sampler_execution_override_is_preserved():
+    """Explicit execution settings override the automatic defaults."""
+    config = _base_config()
+
+    config["fit"] = {
+        "sampler": {
+            "name": "nautilus",
+            "execution": {
+                "processes": 3,
+                "progress": False,
+            },
+        }
+    }
+
+    resolved = resolve_config(
+        config
+    )
+
+    assert resolved["fit"]["sampler"]["execution"] == {
+        "processes": 3,
+        "progress": False,
+    }

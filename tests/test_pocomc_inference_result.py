@@ -324,3 +324,85 @@ def test_pocomc_result_has_no_nested_sampling_public_state(
         result,
         "logzerr",
     )
+
+
+def test_pocomc_accepts_missing_evidence_uncertainty(
+    monkeypatch,
+):
+    """pocoMC may return a finite evidence estimate without an uncertainty."""
+
+    class FakePrior:
+        def __init__(
+            self,
+            distributions,
+        ):
+            self.distributions = distributions
+
+    class FakeSampler:
+        def __init__(
+            self,
+            **kwargs,
+        ):
+            self.kwargs = kwargs
+            self.results = {}
+
+        def run(
+            self,
+            **kwargs,
+        ):
+            self.run_kwargs = kwargs
+
+        def posterior(self):
+            return (
+                np.asarray(
+                    [
+                        [-0.2],
+                        [0.2],
+                    ]
+                ),
+                np.asarray(
+                    [
+                        0.5,
+                        0.5,
+                    ]
+                ),
+                np.asarray(
+                    [
+                        -0.5,
+                        -0.5,
+                    ]
+                ),
+                np.asarray(
+                    [
+                        -0.7,
+                        -0.7,
+                    ]
+                ),
+            )
+
+        def evidence(self):
+            return (
+                -2.0,
+                None,
+            )
+
+    monkeypatch.setitem(
+        sys.modules,
+        "pocomc",
+        SimpleNamespace(
+            Prior=FakePrior,
+            Sampler=FakeSampler,
+        ),
+    )
+
+    result = PocoMCFitter(
+        problem=_make_problem(),
+    ).run()
+
+    assert result.logz == pytest.approx(
+        -2.0
+    )
+    assert result.logz_error is None
+    assert result.evidence is not None
+    assert result.evidence.uncertainty is None
+    assert result.evidence.uncertainty_kind is None

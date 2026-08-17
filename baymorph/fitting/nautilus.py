@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 
+from baymorph.fitting.execution import (
+    SamplerExecution,
+    sampler_pool,
+)
 from baymorph.fitting.problem import InferenceProblem
 from baymorph.results import (
     EvidenceEstimate,
@@ -74,6 +78,7 @@ class NautilusFitter:
         *,
         init_kwargs=None,
         run_kwargs=None,
+        execution: SamplerExecution | None = None,
         progress_label: str | None = None,
     ) -> InferenceResult:
         """Run Nautilus using native constructor and run keyword arguments."""
@@ -114,6 +119,19 @@ class NautilusFitter:
                 f"cannot be configured explicitly: {names}."
             )
 
+        if execution is not None:
+            if "pool" in init_config:
+                raise ValueError(
+                    "Nautilus constructor option 'pool' is owned by "
+                    "fit.sampler.execution.processes."
+                )
+
+            if "verbose" in run_config:
+                raise ValueError(
+                    "Nautilus run option 'verbose' is owned by "
+                    "fit.sampler.execution.progress."
+                )
+
         run_config.setdefault(
             "discard_exploration",
             True,
@@ -143,20 +161,46 @@ class NautilusFitter:
                 "────────────────────────────────────────────────────"
             )
 
-        sampler = Sampler(
-            self.prior_transform,
-            self.loglikelihood,
-            n_dim=self.ndim,
-            pass_dict=False,
-            vectorized=False,
-            **init_config,
+        runtime_init_config = dict(
+            init_config
+        )
+        runtime_run_config = dict(
+            run_config
         )
 
-        success = bool(
-            sampler.run(
-                **run_config
-            )
+        processes = (
+            1
+            if execution is None
+            else execution.processes
         )
+
+        if execution is not None:
+            runtime_run_config[
+                "verbose"
+            ] = execution.progress
+
+        with sampler_pool(
+            processes
+        ) as pool:
+            if pool is not None:
+                runtime_init_config[
+                    "pool"
+                ] = pool
+
+            sampler = Sampler(
+                self.prior_transform,
+                self.loglikelihood,
+                n_dim=self.ndim,
+                pass_dict=False,
+                vectorized=False,
+                **runtime_init_config,
+            )
+
+            success = bool(
+                sampler.run(
+                    **runtime_run_config
+                )
+            )
 
         samples, log_weights, log_likelihood = sampler.posterior(
             return_as_dict=False,
@@ -243,6 +287,11 @@ class NautilusFitter:
             "init": init_config,
             "run": run_config,
         }
+
+        if execution is not None:
+            sampler_configuration[
+                "execution"
+            ] = execution.as_dict()
 
         evidence_statistical_uncertainty = (
             1.0

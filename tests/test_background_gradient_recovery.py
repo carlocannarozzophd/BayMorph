@@ -88,9 +88,12 @@ def _fit_problem(
                     seed
                 ),
             },
+            "execution": {
+                "processes": 1,
+                "progress": False,
+            },
             "run": {
                 "dlogz": 0.5,
-                "print_progress": False,
             },
         },
         problem=problem,

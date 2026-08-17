@@ -109,9 +109,12 @@ def test_bulge_disk_recovers_principal_component_parameters() -> None:
                     12345
                 ),
             },
+            "execution": {
+                "processes": 1,
+                "progress": False,
+            },
             "run": {
                 "dlogz": 0.5,
-                "print_progress": False,
             },
         },
         problem=problem,

@@ -142,9 +142,12 @@ def test_multi_observation_posterior_recovers_shared_radius_and_local_fluxes():
                     12345
                 ),
             },
+            "execution": {
+                "processes": 1,
+                "progress": False,
+            },
             "run": {
                 "dlogz": 0.5,
-                "print_progress": False,
             },
         },
         problem=problem,

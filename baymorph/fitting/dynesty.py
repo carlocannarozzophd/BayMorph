@@ -13,6 +13,10 @@ except ImportError:
     DisplayHandle = None
     HTML = None
 
+from baymorph.fitting.execution import (
+    SamplerExecution,
+    sampler_pool,
+)
 from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.fitting.parameters import ParameterSet
 from baymorph.fitting.problem import InferenceProblem
@@ -407,6 +411,7 @@ class DynestyFitter:
         mode: str = "static",
         init_kwargs=None,
         run_kwargs=None,
+        execution: SamplerExecution | None = None,
         progress_label: str | None = None,
     ) -> InferenceResult:
         """Run Dynesty using native constructor and run keyword arguments.
@@ -480,6 +485,30 @@ class DynestyFitter:
                 f"cannot be configured explicitly: {names}."
             )
 
+        if execution is not None:
+            execution_init_collisions = sorted(
+                {
+                    "pool",
+                    "queue_size",
+                }
+                & set(init_config)
+            )
+
+            if execution_init_collisions:
+                names = ", ".join(
+                    execution_init_collisions
+                )
+                raise ValueError(
+                    "Dynesty execution argument(s) owned by BayMorph "
+                    f"cannot be configured explicitly: {names}."
+                )
+
+            if "print_progress" in run_config:
+                raise ValueError(
+                    "Dynesty run option 'print_progress' is owned by "
+                    "fit.sampler.execution.progress."
+                )
+
         if progress_label is not None:
             print()
             print(
@@ -501,18 +530,47 @@ class DynestyFitter:
             else dynesty.DynamicNestedSampler
         )
 
-        sampler = sampler_class(
-            self.loglikelihood,
-            self.prior_transform,
-            self.ndim,
-            **init_config,
+        runtime_init_config = dict(
+            init_config
+        )
+        runtime_run_config = dict(
+            run_config
         )
 
-        sampler.run_nested(
-            **run_config
+        processes = (
+            1
+            if execution is None
+            else execution.processes
         )
 
-        results = sampler.results
+        if execution is not None:
+            runtime_run_config[
+                "print_progress"
+            ] = execution.progress
+
+        with sampler_pool(
+            processes
+        ) as pool:
+            if pool is not None:
+                runtime_init_config[
+                    "pool"
+                ] = pool
+                runtime_init_config[
+                    "queue_size"
+                ] = processes
+
+            sampler = sampler_class(
+                self.loglikelihood,
+                self.prior_transform,
+                self.ndim,
+                **runtime_init_config,
+            )
+
+            sampler.run_nested(
+                **runtime_run_config
+            )
+
+            results = sampler.results
 
         if progress_label is not None:
             total_calls = (
@@ -591,6 +649,11 @@ class DynestyFitter:
             "init": init_config,
             "run": run_config,
         }
+
+        if execution is not None:
+            sampler_configuration[
+                "execution"
+            ] = execution.as_dict()
 
         evidence = EvidenceEstimate(
             logz=final_logz,

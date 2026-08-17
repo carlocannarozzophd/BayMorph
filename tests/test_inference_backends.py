@@ -58,7 +58,7 @@ def test_dynesty_backend_preserves_static_native_config():
         config={
             "name": "dynesty",
             "mode": "static",
-            "init": {
+        "init": {
                 "nlive": 300,
                 "sample": "rslice",
                 "future_init_option": 17,
@@ -76,6 +76,7 @@ def test_dynesty_backend_preserves_static_native_config():
     assert backend.config == {
         "name": "dynesty",
         "mode": "static",
+        "execution": {},
         "init": {
             "nlive": 300,
             "sample": "rslice",
@@ -122,6 +123,7 @@ def test_dynesty_backend_defaults_to_static():
     assert backend.config == {
         "name": "dynesty",
         "mode": "static",
+        "execution": {},
         "init": {},
         "run": {},
     }
@@ -158,7 +160,7 @@ def test_pocomc_backend_preserves_native_config():
         problem=ScalarProblem(),
         config={
             "name": "pocomc",
-            "init": {
+        "init": {
                 "n_effective": 512,
                 "sample": "tpcn",
                 "random_state": 42,
@@ -176,6 +178,7 @@ def test_pocomc_backend_preserves_native_config():
 
     assert backend.config == {
         "name": "pocomc",
+        "execution": {},
         "init": {
             "n_effective": 512,
             "sample": "tpcn",
@@ -221,7 +224,7 @@ def test_nautilus_backend_preserves_native_config():
         problem=ScalarProblem(),
         config={
             "name": "nautilus",
-            "init": {
+        "init": {
                 "n_live": 500,
                 "seed": 42,
             },
@@ -235,6 +238,7 @@ def test_nautilus_backend_preserves_native_config():
 
     assert backend.config == {
         "name": "nautilus",
+        "execution": {},
         "init": {
             "n_live": 500,
             "seed": 42,
