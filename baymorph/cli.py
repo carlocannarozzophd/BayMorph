@@ -365,10 +365,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     config_parser.add_argument(
         "--sampler",
-        default="pocomc",
+        default="nautilus",
         help=(
             "Inference sampler name. "
-            "Default: pocomc."
+            "Default: nautilus."
         ),
     )
 

@@ -102,7 +102,7 @@ def test_problem_path_returns_pocomc_backend():
     )
 
 
-def test_problem_path_defaults_to_pocomc():
+def test_problem_path_defaults_to_nautilus():
     backend = make_sampler(
         None,
         problem=ScalarProblem(),
@@ -110,8 +110,9 @@ def test_problem_path_defaults_to_pocomc():
 
     assert isinstance(
         backend,
-        PocoMCBackend,
+        InferenceBackend,
     )
+    assert backend.name == "nautilus"
 
 
 def test_problem_path_uses_registry_for_unknown_backend():

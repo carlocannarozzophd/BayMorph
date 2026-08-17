@@ -46,7 +46,7 @@ fit:
     - single_sersic
 
   sampler:
-    name: pocomc
+    name: nautilus
 
   priors:
     single_sersic:

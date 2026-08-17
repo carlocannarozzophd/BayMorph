@@ -527,7 +527,7 @@ def test_config_maker_exposes_model_and_sampler(
     )
 
 
-def test_config_maker_defaults_to_single_sersic_and_pocomc(
+def test_config_maker_defaults_to_single_sersic_and_nautilus(
     tmp_path,
 ):
     """The simple Config Maker workflow must expose stable defaults."""
@@ -547,7 +547,7 @@ def test_config_maker_defaults_to_single_sersic_and_pocomc(
     ]
 
     assert config["fit"]["sampler"] == {
-        "name": "pocomc",
+        "name": "nautilus",
     }
 
 

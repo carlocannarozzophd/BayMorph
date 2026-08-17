@@ -22,13 +22,13 @@ def _base_config():
     }
 
 
-def test_default_sampler_is_pocomc():
+def test_default_sampler_is_nautilus():
     resolved = resolve_config(
         _base_config()
     )
 
     assert resolved["fit"]["sampler"] == {
-        "name": "pocomc",
+        "name": "nautilus",
         "execution": {
             "processes": "auto",
             "progress": True,

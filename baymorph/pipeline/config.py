@@ -100,7 +100,7 @@ DEFAULT_CONFIG = {
             "include_normalization": True,
         },
         "sampler": {
-            "name": "pocomc",
+            "name": "nautilus",
         },
         "comparison": {
             "enabled": False,

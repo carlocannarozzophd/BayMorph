@@ -35,8 +35,9 @@ def make_sampler(
     ----------
     config : mapping, str, or None
         Sampler configuration. A string is interpreted as the backend name.
-        If ``None``, Dynesty is selected temporarily for backward
-        compatibility.
+        If ``None``, Nautilus is selected for the canonical
+        ``InferenceProblem`` path, while the legacy single-image path
+        retains pocoMC temporarily for backward compatibility.
     problem : InferenceProblem, optional
         Backend-neutral inference problem. When supplied, construction is
         delegated entirely to the backend registry.
@@ -63,6 +64,12 @@ def make_sampler(
     sampler_config = _normalize_config(
         config
     )
+
+    if (
+        config is None
+        and problem is not None
+    ):
+        sampler_config["name"] = "nautilus"
 
     sampler_name = str(
         sampler_config.get(

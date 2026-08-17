@@ -126,7 +126,7 @@ def test_official_learn_config_loads():
     ]
     assert (
         config["fit"]["sampler"]["name"]
-        == "pocomc"
+        == "nautilus"
     )
 
 
@@ -192,7 +192,7 @@ def test_resolve_config_applies_nested_defaults():
     assert resolved["preparation"]["detection"]["n_levels"] == 32
     assert resolved["psf"]["type"] == "empirical"
     assert resolved["fit"]["models"] == ["double_sersic"]
-    assert resolved["fit"]["sampler"]["name"] == "pocomc"
+    assert resolved["fit"]["sampler"]["name"] == "nautilus"
     assert resolved["diagnostics"]["radial_profile"] is True
 
     candidate_cfg = resolved["psf"]["empirical"]["candidate_selection"]
@@ -226,7 +226,7 @@ def test_resolve_config_preserves_user_nested_overrides():
     assert resolved["preparation"]["detection"]["n_sigma"] == 5.0
     assert resolved["preparation"]["detection"]["n_levels"] == 32
     assert resolved["fit"]["models"] == ["single_sersic", "double_sersic"]
-    assert resolved["fit"]["sampler"]["name"] == "pocomc"
+    assert resolved["fit"]["sampler"]["name"] == "nautilus"
     assert resolved["fit"]["sampler"]["nlive"] == 1000
 
 
@@ -581,7 +581,7 @@ def test_build_runtime_report_returns_independent_data(tmp_path):
 
     assert report["config"]["object"]["name"] == "NGC1234"
     assert report["runtime"]["image_preparation"]["background"] == 1.5
-    assert report["config"]["fit"]["sampler"]["name"] == "pocomc"
+    assert report["config"]["fit"]["sampler"]["name"] == "nautilus"
 
 
 def test_runtime_report_roundtrip(tmp_path):
