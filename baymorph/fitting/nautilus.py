@@ -244,13 +244,24 @@ class NautilusFitter:
             "run": run_config,
         }
 
+        evidence_statistical_uncertainty = (
+            1.0
+            / np.sqrt(
+                float(
+                    sampler.n_eff
+                )
+            )
+        )
+
         evidence = EvidenceEstimate(
             logz=float(
                 logz
             ),
-            uncertainty=None,
+            uncertainty=float(
+                evidence_statistical_uncertainty
+            ),
             method="nautilus",
-            uncertainty_kind=None,
+            uncertainty_kind="statistical_ess_approximation",
             diagnostics={
                 "discard_exploration": bool(
                     sampler.discard_exploration

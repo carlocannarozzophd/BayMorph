@@ -169,10 +169,15 @@ def test_nautilus_returns_canonical_result(
     assert result.logz == pytest.approx(
         -3.25
     )
-    assert result.logz_error is None
+    assert result.logz_error == pytest.approx(
+        1.0 / np.sqrt(180.0)
+    )
 
     assert result.evidence is not None
     assert result.evidence.method == "nautilus"
+    assert result.evidence.uncertainty_kind == (
+        "statistical_ess_approximation"
+    )
 
     assert result.diagnostics[
         "calls"
