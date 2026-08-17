@@ -14,16 +14,10 @@ from baymorph.fitting.observation_covariates import (
     wavelength_covariate,
 )
 from baymorph.fitting.parameters import Parameter
-from baymorph.fitting.priors import (
-    BetaPrior,
-    FixedPrior,
-    NormalPrior,
-    Prior,
-    UniformPrior,
-)
 from baymorph.models import get_model
 from baymorph.models.geometry import sky_parameter_names
 from baymorph.pipeline.config import load_resolved_config
+from baymorph.pipeline.prior_config import parse_prior_config
 
 SINGLE_SERSIC_PARAMETER_NAMES = (
     "flux",
@@ -35,125 +29,6 @@ SINGLE_SERSIC_PARAMETER_NAMES = (
     "y0",
     "sky",
 )
-
-
-def parse_prior_config(
-    config: Mapping[str, Any],
-) -> Prior:
-    """Build one typed prior from a YAML-compatible mapping."""
-    if not isinstance(
-        config,
-        Mapping,
-    ):
-        raise TypeError(
-            "Prior configuration must be a mapping."
-        )
-
-    prior_type = str(
-        config.get(
-            "type",
-            "",
-        )
-    ).strip().lower()
-
-    if prior_type == "fixed":
-        _require_exact_keys(
-            config,
-            {
-                "type",
-                "value",
-            },
-            context="Fixed prior",
-        )
-
-        return FixedPrior(
-            value=config[
-                "value"
-            ],
-        )
-
-    if prior_type == "uniform":
-        _require_exact_keys(
-            config,
-            {
-                "type",
-                "lower",
-                "upper",
-            },
-            context="Uniform prior",
-        )
-
-        return UniformPrior(
-            lower=config[
-                "lower"
-            ],
-            upper=config[
-                "upper"
-            ],
-        )
-
-    if prior_type == "beta":
-        has_lower = "lower" in config
-        has_upper = "upper" in config
-
-        if has_lower or has_upper:
-            expected = {
-                "type",
-                "alpha",
-                "beta",
-                "lower",
-                "upper",
-            }
-        else:
-            expected = {
-                "type",
-                "alpha",
-                "beta",
-            }
-
-        _require_exact_keys(
-            config,
-            expected,
-            context="Beta prior",
-        )
-
-        return BetaPrior(
-            alpha=config["alpha"],
-            beta=config["beta"],
-            lower=config.get(
-                "lower",
-                0.0,
-            ),
-            upper=config.get(
-                "upper",
-                1.0,
-            ),
-        )
-
-    if prior_type == "normal":
-        _require_exact_keys(
-            config,
-            {
-                "type",
-                "mean",
-                "sigma",
-            },
-            context="Normal prior",
-        )
-
-        return NormalPrior(
-            mean=config[
-                "mean"
-            ],
-            sigma=config[
-                "sigma"
-            ],
-        )
-
-    raise ValueError(
-        "Prior type must be one of "
-        "'fixed', 'uniform', 'beta', or 'normal'."
-    )
 
 
 def resolve_multi_observation_observation_configs(
