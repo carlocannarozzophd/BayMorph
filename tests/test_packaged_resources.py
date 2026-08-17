@@ -1,106 +1,78 @@
-"""Tests ensuring packaged resources match public repository examples."""
+"""Tests for canonical BayMorph packaged resources."""
 
 from __future__ import annotations
 
-import json
-from importlib.resources import files
 from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-RESOURCE_PAIRS = (
-    (
-        PROJECT_ROOT / "configs",
-        PROJECT_ROOT / "baymorph" / "resources" / "configs",
-        "*.yaml",
-    ),
-    (
-        PROJECT_ROOT / "notebooks",
-        PROJECT_ROOT / "baymorph" / "resources" / "notebooks",
-        "*.ipynb",
-    ),
+REPOSITORY_CONFIG_DIRECTORY = (
+    PROJECT_ROOT
+    / "configs"
+)
+
+PACKAGED_CONFIG_DIRECTORY = (
+    PROJECT_ROOT
+    / "baymorph"
+    / "resources"
+    / "configs"
+)
+
+PACKAGED_NOTEBOOK_DIRECTORY = (
+    PROJECT_ROOT
+    / "baymorph"
+    / "resources"
+    / "notebooks"
 )
 
 
-def _relative_files(
+def _relative_yaml_files(
     directory: Path,
-    pattern: str,
 ) -> list[Path]:
-    """Return sorted top-level files matching the packaging pattern."""
+    """Return sorted top-level YAML files."""
     return sorted(
         path.relative_to(directory)
-        for path in directory.glob(pattern)
+        for path in directory.glob("*.yaml")
         if path.is_file()
     )
 
 
-def test_packaged_tutorial_uses_supported_imports() -> None:
-    """Ensure the packaged tutorial uses supported public interfaces."""
-    notebook_path = (
-        files("baymorph.resources")
-        / "notebooks"
-        / "01_Simulated_SingleSersic_SingleBand_Fit.ipynb"
+def test_packaged_config_directories_exist() -> None:
+    """Repository and packaged configuration directories must exist."""
+    assert REPOSITORY_CONFIG_DIRECTORY.is_dir()
+    assert PACKAGED_CONFIG_DIRECTORY.is_dir()
+
+
+def test_packaged_config_file_lists_match() -> None:
+    """Packaged configurations must match public repository configurations."""
+    assert _relative_yaml_files(
+        REPOSITORY_CONFIG_DIRECTORY
+    ) == _relative_yaml_files(
+        PACKAGED_CONFIG_DIRECTORY
     )
 
-    with notebook_path.open("r", encoding="utf-8") as stream:
-        notebook = json.load(stream)
 
-    source = "\n".join(
-        line
-        for cell in notebook["cells"]
-        if cell.get("cell_type") == "code"
-        for line in cell.get("source", [])
-    )
+def test_packaged_config_contents_match() -> None:
+    """Packaged configurations must be byte-identical to public configs."""
+    for relative_path in _relative_yaml_files(
+        REPOSITORY_CONFIG_DIRECTORY
+    ):
+        repository_file = (
+            REPOSITORY_CONFIG_DIRECTORY
+            / relative_path
+        )
+        packaged_file = (
+            PACKAGED_CONFIG_DIRECTORY
+            / relative_path
+        )
 
-    assert "from baymorph import BayMorphRunner" in source
-    assert (
-        "from baymorph.pipeline import run_simulation_from_config"
-        in source
-    )
-
-    assert "load_resolved_config" not in source
-    assert "observation.data" not in source
-    assert "observation.model_image" not in source
-    assert "matplotlib" not in source
-    assert "numpy" not in source
-
-
-def test_packaged_resource_directories_exist() -> None:
-    """Repository and packaged resource directories must exist."""
-    for repository_directory, packaged_directory, _ in RESOURCE_PAIRS:
-        assert repository_directory.is_dir()
-        assert packaged_directory.is_dir()
-
-
-def test_packaged_resource_file_lists_match() -> None:
-    """Packaged resources must match declared public resource patterns."""
-    for (
-        repository_directory,
-        packaged_directory,
-        pattern,
-    ) in RESOURCE_PAIRS:
-        assert _relative_files(
-            repository_directory,
-            pattern,
-        ) == _relative_files(
-            packaged_directory,
-            pattern,
+        assert (
+            repository_file.read_bytes()
+            == packaged_file.read_bytes()
         )
 
 
-def test_packaged_resource_contents_match() -> None:
-    """Packaged resources must be byte-identical to public examples."""
-    for (
-        repository_directory,
-        packaged_directory,
-        pattern,
-    ) in RESOURCE_PAIRS:
-        for relative_path in _relative_files(
-            repository_directory,
-            pattern,
-        ):
-            repository_file = repository_directory / relative_path
-            packaged_file = packaged_directory / relative_path
-
-            assert repository_file.read_bytes() == packaged_file.read_bytes()
+def test_notebooks_are_not_duplicated_inside_package() -> None:
+    """Public notebooks must have one canonical repository location."""
+    assert not PACKAGED_NOTEBOOK_DIRECTORY.exists()

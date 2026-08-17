@@ -67,7 +67,7 @@ def _copy_resource_tree(
 
 
 def _command_examples(args: argparse.Namespace) -> int:
-    """Copy BayMorph example notebooks and configurations."""
+    """Copy packaged BayMorph example configurations."""
     destination = Path(args.destination).expanduser().resolve()
 
     _copy_resource_tree(
@@ -75,13 +75,11 @@ def _command_examples(args: argparse.Namespace) -> int:
         destination / "configs",
         force=args.force,
     )
-    _copy_resource_tree(
-        "notebooks",
-        destination / "notebooks",
-        force=args.force,
-    )
 
-    print(f"BayMorph examples copied to:\n{destination}")
+    print(
+        "BayMorph example configurations copied to:"
+        f"\n{destination}"
+    )
     return 0
 
 
@@ -114,11 +112,6 @@ def _command_init(args: argparse.Namespace) -> int:
     _copy_resource_tree(
         "configs",
         project_dir / "configs",
-        force=args.force,
-    )
-    _copy_resource_tree(
-        "notebooks",
-        project_dir / "notebooks",
         force=args.force,
     )
 
@@ -301,7 +294,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     examples_parser = subparsers.add_parser(
         "examples",
-        help="Copy packaged example notebooks and YAML configurations.",
+        help="Copy packaged example YAML configurations.",
     )
     examples_parser.add_argument(
         "destination",

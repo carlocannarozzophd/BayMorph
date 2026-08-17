@@ -14,7 +14,7 @@
 <p align="center">
   <a href="#installation">Installation</a> ·
   <a href="#quick-start">Quick Start</a> ·
-  <a href="notebooks/01_Simulated_SingleSersic_SingleBand_Fit.ipynb">Tutorial</a> ·
+  <a href="notebooks/01_Simulated_SingleBand.ipynb">Tutorial</a> ·
   <a href="docs/API.md">API</a> ·
   <a href="docs/architecture/ARCHITECTURE.md">Architecture</a> ·
   <a href="ROADMAP.md">Roadmap</a>
@@ -228,15 +228,16 @@ baymorph init my_analysis
 cd my_analysis
 ~~~
 
-The initialized workspace contains the public notebooks, the canonical
-simulated-example configuration, and directories for user data and run
-products. It is only a convenience: BayMorph does not require a special
-project format and can also be used directly inside an existing working
-directory.
+The initialized workspace contains the canonical example configuration and
+directories for notebooks, user data, and run products. Public tutorial
+notebooks live only in the BayMorph repository and are not duplicated inside
+the installed package. The workspace is only a convenience: BayMorph does not
+require a special project format and can also be used directly inside an
+existing working directory.
 
 The recommended first workflow is notebook-based:
 
-    notebooks/01_Simulated_SingleSersic_SingleBand_Fit.ipynb
+    notebooks/01_Simulated_SingleBand.ipynb
 
 The same configured analysis can be executed non-interactively:
 
@@ -381,25 +382,25 @@ provenance and fit summaries.
 
 ## Learn BayMorph
 
+BayMorph provides exactly two canonical public notebooks.
+
 The recommended starting point is:
 
-    notebooks/01_Simulated_SingleSersic_SingleBand_Fit.ipynb
+    notebooks/01_Simulated_SingleBand.ipynb
 
-The tutorial demonstrates the complete scientific workflow from configuration
-through posterior inference and diagnostics.
+It demonstrates the complete simulated single-observation workflow from
+configuration through posterior inference and diagnostics.
 
-The observed single-observation workflow is available in:
+The observed single-observation workflow is:
 
-    notebooks/02_Observed_Galaxy_Analysis.ipynb
+    notebooks/02_Observed_SingleBand.ipynb
 
-Joint inference from correlated observations of the same astronomical object
-is demonstrated in:
+Both notebooks use the public configuration and runner interfaces. Sampler
+selection remains explicit, while multiprocessing and backend-specific
+execution machinery remain package-owned.
 
-    notebooks/03_MultiObservation_ConfigMaker_and_Joint_Fit.ipynb
-
-The public Config Maker helpers allow these workflows to select the morphology
-model and inference sampler explicitly while keeping backend-specific machinery
-out of the notebook.
+Multi-observation inference remains part of the scientific API and is
+documented separately from the minimal public notebook workflow.
 
 ## Documentation
 

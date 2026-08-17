@@ -86,7 +86,6 @@ include = ["baymorph*"]
 [tool.setuptools.package-data]
 "baymorph.resources" = [
     "configs/*.yaml",
-    "notebooks/*.ipynb",
 ]
 
 [tool.ruff]
