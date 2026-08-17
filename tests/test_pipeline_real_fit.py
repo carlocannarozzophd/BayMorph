@@ -366,7 +366,7 @@ def test_build_parameter_set_double_sersic():
         "theta_disk",
         "x0",
         "y0",
-        "sky",
+        "background_level",
     ]
 
     assert parameters.names == parameter_names
@@ -386,7 +386,7 @@ def test_make_model_factory_single_sersic():
         theta=0.0,
         x0=15.0,
         y0=15.0,
-        sky=1.0,
+        background_level=1.0,
     )
 
     image = model.render((31, 31))
@@ -414,7 +414,7 @@ def test_make_model_factory_double_sersic():
         theta_disk=0.0,
         x0=15.0,
         y0=15.0,
-        sky=1.0,
+        background_level=1.0,
     )
 
     image = model.render((31, 31))
@@ -720,7 +720,7 @@ def test_build_parameter_set_sersic_point_source():
         "flux_point_source",
         "x0",
         "y0",
-        "sky",
+        "background_level",
     ]
 
     assert parameters.names == parameter_names
@@ -742,7 +742,7 @@ def test_make_model_factory_sersic_point_source():
         flux_point_source=25.0,
         x0=15.0,
         y0=15.0,
-        sky=1.0,
+        background_level=1.0,
     )
 
     image = model.render((31, 31))
@@ -776,7 +776,7 @@ def test_build_parameter_set_bulge_disk():
         "theta_disk",
         "x0",
         "y0",
-        "sky",
+        "background_level",
     ]
 
     assert "n_disk" not in parameter_names
@@ -802,7 +802,7 @@ def test_make_model_factory_bulge_disk():
         theta_disk=0.2,
         x0=15.0,
         y0=15.0,
-        sky=1.0,
+        background_level=1.0,
     )
 
     image = model.render((31, 31))

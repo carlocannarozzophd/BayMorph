@@ -88,6 +88,23 @@ DEFAULT_CONFIG = {
             "enabled": False,
             "metric": "bayes_factor",
         },
+        "background": {
+            "model": "constant",
+            "priors": {
+                "background_level": {
+                    "min": -50.0,
+                    "max": 50.0,
+                },
+                "background_gradient_x": {
+                    "min": -0.1,
+                    "max": 0.1,
+                },
+                "background_gradient_y": {
+                    "min": -0.1,
+                    "max": 0.1,
+                },
+            },
+        },
         "priors": {
             "single_sersic": {
                 "flux": {
@@ -371,6 +388,27 @@ def validate_config(config: dict[str, Any]) -> None:
             "'psf.empirical.construction.normalize'. "
             "BayMorph always normalizes PSF kernels to unit sum."
         )
+
+    background_config = (
+        config
+        .get("fit", {})
+        .get("background", {})
+    )
+
+    if "model" in background_config:
+        background_model = str(
+            background_config["model"]
+        ).strip().lower()
+
+        if background_model not in {
+            "constant",
+            "plane",
+        }:
+            raise ValueError(
+                "Unsupported fit.background.model "
+                f"{background_model!r}. "
+                "Available models: 'constant', 'plane'."
+            )
 
     preparation_config = config.get("preparation", {})
 

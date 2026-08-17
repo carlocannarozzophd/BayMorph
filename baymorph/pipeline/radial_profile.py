@@ -389,7 +389,7 @@ def _component_images(
     *,
     model_name: str,
 ) -> dict[str, np.ndarray]:
-    """Render galaxy components while excluding additive sky terms."""
+    """Render galaxy components while excluding additive background terms."""
     components = model.render_components(
         image_shape
     )
@@ -420,6 +420,61 @@ def _total_component_image(
             axis=0,
         ),
         axis=0,
+    )
+
+
+def _residual_background_image(
+    model,
+    parameters: Mapping[str, Any],
+    image_shape: tuple[int, int],
+) -> np.ndarray:
+    """Render the fitted residual background on one observation grid.
+
+    Observation-level background models expose ``render_background()``.
+    The scalar fallback preserves the current MultiObservation contract
+    until that workflow is migrated away from the legacy ``sky`` parameter.
+    """
+    if hasattr(
+        model,
+        "render_background",
+    ):
+        background = np.asarray(
+            model.render_background(
+                image_shape
+            ),
+            dtype=float,
+        )
+
+        if background.shape != image_shape:
+            raise ValueError(
+                "Rendered background shape does not match the fitted image."
+            )
+
+        if not np.all(
+            np.isfinite(
+                background
+            )
+        ):
+            raise ValueError(
+                "Rendered background contains non-finite values."
+            )
+
+        return background
+
+    level = float(
+        parameters.get(
+            "background_level",
+            parameters.get(
+                "sky",
+                0.0,
+            ),
+        )
+    )
+
+    return np.full(
+        image_shape,
+        level,
+        dtype=float,
     )
 
 
@@ -480,6 +535,11 @@ def _run_single_observation_radial_profiles(
         model_factory = _make_model_factory(
             model_name,
             psf,
+            background_cfg=(
+                config
+                .get("fit", {})
+                .get("background")
+            ),
         )
 
         best_model = model_factory(
@@ -496,23 +556,22 @@ def _run_single_observation_radial_profiles(
             component_images
         )
 
-        best_sky = float(
-            fit.best_parameters.get(
-                "sky",
-                0.0,
-            )
+        residual_background = _residual_background_image(
+            best_model,
+            fit.best_parameters,
+            image_products.prepared_data.shape,
         )
 
-        sky_subtracted_data = (
+        background_subtracted_data = (
             np.asarray(
                 image_products.prepared_data,
                 dtype=float,
             )
-            - best_sky
+            - residual_background
         )
 
         data_statistics = radial_profile_statistics_from_image(
-            sky_subtracted_data,
+            background_subtracted_data,
             center_x=center_x,
             center_y=center_y,
             radii=radii,
@@ -767,23 +826,22 @@ def _run_multi_observation_radial_profiles(
                 component_images
             )
 
-            best_sky = float(
-                observation_fit.parameters.get(
-                    "sky",
-                    0.0,
-                )
+            residual_background = _residual_background_image(
+                best_model,
+                observation_fit.parameters,
+                image_products.prepared_data.shape,
             )
 
-            sky_subtracted_data = (
+            background_subtracted_data = (
                 np.asarray(
                     image_products.prepared_data,
                     dtype=float,
                 )
-                - best_sky
+                - residual_background
             )
 
             data_statistics = radial_profile_statistics_from_image(
-                sky_subtracted_data,
+                background_subtracted_data,
                 center_x=center_x,
                 center_y=center_y,
                 radii=radii,

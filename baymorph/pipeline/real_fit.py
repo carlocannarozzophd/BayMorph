@@ -21,6 +21,10 @@ from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.fitting.parameters import Parameter, ParameterSet
 from baymorph.likelihood import make_likelihood
 from baymorph.models import get_model
+from baymorph.observation.background import (
+    BackgroundAppliedModel,
+    make_background_effect,
+)
 from baymorph.pipeline.config import (
     DEFAULT_CONFIG,
     load_resolved_config,
@@ -90,6 +94,10 @@ def run_real_fit_from_config(
             image_products=image_products,
             psf=psf,
             prior_cfg=resolved["fit"]["priors"],
+            background_cfg=resolved["fit"].get(
+                "background",
+                DEFAULT_CONFIG["fit"]["background"],
+            ),
             likelihood_cfg=likelihood_cfg,
             sampler_cfg=sampler_cfg,
         )
@@ -135,6 +143,7 @@ def _execute_single_model_fit(
     image_products,
     psf,
     prior_cfg,
+    background_cfg,
     likelihood_cfg,
     sampler_cfg,
 ):
@@ -148,11 +157,13 @@ def _execute_single_model_fit(
         target_x=image_products.target_x,
         target_y=image_products.target_y,
         prior_cfg=prior_cfg,
+        background_cfg=background_cfg,
     )
 
     model_factory = _make_model_factory(
         model_name,
         psf,
+        background_cfg=background_cfg,
     )
 
     problem = _build_image_inference_problem(
@@ -540,6 +551,32 @@ def _build_parameter_list(
     return ParameterSet(parameters)
 
 
+def _background_parameter_names(
+    background_cfg: dict,
+) -> list[str]:
+    """Return the sampled parameter contract for one background model."""
+    model = str(
+        background_cfg["model"]
+    ).strip().lower()
+
+    if model == "constant":
+        return [
+            "background_level",
+        ]
+
+    if model == "plane":
+        return [
+            "background_level",
+            "background_gradient_x",
+            "background_gradient_y",
+        ]
+
+    raise ValueError(
+        f"Unsupported background model {model!r}. "
+        "Available models: 'constant', 'plane'."
+    )
+
+
 def _build_parameter_set(
     model_name: str,
     data_fit: np.ndarray,
@@ -548,10 +585,14 @@ def _build_parameter_set(
     target_x: float,
     target_y: float,
     prior_cfg=None,
+    background_cfg=None,
 ):
-    """Build model parameters and data-derived prior-scale estimates."""
+    """Build morphology and residual-background fit parameters."""
     if prior_cfg is None:
         prior_cfg = DEFAULT_CONFIG["fit"]["priors"]
+
+    if background_cfg is None:
+        background_cfg = DEFAULT_CONFIG["fit"]["background"]
 
     valid_for_flux = (
         (~mask_fit)
@@ -568,28 +609,57 @@ def _build_parameter_set(
         )
     )
 
-    sky_guess = np.nanmedian(
+    background_guess = np.nanmedian(
         data_fit[valid_for_flux],
     )
 
     model_prior_cfg = prior_cfg[model_name]
 
-    model_definition = get_model(model_name)
-    parameter_names = list(model_definition.parameter_names)
+    model_definition = get_model(
+        model_name
+    )
 
-    parameters = _build_parameter_list(
-        parameter_names,
+    morphology_parameter_names = [
+        name
+        for name in model_definition.parameter_names
+        if name != "sky"
+    ]
+
+    morphology_parameters = _build_parameter_list(
+        morphology_parameter_names,
         model_prior_cfg,
         flux_total=flux_total,
         target_x=target_x,
         target_y=target_y,
     )
 
+    background_parameter_names = _background_parameter_names(
+        background_cfg
+    )
+
+    background_parameters = _build_parameter_list(
+        background_parameter_names,
+        background_cfg["priors"],
+        flux_total=flux_total,
+        target_x=target_x,
+        target_y=target_y,
+    )
+
+    parameter_names = (
+        morphology_parameter_names
+        + background_parameter_names
+    )
+
+    parameters = ParameterSet(
+        morphology_parameters.all_parameters
+        + background_parameters.all_parameters
+    )
+
     return (
         parameter_names,
         parameters,
         flux_total,
-        sky_guess,
+        background_guess,
     )
 
 
@@ -625,14 +695,68 @@ def _resolve_model_factory(
 def _make_model_factory(
     model_name,
     psf,
+    *,
+    background_cfg=None,
 ):
-    """Build an observation-specific production model factory."""
-    return partial(
+    """Build an observation-specific source-plus-background factory."""
+    if background_cfg is None:
+        background_cfg = DEFAULT_CONFIG["fit"]["background"]
+
+    model_definition = get_model(
+        model_name
+    )
+
+    morphology_parameter_names = [
+        name
+        for name in model_definition.parameter_names
+        if name != "sky"
+    ]
+
+    source_factory = partial(
         _resolve_model_factory(
             model_name
         ),
         psf=psf,
+        sky=0.0,
     )
+
+    background_model = str(
+        background_cfg["model"]
+    ).strip().lower()
+
+    def factory(
+        **parameters,
+    ):
+        source_parameters = {
+            name: parameters[name]
+            for name in morphology_parameter_names
+        }
+
+        source_model = source_factory(
+            **source_parameters,
+        )
+
+        background = make_background_effect(
+            background_model,
+            level=parameters[
+                "background_level"
+            ],
+            gradient_x=parameters.get(
+                "background_gradient_x",
+                0.0,
+            ),
+            gradient_y=parameters.get(
+                "background_gradient_y",
+                0.0,
+            ),
+        )
+
+        return BackgroundAppliedModel(
+            model=source_model,
+            background=background,
+        )
+
+    return factory
 
 
 def _compute_best_model(
