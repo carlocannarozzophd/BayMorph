@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -692,52 +691,55 @@ def _resolve_model_factory(
         ) from exc
 
 
-def _make_model_factory(
-    model_name,
-    psf,
-    *,
-    background_cfg=None,
-):
-    """Build an observation-specific source-plus-background factory."""
-    if background_cfg is None:
-        background_cfg = DEFAULT_CONFIG["fit"]["background"]
+class _ObservedModelFactory:
+    """Pickle-safe observation-specific source-plus-background factory."""
 
-    model_definition = get_model(
-        model_name
-    )
-
-    morphology_parameter_names = [
-        name
-        for name in model_definition.parameter_names
-        if name != "sky"
-    ]
-
-    source_factory = partial(
-        _resolve_model_factory(
+    def __init__(
+        self,
+        model_name,
+        psf,
+        *,
+        background_cfg,
+    ) -> None:
+        self.model_name = str(
             model_name
-        ),
-        psf=psf,
-        sky=0.0,
-    )
+        )
+        self.psf = psf
 
-    background_model = str(
-        background_cfg["model"]
-    ).strip().lower()
+        self.background_model = str(
+            background_cfg["model"]
+        ).strip().lower()
 
-    def factory(
+        model_definition = get_model(
+            self.model_name
+        )
+
+        self.morphology_parameter_names = tuple(
+            name
+            for name in model_definition.parameter_names
+            if name != "sky"
+        )
+
+    def __call__(
+        self,
         **parameters,
     ):
+        """Build one observed source-plus-background model."""
         source_parameters = {
             name: parameters[name]
-            for name in morphology_parameter_names
+            for name in self.morphology_parameter_names
         }
 
-        source_model = source_factory(
+        source_model = _resolve_model_factory(
+            self.model_name
+        )(
             **source_parameters,
+            psf=self.psf,
+            sky=0.0,
         )
 
         background = make_background_effect(
-            background_model,
+            self.background_model,
             level=parameters[
                 "background_level"
             ],
@@ -756,7 +758,22 @@ def _make_model_factory(
             background=background,
         )
 
-    return factory
+
+def _make_model_factory(
+    model_name,
+    psf,
+    *,
+    background_cfg=None,
+):
+    """Build a pickle-safe observation-specific production model factory."""
+    if background_cfg is None:
+        background_cfg = DEFAULT_CONFIG["fit"]["background"]
+
+    return _ObservedModelFactory(
+        model_name,
+        psf,
+        background_cfg=background_cfg,
+    )
 
 
 def _compute_best_model(
