@@ -47,6 +47,12 @@ fit:
 
   sampler:
     name: nautilus
+    init:
+      n_live: 500
+      seed: 42
+    run:
+      n_eff: 1000
+      f_live: 0.01
 
   priors:
     single_sersic:
