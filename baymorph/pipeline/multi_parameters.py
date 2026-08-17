@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 
 from baymorph.core.observation import Observation
+from baymorph.fitting.priors import UniformPrior
 from baymorph.models import get_model
 from baymorph.models.geometry import (
     ModelGeometry,
@@ -16,6 +17,7 @@ from baymorph.models.geometry import (
     sky_parameter_names,
 )
 from baymorph.pipeline.config import DEFAULT_CONFIG
+from baymorph.pipeline.prior_config import parse_prior_config
 
 
 Bounds = Sequence[float]
@@ -56,6 +58,69 @@ def _parse_default_value(
         return float(-np.pi / 2.0)
 
     return float(value)
+
+
+def _typed_uniform_bounds(
+    config: Mapping[str, Any],
+    *,
+    references: Mapping[str, float] | None = None,
+) -> tuple[float, float]:
+    """Resolve one typed uniform prior into finite bounds."""
+    prior = parse_prior_config(
+        config,
+        references=references,
+    )
+
+    if not isinstance(
+        prior,
+        UniformPrior,
+    ):
+        raise ValueError(
+            "This automatic parameter transformation requires "
+            "a uniform prior."
+        )
+
+    return (
+        float(prior.lower),
+        float(prior.upper),
+    )
+
+
+def _center_default_offsets(
+    config: Mapping[str, Any],
+    *,
+    reference_name: str,
+) -> tuple[float, float]:
+    """Return detector-coordinate offsets around an explicit target seed."""
+    if "type" in config:
+        if config.get(
+            "relative_to"
+        ) != reference_name:
+            raise ValueError(
+                "Automatic centre priors require a relative uniform prior "
+                f"with relative_to={reference_name!r}."
+            )
+
+        return _typed_uniform_bounds(
+            config,
+            references={
+                reference_name: 0.0,
+            },
+        )
+
+    if "offset" in config:
+        offset = float(
+            config["offset"]
+        )
+
+        return (
+            -offset,
+            offset,
+        )
+
+    raise ValueError(
+        "Automatic centre priors require a relative typed prior."
+    )
 
 
 def _normalize_bounds(
@@ -318,8 +383,8 @@ def _sky_center_bounds(
     *,
     observation: Observation,
     target_center: tuple[float, float],
-    x_offset: float,
-    y_offset: float,
+    x_offsets: tuple[float, float],
+    y_offsets: tuple[float, float],
 ) -> tuple[
     tuple[float, float],
     tuple[float, float],
@@ -333,21 +398,23 @@ def _sky_center_bounds(
         )
 
     x0, y0 = target_center
+    x_lower, x_upper = x_offsets
+    y_lower, y_upper = y_offsets
 
     x_values = np.asarray(
         [
-            x0 - x_offset,
+            x0 + x_lower,
             x0,
-            x0 + x_offset,
+            x0 + x_upper,
         ],
         dtype=float,
     )
 
     y_values = np.asarray(
         [
-            y0 - y_offset,
+            y0 + y_lower,
             y0,
-            y0 + y_offset,
+            y0 + y_upper,
         ],
         dtype=float,
     )
@@ -445,8 +512,8 @@ def _center_parameter_specifications(
     observations: Mapping[str, Observation],
     target_centers: Mapping[str, tuple[float, float]],
     observation_ids: tuple[str, ...],
-    x_offset: float,
-    y_offset: float,
+    x_offsets: tuple[float, float],
+    y_offsets: tuple[float, float],
     shared: set[str],
 ) -> dict[str, dict[str, Any]]:
     """Build sky-coordinate centre specifications."""
@@ -458,8 +525,8 @@ def _center_parameter_specifications(
             target_center=target_centers[
                 observation_id
             ],
-            x_offset=x_offset,
-            y_offset=y_offset,
+            x_offsets=x_offsets,
+            y_offsets=y_offsets,
         )
         for observation_id in observation_ids
     }
@@ -754,25 +821,29 @@ def make_multi_parameters(
             if (
                 x_default is None
                 or y_default is None
-                or "offset" not in x_default
-                or "offset" not in y_default
             ):
                 raise ValueError(
                     "Automatic sky-centre priors require detector-centre "
-                    "offset defaults. Supply explicit prior_bounds for "
+                    "defaults. Supply explicit prior_bounds for "
                     "'ra' and 'dec'."
                 )
+
+            x_offsets = _center_default_offsets(
+                x_default,
+                reference_name="target_x",
+            )
+
+            y_offsets = _center_default_offsets(
+                y_default,
+                reference_name="target_y",
+            )
 
             center_specs = _center_parameter_specifications(
                 observations=loaded_observations,
                 target_centers=normalized_centers,
                 observation_ids=observation_ids,
-                x_offset=float(
-                    x_default["offset"]
-                ),
-                y_offset=float(
-                    y_default["offset"]
-                ),
+                x_offsets=x_offsets,
+                y_offsets=y_offsets,
                 shared=shared_set,
             )
 
@@ -823,6 +894,157 @@ def make_multi_parameters(
                 f"No standard prior is available for parameter "
                 f"{parameter_name!r}. Supply explicit prior_bounds."
             )
+
+        if "type" in default:
+            if "relative_to" in default:
+                if parameter_frame != "detector":
+                    raise ValueError(
+                        f"Relative detector prior for parameter "
+                        f"{parameter_name!r} cannot be used directly in "
+                        "sky-frame inference."
+                    )
+
+                if detector_name == geometry.centre_x:
+                    reference_name = "target_x"
+                    center_index = 0
+
+                elif detector_name == geometry.centre_y:
+                    reference_name = "target_y"
+                    center_index = 1
+
+                else:
+                    raise ValueError(
+                        f"Relative prior for parameter "
+                        f"{parameter_name!r} is unsupported."
+                    )
+
+                lower_offset, upper_offset = _center_default_offsets(
+                    default,
+                    reference_name=reference_name,
+                )
+
+                per_observation = {
+                    observation_id: (
+                        normalized_centers[
+                            observation_id
+                        ][
+                            center_index
+                        ]
+                        + lower_offset,
+                        normalized_centers[
+                            observation_id
+                        ][
+                            center_index
+                        ]
+                        + upper_offset,
+                    )
+                    for observation_id in observation_ids
+                }
+
+                if is_shared:
+                    lower = min(
+                        value[0]
+                        for value in per_observation.values()
+                    )
+                    upper = max(
+                        value[1]
+                        for value in per_observation.values()
+                    )
+
+                    specifications[
+                        parameter_name
+                    ] = {
+                        "coupling": "shared",
+                        "prior": _uniform(
+                            lower,
+                            upper,
+                        ),
+                    }
+
+                else:
+                    specifications[
+                        parameter_name
+                    ] = {
+                        "coupling": "independent",
+                        "priors": {
+                            observation_id: _uniform(
+                                *per_observation[
+                                    observation_id
+                                ]
+                            )
+                            for observation_id in observation_ids
+                        },
+                    }
+
+                continue
+
+            if (
+                parameter_frame == "sky"
+                and detector_name in radii
+            ):
+                if is_shared:
+                    raise ValueError(
+                        f"Shared sky-frame radius "
+                        f"{parameter_name!r} requires explicit "
+                        "prior_bounds because detector-pixel defaults "
+                        "do not define a unique common physical prior."
+                    )
+
+                lower, upper = _typed_uniform_bounds(
+                    default
+                )
+
+                radius_priors = {}
+
+                for observation_id in observation_ids:
+                    pixel_scale = loaded_observations[
+                        observation_id
+                    ].metadata.pixel_scale
+
+                    if (
+                        pixel_scale is None
+                        or not np.isfinite(
+                            pixel_scale
+                        )
+                        or pixel_scale <= 0.0
+                    ):
+                        raise ValueError(
+                            "Sky-frame radius construction requires a "
+                            "positive pixel scale for observation "
+                            f"{observation_id!r}."
+                        )
+
+                    radius_priors[
+                        observation_id
+                    ] = _uniform(
+                        lower
+                        * float(pixel_scale),
+                        upper
+                        * float(pixel_scale),
+                    )
+
+                specifications[
+                    parameter_name
+                ] = {
+                    "coupling": "independent",
+                    "priors": radius_priors,
+                }
+
+                continue
+
+            parse_prior_config(
+                default
+            )
+
+            specifications[
+                parameter_name
+            ] = _coupled_prior(
+                default,
+                observation_ids=observation_ids,
+                is_shared=is_shared,
+            )
+
+            continue
 
         if (
             "min_factor" in default

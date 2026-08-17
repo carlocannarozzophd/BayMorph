@@ -36,6 +36,7 @@ from baymorph.pipeline.outputs import (
     pipeline_paths,
     save_resolved_config,
 )
+from baymorph.pipeline.prior_config import parse_prior_config
 from baymorph.pipeline.psf_construction import load_empirical_psf
 from baymorph.results.inference import json_compatible_metadata
 from baymorph.results import InferenceResult, RealFitProducts
@@ -525,8 +526,18 @@ def _build_parameter_list(
     target_x: float,
     target_y: float,
 ) -> ParameterSet:
-    """Build a ParameterSet from ordered model parameter names."""
+    """Build a ParameterSet from ordered model parameter names.
+
+    Typed prior configurations are resolved directly into BayMorph ``Prior``
+    objects. Legacy single-observation prior syntax remains temporarily
+    supported until the repository-wide prior migration is complete.
+    """
     parameters = []
+
+    references = {
+        "target_x": float(target_x),
+        "target_y": float(target_y),
+    }
 
     for name in parameter_names:
         cfg = _prior_entry_for_parameter(
@@ -534,8 +545,16 @@ def _build_parameter_list(
             prior_cfg,
         )
 
-        parameters.append(
-            Parameter(
+        if "type" in cfg:
+            parameter = Parameter(
+                name,
+                prior=parse_prior_config(
+                    cfg,
+                    references=references,
+                ),
+            )
+        else:
+            parameter = Parameter(
                 name,
                 *_bounds_from_prior(
                     name,
@@ -545,9 +564,14 @@ def _build_parameter_list(
                     target_y=target_y,
                 ),
             )
+
+        parameters.append(
+            parameter
         )
 
-    return ParameterSet(parameters)
+    return ParameterSet(
+        parameters
+    )
 
 
 def _background_parameter_names(

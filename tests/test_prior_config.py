@@ -62,6 +62,82 @@ def test_parse_supported_prior_types() -> None:
     )
 
 
+def test_parse_relative_uniform_prior() -> None:
+    """Relative uniform priors must resolve around explicit references."""
+    prior = parse_prior_config(
+        {
+            "type": "uniform",
+            "lower": -8.0,
+            "upper": 8.0,
+            "relative_to": "target_x",
+        },
+        references={
+            "target_x": 174.5,
+        },
+    )
+
+    assert prior == UniformPrior(
+        lower=166.5,
+        upper=182.5,
+    )
+
+
+def test_relative_prior_does_not_change_reference_mapping() -> None:
+    """Resolving a relative prior must not mutate its reference context."""
+    references = {
+        "target_x": 100.0,
+    }
+
+    parse_prior_config(
+        {
+            "type": "uniform",
+            "lower": -5.0,
+            "upper": 5.0,
+            "relative_to": "target_x",
+        },
+        references=references,
+    )
+
+    assert references == {
+        "target_x": 100.0,
+    }
+
+
+def test_relative_prior_requires_references() -> None:
+    """Relative uniform priors must fail without an explicit context."""
+    with pytest.raises(
+        ValueError,
+        match="requires reference values",
+    ):
+        parse_prior_config(
+            {
+                "type": "uniform",
+                "lower": -8.0,
+                "upper": 8.0,
+                "relative_to": "target_x",
+            }
+        )
+
+
+def test_relative_prior_rejects_unknown_reference() -> None:
+    """Relative priors must not silently resolve unknown reference names."""
+    with pytest.raises(
+        ValueError,
+        match="Unknown prior reference",
+    ):
+        parse_prior_config(
+            {
+                "type": "uniform",
+                "lower": -8.0,
+                "upper": 8.0,
+                "relative_to": "target_x",
+            },
+            references={
+                "target_y": 42.0,
+            },
+        )
+
+
 def test_parse_prior_requires_mapping() -> None:
     """Prior configuration must be mapping-like."""
     with pytest.raises(
@@ -103,3 +179,19 @@ def test_parse_prior_rejects_extra_keys() -> None:
                 "unexpected": 42,
             }
         )
+
+
+def test_parse_symbolic_uniform_bounds() -> None:
+    """Typed priors must support canonical symbolic angular bounds."""
+    prior = parse_prior_config(
+        {
+            "type": "uniform",
+            "lower": "-pi/2",
+            "upper": "pi/2",
+        }
+    )
+
+    assert prior == UniformPrior(
+        lower=-1.5707963267948966,
+        upper=1.5707963267948966,
+    )
