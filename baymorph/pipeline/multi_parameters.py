@@ -47,19 +47,6 @@ def _uniform(
     }
 
 
-def _parse_default_value(
-    value: Any,
-) -> float:
-    """Parse numerical and symbolic default prior values."""
-    if value == "pi/2":
-        return float(np.pi / 2.0)
-
-    if value == "-pi/2":
-        return float(-np.pi / 2.0)
-
-    return float(value)
-
-
 def _typed_uniform_bounds(
     config: Mapping[str, Any],
     *,
@@ -92,34 +79,19 @@ def _center_default_offsets(
     reference_name: str,
 ) -> tuple[float, float]:
     """Return detector-coordinate offsets around an explicit target seed."""
-    if "type" in config:
-        if config.get(
-            "relative_to"
-        ) != reference_name:
-            raise ValueError(
-                "Automatic centre priors require a relative uniform prior "
-                f"with relative_to={reference_name!r}."
-            )
-
-        return _typed_uniform_bounds(
-            config,
-            references={
-                reference_name: 0.0,
-            },
+    if config.get(
+        "relative_to"
+    ) != reference_name:
+        raise ValueError(
+            "Automatic centre priors require a relative uniform prior "
+            f"with relative_to={reference_name!r}."
         )
 
-    if "offset" in config:
-        offset = float(
-            config["offset"]
-        )
-
-        return (
-            -offset,
-            offset,
-        )
-
-    raise ValueError(
-        "Automatic centre priors require a relative typed prior."
+    return _typed_uniform_bounds(
+        config,
+        references={
+            reference_name: 0.0,
+        },
     )
 
 
@@ -1046,162 +1018,10 @@ def make_multi_parameters(
 
             continue
 
-        if (
-            "min_factor" in default
-            or "max_factor" in default
-        ):
-            raise ValueError(
-                f"Parameter {parameter_name!r} uses a data-scaled standard "
-                "prior. Supply explicit prior_bounds."
-            )
-
-        if "offset" in default:
-            if parameter_frame == "detector":
-                offset = float(
-                    default["offset"]
-                )
-
-                center_index = (
-                    0
-                    if detector_name
-                    == geometry.centre_x
-                    else 1
-                )
-
-                per_observation = {
-                    observation_id: (
-                        normalized_centers[
-                            observation_id
-                        ][
-                            center_index
-                        ]
-                        - offset,
-                        normalized_centers[
-                            observation_id
-                        ][
-                            center_index
-                        ]
-                        + offset,
-                    )
-                    for observation_id in observation_ids
-                }
-
-                if is_shared:
-                    lower = min(
-                        value[0]
-                        for value in per_observation.values()
-                    )
-                    upper = max(
-                        value[1]
-                        for value in per_observation.values()
-                    )
-
-                    specifications[
-                        parameter_name
-                    ] = {
-                        "coupling": "shared",
-                        "prior": _uniform(
-                            lower,
-                            upper,
-                        ),
-                    }
-
-                else:
-                    specifications[
-                        parameter_name
-                    ] = {
-                        "coupling": "independent",
-                        "priors": {
-                            observation_id: _uniform(
-                                *per_observation[
-                                    observation_id
-                                ]
-                            )
-                            for observation_id in observation_ids
-                        },
-                    }
-
-                continue
-
-            raise ValueError(
-                f"Cannot resolve offset prior for parameter "
-                f"{parameter_name!r}. Supply explicit prior_bounds."
-            )
-
-        if (
-            "min" not in default
-            or "max" not in default
-        ):
-            raise ValueError(
-                f"Unsupported standard prior specification for parameter "
-                f"{parameter_name!r}. Supply explicit prior_bounds."
-            )
-
-        lower = _parse_default_value(
-            default["min"]
-        )
-
-        upper = _parse_default_value(
-            default["max"]
-        )
-
-        if (
-            parameter_frame == "sky"
-            and detector_name in radii
-        ):
-            if is_shared:
-                raise ValueError(
-                    f"Shared sky-frame radius {parameter_name!r} requires "
-                    "explicit prior_bounds because detector-pixel defaults "
-                    "do not define a unique common physical prior."
-                )
-
-            radius_priors = {}
-
-            for observation_id in observation_ids:
-                pixel_scale = loaded_observations[
-                    observation_id
-                ].metadata.pixel_scale
-
-                if (
-                    pixel_scale is None
-                    or not np.isfinite(
-                        pixel_scale
-                    )
-                    or pixel_scale <= 0.0
-                ):
-                    raise ValueError(
-                        "Sky-frame radius construction requires a positive "
-                        f"pixel scale for observation {observation_id!r}."
-                    )
-
-                radius_priors[
-                    observation_id
-                ] = _uniform(
-                    lower
-                    * float(pixel_scale),
-                    upper
-                    * float(pixel_scale),
-                )
-
-            specifications[
-                parameter_name
-            ] = {
-                "coupling": "independent",
-                "priors": radius_priors,
-            }
-
-            continue
-
-        specifications[
-            parameter_name
-        ] = _coupled_prior(
-            _uniform(
-                lower,
-                upper,
-            ),
-            observation_ids=observation_ids,
-            is_shared=is_shared,
+        raise ValueError(
+            f"Unsupported untyped standard prior specification for parameter "
+            f"{parameter_name!r}. Standard priors must use the typed prior "
+            "schema or explicit prior_bounds must be supplied."
         )
 
     return {
