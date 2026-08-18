@@ -1,4 +1,4 @@
-"""Experimental high-throughput hybrid rendering for Sérsic models."""
+"""Experimental hybrid rendering utilities for Sérsic models."""
 
 from __future__ import annotations
 
@@ -7,11 +7,16 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.integrate import quad
+from scipy.special import gammainc
 
 if TYPE_CHECKING:
     from baymorph.models.sersic import SersicModel
 
 FloatArray = NDArray[np.float64]
+
+_TWO_PI = 2.0 * np.pi
+_DIRECTION_EPSILON = 1.0e-15
 
 
 @lru_cache(maxsize=None)
@@ -19,6 +24,14 @@ def _legendre_rule(
     order: int,
 ) -> tuple[FloatArray, FloatArray]:
     """Return a cached Gauss-Legendre quadrature rule."""
+    if (
+        not isinstance(order, (int, np.integer))
+        or order <= 0
+    ):
+        raise ValueError(
+            "integration_order must be a positive integer."
+        )
+
     nodes, weights = np.polynomial.legendre.leggauss(order)
 
     nodes = np.asarray(nodes, dtype=float)
@@ -30,109 +43,6 @@ def _legendre_rule(
     return nodes, weights
 
 
-def _validate_positive_integer(
-    value: int,
-    *,
-    name: str,
-) -> None:
-    """Require a strictly positive integer."""
-    if (
-        not isinstance(value, (int, np.integer))
-        or value <= 0
-    ):
-        raise ValueError(
-            f"{name} must be a positive integer."
-        )
-
-
-def _validate_configuration(
-    *,
-    base_order: int,
-    refinement_order: int,
-    refinement_radius: float,
-    central_min_order: int,
-    central_max_order: int,
-    central_rtol: float,
-    central_atol: float,
-) -> None:
-    """Validate hybrid-renderer numerical controls."""
-    _validate_positive_integer(
-        base_order,
-        name="base_order",
-    )
-    _validate_positive_integer(
-        refinement_order,
-        name="refinement_order",
-    )
-    _validate_positive_integer(
-        central_min_order,
-        name="central_min_order",
-    )
-    _validate_positive_integer(
-        central_max_order,
-        name="central_max_order",
-    )
-
-    if central_max_order < central_min_order:
-        raise ValueError(
-            "central_max_order must be greater than or equal to "
-            "central_min_order."
-        )
-
-    if (
-        not np.isfinite(refinement_radius)
-        or refinement_radius < 0.0
-    ):
-        raise ValueError(
-            "refinement_radius must be finite and non-negative."
-        )
-
-    if (
-        not np.isfinite(central_rtol)
-        or central_rtol < 0.0
-    ):
-        raise ValueError(
-            "central_rtol must be finite and non-negative."
-        )
-
-    if (
-        not np.isfinite(central_atol)
-        or central_atol < 0.0
-    ):
-        raise ValueError(
-            "central_atol must be finite and non-negative."
-        )
-
-
-def _central_pixel(
-    model: SersicModel,
-    *,
-    origin: tuple[float, float],
-) -> tuple[int, int, float, float]:
-    """Return the local index and global centre of the central pixel."""
-    y_origin, x_origin = origin
-
-    local_x = model.x0 - x_origin
-    local_y = model.y0 - y_origin
-
-    index_x = int(
-        np.floor(local_x + 0.5)
-    )
-    index_y = int(
-        np.floor(local_y + 0.5)
-    )
-
-    pixel_x = x_origin + index_x
-    pixel_y = y_origin + index_y
-
-    return (
-        index_y,
-        index_x,
-        float(pixel_y),
-        float(pixel_x),
-    )
-
-
 def _split_central_pixel_integral(
     model: SersicModel,
     *,
@@ -140,10 +50,13 @@ def _split_central_pixel_integral(
     pixel_y: float,
     integration_order: int,
 ) -> float:
-    """Integrate the central pixel after splitting at the Sérsic centre."""
-    _validate_positive_integer(
-        integration_order,
-        name="integration_order",
+    """Return a split high-order numerical central-pixel integral.
+
+    This routine is retained only as an independent numerical validation
+    reference. Hybrid rendering uses the semi-analytic pixel integral.
+    """
+    nodes, weights = _legendre_rule(
+        integration_order
     )
 
     xmin = pixel_x - 0.5
@@ -163,17 +76,10 @@ def _split_central_pixel_integral(
     x_edges.append(xmax)
     y_edges.append(ymax)
 
-    nodes, weights = _legendre_rule(
-        integration_order
-    )
-
     weight_2d = (
         weights[:, None]
         * weights[None, :]
     )
-
-    bn = model.bn
-    log_i0 = model.log_central_intensity
 
     cos_theta = np.cos(model.theta)
     sin_theta = np.sin(model.theta)
@@ -223,9 +129,10 @@ def _split_central_pixel_integral(
             )
 
             intensity = np.exp(
-                log_i0
-                - bn
-                * (radius / model.re) ** (1.0 / model.n)
+                model.log_central_intensity
+                - model.bn
+                * (radius / model.re)
+                ** (1.0 / model.n)
             )
 
             total += (
@@ -241,56 +148,354 @@ def _split_central_pixel_integral(
     return float(total)
 
 
-def _converged_central_pixel_integral(
+def _pixel_angular_breakpoints(
     model: SersicModel,
     *,
     pixel_x: float,
     pixel_y: float,
-    minimum_order: int,
-    maximum_order: int,
-    rtol: float,
-    atol: float,
-) -> float:
-    """Return an order-converged split central-pixel integral."""
-    order = int(minimum_order)
+) -> tuple[float, ...]:
+    """Return angular directions through transformed pixel vertices."""
+    cos_theta = np.cos(model.theta)
+    sin_theta = np.sin(model.theta)
 
-    previous = _split_central_pixel_integral(
+    angles: list[float] = []
+
+    for x in (
+        pixel_x - 0.5,
+        pixel_x + 0.5,
+    ):
+        for y in (
+            pixel_y - 0.5,
+            pixel_y + 0.5,
+        ):
+            dx = x - model.x0
+            dy = y - model.y0
+
+            x_rotated = (
+                dx * cos_theta
+                + dy * sin_theta
+            )
+            y_rotated = (
+                -dx * sin_theta
+                + dy * cos_theta
+            ) / model.q
+
+            phi = float(
+                np.arctan2(
+                    y_rotated,
+                    x_rotated,
+                )
+            )
+
+            if phi < 0.0:
+                phi += _TWO_PI
+
+            angles.append(phi)
+
+    return tuple(
+        sorted(
+            set(angles)
+        )
+    )
+
+
+def _ray_pixel_interval(
+    model: SersicModel,
+    phi: float,
+    *,
+    pixel_x: float,
+    pixel_y: float,
+) -> tuple[float, float] | None:
+    """Return the elliptical-radius interval intersecting one pixel.
+
+    Parameters
+    ----------
+    model : SersicModel
+        Sérsic morphology model.
+    phi : float
+        Elliptical polar angle in radians.
+    pixel_x, pixel_y : float
+        Detector-pixel centre coordinates.
+
+    Returns
+    -------
+    tuple of float or None
+        ``(R_in, R_out)`` when the ray intersects the detector pixel,
+        otherwise ``None``.
+    """
+    cos_phi = np.cos(phi)
+    sin_phi = np.sin(phi)
+
+    cos_theta = np.cos(model.theta)
+    sin_theta = np.sin(model.theta)
+
+    dx_per_radius = (
+        cos_phi * cos_theta
+        - model.q
+        * sin_phi
+        * sin_theta
+    )
+    dy_per_radius = (
+        cos_phi * sin_theta
+        + model.q
+        * sin_phi
+        * cos_theta
+    )
+
+    dx_min = (
+        pixel_x - 0.5 - model.x0
+    )
+    dx_max = (
+        pixel_x + 0.5 - model.x0
+    )
+    dy_min = (
+        pixel_y - 0.5 - model.y0
+    )
+    dy_max = (
+        pixel_y + 0.5 - model.y0
+    )
+
+    lower = 0.0
+    upper = np.inf
+
+    for coordinate, minimum, maximum in (
+        (
+            dx_per_radius,
+            dx_min,
+            dx_max,
+        ),
+        (
+            dy_per_radius,
+            dy_min,
+            dy_max,
+        ),
+    ):
+        if (
+            abs(coordinate)
+            < _DIRECTION_EPSILON
+        ):
+            if not (
+                minimum
+                <= 0.0
+                <= maximum
+            ):
+                return None
+
+            continue
+
+        first = minimum / coordinate
+        second = maximum / coordinate
+
+        entry = min(
+            first,
+            second,
+        )
+        exit_ = max(
+            first,
+            second,
+        )
+
+        lower = max(
+            lower,
+            entry,
+        )
+        upper = min(
+            upper,
+            exit_,
+        )
+
+        if upper <= lower:
+            return None
+
+    lower = max(
+        0.0,
+        lower,
+    )
+
+    if (
+        not np.isfinite(upper)
+        or upper <= lower
+    ):
+        return None
+
+    return (
+        float(lower),
+        float(upper),
+    )
+
+
+def _semianalytic_pixel_integral(
+    model: SersicModel,
+    *,
+    pixel_x: float,
+    pixel_y: float,
+    epsabs: float = 1.0e-13,
+    epsrel: float = 1.0e-12,
+) -> float:
+    r"""Return the semi-analytic Sérsic integral over any detector pixel.
+
+    Elliptical polar coordinates reduce the two-dimensional Sérsic integral
+    to a one-dimensional angular quadrature. For each angular direction,
+    the detector pixel intersects the ray over a radial interval
+    ``[R_in(phi), R_out(phi)]``. The radial Sérsic integral is evaluated
+    analytically with the regularized lower incomplete gamma function.
+    """
+    if (
+        not np.isfinite(epsabs)
+        or epsabs < 0.0
+    ):
+        raise ValueError(
+            "epsabs must be finite and non-negative."
+        )
+
+    if (
+        not np.isfinite(epsrel)
+        or epsrel < 0.0
+    ):
+        raise ValueError(
+            "epsrel must be finite and non-negative."
+        )
+
+    if epsabs == 0.0 and epsrel == 0.0:
+        raise ValueError(
+            "At least one integration tolerance must be positive."
+        )
+
+    bn = model.bn
+    gamma_shape = 2.0 * model.n
+    inverse_n = 1.0 / model.n
+
+    def cumulative_flux_fraction(
+        radius: float,
+    ) -> float:
+        if radius <= 0.0:
+            return 0.0
+
+        argument = (
+            bn
+            * (radius / model.re)
+            ** inverse_n
+        )
+
+        return float(
+            gammainc(
+                gamma_shape,
+                argument,
+            )
+        )
+
+    def angular_integrand(
+        phi: float,
+    ) -> float:
+        interval = _ray_pixel_interval(
+            model,
+            phi,
+            pixel_x=pixel_x,
+            pixel_y=pixel_y,
+        )
+
+        if interval is None:
+            return 0.0
+
+        radius_in, radius_out = interval
+
+        return (
+            cumulative_flux_fraction(
+                radius_out
+            )
+            - cumulative_flux_fraction(
+                radius_in
+            )
+        )
+
+    boundaries = [
+        0.0,
+        *[
+            phi
+            for phi in _pixel_angular_breakpoints(
+                model,
+                pixel_x=pixel_x,
+                pixel_y=pixel_y,
+            )
+            if 0.0 < phi < _TWO_PI
+        ],
+        _TWO_PI,
+    ]
+
+    boundaries = sorted(
+        set(boundaries)
+    )
+
+    angular_integral = 0.0
+
+    for lower, upper in zip(
+        boundaries[:-1],
+        boundaries[1:],
+        strict=True,
+    ):
+        midpoint = (
+            0.5 * (lower + upper)
+        )
+
+        if _ray_pixel_interval(
+            model,
+            midpoint,
+            pixel_x=pixel_x,
+            pixel_y=pixel_y,
+        ) is None:
+            continue
+
+        value, _ = quad(
+            angular_integrand,
+            lower,
+            upper,
+            epsabs=epsabs,
+            epsrel=epsrel,
+            limit=100,
+        )
+
+        angular_integral += value
+
+    return float(
+        model.flux
+        * angular_integral
+        / _TWO_PI
+    )
+
+
+def _semianalytic_central_pixel_integral(
+    model: SersicModel,
+    *,
+    pixel_x: float,
+    pixel_y: float,
+    epsabs: float = 1.0e-13,
+    epsrel: float = 1.0e-12,
+) -> float:
+    """Return the semi-analytic integral of the pixel containing the centre."""
+    tolerance = (
+        8.0
+        * np.finfo(float).eps
+    )
+
+    if not (
+        pixel_x - 0.5 - tolerance
+        <= model.x0
+        <= pixel_x + 0.5 + tolerance
+        and pixel_y - 0.5 - tolerance
+        <= model.y0
+        <= pixel_y + 0.5 + tolerance
+    ):
+        raise ValueError(
+            "Semi-analytic central integration requires a pixel "
+            "containing the Sersic centre."
+        )
+
+    return _semianalytic_pixel_integral(
         model,
         pixel_x=pixel_x,
         pixel_y=pixel_y,
-        integration_order=order,
-    )
-
-    if order == maximum_order:
-        return previous
-
-    while order < maximum_order:
-        next_order = min(
-            2 * order,
-            maximum_order,
-        )
-
-        current = _split_central_pixel_integral(
-            model,
-            pixel_x=pixel_x,
-            pixel_y=pixel_y,
-            integration_order=next_order,
-        )
-
-        tolerance = (
-            atol
-            + rtol * abs(current)
-        )
-
-        if abs(current - previous) <= tolerance:
-            return current
-
-        previous = current
-        order = next_order
-
-    raise RuntimeError(
-        "Split central-pixel Sérsic quadrature did not converge "
-        f"by integration order {maximum_order}."
+        epsabs=epsabs,
+        epsrel=epsrel,
     )
 
 
@@ -299,146 +504,104 @@ def render_sersic_hybrid(
     shape: tuple[int, int],
     *,
     origin: tuple[float, float] = (0.0, 0.0),
-    base_order: int = 1,
-    refinement_order: int = 8,
-    refinement_radius: float = 16.0,
-    central_min_order: int = 32,
-    central_max_order: int = 512,
-    central_rtol: float = 1.0e-6,
-    central_atol: float = 0.0,
+    semianalytic_half_width: int = 4,
+    central_epsabs: float = 1.0e-13,
+    central_epsrel: float = 1.0e-12,
 ) -> FloatArray:
-    """Render a Sérsic profile with localized numerical refinement.
+    """Render a Sérsic profile with an inner semi-analytic pixel patch.
 
-    The renderer combines inexpensive fixed quadrature over the complete
-    footprint with higher-order integration in a square region surrounding
-    the Sérsic centre. The detector pixel containing the mathematical centre
-    is treated separately by splitting its integration domain at ``x0`` and
-    ``y0`` and increasing its quadrature order until convergence.
+    The outer image uses midpoint integration. Pixels in a square inner
+    region centred on the detector pixel containing the Sérsic centre are
+    replaced by semi-analytic Sérsic pixel integrals.
 
-    This renderer is experimental. Its numerical controls are explicit and
-    must be validated over the intended scientific parameter domain before it
-    replaces the uniform fixed-order renderer in production inference.
+    ``semianalytic_half_width`` remains an experimental numerical control.
+    A fixed value is not intended as the final production selection rule.
     """
-    _validate_configuration(
-        base_order=base_order,
-        refinement_order=refinement_order,
-        refinement_radius=refinement_radius,
-        central_min_order=central_min_order,
-        central_max_order=central_max_order,
-        central_rtol=central_rtol,
-        central_atol=central_atol,
-    )
+    model._validate_shape(shape)
+
+    if (
+        not isinstance(
+            semianalytic_half_width,
+            (int, np.integer),
+        )
+        or semianalytic_half_width < 0
+    ):
+        raise ValueError(
+            "semianalytic_half_width must be a non-negative integer."
+        )
 
     image = model.render(
         shape=shape,
         origin=origin,
         renderer="fixed",
-        integration_order=base_order,
+        integration_order=1,
     )
 
     y_origin, x_origin = origin
 
-    local_center_x = model.x0 - x_origin
-    local_center_y = model.y0 - y_origin
-
-    x_min = max(
-        0,
-        int(
-            np.floor(
-                local_center_x
-                - refinement_radius
-            )
-        ),
-    )
-    x_max = min(
-        shape[1],
-        int(
-            np.ceil(
-                local_center_x
-                + refinement_radius
-            )
+    central_x = int(
+        np.floor(
+            model.x0
+            - x_origin
+            + 0.5
         )
-        + 1,
     )
-    y_min = max(
-        0,
-        int(
-            np.floor(
-                local_center_y
-                - refinement_radius
-            )
-        ),
-    )
-    y_max = min(
-        shape[0],
-        int(
-            np.ceil(
-                local_center_y
-                + refinement_radius
-            )
+    central_y = int(
+        np.floor(
+            model.y0
+            - y_origin
+            + 0.5
         )
-        + 1,
     )
 
-    if (
-        x_min < x_max
-        and y_min < y_max
+    xmin = max(
+        0,
+        central_x
+        - semianalytic_half_width,
+    )
+    xmax = min(
+        shape[1] - 1,
+        central_x
+        + semianalytic_half_width,
+    )
+    ymin = max(
+        0,
+        central_y
+        - semianalytic_half_width,
+    )
+    ymax = min(
+        shape[0] - 1,
+        central_y
+        + semianalytic_half_width,
+    )
+
+    for local_y in range(
+        ymin,
+        ymax + 1,
     ):
-        local_y, local_x = np.mgrid[
-            y_min:y_max,
-            x_min:x_max,
-        ]
-
-        pixel_x = (
-            np.asarray(
-                local_x,
-                dtype=float,
+        for local_x in range(
+            xmin,
+            xmax + 1,
+        ):
+            pixel_x = (
+                x_origin
+                + local_x
             )
-            + x_origin
-        )
-        pixel_y = (
-            np.asarray(
+            pixel_y = (
+                y_origin
+                + local_y
+            )
+
+            image[
                 local_y,
-                dtype=float,
+                local_x,
+            ] = _semianalytic_pixel_integral(
+                model,
+                pixel_x=float(pixel_x),
+                pixel_y=float(pixel_y),
+                epsabs=central_epsabs,
+                epsrel=central_epsrel,
             )
-            + y_origin
-        )
-
-        image[
-            y_min:y_max,
-            x_min:x_max,
-        ] = model._integrate_pixel_fixed(
-            pixel_x=pixel_x,
-            pixel_y=pixel_y,
-            integration_order=refinement_order,
-        )
-
-    (
-        central_y,
-        central_x,
-        pixel_y,
-        pixel_x,
-    ) = _central_pixel(
-        model,
-        origin=origin,
-    )
-
-    if (
-        0 <= central_y < shape[0]
-        and 0 <= central_x < shape[1]
-    ):
-        image[
-            central_y,
-            central_x,
-        ] = _converged_central_pixel_integral(
-            model,
-            pixel_x=pixel_x,
-            pixel_y=pixel_y,
-            minimum_order=central_min_order,
-            maximum_order=central_max_order,
-            rtol=central_rtol,
-            atol=central_atol,
-        )
 
     return np.asarray(
         image,
