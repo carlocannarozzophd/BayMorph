@@ -576,6 +576,9 @@ def run_psf_construction_from_config(
 ) -> np.ndarray:
     """Construct an empirical PSF from selected candidates.
 
+    Candidates are validated using a local robust peak signal-to-noise
+    estimate before recentering and stacking.
+
     Parameters
     ----------
     config : dict, str, or pathlib.Path
@@ -589,8 +592,9 @@ def run_psf_construction_from_config(
     Raises
     ------
     ValueError
-        If no candidates are available or if any candidate is missing its
-        cutout half-size.
+        If no candidates are available, if any candidate is missing its
+        cutout half-size, or if no candidate satisfies the configured
+        signal-to-noise threshold.
     """
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
@@ -607,8 +611,39 @@ def run_psf_construction_from_config(
     if len(candidates) == 0:
         raise ValueError("No PSF candidates available.")
 
+    candidate_cfg = (
+        resolved.get(
+            "psf",
+            {},
+        )
+        .get(
+            "empirical",
+            {},
+        )
+        .get(
+            "candidate_selection",
+            {},
+        )
+    )
+
+    min_peak_snr = float(
+        candidate_cfg.get(
+            "min_peak_snr",
+            30.0,
+        )
+    )
+
+    if (
+        not np.isfinite(min_peak_snr)
+        or min_peak_snr < 0.0
+    ):
+        raise ValueError(
+            "min_peak_snr must be finite and non-negative."
+        )
+
     cutouts = []
     used_candidates = []
+    rejected_candidates = []
 
     for candidate in candidates:
         if candidate.half_size is None:
@@ -623,24 +658,62 @@ def run_psf_construction_from_config(
             half_size=candidate.half_size,
         )
 
-        cutout = subtract_outer_background(cutout)
-        cutout = recenter_cutout(cutout)
-
-        cutouts.append(cutout)
-
-        used_candidates.append(
-            {
-                "label": candidate.label,
-                "x": candidate.x,
-                "y": candidate.y,
-                "half_size": candidate.half_size,
-            }
+        peak_snr = estimate_cutout_peak_snr(
+            cutout
         )
 
-    psf = stack_psf_cutouts(cutouts)
+        candidate_metadata = {
+            "label": candidate.label,
+            "x": candidate.x,
+            "y": candidate.y,
+            "half_size": candidate.half_size,
+            "peak_snr": peak_snr,
+        }
 
-    psf_equivalent_gaussian_fwhm = estimate_psf_equivalent_gaussian_fwhm(
-        psf,
+        if (
+            peak_snr is None
+            or peak_snr < min_peak_snr
+        ):
+            rejected_candidates.append(
+                {
+                    **candidate_metadata,
+                    "reason": (
+                        "peak_snr_unavailable"
+                        if peak_snr is None
+                        else "peak_snr_below_threshold"
+                    ),
+                }
+            )
+            continue
+
+        cutout = subtract_outer_background(
+            cutout
+        )
+        cutout = recenter_cutout(
+            cutout
+        )
+
+        cutouts.append(
+            cutout
+        )
+        used_candidates.append(
+            candidate_metadata
+        )
+
+    if len(cutouts) == 0:
+        raise ValueError(
+            "No PSF candidates satisfy "
+            f"min_peak_snr={min_peak_snr:g}."
+        )
+
+    psf = stack_psf_cutouts(
+        cutouts
+    )
+
+    psf_equivalent_gaussian_fwhm = (
+        estimate_psf_equivalent_gaussian_fwhm(
+            psf,
+        )
     )
 
     save_empirical_psf_diagnostics(
@@ -662,23 +735,31 @@ def run_psf_construction_from_config(
             ),
             "n_candidates_input": len(candidates),
             "n_candidates_used": len(cutouts),
+            "n_candidates_rejected_snr": len(
+                rejected_candidates
+            ),
+            "min_peak_snr": min_peak_snr,
             "psf_shape": list(psf.shape),
             "psf_sum": float(np.sum(psf)),
             "psf_peak": float(np.nanmax(psf)),
             "psf_min": float(np.nanmin(psf)),
             "psf_max": float(np.nanmax(psf)),
-            "psf_equivalent_gaussian_fwhm_pix": psf_equivalent_gaussian_fwhm,
+            "psf_equivalent_gaussian_fwhm_pix": (
+                psf_equivalent_gaussian_fwhm
+            ),
             "used_candidates": used_candidates,
+            "rejected_candidates": rejected_candidates,
             "warnings": _empirical_psf_warnings(
                 psf,
                 n_candidates_used=len(cutouts),
-                psf_equivalent_gaussian_fwhm_pix=psf_equivalent_gaussian_fwhm,
+                psf_equivalent_gaussian_fwhm_pix=(
+                    psf_equivalent_gaussian_fwhm
+                ),
             ),
         },
     )
 
     return psf
-
 
 def normalize_psf(psf: np.ndarray) -> np.ndarray:
     """Normalize a PSF image to unit sum.
@@ -747,6 +828,137 @@ def extract_centered_cutout(
     return image[y_min:y_max, x_min:x_max]
 
 
+def _outer_border_pixels(
+    cutout: np.ndarray,
+    *,
+    border_width: int,
+) -> np.ndarray:
+    """Return pixels in the outer border of a two-dimensional cutout."""
+    data = np.asarray(
+        cutout,
+        dtype=float,
+    )
+
+    if data.ndim != 2:
+        raise ValueError(
+            "PSF cutout must be 2D."
+        )
+
+    if border_width <= 0:
+        raise ValueError(
+            "border_width must be positive."
+        )
+
+    if 2 * border_width >= min(
+        data.shape
+    ):
+        raise ValueError(
+            "border_width is too large for this cutout."
+        )
+
+    return np.concatenate(
+        [
+            data[:border_width, :].ravel(),
+            data[-border_width:, :].ravel(),
+            data[:, :border_width].ravel(),
+            data[:, -border_width:].ravel(),
+        ]
+    )
+
+
+def estimate_cutout_peak_snr(
+    cutout: np.ndarray,
+    *,
+    border_width: int = 3,
+) -> float | None:
+    """Estimate robust local peak signal-to-noise for a PSF candidate.
+
+    The local background and noise are estimated from the outer cutout
+    border. Noise is represented by the Gaussian-equivalent MAD scale.
+
+    Parameters
+    ----------
+    cutout : ndarray
+        Candidate image cutout before background subtraction.
+    border_width : int, default=3
+        Width of the outer region used for background and noise estimation.
+
+    Returns
+    -------
+    float or None
+        Peak signal-to-noise ratio, or ``None`` when a finite positive
+        local noise scale cannot be measured.
+    """
+    data = np.asarray(
+        cutout,
+        dtype=float,
+    )
+
+    border = _outer_border_pixels(
+        data,
+        border_width=border_width,
+    )
+
+    finite_border = border[
+        np.isfinite(
+            border
+        )
+    ]
+
+    if finite_border.size == 0:
+        return None
+
+    background = float(
+        np.median(
+            finite_border
+        )
+    )
+
+    mad = float(
+        np.median(
+            np.abs(
+                finite_border
+                - background
+            )
+        )
+    )
+
+    local_sigma = 1.4826 * mad
+
+    if (
+        not np.isfinite(local_sigma)
+        or local_sigma <= 0.0
+    ):
+        return None
+
+    finite_data = data[
+        np.isfinite(
+            data
+        )
+    ]
+
+    if finite_data.size == 0:
+        return None
+
+    peak_signal = float(
+        np.max(
+            finite_data
+        )
+        - background
+    )
+
+    if (
+        not np.isfinite(peak_signal)
+        or peak_signal <= 0.0
+    ):
+        return None
+
+    return float(
+        peak_signal
+        / local_sigma
+    )
+
+
 def subtract_outer_background(
     cutout: np.ndarray,
     border_width: int = 3,
@@ -770,22 +982,14 @@ def subtract_outer_background(
     ValueError
         If ``border_width`` is not positive or is too large for the cutout.
     """
-    if border_width <= 0:
-        raise ValueError("border_width must be positive.")
-
-    if 2 * border_width >= min(cutout.shape):
-        raise ValueError("border_width is too large for this cutout.")
-
-    border_pixels = np.concatenate(
-        [
-            cutout[:border_width, :].ravel(),
-            cutout[-border_width:, :].ravel(),
-            cutout[:, :border_width].ravel(),
-            cutout[:, -border_width:].ravel(),
-        ]
+    border_pixels = _outer_border_pixels(
+        cutout,
+        border_width=border_width,
     )
 
-    background = np.nanmedian(border_pixels)
+    background = np.nanmedian(
+        border_pixels
+    )
 
     return cutout - background
 

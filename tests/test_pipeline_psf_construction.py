@@ -264,3 +264,250 @@ def test_estimate_psf_fwhm_preserves_compatibility():
         rel=1.0e-12,
         abs=1.0e-12,
     )
+
+
+def test_empirical_psf_peak_snr_default_is_resolved():
+    """Empirical PSF construction must use an explicit S/N quality threshold."""
+    config = {
+        "object": {"name": "NGC1234"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": "outputs"},
+    }
+
+    resolved = resolve_config(config)
+
+    assert (
+        resolved["psf"]["empirical"]
+        ["candidate_selection"]["min_peak_snr"]
+        == 30.0
+    )
+
+
+def test_estimate_cutout_peak_snr_uses_robust_border_noise():
+    """Peak S/N must be based on a robust local border-noise estimate."""
+    from baymorph.pipeline.psf_construction import (
+        estimate_cutout_peak_snr,
+    )
+
+    rng = np.random.default_rng(42)
+    cutout = rng.normal(
+        0.0,
+        2.0,
+        size=(25, 25),
+    )
+    cutout[12, 12] += 100.0
+
+    peak_snr = estimate_cutout_peak_snr(
+        cutout
+    )
+
+    assert peak_snr is not None
+    assert 30.0 < peak_snr < 70.0
+
+
+def test_psf_construction_rejects_low_snr_candidates(
+    monkeypatch,
+):
+    """Construction must stack only candidates above the configured S/N."""
+    from types import SimpleNamespace
+
+    import baymorph.pipeline.psf_construction as module
+
+    image = np.zeros(
+        (31, 31),
+        dtype=float,
+    )
+    image[10, 10] = 100.0
+    image[20, 20] = 10.0
+
+    candidates = [
+        SimpleNamespace(
+            label=1,
+            x=10.0,
+            y=10.0,
+            half_size=3,
+        ),
+        SimpleNamespace(
+            label=2,
+            x=20.0,
+            y=20.0,
+            half_size=3,
+        ),
+    ]
+
+    observation = SimpleNamespace(
+        image=SimpleNamespace(
+            data=image
+        )
+    )
+
+    monkeypatch.setattr(
+        module.Observation,
+        "from_fits",
+        lambda _: observation,
+    )
+    monkeypatch.setattr(
+        module,
+        "load_psf_candidates",
+        lambda _: candidates,
+    )
+    monkeypatch.setattr(
+        module,
+        "estimate_cutout_peak_snr",
+        lambda cutout: float(
+            np.max(
+                cutout
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "observation_metadata_dict",
+        lambda _: {},
+    )
+    monkeypatch.setattr(
+        module,
+        "save_empirical_psf_diagnostics",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        module,
+        "save_empirical_psf",
+        lambda *args, **kwargs: None,
+    )
+
+    captured = {}
+
+    def fake_stack(cutouts):
+        captured["n_cutouts"] = len(
+            cutouts
+        )
+        psf = np.zeros(
+            (7, 7),
+            dtype=float,
+        )
+        psf[3, 3] = 1.0
+        return psf
+
+    def fake_save_metadata(
+        config,
+        metadata,
+    ):
+        captured["metadata"] = metadata
+
+    monkeypatch.setattr(
+        module,
+        "stack_psf_cutouts",
+        fake_stack,
+    )
+    monkeypatch.setattr(
+        module,
+        "save_empirical_psf_metadata",
+        fake_save_metadata,
+    )
+
+    config = {
+        "data": {
+            "image_path": "unused.fits",
+        },
+        "psf": {
+            "empirical": {
+                "candidate_selection": {
+                    "min_peak_snr": 30.0,
+                },
+            },
+        },
+    }
+
+    module.run_psf_construction_from_config(
+        config
+    )
+
+    assert captured["n_cutouts"] == 1
+
+    metadata = captured[
+        "metadata"
+    ]
+
+    assert metadata[
+        "n_candidates_input"
+    ] == 2
+    assert metadata[
+        "n_candidates_used"
+    ] == 1
+    assert metadata[
+        "n_candidates_rejected_snr"
+    ] == 1
+    assert metadata[
+        "used_candidates"
+    ][0]["label"] == 1
+    assert metadata[
+        "rejected_candidates"
+    ][0]["label"] == 2
+    assert metadata[
+        "rejected_candidates"
+    ][0]["reason"] == (
+        "peak_snr_below_threshold"
+    )
+
+
+def test_psf_construction_fails_when_all_candidates_fail_snr(
+    monkeypatch,
+):
+    """Construction must fail rather than create a PSF from invalid candidates."""
+    from types import SimpleNamespace
+
+    import baymorph.pipeline.psf_construction as module
+
+    observation = SimpleNamespace(
+        image=SimpleNamespace(
+            data=np.zeros(
+                (21, 21),
+                dtype=float,
+            )
+        )
+    )
+
+    candidate = SimpleNamespace(
+        label=1,
+        x=10.0,
+        y=10.0,
+        half_size=3,
+    )
+
+    monkeypatch.setattr(
+        module.Observation,
+        "from_fits",
+        lambda _: observation,
+    )
+    monkeypatch.setattr(
+        module,
+        "load_psf_candidates",
+        lambda _: [candidate],
+    )
+    monkeypatch.setattr(
+        module,
+        "estimate_cutout_peak_snr",
+        lambda cutout: 5.0,
+    )
+
+    config = {
+        "data": {
+            "image_path": "unused.fits",
+        },
+        "psf": {
+            "empirical": {
+                "candidate_selection": {
+                    "min_peak_snr": 30.0,
+                },
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="No PSF candidates satisfy min_peak_snr=30",
+    ):
+        module.run_psf_construction_from_config(
+            config
+        )

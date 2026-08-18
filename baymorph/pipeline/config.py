@@ -81,6 +81,7 @@ DEFAULT_CONFIG = {
                 "max_area": 800,
                 "min_peak": 20,
                 "max_peak": 80000,
+                "min_peak_snr": 30.0,
                 "max_eccentricity": 0.8,
                 "max_elongation": 2.5,
                 "edge_margin": 30,
