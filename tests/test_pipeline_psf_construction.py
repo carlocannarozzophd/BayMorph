@@ -511,3 +511,105 @@ def test_psf_construction_fails_when_all_candidates_fail_snr(
         module.run_psf_construction_from_config(
             config
         )
+
+
+def test_psf_core_fwhm_recovers_sampled_gaussian_width():
+    """Sub-pixel core FWHM must recover sampled Gaussian widths."""
+    from baymorph.pipeline.psf_construction import (
+        estimate_psf_core_fwhm,
+    )
+    from baymorph.simulation.psf import GaussianPSF
+
+    for nominal_fwhm in (
+        2.5,
+        4.0,
+    ):
+        psf = GaussianPSF(
+            fwhm=nominal_fwhm
+        ).kernel()
+
+        core_fwhm = estimate_psf_core_fwhm(
+            psf
+        )
+
+        assert core_fwhm == pytest.approx(
+            nominal_fwhm,
+            abs=0.05,
+        )
+
+
+def test_psf_core_fwhm_is_invariant_to_normalization():
+    """Multiplicative normalization must not change the core FWHM."""
+    from baymorph.pipeline.psf_construction import (
+        estimate_psf_core_fwhm,
+    )
+    from baymorph.simulation.psf import GaussianPSF
+
+    psf = GaussianPSF(
+        fwhm=3.5
+    ).kernel()
+
+    reference = estimate_psf_core_fwhm(
+        psf
+    )
+
+    rescaled = estimate_psf_core_fwhm(
+        100.0 * psf
+    )
+
+    assert rescaled == pytest.approx(
+        reference,
+        rel=1.0e-12,
+        abs=1.0e-12,
+    )
+
+
+def test_psf_core_fwhm_rejects_invalid_inputs():
+    """Invalid or degenerate PSF arrays must not produce a core width."""
+    from baymorph.pipeline.psf_construction import (
+        estimate_psf_core_fwhm,
+    )
+
+    assert estimate_psf_core_fwhm(
+        np.ones(10)
+    ) is None
+
+    assert estimate_psf_core_fwhm(
+        np.zeros((9, 9))
+    ) is None
+
+    assert estimate_psf_core_fwhm(
+        np.full(
+            (9, 9),
+            np.nan,
+        )
+    ) is None
+
+
+def test_psf_core_fwhm_validates_sampling_parameters():
+    """Core-FWHM sampling controls must reject invalid values."""
+    from baymorph.pipeline.psf_construction import (
+        estimate_psf_core_fwhm,
+    )
+
+    psf = np.ones(
+        (9, 9)
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="radial_step must be positive",
+    ):
+        estimate_psf_core_fwhm(
+            psf,
+            radial_step=0.0,
+        )
+
+    with pytest.raises(
+        ValueError,
+        match="n_angles must be at least 8",
+    ):
+        estimate_psf_core_fwhm(
+            psf,
+            n_angles=4,
+        )

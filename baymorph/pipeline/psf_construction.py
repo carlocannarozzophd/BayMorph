@@ -15,10 +15,7 @@ from baymorph.pipeline.config import load_resolved_config
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
 from baymorph.pipeline.outputs import make_output_tree, pipeline_paths
 from baymorph.pipeline.psf_candidates import load_psf_candidates
-from baymorph.plotting.style import (
-    set_plot_style,
-    style_axes,
-)
+from baymorph.plotting.style import make_plot
 from baymorph.simulation.psf import (
     EmpiricalPSF,
     GaussianPSF,
@@ -148,6 +145,181 @@ def estimate_psf_equivalent_gaussian_fwhm(
     )
 
 
+
+def estimate_psf_core_fwhm(
+    psf: np.ndarray,
+    *,
+    radial_step: float = 0.05,
+    n_angles: int = 360,
+) -> float | None:
+    """Estimate the circularized half-maximum core FWHM of a PSF.
+
+    The PSF is sampled along uniformly spaced radial directions using
+    cubic interpolation. The azimuthal median profile is then used to
+    locate the half-maximum radius at sub-pixel resolution.
+
+    This quantity characterizes the PSF core and is intentionally
+    distinct from the second-moment Gaussian-equivalent FWHM, which is
+    more sensitive to extended wings.
+
+    Parameters
+    ----------
+    psf : numpy.ndarray
+        Two-dimensional PSF image.
+    radial_step : float, default=0.05
+        Radial sampling interval in pixels.
+    n_angles : int, default=360
+        Number of uniformly spaced radial directions.
+
+    Returns
+    -------
+    float or None
+        Circularized core FWHM in pixels, or ``None`` when the
+        half-maximum crossing cannot be measured.
+
+    Raises
+    ------
+    ValueError
+        If ``radial_step`` is not positive or ``n_angles`` is too small.
+    """
+    from scipy.ndimage import map_coordinates
+
+    if radial_step <= 0.0:
+        raise ValueError(
+            "radial_step must be positive."
+        )
+
+    if n_angles < 8:
+        raise ValueError(
+            "n_angles must be at least 8."
+        )
+
+    data = np.asarray(
+        psf,
+        dtype=float,
+    )
+
+    if (
+        data.ndim != 2
+        or not np.all(np.isfinite(data))
+    ):
+        return None
+
+    peak = float(
+        np.max(data)
+    )
+
+    if (
+        not np.isfinite(peak)
+        or peak <= 0.0
+    ):
+        return None
+
+    y0, x0 = np.unravel_index(
+        np.argmax(data),
+        data.shape,
+    )
+
+    max_radius = float(
+        min(
+            x0,
+            y0,
+            data.shape[1] - 1 - x0,
+            data.shape[0] - 1 - y0,
+        )
+    )
+
+    if max_radius <= radial_step:
+        return None
+
+    radii = np.arange(
+        0.0,
+        max_radius + 0.5 * radial_step,
+        radial_step,
+    )
+
+    angles = np.linspace(
+        0.0,
+        2.0 * np.pi,
+        n_angles,
+        endpoint=False,
+    )
+
+    radial_grid = radii[
+        None,
+        :
+    ]
+
+    y_coordinates = (
+        float(y0)
+        + np.sin(angles)[:, None]
+        * radial_grid
+    )
+
+    x_coordinates = (
+        float(x0)
+        + np.cos(angles)[:, None]
+        * radial_grid
+    )
+
+    samples = map_coordinates(
+        data,
+        [
+            y_coordinates,
+            x_coordinates,
+        ],
+        order=3,
+        mode="nearest",
+        prefilter=True,
+    )
+
+    profile = np.median(
+        samples,
+        axis=0,
+    )
+
+    peak_profile = float(
+        profile[0]
+    )
+
+    if (
+        not np.isfinite(peak_profile)
+        or peak_profile <= 0.0
+    ):
+        return None
+
+    half_maximum = 0.5 * peak_profile
+
+    crossings = np.flatnonzero(
+        profile <= half_maximum
+    )
+
+    if (
+        crossings.size == 0
+        or crossings[0] == 0
+    ):
+        return None
+
+    index = int(
+        crossings[0]
+    )
+
+    half_maximum_radius = float(
+        np.interp(
+            half_maximum,
+            [
+                profile[index],
+                profile[index - 1],
+            ],
+            [
+                radii[index],
+                radii[index - 1],
+            ],
+        )
+    )
+
+    return 2.0 * half_maximum_radius
+
 def estimate_psf_fwhm(
     psf: np.ndarray,
 ) -> float | None:
@@ -237,43 +409,6 @@ def psf_radial_profile(
 
 
 
-def _style_psf_axis(
-    ax,
-    *,
-    fontsize: int = 35,
-) -> None:
-    """Apply the standard BayMorph style to a PSF diagnostic axis."""
-    style_axes(
-        ax,
-        fontsize=fontsize,
-    )
-
-    for spine in ax.spines.values():
-        spine.set_linewidth(3)
-
-    ax.tick_params(
-        which="both",
-        direction="out",
-        top=False,
-        right=False,
-    )
-
-    ax.tick_params(
-        which="major",
-        length=10,
-        width=3,
-        labelsize=fontsize * 0.8,
-    )
-
-    ax.tick_params(
-        which="minor",
-        length=5,
-        width=3,
-    )
-
-    ax.minorticks_on()
-
-
 def _psf_grid_shape(n_items: int) -> tuple[int, int]:
     """Return an adaptive grid shape for PSF cutout diagnostics."""
     if n_items <= 0:
@@ -314,11 +449,6 @@ def save_psf_diagnostics(
     None
         Diagnostic figures are written to the configured PSF directory.
     """
-    set_plot_style(
-        fontsize=35,
-        usetex=False,
-    )
-
     paths = pipeline_paths(config)["psf"]
 
     diagnostics_dir = (
@@ -336,14 +466,19 @@ def save_psf_diagnostics(
         dtype=float,
     )
 
-    equivalent_gaussian_fwhm = estimate_psf_equivalent_gaussian_fwhm(
+    core_fwhm = estimate_psf_core_fwhm(
         psf,
     )
 
-    fig, axes = plt.subplots(
-        1,
-        2,
-        figsize=(30, 15),
+    equivalent_gaussian_fwhm = (
+        estimate_psf_equivalent_gaussian_fwhm(
+            psf,
+        )
+    )
+
+    fig, axes = make_plot(
+        nrows=1,
+        ncols=2,
         constrained_layout=True,
     )
 
@@ -355,17 +490,14 @@ def save_psf_diagnostics(
 
     axes[0].set_title(
         title,
-        fontsize=35,
     )
 
     axes[0].set_xlabel(
         r"$x\ [{\rm pix}]$",
-        fontsize=35,
     )
 
     axes[0].set_ylabel(
         r"$y\ [{\rm pix}]$",
-        fontsize=35,
     )
 
     radius, profile = psf_radial_profile(
@@ -379,6 +511,18 @@ def save_psf_diagnostics(
         lw=3,
         label="Measured profile",
     )
+
+    if core_fwhm is not None:
+        axes[1].axvline(
+            0.5 * core_fwhm,
+            color="darkorange",
+            linestyle="-.",
+            lw=3,
+            label=(
+                r"$\mathrm{FWHM}_{\mathrm{core}}"
+                rf" = {core_fwhm:.2f}\ \mathrm{{pix}}$"
+            ),
+        )
 
     if equivalent_gaussian_fwhm is not None:
         axes[1].axvline(
@@ -406,37 +550,23 @@ def save_psf_diagnostics(
 
     axes[1].set_xlabel(
         r"$R\ [{\rm pix}]$",
-        fontsize=35,
     )
 
     axes[1].set_ylabel(
         r"$I_{\rm PSF}$",
-        fontsize=35,
     )
 
     axes[1].set_title(
         "PSF radial profile",
-        fontsize=35,
     )
 
     axes[1].legend(
         frameon=False,
-        fontsize=30,
-    )
-
-    for ax in axes:
-        _style_psf_axis(
-            ax,
-            fontsize=35,
-        )
-
-    figure_path = (
-        diagnostics_dir
-        / "empirical_psf_diagnostic.pdf"
     )
 
     fig.savefig(
-        figure_path,
+        diagnostics_dir
+        / "empirical_psf_diagnostic.pdf",
         bbox_inches="tight",
     )
 
@@ -447,15 +577,14 @@ def save_psf_diagnostics(
     if not cutouts:
         return
 
-    n_cutouts = len(cutouts)
     nrows, ncols = _psf_grid_shape(
-        n_cutouts
+        len(cutouts)
     )
 
-    fig, axes = plt.subplots(
-        nrows,
-        ncols,
-        figsize=(30, 15),
+    fig, axes = make_plot(
+        nrows=nrows,
+        ncols=ncols,
+        flatten=False,
         squeeze=False,
         constrained_layout=True,
     )
@@ -467,8 +596,13 @@ def save_psf_diagnostics(
     for ax in axes_flat:
         ax.axis("off")
 
-    for i, cutout in enumerate(cutouts):
-        ax = axes_flat[i]
+    for index, cutout in enumerate(
+        cutouts
+    ):
+        ax = axes_flat[
+            index
+        ]
+
         ax.axis("on")
 
         ax.imshow(
@@ -478,13 +612,7 @@ def save_psf_diagnostics(
         )
 
         ax.set_title(
-            rf"$\mathrm{{PSF\ cutout}}\ {i + 1}$",
-            fontsize=25,
-        )
-
-        _style_psf_axis(
-            ax,
-            fontsize=25,
+            rf"$\mathrm{{PSF\ cutout}}\ {index + 1}$",
         )
 
     fig.savefig(
@@ -496,7 +624,6 @@ def save_psf_diagnostics(
     plt.close(
         fig,
     )
-
 
 def save_empirical_psf_diagnostics(
     config: dict[str, Any],
@@ -561,6 +688,14 @@ def save_simulated_psf_products(
             "type": "gaussian",
             "source": "simulation",
             "fwhm_pix": float(fwhm),
+            "psf_core_fwhm_pix": estimate_psf_core_fwhm(
+                kernel
+            ),
+            "psf_equivalent_gaussian_fwhm_pix": (
+                estimate_psf_equivalent_gaussian_fwhm(
+                    kernel
+                )
+            ),
             "kernel_size": int(size),
             "psf_shape": list(kernel.shape),
             "psf_sum": float(np.sum(kernel)),
@@ -710,6 +845,10 @@ def run_psf_construction_from_config(
         cutouts
     )
 
+    psf_core_fwhm = estimate_psf_core_fwhm(
+        psf,
+    )
+
     psf_equivalent_gaussian_fwhm = (
         estimate_psf_equivalent_gaussian_fwhm(
             psf,
@@ -744,6 +883,7 @@ def run_psf_construction_from_config(
             "psf_peak": float(np.nanmax(psf)),
             "psf_min": float(np.nanmin(psf)),
             "psf_max": float(np.nanmax(psf)),
+            "psf_core_fwhm_pix": psf_core_fwhm,
             "psf_equivalent_gaussian_fwhm_pix": (
                 psf_equivalent_gaussian_fwhm
             ),
