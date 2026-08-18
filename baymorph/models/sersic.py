@@ -121,23 +121,7 @@ class SersicModel:
         self,
         radius: ArrayLike,
     ) -> FloatArray:
-        """Evaluate the continuous Sérsic surface brightness.
-
-        Parameters
-        ----------
-        radius : array-like
-            Elliptical radius in pixels.
-
-        Returns
-        -------
-        ndarray
-            Surface brightness evaluated at each radius.
-
-        Raises
-        ------
-        ValueError
-            If any radius is negative or non-finite.
-        """
+        """Evaluate the continuous Sérsic surface brightness."""
         radius_array = np.asarray(radius, dtype=float)
 
         if np.any(~np.isfinite(radius_array)):
@@ -206,7 +190,6 @@ class SersicModel:
         integration_order: int,
     ) -> FloatArray:
         """Integrate the profile over an arbitrary rectangular region."""
-
         nodes, weights = np.polynomial.legendre.leggauss(
             integration_order
         )
@@ -305,8 +288,7 @@ class SersicModel:
         *,
         integration_order: int,
     ) -> FloatArray:
-        """Integrate the profile over detector pixels using fixed quadrature."""
-
+        """Integrate detector pixels using fixed quadrature."""
         return self._integrate_rectangle(
             xmin=np.asarray(pixel_x, dtype=float) - 0.5,
             xmax=np.asarray(pixel_x, dtype=float) + 0.5,
@@ -323,13 +305,11 @@ class SersicModel:
         integration_order: int,
     ) -> FloatArray:
         """Backward-compatible alias for fixed pixel integration."""
-
         return self._integrate_pixel_fixed(
             pixel_x=pixel_x,
             pixel_y=pixel_y,
             integration_order=integration_order,
         )
-
 
     def _integrate_pixel_adaptive(
         self,
@@ -342,7 +322,6 @@ class SersicModel:
         max_depth: int,
     ) -> FloatArray:
         """Integrate detector pixels using adaptive quadrature."""
-
         from baymorph.rendering import (
             IntegrationCell,
             integrate_adaptively,
@@ -385,20 +364,19 @@ class SersicModel:
             image[index] = result.value
 
         return image
-    
+
     def render_components(
         self,
         shape: tuple[int, int],
         *,
-        renderer: str = "fixed",
-        integration_order: int = 5,
+        renderer: str = "hybrid",
+        integration_order: int = 4,
         rtol: float = 1.0e-6,
         atol: float = 1.0e-12,
         max_depth: int = 6,
         origin: tuple[float, float] = (0.0, 0.0),
     ) -> dict[str, FloatArray]:
         """Render the Sérsic model as a named single-component model."""
-
         return {
             "sersic": self.render(
                 shape=shape,
@@ -411,34 +389,72 @@ class SersicModel:
             )
         }
 
-
     def render(
         self,
         shape: tuple[int, int],
         *,
-        renderer: str = "fixed",
-        integration_order: int = 5,
+        renderer: str = "hybrid",
+        integration_order: int = 4,
         rtol: float = 1.0e-6,
         atol: float = 1.0e-12,
         max_depth: int = 6,
         origin: tuple[float, float] = (0.0, 0.0),
     ) -> FloatArray:
-        """Integrate the continuous model over detector pixels."""
+        """Integrate the continuous model over detector pixels.
 
+        ``hybrid`` is the production default. It combines moderate-order
+        Gauss-Legendre quadrature over the smooth outer image with automatic
+        semi-analytic integration of the numerically difficult Sérsic core.
+
+        ``fixed`` and ``adaptive`` remain available for numerical validation.
+        """
         self._validate_shape(shape)
-        self._validate_integration_order(integration_order)
+        self._validate_integration_order(
+            integration_order
+        )
 
-        if renderer not in {"fixed", "adaptive"}:
+        if renderer not in {
+            "hybrid",
+            "fixed",
+            "adaptive",
+        }:
             raise ValueError(
-                "renderer must be either 'fixed' or 'adaptive'."
+                "renderer must be 'hybrid', 'fixed', or 'adaptive'."
+            )
+
+        if renderer == "hybrid":
+            from baymorph.rendering.sersic_hybrid import (
+                render_sersic_hybrid,
+            )
+
+            return render_sersic_hybrid(
+                self,
+                shape,
+                origin=origin,
+                outer_integration_order=integration_order,
             )
 
         ny, nx = shape
         y_origin, x_origin = origin
 
-        pixel_y, pixel_x = np.mgrid[0:ny, 0:nx]
-        pixel_y = np.asarray(pixel_y, dtype=float) + y_origin
-        pixel_x = np.asarray(pixel_x, dtype=float) + x_origin
+        pixel_y, pixel_x = np.mgrid[
+            0:ny,
+            0:nx,
+        ]
+        pixel_y = (
+            np.asarray(
+                pixel_y,
+                dtype=float,
+            )
+            + y_origin
+        )
+        pixel_x = (
+            np.asarray(
+                pixel_x,
+                dtype=float,
+            )
+            + x_origin
+        )
 
         if renderer == "fixed":
             return self._integrate_pixel_fixed(

@@ -379,3 +379,70 @@ def test_sersic_rectangle_integrator_is_additive_under_quadrisection():
         rtol=1.0e-12,
         atol=1.0e-14,
     )
+
+
+def test_sersic_default_render_uses_validated_hybrid_renderer():
+    """Default Sérsic rendering must use the validated hybrid algorithm."""
+    from baymorph.rendering.sersic_hybrid import (
+        render_sersic_hybrid,
+    )
+
+    model = SersicModel(
+        flux=1.0,
+        re=0.5,
+        n=10.0,
+        q=0.2,
+        theta=0.67,
+        x0=20.49,
+        y0=19.51,
+    )
+
+    default = model.render(
+        shape=(41, 41),
+    )
+
+    explicit = render_sersic_hybrid(
+        model,
+        shape=(41, 41),
+    )
+
+    np.testing.assert_allclose(
+        default,
+        explicit,
+        rtol=0.0,
+        atol=0.0,
+    )
+
+
+def test_sersic_fixed_renderer_remains_available_for_validation():
+    """Fixed quadrature must remain explicitly accessible."""
+    model = SersicModel(
+        flux=1.0,
+        re=0.5,
+        n=10.0,
+        q=0.2,
+        theta=0.67,
+        x0=20.49,
+        y0=19.51,
+    )
+
+    hybrid = model.render(
+        shape=(41, 41),
+    )
+
+    fixed = model.render(
+        shape=(41, 41),
+        renderer="fixed",
+        integration_order=4,
+    )
+
+    assert hybrid.shape == fixed.shape
+    assert np.all(np.isfinite(hybrid))
+    assert np.all(np.isfinite(fixed))
+
+    assert (
+        np.linalg.norm(
+            hybrid - fixed
+        )
+        > 1.0e-3
+    )

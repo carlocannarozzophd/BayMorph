@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from baymorph.fitting import (
     Parameter,
@@ -16,18 +15,21 @@ from baymorph.likelihood import GaussianImageLikelihood
 from baymorph.simulation.psf import GaussianPSF
 
 
-def test_bulge_disk_recovers_principal_component_parameters() -> None:
-    """A controlled fit should recover bulge and disc fluxes."""
+def test_bulge_disk_sampler_recovers_linear_gaussian_posterior() -> None:
+    """Recover the analytic posterior geometry of a controlled linear fit."""
     rng = np.random.default_rng(20260806)
 
     shape = (25, 25)
     noise_sigma = 1.5
     psf = GaussianPSF(fwhm=2.5)
 
-    truth = {
-        "flux_bulge": 250.0,
-        "flux_disk": 600.0,
-    }
+    truth = np.asarray(
+        [
+            250.0,
+            600.0,
+        ],
+        dtype=float,
+    )
 
     fixed_parameters = {
         "re_bulge": 2.5,
@@ -42,13 +44,22 @@ def test_bulge_disk_recovers_principal_component_parameters() -> None:
         "sky": 0.0,
     }
 
-    truth_model = make_bulge_disk_psf_sky_model(
-        **truth,
-        **fixed_parameters,
-        psf=psf,
-    )
+    def render(
+        flux_bulge: float,
+        flux_disk: float,
+    ) -> np.ndarray:
+        model = make_bulge_disk_psf_sky_model(
+            flux_bulge=flux_bulge,
+            flux_disk=flux_disk,
+            **fixed_parameters,
+            psf=psf,
+        )
+        return model.render(shape)
 
-    noiseless = truth_model.render(shape)
+    noiseless = render(
+        truth[0],
+        truth[1],
+    )
 
     data = noiseless + rng.normal(
         loc=0.0,
@@ -98,6 +109,66 @@ def test_bulge_disk_recovers_principal_component_parameters() -> None:
         likelihood=likelihood,
     )
 
+    base = render(
+        1.0,
+        1.0,
+    )
+
+    bulge_template = (
+        render(2.0, 1.0)
+        - base
+    )
+    disk_template = (
+        render(1.0, 2.0)
+        - base
+    )
+
+    reconstructed_truth = (
+        truth[0] * bulge_template
+        + truth[1] * disk_template
+    )
+
+    np.testing.assert_allclose(
+        reconstructed_truth,
+        noiseless,
+        rtol=1.0e-12,
+        atol=1.0e-12,
+    )
+
+    design = np.column_stack(
+        (
+            bulge_template.ravel(),
+            disk_template.ravel(),
+        )
+    )
+
+    precision = (
+        design.T @ design
+        / noise_sigma**2
+    )
+    covariance = np.linalg.inv(
+        precision
+    )
+
+    analytic_mean = covariance @ (
+        design.T @ data.ravel()
+        / noise_sigma**2
+    )
+
+    delta_truth = (
+        analytic_mean - truth
+    )
+
+    truth_mahalanobis_sq = float(
+        delta_truth.T
+        @ precision
+        @ delta_truth
+    )
+
+    # For two fitted parameters, Delta chi^2 = 5.991 corresponds to
+    # the 95% joint Gaussian confidence region.
+    assert truth_mahalanobis_sq < 5.991
+
     backend = make_sampler(
         {
             "name": "dynesty",
@@ -127,20 +198,33 @@ def test_bulge_disk_recovers_principal_component_parameters() -> None:
         "flux_disk",
     ]
 
-    relative_tolerances = {
-        "flux_bulge": 0.15,
-        "flux_disk": 0.10,
-    }
+    sampled_location = np.asarray(
+        [
+            result.summary(
+                "flux_bulge"
+            )["median"],
+            result.summary(
+                "flux_disk"
+            )["median"],
+        ],
+        dtype=float,
+    )
 
-    for name, expected in truth.items():
-        summary = result.summary(name)
+    delta_sampler = (
+        sampled_location
+        - analytic_mean
+    )
 
-        assert summary["median"] == pytest.approx(
-            expected,
-            rel=relative_tolerances[name],
-        )
+    sampler_mahalanobis_sq = float(
+        delta_sampler.T
+        @ precision
+        @ delta_sampler
+    )
+
+    assert sampler_mahalanobis_sq < 1.0
 
     assert result.logz is not None
     assert np.isfinite(result.logz)
+
     assert result.logz_error is not None
     assert np.isfinite(result.logz_error)

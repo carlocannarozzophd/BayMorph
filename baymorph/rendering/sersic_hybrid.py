@@ -1,4 +1,4 @@
-"""Experimental hybrid rendering utilities for Sérsic models."""
+"""Hybrid semi-analytic rendering utilities for Sérsic models."""
 
 from __future__ import annotations
 
@@ -20,6 +20,13 @@ _DIRECTION_EPSILON = 1.0e-15
 _ANGULAR_BREAKPOINT_ATOL = (
     1024.0 * np.finfo(float).eps * _TWO_PI
 )
+
+DEFAULT_OUTER_INTEGRATION_ORDER = 4
+DEFAULT_UNIT_FLUX_PIXEL_TOLERANCE = 1.0e-4
+DEFAULT_GUARD_RINGS = 2
+DEFAULT_MAX_HALF_WIDTH = 16
+DEFAULT_EPSABS = 1.0e-13
+DEFAULT_EPSREL = 1.0e-12
 
 
 @lru_cache(maxsize=None)
@@ -55,8 +62,9 @@ def _split_central_pixel_integral(
 ) -> float:
     """Return a split high-order numerical central-pixel integral.
 
-    This routine is retained only as an independent numerical validation
-    reference. Hybrid rendering uses the semi-analytic pixel integral.
+    This routine is retained as an independent numerical validation
+    reference. Production hybrid rendering uses the semi-analytic
+    pixel integral.
     """
     nodes, weights = _legendre_rule(
         integration_order
@@ -159,12 +167,12 @@ def _merge_periodic_angles(
     """Merge numerically coincident angular directions.
 
     Detector-pixel vertices can be exactly collinear with the Sérsic centre
-    while floating-point coordinate arithmetic produces slightly different
-    ``atan2`` values. Such duplicate directions would create artificial,
-    extremely narrow integration intervals.
+    while floating-point arithmetic produces slightly different ``atan2``
+    values. Such duplicate directions would create artificial, extremely
+    narrow angular integration intervals.
 
-    Angles within ``atol`` are therefore treated as one geometric direction.
-    The periodic equivalence between zero and two pi is handled explicitly.
+    Angles within ``atol`` are treated as one geometric direction. The
+    periodic equivalence between zero and two pi is handled explicitly.
     """
     if not angles:
         return ()
@@ -377,8 +385,8 @@ def _semianalytic_pixel_integral(
     *,
     pixel_x: float,
     pixel_y: float,
-    epsabs: float = 1.0e-13,
-    epsrel: float = 1.0e-12,
+    epsabs: float = DEFAULT_EPSABS,
+    epsrel: float = DEFAULT_EPSREL,
 ) -> float:
     r"""Return the semi-analytic Sérsic integral over any detector pixel.
 
@@ -516,8 +524,8 @@ def _semianalytic_central_pixel_integral(
     *,
     pixel_x: float,
     pixel_y: float,
-    epsabs: float = 1.0e-13,
-    epsrel: float = 1.0e-12,
+    epsabs: float = DEFAULT_EPSABS,
+    epsrel: float = DEFAULT_EPSREL,
 ) -> float:
     """Return the semi-analytic integral of the pixel containing the centre."""
     tolerance = (
@@ -721,7 +729,7 @@ def _apply_automatic_semianalytic_region(
                 epsrel=epsrel,
             )
 
-            midpoint = float(
+            numerical = float(
                 output[
                     local_y,
                     local_x,
@@ -729,7 +737,7 @@ def _apply_automatic_semianalytic_region(
             )
 
             normalized_error = (
-                abs(semi - midpoint)
+                abs(semi - numerical)
                 / flux_scale
             )
 
@@ -792,32 +800,35 @@ def render_sersic_hybrid(
     model: SersicModel,
     shape: tuple[int, int],
     *,
-    unit_flux_pixel_tolerance: float,
     origin: tuple[float, float] = (0.0, 0.0),
-    guard_rings: int = 2,
-    max_half_width: int = 16,
-    epsabs: float = 1.0e-13,
-    epsrel: float = 1.0e-12,
+    outer_integration_order: int = DEFAULT_OUTER_INTEGRATION_ORDER,
+    unit_flux_pixel_tolerance: float = DEFAULT_UNIT_FLUX_PIXEL_TOLERANCE,
+    guard_rings: int = DEFAULT_GUARD_RINGS,
+    max_half_width: int = DEFAULT_MAX_HALF_WIDTH,
+    epsabs: float = DEFAULT_EPSABS,
+    epsrel: float = DEFAULT_EPSREL,
 ) -> FloatArray:
-    """Render a Sérsic profile with automatic semi-analytic refinement.
+    """Render a Sérsic profile with validated hybrid integration.
 
-    The complete image is initially evaluated by midpoint integration.
-    Successive Chebyshev rings around the Sérsic centre are then evaluated
-    semi-analytically. Refinement stops after ``guard_rings`` consecutive
-    rings for which the maximum midpoint error, normalized by total model
-    flux, is no larger than ``unit_flux_pixel_tolerance``.
+    The smooth outer image is evaluated with fixed Gauss-Legendre quadrature.
+    Successive Chebyshev rings around the Sérsic centre are then compared with
+    semi-analytic detector-pixel integrals. Evaluated inner pixels are replaced
+    by their semi-analytic values and refinement stops after the requested
+    number of consecutive converged guard rings.
 
-    The tolerance is intentionally explicit while this renderer remains
-    experimental. It is an intrinsic rendering criterion and does not by
-    itself guarantee a particular likelihood or posterior error.
+    The default numerical controls correspond to the validated BayMorph
+    Sérsic rendering rule.
     """
     model._validate_shape(shape)
+    model._validate_integration_order(
+        outer_integration_order
+    )
 
     image = model.render(
         shape=shape,
         origin=origin,
         renderer="fixed",
-        integration_order=1,
+        integration_order=outer_integration_order,
     )
 
     (
