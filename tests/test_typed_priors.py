@@ -208,3 +208,81 @@ def test_beta_prior_rejects_non_positive_shapes(
             alpha=alpha,
             beta=beta_parameter,
         )
+
+
+def test_log_uniform_prior_maps_median_to_geometric_mean():
+    """The unit-cube midpoint must map to the geometric mean."""
+    from baymorph.fitting import LogUniformPrior
+
+    prior = LogUniformPrior(
+        lower=1.0e2,
+        upper=1.0e8,
+    )
+
+    assert prior.transform(
+        0.5
+    ) == pytest.approx(
+        1.0e5
+    )
+
+
+def test_log_uniform_prior_respects_endpoints():
+    """Finite log-uniform bounds must map exactly from unit-cube endpoints."""
+    from baymorph.fitting import LogUniformPrior
+
+    prior = LogUniformPrior(
+        lower=2.0,
+        upper=200.0,
+    )
+
+    assert prior.transform(
+        0.0
+    ) == pytest.approx(
+        2.0
+    )
+
+    assert prior.transform(
+        1.0
+    ) == pytest.approx(
+        200.0
+    )
+
+
+@pytest.mark.parametrize(
+    (
+        "lower",
+        "upper",
+    ),
+    [
+        (
+            0.0,
+            10.0,
+        ),
+        (
+            -1.0,
+            10.0,
+        ),
+        (
+            10.0,
+            10.0,
+        ),
+        (
+            10.0,
+            1.0,
+        ),
+    ],
+)
+def test_log_uniform_prior_rejects_invalid_bounds(
+    lower,
+    upper,
+):
+    """Log-uniform priors require ordered strictly positive bounds."""
+    from baymorph.fitting import LogUniformPrior
+
+    with pytest.raises(
+        ValueError
+    ):
+        LogUniformPrior(
+            lower=lower,
+            upper=upper,
+        )

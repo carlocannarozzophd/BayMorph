@@ -9,6 +9,7 @@ from typing import Any
 from baymorph.fitting.priors import (
     BetaPrior,
     FixedPrior,
+    LogUniformPrior,
     NormalPrior,
     Prior,
     UniformPrior,
@@ -150,6 +151,26 @@ def parse_prior_config(
             upper=upper,
         )
 
+    if prior_type == "log_uniform":
+        _require_exact_keys(
+            config,
+            {
+                "type",
+                "lower",
+                "upper",
+            },
+            context="Log-uniform prior",
+        )
+
+        return LogUniformPrior(
+            lower=_parse_numeric_value(
+                config["lower"]
+            ),
+            upper=_parse_numeric_value(
+                config["upper"]
+            ),
+        )
+
     if prior_type == "beta":
         has_lower = "lower" in config
         has_upper = "upper" in config
@@ -218,7 +239,7 @@ def parse_prior_config(
 
     raise ValueError(
         "Prior type must be one of "
-        "'fixed', 'uniform', 'beta', or 'normal'."
+        "'fixed', 'uniform', 'log_uniform', 'beta', or 'normal'."
     )
 
 
@@ -250,8 +271,6 @@ def _require_exact_keys(
             f"{context} configuration keys are invalid. "
             f"Missing: {missing}. Extra: {extra}."
         )
-
-
 
 
 _PARAMETER_PRIOR_ALIASES = {

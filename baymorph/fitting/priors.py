@@ -85,6 +85,80 @@ class UniformPrior(Prior):
 
 
 @dataclass(frozen=True)
+class LogUniformPrior(Prior):
+    """Log-uniform prior over a finite strictly positive interval.
+
+    The density is proportional to ``1 / x`` between ``lower`` and
+    ``upper``. Equivalently, the natural logarithm of the parameter is
+    uniformly distributed between ``log(lower)`` and ``log(upper)``.
+    """
+
+    lower: float
+    upper: float
+
+    def __post_init__(self) -> None:
+        lower = float(self.lower)
+        upper = float(self.upper)
+
+        if not np.isfinite(lower) or not np.isfinite(upper):
+            raise ValueError(
+                "Log-uniform prior bounds must be finite."
+            )
+
+        if lower <= 0.0:
+            raise ValueError(
+                "Log-uniform prior lower bound must be positive."
+            )
+
+        if upper <= lower:
+            raise ValueError(
+                "Log-uniform prior upper bound must be greater than its "
+                "lower bound."
+            )
+
+        object.__setattr__(self, "lower", lower)
+        object.__setattr__(self, "upper", upper)
+
+    def transform(self, unit_value: float) -> float:
+        """Map one unit-cube coordinate uniformly in logarithmic space."""
+        value = _validate_unit_value(
+            unit_value
+        )
+
+        if value == 0.0:
+            return self.lower
+
+        if value == 1.0:
+            return self.upper
+
+        log_lower = np.log(
+            self.lower
+        )
+        log_upper = np.log(
+            self.upper
+        )
+
+        result = np.exp(
+            log_lower
+            + value
+            * (
+                log_upper
+                - log_lower
+            )
+        )
+
+        if (
+            not np.isfinite(result)
+            or result <= 0.0
+        ):
+            raise ValueError(
+                "Log-uniform prior transform produced an invalid value."
+            )
+
+        return float(result)
+
+
+@dataclass(frozen=True)
 class NormalPrior(Prior):
     """Unbounded normal prior."""
 
@@ -124,7 +198,6 @@ class NormalPrior(Prior):
             self.mean
             + self.sigma * norm.ppf(clipped)
         )
-
 
 
 @dataclass(frozen=True)

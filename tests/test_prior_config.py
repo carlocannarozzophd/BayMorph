@@ -195,3 +195,37 @@ def test_parse_symbolic_uniform_bounds() -> None:
         lower=-1.5707963267948966,
         upper=1.5707963267948966,
     )
+
+
+def test_parse_log_uniform_prior() -> None:
+    """The shared parser must construct a log-uniform prior."""
+    from baymorph.fitting.priors import LogUniformPrior
+
+    prior = parse_prior_config(
+        {
+            "type": "log_uniform",
+            "lower": 1.0e2,
+            "upper": 1.0e8,
+        }
+    )
+
+    assert prior == LogUniformPrior(
+        lower=1.0e2,
+        upper=1.0e8,
+    )
+
+
+def test_log_uniform_prior_rejects_extra_configuration_keys() -> None:
+    """Log-uniform prior configuration must use an exact key set."""
+    with pytest.raises(
+        ValueError,
+        match="Extra",
+    ):
+        parse_prior_config(
+            {
+                "type": "log_uniform",
+                "lower": 1.0,
+                "upper": 100.0,
+                "unexpected": 42,
+            }
+        )

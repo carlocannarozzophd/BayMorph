@@ -25,6 +25,7 @@ from baymorph.fitting.pocomc import (
 from baymorph.fitting.priors import (
     BetaPrior,
     FixedPrior,
+    LogUniformPrior,
     NormalPrior,
     Prior,
     UniformPrior,
@@ -36,6 +37,7 @@ __all__ = [
     "DynestyFitter",
     "FixedPrior",
     "GridSearchResult",
+    "LogUniformPrior",
     "NativeFitter",
     "NormalPrior",
     "Parameter",
@@ -47,7 +49,7 @@ __all__ = [
     "grid_search_1d",
     "make_bulge_disk_psf_sky_model",
     "make_double_sersic_psf_sky_model",
-    "make_sersic_point_source_psf_sky_model",
     "make_sampler",
+    "make_sersic_point_source_psf_sky_model",
     "make_single_sersic_psf_sky_model",
 ]
