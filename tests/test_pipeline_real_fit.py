@@ -36,8 +36,6 @@ from baymorph.pipeline.real_fit import (
 )
 
 
-
-
 def _prior_config_with_explicit_fluxes(
     model_name: str,
 ) -> dict:
@@ -170,7 +168,6 @@ def test_run_real_fit_requires_psf_products(
         match="PSF products are required before fitting",
     ):
         run_real_fit_from_config({})
-
 
 
 def test_real_fit_products_preserve_posterior_round_trip(
@@ -382,7 +379,7 @@ def test_compute_fit_statistics_uses_unmasked_valid_pixels():
     assert np.allclose(
         stats["norm_residual"][~mask],
         (data - model)[~mask],
-)
+    )
 
 
 def test_build_parameter_set_single_sersic():
@@ -519,6 +516,7 @@ def test_compute_bayesian_model_comparison():
         np.exp(3.0)
     )
 
+
 def test_run_sampler_builds_problem_and_backend(
     monkeypatch,
 ):
@@ -643,6 +641,10 @@ def _run_two_model_fit_for_comparison_test(
                 "type": "gaussian",
             },
             "sampler": {},
+            "region": {
+                "mode": "full",
+                "radius": None,
+            },
             "comparison": {
                 "enabled": comparison_enabled,
                 "metric": comparison_metric,
@@ -651,6 +653,18 @@ def _run_two_model_fit_for_comparison_test(
     }
 
     image_products = SimpleNamespace(
+        prepared_data=np.zeros(
+            (2, 2),
+            dtype=float,
+        ),
+        noise=np.ones(
+            (2, 2),
+            dtype=float,
+        ),
+        fitting_mask=np.zeros(
+            (2, 2),
+            dtype=bool,
+        ),
         cutout_bounds=None,
     )
     saved_comparisons = []

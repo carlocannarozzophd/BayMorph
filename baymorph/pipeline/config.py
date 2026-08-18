@@ -100,6 +100,10 @@ DEFAULT_CONFIG = {
             "type": "gaussian",
             "include_normalization": True,
         },
+        "region": {
+            "mode": "full",
+            "radius": None,
+        },
         "sampler": {
             "name": "nautilus",
         },
@@ -327,7 +331,7 @@ def load_config(path: str | Path) -> dict[str, Any]:
     Parameters
     ----------
     path : str or pathlib.Path
-        Path to the YAML configuration file.
+        Path to a YAML configuration file.
 
     Returns
     -------
@@ -337,7 +341,7 @@ def load_config(path: str | Path) -> dict[str, Any]:
     Raises
     ------
     FileNotFoundError
-        If the configuration file does not exist.
+        If the YAML file does not exist.
     ValueError
         If the YAML file is empty.
     TypeError
@@ -346,18 +350,109 @@ def load_config(path: str | Path) -> dict[str, Any]:
     path = Path(path)
 
     if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
+        raise FileNotFoundError(
+            f"Config file not found: {path}"
+        )
 
     with path.open("r") as f:
         config = yaml.safe_load(f)
 
     if config is None:
-        raise ValueError(f"Config file is empty: {path}")
+        raise ValueError(
+            f"Config file is empty: {path}"
+        )
 
     if not isinstance(config, dict):
-        raise TypeError("Config file must define a YAML mapping at top level.")
+        raise TypeError(
+            "Config file must define a YAML mapping at top level."
+        )
 
     return config
+
+
+def _validate_fit_region_config(
+    region_config: Any,
+) -> None:
+    """Validate the likelihood inference-region configuration."""
+    if not isinstance(
+        region_config,
+        dict,
+    ):
+        raise TypeError(
+            "fit.region must be a mapping."
+        )
+
+    supported_keys = {
+        "mode",
+        "radius",
+    }
+
+    unsupported_keys = sorted(
+        set(region_config)
+        - supported_keys
+    )
+
+    if unsupported_keys:
+        raise ValueError(
+            "Unsupported fit.region entries: "
+            f"{unsupported_keys}."
+        )
+
+    mode = str(
+        region_config.get(
+            "mode",
+            "full",
+        )
+    ).strip().lower()
+
+    if mode not in {
+        "full",
+        "circular",
+    }:
+        raise ValueError(
+            "fit.region.mode must be 'full' or 'circular'."
+        )
+
+    radius = region_config.get(
+        "radius",
+        None,
+    )
+
+    if mode == "full":
+        if radius is not None:
+            raise ValueError(
+                "fit.region.radius must be null when "
+                "fit.region.mode is 'full'."
+            )
+
+        return
+
+    if radius is None:
+        raise ValueError(
+            "fit.region.radius is required when "
+            "fit.region.mode is 'circular'."
+        )
+
+    if (
+        isinstance(radius, bool)
+        or not isinstance(
+            radius,
+            (int, float),
+        )
+    ):
+        raise TypeError(
+            "fit.region.radius must be a finite positive number."
+        )
+
+    radius = float(radius)
+
+    if (
+        not math.isfinite(radius)
+        or radius <= 0.0
+    ):
+        raise ValueError(
+            "fit.region.radius must be a finite positive number."
+        )
 
 
 def validate_config(config: dict[str, Any]) -> None:
@@ -373,15 +468,26 @@ def validate_config(config: dict[str, Any]) -> None:
     ValueError
         If a required top-level section or required entry is missing.
     """
-    missing = [key for key in REQUIRED_TOP_LEVEL_KEYS if key not in config]
+    missing = [
+        key
+        for key in REQUIRED_TOP_LEVEL_KEYS
+        if key not in config
+    ]
+
     if missing:
-        raise ValueError(f"Missing required config sections: {missing}")
+        raise ValueError(
+            f"Missing required config sections: {missing}"
+        )
 
     if "name" not in config["object"]:
-        raise ValueError("Config section 'object' must contain 'name'.")
+        raise ValueError(
+            "Config section 'object' must contain 'name'."
+        )
 
     if "image_path" not in config["data"]:
-        raise ValueError("Config section 'data' must contain 'image_path'.")
+        raise ValueError(
+            "Config section 'data' must contain 'image_path'."
+        )
 
     unsupported_data_keys = sorted(
         {
@@ -400,7 +506,9 @@ def validate_config(config: dict[str, Any]) -> None:
         )
 
     if "root" not in config["outputs"]:
-        raise ValueError("Config section 'outputs' must contain 'root'.")
+        raise ValueError(
+            "Config section 'outputs' must contain 'root'."
+        )
 
     if "masking" in config:
         raise ValueError(
@@ -432,10 +540,19 @@ def validate_config(config: dict[str, Any]) -> None:
             "BayMorph always normalizes PSF kernels to unit sum."
         )
 
-    background_config = (
-        config
-        .get("fit", {})
-        .get("background", {})
+    fit_config = config.get(
+        "fit",
+        {},
+    )
+
+    if "region" in fit_config:
+        _validate_fit_region_config(
+            fit_config["region"]
+        )
+
+    background_config = fit_config.get(
+        "background",
+        {},
     )
 
     if "model" in background_config:
@@ -453,16 +570,25 @@ def validate_config(config: dict[str, Any]) -> None:
                 "Available models: 'constant', 'plane'."
             )
 
-    preparation_config = config.get("preparation", {})
+    preparation_config = config.get(
+        "preparation",
+        {},
+    )
 
     unsupported_preparation_entries = []
 
-    if "method" in preparation_config.get("background", {}):
+    if "method" in preparation_config.get(
+        "background",
+        {},
+    ):
         unsupported_preparation_entries.append(
             "preparation.background.method"
         )
 
-    if "method" in preparation_config.get("noise", {}):
+    if "method" in preparation_config.get(
+        "noise",
+        {},
+    ):
         unsupported_preparation_entries.append(
             "preparation.noise.method"
         )
@@ -475,7 +601,10 @@ def validate_config(config: dict[str, Any]) -> None:
             "background estimation and MAD-based noise estimation."
         )
 
-    detection_config = preparation_config.get("detection", {})
+    detection_config = preparation_config.get(
+        "detection",
+        {},
+    )
 
     if "npixels" in detection_config:
         raise ValueError(
@@ -483,7 +612,6 @@ def validate_config(config: dict[str, Any]) -> None:
             "'preparation.detection.npixels'. "
             "Use 'preparation.detection.n_pixels' instead."
         )
-
 
 
 def validate_fit_priors(
@@ -559,7 +687,6 @@ def validate_fit_priors(
                 f"Missing prior configuration for model "
                 f"{model_name!r}: {names}."
             )
-
 
 
 def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -640,13 +767,42 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
         resolved["fit"]["sampler"]
     )
 
-    resolved["object"] = dict(resolved["object"])
-    resolved["data"] = dict(resolved["data"])
-    resolved["outputs"] = dict(resolved["outputs"])
+    _validate_fit_region_config(
+        resolved["fit"]["region"]
+    )
 
-    resolved["object"]["name"] = str(resolved["object"]["name"])
-    resolved["data"]["image_path"] = str(Path(resolved["data"]["image_path"]))
-    resolved["outputs"]["root"] = str(Path(resolved["outputs"]["root"]))
+    resolved["fit"]["region"]["mode"] = str(
+        resolved["fit"]["region"]["mode"]
+    ).strip().lower()
+
+    if resolved["fit"]["region"]["radius"] is not None:
+        resolved["fit"]["region"]["radius"] = float(
+            resolved["fit"]["region"]["radius"]
+        )
+
+    resolved["object"] = dict(
+        resolved["object"]
+    )
+    resolved["data"] = dict(
+        resolved["data"]
+    )
+    resolved["outputs"] = dict(
+        resolved["outputs"]
+    )
+
+    resolved["object"]["name"] = str(
+        resolved["object"]["name"]
+    )
+    resolved["data"]["image_path"] = str(
+        Path(
+            resolved["data"]["image_path"]
+        )
+    )
+    resolved["outputs"]["root"] = str(
+        Path(
+            resolved["outputs"]["root"]
+        )
+    )
 
     data_cfg = resolved["data"]
 
@@ -687,10 +843,14 @@ def _estimate_psf_half_size_limits(
         If either input is non-positive.
     """
     if seeing_fwhm_arcsec <= 0:
-        raise ValueError("seeing_fwhm_arcsec must be positive.")
+        raise ValueError(
+            "seeing_fwhm_arcsec must be positive."
+        )
 
     if pixel_scale_arcsec <= 0:
-        raise ValueError("pixel_scale_arcsec must be positive.")
+        raise ValueError(
+            "pixel_scale_arcsec must be positive."
+        )
 
     seeing_fwhm_pixels = (
         seeing_fwhm_arcsec
@@ -698,13 +858,20 @@ def _estimate_psf_half_size_limits(
     )
 
     min_half_size = int(
-        math.ceil(4.0 * seeing_fwhm_pixels)
+        math.ceil(
+            4.0 * seeing_fwhm_pixels
+        )
     )
     max_half_size = int(
-        math.ceil(10.0 * seeing_fwhm_pixels)
+        math.ceil(
+            10.0 * seeing_fwhm_pixels
+        )
     )
 
-    return min_half_size, max_half_size
+    return (
+        min_half_size,
+        max_half_size,
+    )
 
 
 def resolve_runtime_config(
@@ -725,37 +892,40 @@ def resolve_runtime_config(
     dict
         Runtime-resolved configuration dictionary.
     """
-    resolved = deepcopy(config)
+    resolved = deepcopy(
+        config
+    )
 
-    # ------------------------------------------------------------------
-    # Target geometry
-    # ------------------------------------------------------------------
-
-    data_cfg = resolved.get("data")
+    data_cfg = resolved.get(
+        "data"
+    )
 
     if data_cfg is not None:
-        if data_cfg.get("target_position") == "center":
+        if data_cfg.get(
+            "target_position"
+        ) == "center":
             data_cfg["target_position"] = {
                 "x": observation.metadata.center_x,
                 "y": observation.metadata.center_y,
             }
 
-    # ------------------------------------------------------------------
-    # Image calibration
-    # ------------------------------------------------------------------
-
     if data_cfg is not None:
-        pixel_scale = data_cfg.get("pixel_scale")
+        pixel_scale = data_cfg.get(
+            "pixel_scale"
+        )
 
-        if pixel_scale in (None, "auto"):
-            metadata_pixel_scale = observation.metadata.pixel_scale
+        if pixel_scale in (
+            None,
+            "auto",
+        ):
+            metadata_pixel_scale = (
+                observation.metadata.pixel_scale
+            )
 
             if metadata_pixel_scale is not None:
-                data_cfg["pixel_scale"] = metadata_pixel_scale
-
-    # ------------------------------------------------------------------
-    # PSF candidate selection
-    # ------------------------------------------------------------------
+                data_cfg["pixel_scale"] = (
+                    metadata_pixel_scale
+                )
 
     candidate_cfg = (
         resolved
@@ -765,78 +935,117 @@ def resolve_runtime_config(
     )
 
     if candidate_cfg is not None:
-        #
-        # Automatic half-size limits from seeing
-        #
-        min_half_size = candidate_cfg.get("min_half_size")
-        max_half_size = candidate_cfg.get("max_half_size")
+        min_half_size = candidate_cfg.get(
+            "min_half_size"
+        )
+        max_half_size = candidate_cfg.get(
+            "max_half_size"
+        )
 
-        needs_min_half_size = min_half_size == "auto"
-        needs_max_half_size = max_half_size == "auto"
+        needs_min_half_size = (
+            min_half_size == "auto"
+        )
+        needs_max_half_size = (
+            max_half_size == "auto"
+        )
 
-        if needs_min_half_size or needs_max_half_size:
-            seeing_fwhm = observation.metadata.seeing_fwhm
+        if (
+            needs_min_half_size
+            or needs_max_half_size
+        ):
+            seeing_fwhm = (
+                observation.metadata.seeing_fwhm
+            )
 
             pixel_scale = None
+
             if data_cfg is not None:
-                pixel_scale = data_cfg.get("pixel_scale")
+                pixel_scale = data_cfg.get(
+                    "pixel_scale"
+                )
 
             if (
                 seeing_fwhm is not None
-                and isinstance(pixel_scale, (int, float))
+                and isinstance(
+                    pixel_scale,
+                    (int, float),
+                )
             ):
                 (
                     estimated_min_half_size,
                     estimated_max_half_size,
                 ) = _estimate_psf_half_size_limits(
                     seeing_fwhm_arcsec=seeing_fwhm,
-                    pixel_scale_arcsec=float(pixel_scale),
+                    pixel_scale_arcsec=float(
+                        pixel_scale
+                    ),
                 )
 
                 if needs_min_half_size:
-                    candidate_cfg["min_half_size"] = (
-                        estimated_min_half_size
-                    )
+                    candidate_cfg[
+                        "min_half_size"
+                    ] = estimated_min_half_size
 
                 if needs_max_half_size:
-                    candidate_cfg["max_half_size"] = (
-                        estimated_max_half_size
-                    )
+                    candidate_cfg[
+                        "max_half_size"
+                    ] = estimated_max_half_size
 
-        #
-        # Automatic saturation threshold
-        #
-        if candidate_cfg.get("max_peak") == "auto":
-            saturation = observation.metadata.saturation
+        if candidate_cfg.get(
+            "max_peak"
+        ) == "auto":
+            saturation = (
+                observation.metadata.saturation
+            )
 
             if saturation is not None:
-                candidate_cfg["max_peak"] = saturation
+                candidate_cfg[
+                    "max_peak"
+                ] = saturation
             else:
-                candidate_cfg["max_peak"] = (
-                    DEFAULT_CONFIG["psf"]["empirical"]
-                    ["candidate_selection"]["max_peak"]
+                candidate_cfg[
+                    "max_peak"
+                ] = (
+                    DEFAULT_CONFIG[
+                        "psf"
+                    ][
+                        "empirical"
+                    ][
+                        "candidate_selection"
+                    ][
+                        "max_peak"
+                    ]
                 )
 
     return resolved
 
 
-def load_resolved_config(path: str | Path) -> dict[str, Any]:
+def load_resolved_config(
+    path: str | Path,
+) -> dict[str, Any]:
     """Load, validate, and resolve a BayMorph YAML configuration.
 
     Parameters
     ----------
     path : str or pathlib.Path
-        Path to the YAML configuration file.
+        Path to a YAML configuration file.
 
     Returns
     -------
     dict
         Resolved configuration dictionary.
     """
-    return resolve_config(load_config(path))
+    return resolve_config(
+        load_config(
+            path
+        )
+    )
 
 
-def deep_update(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
+def deep_update(
+    base: dict[str, Any],
+    updates: dict[str, Any],
+) -> dict[str, Any]:
     """Recursively update a nested dictionary.
 
     Parameters
@@ -852,19 +1061,31 @@ def deep_update(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]
         Updated dictionary. Nested dictionaries are recursively merged, while
         non-dictionary values replace the corresponding base value.
     """
-    result = dict(base)
+    result = dict(
+        base
+    )
 
     for key, value in updates.items():
         if (
             key in result
-            and isinstance(result[key], dict)
-            and isinstance(value, dict)
+            and isinstance(
+                result[key],
+                dict,
+            )
+            and isinstance(
+                value,
+                dict,
+            )
         ):
-            result[key] = deep_update(result[key], value)
+            result[key] = deep_update(
+                result[key],
+                value,
+            )
         else:
             result[key] = value
 
     return result
+
 
 def validate_sampler_config(
     sampler_config: dict[str, Any],
@@ -884,7 +1105,9 @@ def validate_sampler_config(
 
     if name not in SAMPLER_DEFAULTS:
         available = ", ".join(
-            sorted(SAMPLER_DEFAULTS)
+            sorted(
+                SAMPLER_DEFAULTS
+            )
         )
         raise ValueError(
             f"Unknown sampler {name!r}. "

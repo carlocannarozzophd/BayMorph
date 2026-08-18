@@ -22,9 +22,9 @@ class RealFitProducts:
     best_parameters : dict of str to float
         Best-fit parameter values.
     best_model_image : ndarray
-        Rendered best-fit model image.
+        Rendered best-fit model image on the inference footprint.
     residual : ndarray
-        Data-minus-model residual image.
+        Data-minus-model residual image on the inference footprint.
     norm_residual : ndarray
         Residual image normalized by the noise map.
     chi2 : float
@@ -37,6 +37,12 @@ class RealFitProducts:
         Name of the fitted model.
     noise : ndarray, optional
         Noise map used during fitting.
+    inference_bounds : dict of str to int, optional
+        Half-open inference-footprint bounds in preparation-cutout
+        coordinates.
+    inference_mask : ndarray of bool, optional
+        Exact exclusion mask used by the likelihood on the inference
+        footprint.
     radius : ndarray, optional
         Radial-bin centers used by radial-profile diagnostics.
     profile_data : ndarray, optional
@@ -59,6 +65,9 @@ class RealFitProducts:
     model_name: str = "unknown"
     noise: np.ndarray | None = None
 
+    inference_bounds: dict[str, int] | None = None
+    inference_mask: np.ndarray | None = None
+
     radius: np.ndarray | None = None
     profile_data: np.ndarray | None = None
     profile_model: np.ndarray | None = None
@@ -79,8 +88,8 @@ class RealFitProducts:
         Returns
         -------
         dict
-            Model name, fit statistics, Bayesian evidence, and best-fitting
-            parameter values.
+            Model name, fit statistics, Bayesian evidence, inference bounds,
+            and best-fitting parameter values.
         """
         logz = None
         logzerr = None
@@ -94,6 +103,13 @@ class RealFitProducts:
             "statistics": self.statistics,
             "logz": logz,
             "logzerr": logzerr,
+            "inference_bounds": (
+                None
+                if self.inference_bounds is None
+                else dict(
+                    self.inference_bounds
+                )
+            ),
             "best_parameters": dict(
                 self.best_parameters
             ),

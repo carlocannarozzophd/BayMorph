@@ -10,13 +10,13 @@ import numpy as np
 
 from baymorph.core.observation import Observation
 from baymorph.fitting import make_sampler
+from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.fitting.model_factories import (
     make_bulge_disk_psf_sky_model,
     make_double_sersic_psf_sky_model,
     make_sersic_point_source_psf_sky_model,
     make_single_sersic_psf_sky_model,
 )
-from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.fitting.parameters import Parameter, ParameterSet
 from baymorph.likelihood import make_likelihood
 from baymorph.models import get_model
@@ -31,6 +31,10 @@ from baymorph.pipeline.config import (
     validate_fit_priors,
 )
 from baymorph.pipeline.image_preparation import load_image_preparation_products
+from baymorph.pipeline.inference_region import (
+    InferenceRegion,
+    build_inference_region,
+)
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
 from baymorph.pipeline.outputs import (
     make_output_tree,
@@ -42,8 +46,8 @@ from baymorph.pipeline.prior_config import (
     prior_config_for_parameter,
 )
 from baymorph.pipeline.psf_construction import load_empirical_psf
-from baymorph.results.inference import json_compatible_metadata
 from baymorph.results import InferenceResult, RealFitProducts
+from baymorph.results.inference import json_compatible_metadata
 from baymorph.simulation.psf import GaussianPSF
 
 
@@ -88,13 +92,24 @@ def run_real_fit_from_config(
     except FileNotFoundError:
         observation = None
 
-    prior_references = _target_reference_coordinates(
+    preparation_references = _target_reference_coordinates(
         target_position=resolved["data"].get(
             "target_position"
         ),
         cutout_bounds=image_products.cutout_bounds,
         observation=observation,
     )
+
+    inference_region = _build_fit_inference_region(
+        image_products,
+        references=preparation_references,
+        region_cfg=resolved["fit"]["region"],
+    )
+
+    prior_references = {
+        "target_x": inference_region.target_x,
+        "target_y": inference_region.target_y,
+    }
 
     likelihood_cfg = resolved["fit"].get(
         "likelihood",
@@ -107,7 +122,7 @@ def run_real_fit_from_config(
     for model_name in resolved["fit"]["models"]:
         products = _execute_single_model_fit(
             model_name=model_name,
-            image_products=image_products,
+            inference_region=inference_region,
             psf=psf,
             prior_cfg=resolved["fit"]["priors"],
             background_cfg=resolved["fit"].get(
@@ -129,7 +144,11 @@ def run_real_fit_from_config(
         all_products[model_name] = products
 
     if len(all_products) == 1:
-        return next(iter(all_products.values()))
+        return next(
+            iter(
+                all_products.values()
+            )
+        )
 
     comparison_cfg = resolved["fit"]["comparison"]
 
@@ -154,10 +173,58 @@ def run_real_fit_from_config(
     return all_products
 
 
+def _build_fit_inference_region(
+    image_products,
+    *,
+    references: dict[str, float],
+    region_cfg: dict[str, Any],
+) -> InferenceRegion:
+    """Build the likelihood footprint from prepared observation products."""
+    if not isinstance(
+        region_cfg,
+        dict,
+    ):
+        raise TypeError(
+            "fit.region must be a mapping."
+        )
+
+    unsupported = sorted(
+        set(region_cfg)
+        - {
+            "mode",
+            "radius",
+        }
+    )
+
+    if unsupported:
+        raise ValueError(
+            "Unsupported fit.region entries: "
+            f"{unsupported}."
+        )
+
+    return build_inference_region(
+        image_products,
+        mode=region_cfg.get(
+            "mode",
+            "full",
+        ),
+        radius=region_cfg.get(
+            "radius",
+            None,
+        ),
+        reference_x=references[
+            "target_x"
+        ],
+        reference_y=references[
+            "target_y"
+        ],
+    )
+
+
 def _execute_single_model_fit(
     *,
     model_name,
-    image_products,
+    inference_region,
     psf,
     prior_cfg,
     background_cfg,
@@ -166,7 +233,6 @@ def _execute_single_model_fit(
     sampler_cfg,
 ):
     """Execute one complete Bayesian fit for one morphology model."""
-
     parameter_names, parameters = _build_parameter_set(
         model_name,
         prior_cfg=prior_cfg,
@@ -184,9 +250,9 @@ def _execute_single_model_fit(
         model_factory=model_factory,
         parameters=parameters,
         likelihood_cfg=likelihood_cfg,
-        data_fit=image_products.prepared_data,
-        noise_fit=image_products.noise,
-        mask_fit=image_products.fitting_mask,
+        data_fit=inference_region.data,
+        noise_fit=inference_region.noise,
+        mask_fit=inference_region.mask,
     )
 
     backend = make_sampler(
@@ -202,15 +268,17 @@ def _execute_single_model_fit(
         result=result,
         parameter_names=parameter_names,
         model_factory=model_factory,
-        image_shape=image_products.prepared_data.shape,
+        image_shape=inference_region.shape,
     )
 
     stats = _compute_fit_statistics(
-        data=image_products.prepared_data,
+        data=inference_region.data,
         model_image=best_model_image,
-        noise=image_products.noise,
-        mask=image_products.fitting_mask,
-        n_parameters=len(parameter_names),
+        noise=inference_region.noise,
+        mask=inference_region.mask,
+        n_parameters=len(
+            parameter_names
+        ),
     )
 
     return RealFitProducts(
@@ -223,9 +291,10 @@ def _execute_single_model_fit(
         chi2=stats["chi2"],
         ndof=stats["ndof"],
         reduced_chi2=stats["reduced_chi2"],
-        noise=image_products.noise,
+        noise=inference_region.noise,
+        inference_bounds=inference_region.bounds,
+        inference_mask=inference_region.mask.copy(),
     )
-
 
 
 def save_real_fit_products(
@@ -236,24 +305,58 @@ def save_real_fit_products(
     observation: Observation | None = None,
 ) -> None:
     """Save real-galaxy fit products to disk."""
-    paths = pipeline_paths(config)["fits"][model_name]
+    paths = pipeline_paths(
+        config
+    )["fits"][model_name]
 
     paths["dir"].mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    np.save(paths["dir"] / "best_model_image.npy", products.best_model_image)
-    np.save(paths["dir"] / "residual.npy", products.residual)
-    np.save(paths["dir"] / "norm_residual.npy", products.norm_residual)
+    np.save(
+        paths["dir"] / "best_model_image.npy",
+        products.best_model_image,
+    )
+    np.save(
+        paths["dir"] / "residual.npy",
+        products.residual,
+    )
+    np.save(
+        paths["dir"] / "norm_residual.npy",
+        products.norm_residual,
+    )
+
+    inference_mask_path = (
+        paths["dir"]
+        / "inference_mask.npy"
+    )
+
+    if products.inference_mask is not None:
+        np.save(
+            inference_mask_path,
+            np.asarray(
+                products.inference_mask,
+                dtype=bool,
+            ),
+        )
+    elif inference_mask_path.exists():
+        inference_mask_path.unlink()
 
     if products.posterior is not None:
-        products.posterior.save(paths["posterior"])
+        products.posterior.save(
+            paths["posterior"]
+        )
 
-    with open(paths["dir"] / "best_parameters.json", "w") as f:
+    with open(
+        paths["dir"] / "best_parameters.json",
+        "w",
+    ) as f:
         json.dump(
             {
-                key: float(value)
+                key: float(
+                    value
+                )
                 for key, value in products.best_parameters.items()
             },
             f,
@@ -261,16 +364,76 @@ def save_real_fit_products(
         )
 
     sampler_cfg = config["fit"]["sampler"]
+    region_cfg = config["fit"].get(
+        "region",
+        {
+            "mode": "full",
+            "radius": None,
+        },
+    )
+
+    inference_region_summary = None
+
+    if products.inference_bounds is not None:
+        inference_region_summary = {
+            "mode": str(
+                region_cfg.get(
+                    "mode",
+                    "full",
+                )
+            ),
+            "radius": region_cfg.get(
+                "radius",
+                None,
+            ),
+            "bounds": {
+                key: int(
+                    value
+                )
+                for key, value in products.inference_bounds.items()
+            },
+            "shape": [
+                int(
+                    products.best_model_image.shape[0]
+                ),
+                int(
+                    products.best_model_image.shape[1]
+                ),
+            ],
+            "n_rendered_pixels": int(
+                products.best_model_image.size
+            ),
+            "n_usable_pixels": (
+                None
+                if products.inference_mask is None
+                else int(
+                    np.count_nonzero(
+                        ~np.asarray(
+                            products.inference_mask,
+                            dtype=bool,
+                        )
+                    )
+                )
+            ),
+        }
 
     summary = {
         "observation": (
-            observation_metadata_dict(observation)
+            observation_metadata_dict(
+                observation
+            )
             if observation is not None
             else None
         ),
-        "chi2": float(products.chi2),
-        "ndof": int(products.ndof),
-        "reduced_chi2": float(products.reduced_chi2),
+        "chi2": float(
+            products.chi2
+        ),
+        "ndof": int(
+            products.ndof
+        ),
+        "reduced_chi2": float(
+            products.reduced_chi2
+        ),
         "logz": (
             None
             if products.posterior is None
@@ -287,9 +450,13 @@ def save_real_fit_products(
         "sampler": json_compatible_metadata(
             sampler_cfg
         ),
+        "inference_region": inference_region_summary,
     }
 
-    with open(paths["dir"] / "fit_summary.json", "w") as f:
+    with open(
+        paths["dir"] / "fit_summary.json",
+        "w",
+    ) as f:
         json.dump(
             summary,
             f,
@@ -335,8 +502,16 @@ def save_fit_summary_text(
         f"chi2 = {products.chi2:.8g}",
         f"ndof = {products.ndof:d}",
         f"reduced_chi2 = {products.reduced_chi2:.8g}",
-        f"logZ = {logz:.8g}" if logz is not None else "logZ = None",
-        f"logZerr = {logzerr:.8g}" if logzerr is not None else "logZerr = None",
+        (
+            f"logZ = {logz:.8g}"
+            if logz is not None
+            else "logZ = None"
+        ),
+        (
+            f"logZerr = {logzerr:.8g}"
+            if logzerr is not None
+            else "logZerr = None"
+        ),
         "",
         "Best-fit parameters",
     ]
@@ -347,7 +522,10 @@ def save_fit_summary_text(
         )
 
     path.write_text(
-        "\n".join(lines) + "\n"
+        "\n".join(
+            lines
+        )
+        + "\n"
     )
 
 
@@ -356,14 +534,19 @@ def save_bayesian_model_comparison(
     comparison: dict[str, Any],
 ) -> None:
     """Save Bayesian model-comparison results."""
-    paths = pipeline_paths(config)["model_comparison"]
+    paths = pipeline_paths(
+        config
+    )["model_comparison"]
 
     paths["dir"].mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    with open(paths["bayes_factor"], "w") as f:
+    with open(
+        paths["bayes_factor"],
+        "w",
+    ) as f:
         json.dump(
             comparison,
             f,
@@ -371,29 +554,113 @@ def save_bayesian_model_comparison(
         )
 
 
+def _crop_prepared_array(
+    array,
+    *,
+    bounds: dict[str, int],
+):
+    """Crop one prepared-image array to persisted inference bounds."""
+    array = np.asarray(
+        array
+    )
+
+    try:
+        xmin = int(
+            bounds["xmin"]
+        )
+        xmax = int(
+            bounds["xmax"]
+        )
+        ymin = int(
+            bounds["ymin"]
+        )
+        ymax = int(
+            bounds["ymax"]
+        )
+    except (
+        KeyError,
+        TypeError,
+    ) as exc:
+        raise ValueError(
+            "Inference bounds must define xmin, xmax, ymin, and ymax."
+        ) from exc
+
+    if (
+        xmin < 0
+        or ymin < 0
+        or xmax <= xmin
+        or ymax <= ymin
+        or xmax > array.shape[1]
+        or ymax > array.shape[0]
+    ):
+        raise ValueError(
+            "Persisted inference bounds are incompatible with "
+            "prepared-image shape."
+        )
+
+    return np.asarray(
+        array[
+            ymin:ymax,
+            xmin:xmax,
+        ]
+    )
+
+
 def load_real_fit_products(
     config: str | Path | dict[str, Any],
     model_name: str,
 ) -> RealFitProducts:
     """Load saved real-galaxy fit products from disk."""
-    if isinstance(config, (str, Path)):
-        resolved = load_resolved_config(config)
+    if isinstance(
+        config,
+        (str, Path),
+    ):
+        resolved = load_resolved_config(
+            config
+        )
     else:
-        resolved = resolve_config(config)
+        resolved = resolve_config(
+            config
+        )
 
-    paths = pipeline_paths(resolved)["fits"][model_name]
+    paths = pipeline_paths(
+        resolved
+    )["fits"][model_name]
 
-    best_model_image = np.load(paths["dir"] / "best_model_image.npy")
-    residual = np.load(paths["dir"] / "residual.npy")
-    norm_residual = np.load(paths["dir"] / "norm_residual.npy")
+    best_model_image = np.load(
+        paths["dir"]
+        / "best_model_image.npy"
+    )
+    residual = np.load(
+        paths["dir"]
+        / "residual.npy"
+    )
+    norm_residual = np.load(
+        paths["dir"]
+        / "norm_residual.npy"
+    )
 
-    with open(paths["dir"] / "best_parameters.json", "r") as f:
-        best_parameters = json.load(f)
+    with open(
+        paths["dir"]
+        / "best_parameters.json",
+        "r",
+    ) as f:
+        best_parameters = json.load(
+            f
+        )
 
-    with open(paths["dir"] / "fit_summary.json", "r") as f:
-        summary = json.load(f)
+    with open(
+        paths["dir"]
+        / "fit_summary.json",
+        "r",
+    ) as f:
+        summary = json.load(
+            f
+        )
 
-    image_products = load_image_preparation_products(resolved)
+    image_products = load_image_preparation_products(
+        resolved
+    )
 
     posterior = None
 
@@ -402,20 +669,98 @@ def load_real_fit_products(
             paths["posterior"]
         )
 
+    inference_region_summary = summary.get(
+        "inference_region"
+    )
+
+    if isinstance(
+        inference_region_summary,
+        dict,
+    ):
+        inference_bounds = inference_region_summary.get(
+            "bounds"
+        )
+    else:
+        inference_bounds = None
+
+    inference_mask_path = (
+        paths["dir"]
+        / "inference_mask.npy"
+    )
+
+    inference_mask = (
+        np.load(
+            inference_mask_path
+        ).astype(
+            bool
+        )
+        if inference_mask_path.exists()
+        else None
+    )
+
+    if inference_bounds is None:
+        noise = np.asarray(
+            image_products.noise,
+            dtype=float,
+        )
+    else:
+        noise = np.asarray(
+            _crop_prepared_array(
+                image_products.noise,
+                bounds=inference_bounds,
+            ),
+            dtype=float,
+        )
+
+    if noise.shape != best_model_image.shape:
+        raise ValueError(
+            "Loaded inference noise shape does not match "
+            "the saved best-model image."
+        )
+
+    if (
+        inference_mask is not None
+        and inference_mask.shape
+        != best_model_image.shape
+    ):
+        raise ValueError(
+            "Loaded inference mask shape does not match "
+            "the saved best-model image."
+        )
+
     return RealFitProducts(
         model_name=model_name,
         posterior=posterior,
         best_parameters={
-            key: float(value)
+            key: float(
+                value
+            )
             for key, value in best_parameters.items()
         },
         best_model_image=best_model_image,
         residual=residual,
         norm_residual=norm_residual,
-        chi2=float(summary["chi2"]),
-        ndof=int(summary["ndof"]),
-        reduced_chi2=float(summary["reduced_chi2"]),
-        noise=image_products.noise,
+        chi2=float(
+            summary["chi2"]
+        ),
+        ndof=int(
+            summary["ndof"]
+        ),
+        reduced_chi2=float(
+            summary["reduced_chi2"]
+        ),
+        noise=noise,
+        inference_bounds=(
+            None
+            if inference_bounds is None
+            else {
+                key: int(
+                    value
+                )
+                for key, value in inference_bounds.items()
+            }
+        ),
+        inference_mask=inference_mask,
     )
 
 
@@ -516,7 +861,10 @@ def _target_reference_coordinates(
         ymin = float(
             cutout_bounds["ymin"]
         )
-    except (KeyError, TypeError) as exc:
+    except (
+        KeyError,
+        TypeError,
+    ) as exc:
         raise ValueError(
             "cutout_bounds must define 'xmin' and 'ymin'."
         ) from exc
@@ -589,7 +937,10 @@ def _build_parameter_set(
     prior_cfg: dict,
     background_cfg: dict,
     references: dict[str, float],
-) -> tuple[list[str], ParameterSet]:
+) -> tuple[
+    list[str],
+    ParameterSet,
+]:
     """Build morphology and background parameters from typed priors only."""
     if model_name not in prior_cfg:
         raise ValueError(
@@ -665,7 +1016,7 @@ def _resolve_model_factory(
         ]
     except KeyError as exc:
         raise ValueError(
-            f"Unsupported model factory: "
+            "Unsupported model factory: "
             f"{model_definition.factory_name}"
         ) from exc
 
@@ -705,7 +1056,9 @@ class _ObservedModelFactory:
     ):
         """Build one observed source-plus-background model."""
         source_parameters = {
-            name: parameters[name]
+            name: parameters[
+                name
+            ]
             for name in self.morphology_parameter_names
         }
 
@@ -746,7 +1099,11 @@ def _make_model_factory(
 ):
     """Build a pickle-safe observation-specific production model factory."""
     if background_cfg is None:
-        background_cfg = DEFAULT_CONFIG["fit"]["background"]
+        background_cfg = DEFAULT_CONFIG[
+            "fit"
+        ][
+            "background"
+        ]
 
     return _ObservedModelFactory(
         model_name,
@@ -763,7 +1120,9 @@ def _compute_best_model(
 ):
     """Render the best-fit model image from a posterior result."""
     best_parameters = {
-        name: result.best_parameters[name]
+        name: result.best_parameters[
+            name
+        ]
         for name in parameter_names
     }
 
@@ -775,7 +1134,10 @@ def _compute_best_model(
         image_shape,
     )
 
-    return best_model_image, best_parameters
+    return (
+        best_model_image,
+        best_parameters,
+    )
 
 
 def _compute_fit_statistics(
@@ -786,14 +1148,25 @@ def _compute_fit_statistics(
     n_parameters: int,
 ):
     """Compute residuals and chi-squared fit statistics."""
-    residual = data - model_image
+    residual = (
+        data
+        - model_image
+    )
 
     valid = (
         (~mask)
-        & np.isfinite(data)
-        & np.isfinite(model_image)
-        & np.isfinite(noise)
-        & (noise > 0)
+        & np.isfinite(
+            data
+        )
+        & np.isfinite(
+            model_image
+        )
+        & np.isfinite(
+            noise
+        )
+        & (
+            noise > 0
+        )
     )
 
     norm_residual = np.full_like(
@@ -802,24 +1175,38 @@ def _compute_fit_statistics(
         dtype=float,
     )
 
-    norm_residual[valid] = (
-        residual[valid]
-        / noise[valid]
+    norm_residual[
+        valid
+    ] = (
+        residual[
+            valid
+        ]
+        / noise[
+            valid
+        ]
     )
 
     chi2 = float(
         np.sum(
-            norm_residual[valid] ** 2
+            norm_residual[
+                valid
+            ]
+            ** 2
         )
     )
 
     ndof = int(
-        np.sum(valid)
+        np.sum(
+            valid
+        )
         - n_parameters
     )
 
     reduced_chi2 = (
-        float(chi2 / ndof)
+        float(
+            chi2
+            / ndof
+        )
         if ndof > 0
         else np.nan
     )
@@ -841,7 +1228,10 @@ def _compute_bayesian_model_comparison(
         model_name: float(
             products.posterior.logz
         )
-        for model_name, products in products_by_model.items()
+        for (
+            model_name,
+            products,
+        ) in products_by_model.items()
     }
 
     if (
@@ -856,15 +1246,23 @@ def _compute_bayesian_model_comparison(
         }
 
     delta_logz = (
-        logz["double_sersic"]
-        - logz["single_sersic"]
+        logz[
+            "double_sersic"
+        ]
+        - logz[
+            "single_sersic"
+        ]
     )
 
-    log_bayes_factor = float(delta_logz)
+    log_bayes_factor = float(
+        delta_logz
+    )
 
     if log_bayes_factor < 700:
         bayes_factor = float(
-            np.exp(log_bayes_factor)
+            np.exp(
+                log_bayes_factor
+            )
         )
     else:
         bayes_factor = None
@@ -905,7 +1303,6 @@ def _build_image_inference_problem(
         parameters=parameters,
         likelihood=likelihood,
     )
-
 
 
 def _run_sampler(
@@ -956,12 +1353,20 @@ def _diagnostic_title(
 
     if model_name in titles:
         return str(
-            titles[model_name]
+            titles[
+                model_name
+            ]
         )
 
     return (
         model_name
-        .replace("_", " ")
+        .replace(
+            "_",
+            " ",
+        )
         .title()
-        .replace("Sersic", "Sérsic")
+        .replace(
+            "Sersic",
+            "Sérsic",
+        )
     )

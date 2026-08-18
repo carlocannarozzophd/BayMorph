@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from baymorph.pipeline.config import (
     load_config,
@@ -16,11 +17,11 @@ from baymorph.pipeline.config import (
 from baymorph.pipeline.image_preparation import (
     load_image_preparation_products,
 )
-from baymorph.pipeline.multi_observation_outputs import (
-    multi_observation_paths,
-)
 from baymorph.pipeline.multi_observation_config import (
     resolve_multi_observation_config,
+)
+from baymorph.pipeline.multi_observation_outputs import (
+    multi_observation_paths,
 )
 from baymorph.pipeline.outputs import (
     pipeline_paths,
@@ -37,12 +38,21 @@ from baymorph.plotting.images import (
 from baymorph.simulation.psf import GaussianPSF
 
 
-def _psf_to_image(psf, config=None):
+def _psf_to_image(
+    psf,
+    config=None,
+):
     """Return a displayable PSF image from a PSF object, array, or config."""
     if psf is not None:
-        kernel = getattr(psf, "kernel", None)
+        kernel = getattr(
+            psf,
+            "kernel",
+            None,
+        )
 
-        if callable(kernel):
+        if callable(
+            kernel
+        ):
             return kernel()
 
         if kernel is not None:
@@ -53,25 +63,47 @@ def _psf_to_image(psf, config=None):
     if config is None:
         return None
 
-    psf_cfg = config.get("psf", {})
+    psf_cfg = config.get(
+        "psf",
+        {},
+    )
 
     if not psf_cfg:
-        psf_cfg = config.get("simulation", {}).get("psf", {})
+        psf_cfg = (
+            config
+            .get(
+                "simulation",
+                {},
+            )
+            .get(
+                "psf",
+                {},
+            )
+        )
 
-    psf_type = psf_cfg.get("type")
+    psf_type = psf_cfg.get(
+        "type"
+    )
 
     if psf_type == "gaussian":
-        gaussian_cfg = psf_cfg.get("gaussian", {})
+        gaussian_cfg = psf_cfg.get(
+            "gaussian",
+            {},
+        )
         fwhm = gaussian_cfg.get(
             "fwhm",
-            psf_cfg.get("fwhm"),
+            psf_cfg.get(
+                "fwhm"
+            ),
         )
 
         if fwhm is None:
             return None
 
         return GaussianPSF(
-            fwhm=float(fwhm),
+            fwhm=float(
+                fwhm
+            ),
         ).kernel()
 
     return None
@@ -172,6 +204,245 @@ def _multi_observation_title(
     )
 
 
+def _full_inference_bounds(
+    shape: tuple[int, int],
+) -> dict[str, int]:
+    """Return full-image half-open bounds for one prepared footprint."""
+    return {
+        "xmin": 0,
+        "xmax": int(
+            shape[1]
+        ),
+        "ymin": 0,
+        "ymax": int(
+            shape[0]
+        ),
+    }
+
+
+def _crop_to_inference_bounds(
+    array,
+    *,
+    bounds: Mapping[str, int],
+):
+    """Crop one preparation product to inference-footprint bounds."""
+    array = np.asarray(
+        array
+    )
+
+    try:
+        xmin = int(
+            bounds["xmin"]
+        )
+        xmax = int(
+            bounds["xmax"]
+        )
+        ymin = int(
+            bounds["ymin"]
+        )
+        ymax = int(
+            bounds["ymax"]
+        )
+    except (
+        KeyError,
+        TypeError,
+    ) as exc:
+        raise ValueError(
+            "Inference bounds must define xmin, xmax, ymin, and ymax."
+        ) from exc
+
+    if (
+        xmin < 0
+        or ymin < 0
+        or xmax <= xmin
+        or ymax <= ymin
+        or xmax > array.shape[1]
+        or ymax > array.shape[0]
+    ):
+        raise ValueError(
+            "Inference bounds are incompatible with preparation-product "
+            "shape."
+        )
+
+    return np.asarray(
+        array[
+            ymin:ymax,
+            xmin:xmax,
+        ]
+    )
+
+
+def _absolute_inference_bounds(
+    preparation_bounds,
+    inference_bounds: Mapping[str, int],
+):
+    """Translate inference bounds into original-image pixel coordinates."""
+    if preparation_bounds is None:
+        return None
+
+    try:
+        preparation_xmin = int(
+            preparation_bounds[
+                "xmin"
+            ]
+        )
+        preparation_ymin = int(
+            preparation_bounds[
+                "ymin"
+            ]
+        )
+    except (
+        KeyError,
+        TypeError,
+    ) as exc:
+        raise ValueError(
+            "Preparation cutout bounds must define xmin and ymin."
+        ) from exc
+
+    return {
+        "xmin": preparation_xmin
+        + int(
+            inference_bounds[
+                "xmin"
+            ]
+        ),
+        "xmax": preparation_xmin
+        + int(
+            inference_bounds[
+                "xmax"
+            ]
+        ),
+        "ymin": preparation_ymin
+        + int(
+            inference_bounds[
+                "ymin"
+            ]
+        ),
+        "ymax": preparation_ymin
+        + int(
+            inference_bounds[
+                "ymax"
+            ]
+        ),
+    }
+
+
+def _single_observation_plot_products(
+    image_products,
+    fit,
+) -> dict[str, Any]:
+    """Return mutually consistent products on the fitted image footprint."""
+    bounds = getattr(
+        fit,
+        "inference_bounds",
+        None,
+    )
+
+    if bounds is None:
+        bounds = _full_inference_bounds(
+            image_products.prepared_data.shape
+        )
+
+    original_cutout = _crop_to_inference_bounds(
+        image_products.cutout,
+        bounds=bounds,
+    )
+    prepared_cutout = _crop_to_inference_bounds(
+        image_products.prepared_data,
+        bounds=bounds,
+    )
+    segmentation = _crop_to_inference_bounds(
+        image_products.segmentation,
+        bounds=bounds,
+    )
+    target_mask = _crop_to_inference_bounds(
+        image_products.target_segment,
+        bounds=bounds,
+    )
+
+    noise = getattr(
+        fit,
+        "noise",
+        None,
+    )
+
+    if noise is None:
+        noise = _crop_to_inference_bounds(
+            image_products.noise,
+            bounds=bounds,
+        )
+
+    noise = np.asarray(
+        noise,
+        dtype=float,
+    )
+
+    inference_mask = getattr(
+        fit,
+        "inference_mask",
+        None,
+    )
+
+    if inference_mask is None:
+        inference_mask = _crop_to_inference_bounds(
+            image_products.fitting_mask,
+            bounds=bounds,
+        )
+
+    inference_mask = np.asarray(
+        inference_mask,
+        dtype=bool,
+    )
+
+    expected_shape = prepared_cutout.shape
+
+    for name, array in (
+        (
+            "best_model_image",
+            fit.best_model_image,
+        ),
+        (
+            "noise",
+            noise,
+        ),
+        (
+            "inference_mask",
+            inference_mask,
+        ),
+        (
+            "segmentation",
+            segmentation,
+        ),
+        (
+            "target_mask",
+            target_mask,
+        ),
+        (
+            "original_cutout",
+            original_cutout,
+        ),
+    ):
+        if np.asarray(
+            array
+        ).shape != expected_shape:
+            raise ValueError(
+                f"{name} shape does not match the inference footprint."
+            )
+
+    return {
+        "original_cutout": original_cutout,
+        "prepared_cutout": prepared_cutout,
+        "noise": noise,
+        "segmentation": segmentation,
+        "contaminant_mask": inference_mask,
+        "target_mask": target_mask,
+        "cutout_bounds": _absolute_inference_bounds(
+            image_products.cutout_bounds,
+            bounds,
+        ),
+    }
+
+
 def _run_single_observation_residual_maps(
     config: Mapping[str, Any],
     fit_results,
@@ -197,20 +468,39 @@ def _run_single_observation_residual_maps(
     )
 
     for model_name, fit in fits.items():
+        plot_products = _single_observation_plot_products(
+            image_products,
+            fit,
+        )
+
         fig, _ = plot_pipeline_fit_maps(
-            original_cutout=image_products.cutout,
-            prepared_cutout=image_products.prepared_data,
+            original_cutout=plot_products[
+                "original_cutout"
+            ],
+            prepared_cutout=plot_products[
+                "prepared_cutout"
+            ],
             model=fit.best_model_image,
-            noise=image_products.noise,
-            segmentation=image_products.segmentation,
+            noise=plot_products[
+                "noise"
+            ],
+            segmentation=plot_products[
+                "segmentation"
+            ],
             psf=_psf_to_image(
                 psf,
                 config,
             ),
-            contaminant_mask=image_products.fitting_mask,
-            target_mask=image_products.target_segment,
+            contaminant_mask=plot_products[
+                "contaminant_mask"
+            ],
+            target_mask=plot_products[
+                "target_mask"
+            ],
             original_image=image_products.original_image,
-            cutout_bounds=image_products.cutout_bounds,
+            cutout_bounds=plot_products[
+                "cutout_bounds"
+            ],
             title=_diagnostic_title(
                 config,
                 model_name,
@@ -311,10 +601,8 @@ def _run_multi_observation_residual_maps(
             observation_name,
             observation_config,
         ) in observation_configs.items():
-            image_products = (
-                load_image_preparation_products(
-                    observation_config
-                )
+            image_products = load_image_preparation_products(
+                observation_config
             )
 
             observation_fit = fit_observations[
@@ -377,8 +665,8 @@ def run_residual_map_diagnostics(
 ):
     """Generate and save pipeline residual-map diagnostics.
 
-    Single-observation analyses generate the established BayMorph diagnostic
-    for each fitted model. Multi-observation analyses generate the same
+    Single-observation analyses use exactly the image footprint employed by
+    the likelihood. Multi-observation analyses generate the established
     diagnostic independently on every native observation grid while using
     model products from the single joint posterior fit.
 
