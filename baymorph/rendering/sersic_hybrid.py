@@ -17,6 +17,9 @@ FloatArray = NDArray[np.float64]
 
 _TWO_PI = 2.0 * np.pi
 _DIRECTION_EPSILON = 1.0e-15
+_ANGULAR_BREAKPOINT_ATOL = (
+    1024.0 * np.finfo(float).eps * _TWO_PI
+)
 
 
 @lru_cache(maxsize=None)
@@ -148,13 +151,76 @@ def _split_central_pixel_integral(
     return float(total)
 
 
+def _merge_periodic_angles(
+    angles: list[float],
+    *,
+    atol: float = _ANGULAR_BREAKPOINT_ATOL,
+) -> tuple[float, ...]:
+    """Merge numerically coincident angular directions.
+
+    Detector-pixel vertices can be exactly collinear with the Sérsic centre
+    while floating-point coordinate arithmetic produces slightly different
+    ``atan2`` values. Such duplicate directions would create artificial,
+    extremely narrow integration intervals.
+
+    Angles within ``atol`` are therefore treated as one geometric direction.
+    The periodic equivalence between zero and two pi is handled explicitly.
+    """
+    if not angles:
+        return ()
+
+    normalized: list[float] = []
+
+    for angle in angles:
+        value = float(
+            np.mod(
+                angle,
+                _TWO_PI,
+            )
+        )
+
+        if (
+            value <= atol
+            or _TWO_PI - value <= atol
+        ):
+            value = 0.0
+
+        normalized.append(value)
+
+    normalized.sort()
+
+    clusters: list[list[float]] = [
+        [normalized[0]]
+    ]
+
+    for angle in normalized[1:]:
+        cluster = clusters[-1]
+
+        if angle - cluster[0] <= atol:
+            cluster.append(angle)
+        else:
+            clusters.append(
+                [angle]
+            )
+
+    merged = [
+        float(np.mean(cluster))
+        for cluster in clusters
+    ]
+
+    if merged and merged[0] <= atol:
+        merged[0] = 0.0
+
+    return tuple(merged)
+
+
 def _pixel_angular_breakpoints(
     model: SersicModel,
     *,
     pixel_x: float,
     pixel_y: float,
 ) -> tuple[float, ...]:
-    """Return angular directions through transformed pixel vertices."""
+    """Return distinct angular directions through transformed pixel vertices."""
     cos_theta = np.cos(model.theta)
     sin_theta = np.sin(model.theta)
 
@@ -192,10 +258,8 @@ def _pixel_angular_breakpoints(
 
             angles.append(phi)
 
-    return tuple(
-        sorted(
-            set(angles)
-        )
+    return _merge_periodic_angles(
+        angles
     )
 
 
@@ -206,23 +270,7 @@ def _ray_pixel_interval(
     pixel_x: float,
     pixel_y: float,
 ) -> tuple[float, float] | None:
-    """Return the elliptical-radius interval intersecting one pixel.
-
-    Parameters
-    ----------
-    model : SersicModel
-        Sérsic morphology model.
-    phi : float
-        Elliptical polar angle in radians.
-    pixel_x, pixel_y : float
-        Detector-pixel centre coordinates.
-
-    Returns
-    -------
-    tuple of float or None
-        ``(R_in, R_out)`` when the ray intersects the detector pixel,
-        otherwise ``None``.
-    """
+    """Return the elliptical-radius interval intersecting one pixel."""
     cos_phi = np.cos(phi)
     sin_phi = np.sin(phi)
 
@@ -308,8 +356,8 @@ def _ray_pixel_interval(
             return None
 
     lower = max(
-        0.0,
         lower,
+        0.0,
     )
 
     if (
@@ -499,43 +547,120 @@ def _semianalytic_central_pixel_integral(
     )
 
 
-def render_sersic_hybrid(
-    model: SersicModel,
+def _ring_pixels(
     shape: tuple[int, int],
     *,
-    origin: tuple[float, float] = (0.0, 0.0),
-    semianalytic_half_width: int = 4,
-    central_epsabs: float = 1.0e-13,
-    central_epsrel: float = 1.0e-12,
-) -> FloatArray:
-    """Render a Sérsic profile with an inner semi-analytic pixel patch.
+    central_x: int,
+    central_y: int,
+    half_width: int,
+) -> tuple[tuple[int, int], ...]:
+    """Return in-bounds pixels on one Chebyshev ring."""
+    xmin = max(
+        0,
+        central_x - half_width,
+    )
+    xmax = min(
+        shape[1] - 1,
+        central_x + half_width,
+    )
+    ymin = max(
+        0,
+        central_y - half_width,
+    )
+    ymax = min(
+        shape[0] - 1,
+        central_y + half_width,
+    )
 
-    The outer image uses midpoint integration. Pixels in a square inner
-    region centred on the detector pixel containing the Sérsic centre are
-    replaced by semi-analytic Sérsic pixel integrals.
+    if xmin > xmax or ymin > ymax:
+        return ()
 
-    ``semianalytic_half_width`` remains an experimental numerical control.
-    A fixed value is not intended as the final production selection rule.
-    """
-    model._validate_shape(shape)
+    pixels: list[tuple[int, int]] = []
+
+    for local_y in range(
+        ymin,
+        ymax + 1,
+    ):
+        for local_x in range(
+            xmin,
+            xmax + 1,
+        ):
+            distance = max(
+                abs(local_x - central_x),
+                abs(local_y - central_y),
+            )
+
+            if distance == half_width:
+                pixels.append(
+                    (
+                        local_y,
+                        local_x,
+                    )
+                )
+
+    return tuple(pixels)
+
+
+def _apply_automatic_semianalytic_region(
+    model: SersicModel,
+    image: FloatArray,
+    *,
+    origin: tuple[float, float],
+    unit_flux_pixel_tolerance: float,
+    guard_rings: int,
+    max_half_width: int,
+    epsabs: float,
+    epsrel: float,
+) -> tuple[
+    FloatArray,
+    int,
+    int,
+    tuple[float, ...],
+]:
+    """Replace numerically difficult inner rings by semi-analytic integrals."""
+    if (
+        not np.isfinite(
+            unit_flux_pixel_tolerance
+        )
+        or unit_flux_pixel_tolerance <= 0.0
+    ):
+        raise ValueError(
+            "unit_flux_pixel_tolerance must be finite and positive."
+        )
 
     if (
         not isinstance(
-            semianalytic_half_width,
+            guard_rings,
             (int, np.integer),
         )
-        or semianalytic_half_width < 0
+        or guard_rings <= 0
     ):
         raise ValueError(
-            "semianalytic_half_width must be a non-negative integer."
+            "guard_rings must be a positive integer."
         )
 
-    image = model.render(
-        shape=shape,
-        origin=origin,
-        renderer="fixed",
-        integration_order=1,
+    if (
+        not isinstance(
+            max_half_width,
+            (int, np.integer),
+        )
+        or max_half_width < 0
+    ):
+        raise ValueError(
+            "max_half_width must be a non-negative integer."
+        )
+
+    flux_scale = abs(
+        float(model.flux)
     )
+
+    if (
+        not np.isfinite(flux_scale)
+        or flux_scale <= 0.0
+    ):
+        raise ValueError(
+            "Automatic Sérsic refinement requires finite positive flux."
+        )
 
     y_origin, x_origin = origin
 
@@ -554,35 +679,31 @@ def render_sersic_hybrid(
         )
     )
 
-    xmin = max(
-        0,
-        central_x
-        - semianalytic_half_width,
-    )
-    xmax = min(
-        shape[1] - 1,
-        central_x
-        + semianalytic_half_width,
-    )
-    ymin = max(
-        0,
-        central_y
-        - semianalytic_half_width,
-    )
-    ymax = min(
-        shape[0] - 1,
-        central_y
-        + semianalytic_half_width,
-    )
+    output = np.asarray(
+        image,
+        dtype=float,
+    ).copy()
 
-    for local_y in range(
-        ymin,
-        ymax + 1,
+    consecutive_converged_rings = 0
+    evaluated_pixels = 0
+    evaluated_ring_errors: list[float] = []
+
+    for half_width in range(
+        max_half_width + 1
     ):
-        for local_x in range(
-            xmin,
-            xmax + 1,
-        ):
+        pixels = _ring_pixels(
+            output.shape,
+            central_x=central_x,
+            central_y=central_y,
+            half_width=half_width,
+        )
+
+        if not pixels:
+            continue
+
+        ring_max_error = 0.0
+
+        for local_y, local_x in pixels:
             pixel_x = (
                 x_origin
                 + local_x
@@ -592,18 +713,129 @@ def render_sersic_hybrid(
                 + local_y
             )
 
-            image[
-                local_y,
-                local_x,
-            ] = _semianalytic_pixel_integral(
+            semi = _semianalytic_pixel_integral(
                 model,
                 pixel_x=float(pixel_x),
                 pixel_y=float(pixel_y),
-                epsabs=central_epsabs,
-                epsrel=central_epsrel,
+                epsabs=epsabs,
+                epsrel=epsrel,
             )
 
-    return np.asarray(
-        image,
-        dtype=float,
+            midpoint = float(
+                output[
+                    local_y,
+                    local_x,
+                ]
+            )
+
+            normalized_error = (
+                abs(semi - midpoint)
+                / flux_scale
+            )
+
+            ring_max_error = max(
+                ring_max_error,
+                normalized_error,
+            )
+
+            output[
+                local_y,
+                local_x,
+            ] = semi
+
+        evaluated_pixels += len(pixels)
+        evaluated_ring_errors.append(
+            ring_max_error
+        )
+
+        if (
+            ring_max_error
+            <= unit_flux_pixel_tolerance
+        ):
+            consecutive_converged_rings += 1
+        else:
+            consecutive_converged_rings = 0
+
+        if (
+            consecutive_converged_rings
+            >= guard_rings
+        ):
+            return (
+                output,
+                half_width,
+                evaluated_pixels,
+                tuple(
+                    evaluated_ring_errors
+                ),
+            )
+
+        if (
+            evaluated_pixels
+            == output.size
+        ):
+            return (
+                output,
+                half_width,
+                evaluated_pixels,
+                tuple(
+                    evaluated_ring_errors
+                ),
+            )
+
+    raise RuntimeError(
+        "Automatic Sérsic semi-analytic refinement did not converge "
+        f"within max_half_width={max_half_width}."
     )
+
+
+def render_sersic_hybrid(
+    model: SersicModel,
+    shape: tuple[int, int],
+    *,
+    unit_flux_pixel_tolerance: float,
+    origin: tuple[float, float] = (0.0, 0.0),
+    guard_rings: int = 2,
+    max_half_width: int = 16,
+    epsabs: float = 1.0e-13,
+    epsrel: float = 1.0e-12,
+) -> FloatArray:
+    """Render a Sérsic profile with automatic semi-analytic refinement.
+
+    The complete image is initially evaluated by midpoint integration.
+    Successive Chebyshev rings around the Sérsic centre are then evaluated
+    semi-analytically. Refinement stops after ``guard_rings`` consecutive
+    rings for which the maximum midpoint error, normalized by total model
+    flux, is no larger than ``unit_flux_pixel_tolerance``.
+
+    The tolerance is intentionally explicit while this renderer remains
+    experimental. It is an intrinsic rendering criterion and does not by
+    itself guarantee a particular likelihood or posterior error.
+    """
+    model._validate_shape(shape)
+
+    image = model.render(
+        shape=shape,
+        origin=origin,
+        renderer="fixed",
+        integration_order=1,
+    )
+
+    (
+        image,
+        _,
+        _,
+        _,
+    ) = _apply_automatic_semianalytic_region(
+        model,
+        image,
+        origin=origin,
+        unit_flux_pixel_tolerance=(
+            unit_flux_pixel_tolerance
+        ),
+        guard_rings=guard_rings,
+        max_half_width=max_half_width,
+        epsabs=epsabs,
+        epsrel=epsrel,
+    )
+
+    return image

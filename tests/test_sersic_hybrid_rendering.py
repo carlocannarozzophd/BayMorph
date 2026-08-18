@@ -7,6 +7,7 @@ import pytest
 
 from baymorph.models import SersicModel
 from baymorph.rendering.sersic_hybrid import (
+    _apply_automatic_semianalytic_region,
     _semianalytic_central_pixel_integral,
     _semianalytic_pixel_integral,
     _split_central_pixel_integral,
@@ -50,6 +51,31 @@ def gaussian_exact_pixel(
             erf(scale * ymax)
             - erf(scale * ymin)
         )
+    )
+
+
+def selector_result(
+    model,
+    *,
+    tolerance,
+    shape=(41, 41),
+):
+    """Run the automatic selector and expose its diagnostics."""
+    baseline = model.render(
+        shape=shape,
+        renderer="fixed",
+        integration_order=1,
+    )
+
+    return _apply_automatic_semianalytic_region(
+        model,
+        baseline,
+        origin=(0.0, 0.0),
+        unit_flux_pixel_tolerance=tolerance,
+        guard_rings=2,
+        max_half_width=16,
+        epsabs=1.0e-13,
+        epsrel=1.0e-12,
     )
 
 
@@ -199,7 +225,110 @@ def test_semianalytic_pixel_scales_linearly_with_flux():
     )
 
 
-def test_hybrid_renderer_replaces_inner_patch_with_semianalytic_values():
+def test_automatic_selector_is_flux_scale_invariant():
+    parameters = {
+        "re": 0.5,
+        "n": 10.0,
+        "q": 0.2,
+        "theta": 0.67,
+        "x0": 20.49,
+        "y0": 19.51,
+    }
+
+    unit_model = SersicModel(
+        flux=1.0,
+        **parameters,
+    )
+    bright_model = SersicModel(
+        flux=1.0e6,
+        **parameters,
+    )
+
+    (
+        _,
+        unit_half_width,
+        unit_pixels,
+        unit_errors,
+    ) = selector_result(
+        unit_model,
+        tolerance=1.0e-4,
+    )
+
+    (
+        _,
+        bright_half_width,
+        bright_pixels,
+        bright_errors,
+    ) = selector_result(
+        bright_model,
+        tolerance=1.0e-4,
+    )
+
+    assert (
+        bright_half_width
+        == unit_half_width
+    )
+    assert bright_pixels == unit_pixels
+
+    np.testing.assert_allclose(
+        bright_errors,
+        unit_errors,
+        rtol=2.0e-10,
+        atol=1.0e-15,
+    )
+
+
+def test_difficult_profile_requires_at_least_as_much_refinement_as_smooth_profile():
+    smooth = SersicModel(
+        flux=1.0,
+        re=5.0,
+        n=0.5,
+        q=1.0,
+        theta=0.0,
+        x0=20.35,
+        y0=20.40,
+    )
+    difficult = SersicModel(
+        flux=1.0,
+        re=0.5,
+        n=10.0,
+        q=0.2,
+        theta=0.67,
+        x0=20.49,
+        y0=19.51,
+    )
+
+    (
+        _,
+        smooth_half_width,
+        smooth_pixels,
+        _,
+    ) = selector_result(
+        smooth,
+        tolerance=1.0e-4,
+    )
+
+    (
+        _,
+        difficult_half_width,
+        difficult_pixels,
+        _,
+    ) = selector_result(
+        difficult,
+        tolerance=1.0e-4,
+    )
+
+    assert (
+        difficult_half_width
+        >= smooth_half_width
+    )
+    assert (
+        difficult_pixels
+        >= smooth_pixels
+    )
+
+
+def test_automatic_selector_terminal_guard_rings_meet_tolerance():
     model = SersicModel(
         flux=1.0,
         re=0.5,
@@ -210,45 +339,19 @@ def test_hybrid_renderer_replaces_inner_patch_with_semianalytic_values():
         y0=19.51,
     )
 
-    image = render_sersic_hybrid(
+    (
+        _,
+        _,
+        _,
+        ring_errors,
+    ) = selector_result(
         model,
-        shape=(41, 41),
-        semianalytic_half_width=1,
+        tolerance=1.0e-4,
     )
 
-    central_x = int(
-        np.floor(
-            model.x0 + 0.5
-        )
-    )
-    central_y = int(
-        np.floor(
-            model.y0 + 0.5
-        )
-    )
-
-    for pixel_y in range(
-        central_y - 1,
-        central_y + 2,
-    ):
-        for pixel_x in range(
-            central_x - 1,
-            central_x + 2,
-        ):
-            expected = (
-                _semianalytic_pixel_integral(
-                    model,
-                    pixel_x=float(pixel_x),
-                    pixel_y=float(pixel_y),
-                )
-            )
-
-            np.testing.assert_allclose(
-                image[pixel_y, pixel_x],
-                expected,
-                rtol=2.0e-12,
-                atol=1.0e-14,
-            )
+    assert len(ring_errors) >= 2
+    assert ring_errors[-1] <= 1.0e-4
+    assert ring_errors[-2] <= 1.0e-4
 
 
 def test_hybrid_renderer_returns_finite_non_negative_image():
@@ -265,6 +368,7 @@ def test_hybrid_renderer_returns_finite_non_negative_image():
     image = render_sersic_hybrid(
         model,
         shape=(41, 41),
+        unit_flux_pixel_tolerance=1.0e-4,
     )
 
     assert image.shape == (41, 41)
@@ -273,14 +377,29 @@ def test_hybrid_renderer_returns_finite_non_negative_image():
 
 
 @pytest.mark.parametrize(
-    "half_width",
+    ("keyword", "value"),
     [
-        -1,
-        1.5,
+        (
+            "unit_flux_pixel_tolerance",
+            0.0,
+        ),
+        (
+            "unit_flux_pixel_tolerance",
+            -1.0,
+        ),
+        (
+            "guard_rings",
+            0,
+        ),
+        (
+            "max_half_width",
+            -1,
+        ),
     ],
 )
-def test_hybrid_renderer_rejects_invalid_half_width(
-    half_width,
+def test_hybrid_renderer_rejects_invalid_selector_configuration(
+    keyword,
+    value,
 ):
     model = SersicModel(
         flux=1.0,
@@ -292,14 +411,40 @@ def test_hybrid_renderer_rejects_invalid_half_width(
         y0=10.0,
     )
 
-    with pytest.raises(
-        ValueError,
-        match="semianalytic_half_width",
-    ):
+    arguments = {
+        "unit_flux_pixel_tolerance": 1.0e-4,
+        keyword: value,
+    }
+
+    with pytest.raises(ValueError):
         render_sersic_hybrid(
             model,
             shape=(21, 21),
-            semianalytic_half_width=half_width,
+            **arguments,
+        )
+
+
+def test_selector_raises_when_maximum_region_is_insufficient():
+    model = SersicModel(
+        flux=1.0,
+        re=0.5,
+        n=10.0,
+        q=0.2,
+        theta=0.67,
+        x0=20.49,
+        y0=19.51,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="did not converge",
+    ):
+        render_sersic_hybrid(
+            model,
+            shape=(41, 41),
+            unit_flux_pixel_tolerance=1.0e-12,
+            guard_rings=2,
+            max_half_width=1,
         )
 
 
@@ -323,3 +468,47 @@ def test_central_wrapper_rejects_noncentral_pixel():
             pixel_x=8.0,
             pixel_y=8.0,
         )
+
+
+def test_collinear_pixel_vertices_are_merged_without_integration_warning():
+    """Numerically coincident angular breakpoints must form one ray."""
+    import warnings
+
+    from scipy.integrate import IntegrationWarning
+
+    from baymorph.rendering.sersic_hybrid import (
+        _pixel_angular_breakpoints,
+    )
+
+    model = SersicModel(
+        flux=1.0,
+        re=0.5,
+        n=2.0,
+        q=1.0,
+        theta=0.0,
+        x0=32.49,
+        y0=31.51,
+    )
+
+    breakpoints = _pixel_angular_breakpoints(
+        model,
+        pixel_x=33.0,
+        pixel_y=31.0,
+    )
+
+    assert len(breakpoints) == 3
+
+    with warnings.catch_warnings():
+        warnings.simplefilter(
+            "error",
+            IntegrationWarning,
+        )
+
+        value = _semianalytic_pixel_integral(
+            model,
+            pixel_x=33.0,
+            pixel_y=31.0,
+        )
+
+    assert np.isfinite(value)
+    assert value > 0.0
