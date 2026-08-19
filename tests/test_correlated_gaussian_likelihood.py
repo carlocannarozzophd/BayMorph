@@ -362,3 +362,124 @@ def test_factory_does_not_pass_kernel_to_independent_gaussian():
         likelihood,
         GaussianImageLikelihood,
     )
+
+
+def test_quadratic_form_matches_likelihood_without_normalization():
+    """Public Mahalanobis statistic must match -2 logL when unnormalized."""
+    data = np.array(
+        [
+            [0.2, 0.7, -0.1],
+            [1.0, 0.4, 0.8],
+            [0.1, -0.3, 0.6],
+        ]
+    )
+
+    model = np.zeros_like(
+        data
+    )
+
+    noise = np.full_like(
+        data,
+        1.3,
+    )
+
+    kernel = np.array(
+        [
+            [0.01, 0.04, 0.01],
+            [0.08, 1.00, 0.08],
+            [0.01, 0.04, 0.01],
+        ]
+    )
+
+    likelihood = (
+        CorrelatedGaussianImageLikelihood(
+            data=data,
+            noise=noise,
+            correlation_kernel=kernel,
+            include_normalization=False,
+            cg_rtol=1.0e-12,
+        )
+    )
+
+    quadratic = likelihood.quadratic_form(
+        model
+    )
+
+    assert quadratic == pytest.approx(
+        -2.0
+        * likelihood(
+            model
+        ),
+        rel=1.0e-11,
+        abs=1.0e-11,
+    )
+
+
+def test_marginal_standardized_residual_is_not_hidden_as_whitened():
+    """Residual diagnostic must equal (data-model)/S on valid pixels."""
+    data = np.array(
+        [
+            [2.0, 4.0],
+            [6.0, 8.0],
+        ]
+    )
+
+    model = np.array(
+        [
+            [1.0, 1.0],
+            [1.0, 1.0],
+        ]
+    )
+
+    noise = np.array(
+        [
+            [1.0, 2.0],
+            [5.0, 7.0],
+        ]
+    )
+
+    mask = np.array(
+        [
+            [False, True],
+            [False, False],
+        ]
+    )
+
+    likelihood = (
+        CorrelatedGaussianImageLikelihood(
+            data=data,
+            noise=noise,
+            correlation_kernel=np.ones(
+                (1, 1)
+            ),
+            mask=mask,
+        )
+    )
+
+    residual = (
+        likelihood.marginal_standardized_residual(
+            model
+        )
+    )
+
+    assert np.isnan(
+        residual[
+            0,
+            1,
+        ]
+    )
+
+    np.testing.assert_allclose(
+        residual[
+            ~mask
+        ],
+        (
+            data
+            - model
+        )[
+            ~mask
+        ]
+        / noise[
+            ~mask
+        ],
+    )
