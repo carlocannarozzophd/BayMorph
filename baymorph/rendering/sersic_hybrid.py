@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from numpy.typing import NDArray
 from scipy.integrate import quad
-from scipy.special import gammainc
+from scipy.special import gammainc, gammaln
 
 if TYPE_CHECKING:
     from baymorph.models.sersic import SersicModel
@@ -796,6 +796,140 @@ def _apply_automatic_semianalytic_region(
     )
 
 
+def _render_outer_fixed_fast(
+    model: SersicModel,
+    shape: tuple[int, int],
+    *,
+    origin: tuple[float, float],
+    integration_order: int,
+) -> FloatArray:
+    """Render the smooth outer image with fixed quadrature.
+
+    This production fast path preserves the same Gauss-Legendre pixel
+    integration rule used by the generic fixed renderer while avoiding
+    repeated full-image geometry and Sérsic normalization work.
+
+    The generic fixed renderer remains independent and serves as the
+    numerical validation reference.
+    """
+    nodes, weights = _legendre_rule(
+        integration_order
+    )
+
+    ny, nx = shape
+    y_origin, x_origin = origin
+
+    pixel_x = (
+        np.arange(
+            nx,
+            dtype=float,
+        )[None, :]
+        + x_origin
+    )
+    pixel_y = (
+        np.arange(
+            ny,
+            dtype=float,
+        )[:, None]
+        + y_origin
+    )
+
+    n = float(model.n)
+    re = float(model.re)
+    q = float(model.q)
+    bn = float(model.bn)
+
+    log_normalization = (
+        np.log(2.0 * np.pi)
+        + np.log(q)
+        + 2.0 * np.log(re)
+        + np.log(n)
+        + gammaln(2.0 * n)
+        - 2.0 * n * np.log(bn)
+    )
+
+    log_central_intensity = float(
+        np.log(model.flux)
+        - log_normalization
+    )
+
+    cos_theta = float(
+        np.cos(model.theta)
+    )
+    sin_theta = float(
+        np.sin(model.theta)
+    )
+
+    dx = pixel_x - model.x0
+    dy = pixel_y - model.y0
+
+    x_rotated_center = (
+        dx * cos_theta
+        + dy * sin_theta
+    )
+    y_rotated_center = (
+        -dx * sin_theta
+        + dy * cos_theta
+    )
+
+    inverse_q_squared = 1.0 / (q * q)
+    inverse_re_squared = 1.0 / (re * re)
+    radial_exponent = 0.5 / n
+
+    image = np.zeros(
+        shape,
+        dtype=float,
+    )
+
+    for xi, wx in zip(
+        nodes,
+        weights,
+        strict=True,
+    ):
+        for yi, wy in zip(
+            nodes,
+            weights,
+            strict=True,
+        ):
+            x_rotated = (
+                x_rotated_center
+                + 0.5
+                * (
+                    xi * cos_theta
+                    + yi * sin_theta
+                )
+            )
+
+            y_rotated = (
+                y_rotated_center
+                + 0.5
+                * (
+                    -xi * sin_theta
+                    + yi * cos_theta
+                )
+            )
+
+            scaled_radius_squared = (
+                x_rotated * x_rotated
+                + y_rotated
+                * y_rotated
+                * inverse_q_squared
+            ) * inverse_re_squared
+
+            image += (
+                wx
+                * wy
+                * np.exp(
+                    log_central_intensity
+                    - bn
+                    * scaled_radius_squared
+                    ** radial_exponent
+                )
+            )
+
+    return 0.25 * image
+
+
 def render_sersic_hybrid(
     model: SersicModel,
     shape: tuple[int, int],
@@ -824,10 +958,10 @@ def render_sersic_hybrid(
         outer_integration_order
     )
 
-    image = model.render(
-        shape=shape,
+    image = _render_outer_fixed_fast(
+        model,
+        shape,
         origin=origin,
-        renderer="fixed",
         integration_order=outer_integration_order,
     )
 

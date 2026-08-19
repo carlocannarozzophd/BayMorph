@@ -512,3 +512,80 @@ def test_collinear_pixel_vertices_are_merged_without_integration_warning():
 
     assert np.isfinite(value)
     assert value > 0.0
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        {
+            "flux": 2.3e5,
+            "re": 8.7,
+            "n": 1.0,
+            "q": 0.73,
+            "theta": 0.37,
+            "x0": 15.2,
+            "y0": 14.8,
+        },
+        {
+            "flux": 8.1e5,
+            "re": 21.4,
+            "n": 4.0,
+            "q": 0.41,
+            "theta": -0.82,
+            "x0": 17.31,
+            "y0": 16.67,
+        },
+        {
+            "flux": 1.7e6,
+            "re": 32.0,
+            "n": 7.5,
+            "q": 0.88,
+            "theta": 1.13,
+            "x0": 18.49,
+            "y0": 15.51,
+        },
+    ],
+)
+def test_fast_outer_renderer_matches_independent_fixed_reference(
+    parameters,
+):
+    """Production outer rendering must match the generic fixed reference."""
+    from baymorph.rendering.sersic_hybrid import (
+        _render_outer_fixed_fast,
+    )
+
+    model = SersicModel(
+        **parameters
+    )
+
+    shape = (37, 41)
+    origin = (-3.0, 2.0)
+    integration_order = 4
+
+    reference = model.render(
+        shape,
+        renderer="fixed",
+        integration_order=integration_order,
+        origin=origin,
+    )
+
+    fast = _render_outer_fixed_fast(
+        model,
+        shape,
+        origin=origin,
+        integration_order=integration_order,
+    )
+
+    np.testing.assert_allclose(
+        fast,
+        reference,
+        rtol=5.0e-13,
+        atol=1.0e-13,
+    )
+
+    np.testing.assert_allclose(
+        np.sum(fast),
+        np.sum(reference),
+        rtol=5.0e-14,
+        atol=1.0e-12,
+    )
