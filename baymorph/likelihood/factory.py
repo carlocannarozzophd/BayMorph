@@ -9,6 +9,9 @@ import numpy as np
 
 from baymorph.likelihood.base import ImageLikelihood
 from baymorph.likelihood.cash import CashImageLikelihood
+from baymorph.likelihood.correlated_gaussian import (
+    CorrelatedGaussianImageLikelihood,
+)
 from baymorph.likelihood.gaussian import GaussianImageLikelihood
 from baymorph.likelihood.poisson_gaussian import (
     PoissonGaussianImageLikelihood,
@@ -21,6 +24,7 @@ def make_likelihood(
     data: np.ndarray,
     noise: np.ndarray | float | None = None,
     mask: np.ndarray | None = None,
+    correlation_kernel: np.ndarray | None = None,
 ) -> ImageLikelihood:
     """Construct an image likelihood from configuration.
 
@@ -34,7 +38,7 @@ def make_likelihood(
     noise : array-like or float, optional
         Noise information supplied by the image-preparation pipeline.
 
-        For the Gaussian likelihood, this is interpreted as the Gaussian
+        For Gaussian likelihoods, this is interpreted as the marginal
         standard deviation.
 
         For the Poisson-Gaussian likelihood, this is used as read noise only
@@ -43,6 +47,9 @@ def make_likelihood(
         It is ignored by the Cash likelihood.
     mask : array-like of bool, optional
         Boolean mask identifying pixels excluded from likelihood evaluation.
+    correlation_kernel : array-like, optional
+        Fixed two-dimensional stationary correlation kernel. Required by the
+        correlated Gaussian likelihood and ignored by all other likelihoods.
 
     Returns
     -------
@@ -78,6 +85,15 @@ def make_likelihood(
             mask=mask,
         )
 
+    if likelihood_type == "correlated_gaussian":
+        return _make_correlated_gaussian_likelihood(
+            config=likelihood_config,
+            data=data,
+            noise=noise,
+            mask=mask,
+            correlation_kernel=correlation_kernel,
+        )
+
     if likelihood_type == "cash":
         return _make_cash_likelihood(
             config=likelihood_config,
@@ -95,6 +111,7 @@ def make_likelihood(
 
     available = (
         "gaussian",
+        "correlated_gaussian",
         "cash",
         "poisson_gaussian",
     )
@@ -141,6 +158,69 @@ def _make_gaussian_likelihood(
     )
 
 
+def _make_correlated_gaussian_likelihood(
+    *,
+    config: dict[str, Any],
+    data: np.ndarray,
+    noise: np.ndarray | float | None,
+    mask: np.ndarray | None,
+    correlation_kernel: np.ndarray | None,
+) -> CorrelatedGaussianImageLikelihood:
+    """Construct a correlated Gaussian image likelihood."""
+    gaussian_noise = config.pop(
+        "noise",
+        noise,
+    )
+
+    if gaussian_noise is None:
+        raise ValueError(
+            "Correlated Gaussian likelihood requires "
+            "a noise map or scalar noise."
+        )
+
+    if correlation_kernel is None:
+        raise ValueError(
+            "Correlated Gaussian likelihood requires "
+            "a correlation kernel."
+        )
+
+    include_normalization = config.pop(
+        "include_normalization",
+        False,
+    )
+
+    correlation_logdet = config.pop(
+        "correlation_logdet",
+        None,
+    )
+
+    cg_rtol = config.pop(
+        "cg_rtol",
+        5.0e-7,
+    )
+
+    cg_maxiter = config.pop(
+        "cg_maxiter",
+        None,
+    )
+
+    _reject_unknown_options(
+        config,
+        likelihood_type="correlated_gaussian",
+    )
+
+    return CorrelatedGaussianImageLikelihood(
+        data=data,
+        noise=gaussian_noise,
+        correlation_kernel=correlation_kernel,
+        mask=mask,
+        include_normalization=include_normalization,
+        correlation_logdet=correlation_logdet,
+        cg_rtol=cg_rtol,
+        cg_maxiter=cg_maxiter,
+    )
+
+
 def _make_cash_likelihood(
     *,
     config: dict[str, Any],
@@ -152,10 +232,12 @@ def _make_cash_likelihood(
         "include_data_term",
         False,
     )
+
     require_integer_data = config.pop(
         "require_integer_data",
         True,
     )
+
     integer_tolerance = config.pop(
         "integer_tolerance",
         1.0e-10,
@@ -197,10 +279,12 @@ def _make_poisson_gaussian_likelihood(
         "tail_probability",
         1.0e-12,
     )
+
     minimum_terms = config.pop(
         "minimum_terms",
         20,
     )
+
     maximum_terms = config.pop(
         "maximum_terms",
         100000,
@@ -249,6 +333,9 @@ def _normalize_likelihood_type(
     """Normalize supported likelihood aliases."""
     aliases = {
         "normal": "gaussian",
+        "correlated-gaussian": "correlated_gaussian",
+        "gaussian_correlated": "correlated_gaussian",
+        "gaussian-correlated": "correlated_gaussian",
         "poisson": "cash",
         "cash_statistic": "cash",
         "poisson-gaussian": "poisson_gaussian",
