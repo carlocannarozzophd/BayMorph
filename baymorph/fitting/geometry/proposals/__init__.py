@@ -3,6 +3,7 @@
 from .base import ProposalEngine, ProposalFailure, ProposalResult
 from .gaussian import GaussianProposalEngine
 from .prior import PriorProposalEngine
+from .slice import WhitenedSliceProposalEngine
 
 __all__ = [
     "ProposalEngine",
@@ -10,4 +11,5 @@ __all__ = [
     "ProposalResult",
     "PriorProposalEngine",
     "GaussianProposalEngine",
+    "WhitenedSliceProposalEngine",
 ]
