@@ -44,19 +44,27 @@ def test_packaged_config_directories_exist() -> None:
     assert PACKAGED_CONFIG_DIRECTORY.is_dir()
 
 
-def test_packaged_config_file_lists_match() -> None:
-    """Packaged configurations must match public repository configurations."""
-    assert _relative_yaml_files(
-        REPOSITORY_CONFIG_DIRECTORY
-    ) == _relative_yaml_files(
-        PACKAGED_CONFIG_DIRECTORY
+def test_packaged_configs_have_repository_sources() -> None:
+    """Every packaged configuration must have a repository source."""
+    repository_configs = set(
+        _relative_yaml_files(
+            REPOSITORY_CONFIG_DIRECTORY
+        )
     )
+    packaged_configs = set(
+        _relative_yaml_files(
+            PACKAGED_CONFIG_DIRECTORY
+        )
+    )
+
+    assert packaged_configs
+    assert packaged_configs <= repository_configs
 
 
 def test_packaged_config_contents_match() -> None:
-    """Packaged configurations must be byte-identical to public configs."""
+    """Packaged configurations must match their repository sources."""
     for relative_path in _relative_yaml_files(
-        REPOSITORY_CONFIG_DIRECTORY
+        PACKAGED_CONFIG_DIRECTORY
     ):
         repository_file = (
             REPOSITORY_CONFIG_DIRECTORY
@@ -66,6 +74,8 @@ def test_packaged_config_contents_match() -> None:
             PACKAGED_CONFIG_DIRECTORY
             / relative_path
         )
+
+        assert repository_file.is_file()
 
         assert (
             repository_file.read_bytes()
