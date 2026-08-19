@@ -132,6 +132,14 @@ def _products(
             shape,
             dtype=bool,
         ),
+        target_x=(
+            shape[1] - 1
+        )
+        / 2.0,
+        target_y=(
+            shape[0] - 1
+        )
+        / 2.0,
     )
 
 
@@ -788,4 +796,115 @@ def test_multi_observation_fit_builds_joint_and_observation_products(
 
     assert result.best_parameters == (
         inference_result.best_parameters
+    )
+
+
+def test_multi_observation_uses_observation_specific_likelihood_state(
+    monkeypatch,
+):
+    """Joint inference must preserve each observation likelihood model."""
+    observation_configs = {
+        "g": {
+            "fit": {
+                "likelihood": {
+                    "type": "gaussian",
+                },
+            },
+        },
+        "r": {
+            "fit": {
+                "likelihood": {
+                    "type": "correlated_gaussian",
+                    "include_normalization": False,
+                },
+            },
+        },
+    }
+
+    monkeypatch.setattr(
+        multi_observation_fit,
+        "resolve_multi_observation_config",
+        lambda config, base_dir: (
+            observation_configs,
+            _layout(),
+        ),
+    )
+
+    products = {
+        "g": _products(),
+        "r": _products(),
+    }
+
+    for product in products.values():
+        product.target_x = 5.0
+        product.target_y = 5.0
+
+    monkeypatch.setattr(
+        multi_observation_fit,
+        "load_image_preparation_products",
+        lambda config: (
+            products["g"]
+            if config is observation_configs["g"]
+            else products["r"]
+        ),
+    )
+
+    monkeypatch.setattr(
+        multi_observation_fit,
+        "_load_psf_from_config",
+        lambda config: np.ones(
+            (3, 3),
+            dtype=float,
+        )
+        / 9.0,
+    )
+
+    kernel = np.asarray(
+        [
+            [0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+
+    def fake_prepare_likelihood_state(
+        config,
+        inference_region,
+    ):
+        likelihood_type = config["fit"]["likelihood"]["type"]
+
+        return SimpleNamespace(
+            noise=np.ones(
+                inference_region.shape,
+                dtype=float,
+            ),
+            correlation_kernel=(
+                kernel
+                if likelihood_type == "correlated_gaussian"
+                else None
+            ),
+        )
+
+    monkeypatch.setattr(
+        multi_observation_fit,
+        "prepare_real_fit_likelihood_state",
+        fake_prepare_likelihood_state,
+    )
+
+    problem = (
+        multi_observation_fit
+        .build_multi_observation_problem_from_config(
+            _config()
+        )
+    )
+
+    assert (
+        problem.likelihood._likelihoods["g"].__class__.__name__
+        == "GaussianImageLikelihood"
+    )
+
+    assert (
+        problem.likelihood._likelihoods["r"].__class__.__name__
+        == "CorrelatedGaussianImageLikelihood"
     )

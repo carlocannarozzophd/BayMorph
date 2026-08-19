@@ -70,6 +70,8 @@ def _products():
             "ymin": 0,
             "ymax": 15,
         },
+        target_x=7.0,
+        target_y=7.0,
     )
 
 

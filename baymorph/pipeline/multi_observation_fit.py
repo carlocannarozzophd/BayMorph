@@ -32,6 +32,10 @@ from baymorph.observation.model_parameter_transforms import (
 from baymorph.pipeline.image_preparation import (
     load_image_preparation_products,
 )
+from baymorph.pipeline.inference_region import build_inference_region
+from baymorph.pipeline.likelihood_state import (
+    prepare_real_fit_likelihood_state,
+)
 from baymorph.pipeline.multi_observation_noise import (
     estimate_cross_observation_noise_diagnostics,
     print_cross_observation_noise_diagnostics,
@@ -267,14 +271,6 @@ def _build_multi_observation_context(
     models = fit_config["models"]
     model_name = models[0]
 
-    likelihood_config = fit_config.get(
-        "likelihood",
-        {
-            "type": "gaussian",
-            "include_normalization": True,
-        },
-    )
-
     parameter_frame = multi_observation_parameter_frame(
         raw_config
     )
@@ -307,16 +303,64 @@ def _build_multi_observation_context(
                 f"'{observation_name}'."
             ) from exc
 
+    likelihoods = {}
+
+    for observation_name, products in image_products.items():
+        observation_config = observation_configs[
+            observation_name
+        ]
+
+        global_likelihood_config = fit_config.get(
+            "likelihood",
+            {
+                "type": "gaussian",
+                "include_normalization": True,
+            },
+        )
+
+        observation_fit_config = observation_config.get(
+            "fit",
+            {},
+        )
+
+        likelihood_config = observation_fit_config.get(
+            "likelihood",
+            global_likelihood_config,
+        )
+
+        effective_observation_config = dict(
+            observation_config
+        )
+        effective_fit_config = dict(
+            observation_fit_config
+        )
+        effective_fit_config[
+            "likelihood"
+        ] = likelihood_config
+        effective_observation_config[
+            "fit"
+        ] = effective_fit_config
+
+        inference_region = build_inference_region(
+            products,
+            mode="full",
+        )
+
+        likelihood_state = prepare_real_fit_likelihood_state(
+            effective_observation_config,
+            inference_region,
+        )
+
+        likelihoods[observation_name] = make_likelihood(
+            likelihood_config,
+            data=inference_region.data,
+            noise=likelihood_state.noise,
+            mask=inference_region.mask,
+            correlation_kernel=likelihood_state.correlation_kernel,
+        )
+
     likelihood = MultiObservationLikelihood(
-        {
-            observation_name: make_likelihood(
-                likelihood_config,
-                data=products.prepared_data,
-                noise=products.noise,
-                mask=products.fitting_mask,
-            )
-            for observation_name, products in image_products.items()
-        }
+        likelihoods
     )
 
     parameter_transforms = None
