@@ -1,0 +1,515 @@
+"""Tests for correlated Gaussian integration in the real-fit pipeline."""
+
+from types import SimpleNamespace
+
+import json
+import numpy as np
+import pytest
+
+from baymorph.fitting import Parameter, ParameterSet
+from baymorph.fitting.priors import UniformPrior
+from baymorph.likelihood import CorrelatedGaussianImageLikelihood
+from baymorph.pipeline.config import resolve_config
+from baymorph.pipeline.real_fit import (
+    _build_image_inference_problem,
+    _compute_fit_statistics,
+    load_real_fit_products,
+    run_real_fit_from_config,
+    save_real_fit_products,
+)
+from baymorph.results import RealFitProducts
+
+
+def test_build_image_problem_passes_correlated_kernel():
+    """Problem builder must pass fixed correlation state to the factory."""
+    parameters = ParameterSet(
+        [
+            Parameter(
+                "flux",
+                prior=UniformPrior(
+                    1.0,
+                    2.0,
+                ),
+            )
+        ]
+    )
+
+    kernel = np.array(
+        [
+            [0.01, 0.04, 0.01],
+            [0.08, 1.00, 0.08],
+            [0.01, 0.04, 0.01],
+        ]
+    )
+
+    problem = _build_image_inference_problem(
+        model_factory=lambda **kwargs: None,
+        parameters=parameters,
+        likelihood_cfg={
+            "type": "correlated_gaussian",
+            "include_normalization": False,
+        },
+        data_fit=np.zeros((4, 5)),
+        noise_fit=np.ones((4, 5)),
+        mask_fit=np.zeros(
+            (4, 5),
+            dtype=bool,
+        ),
+        correlation_kernel_fit=kernel,
+    )
+
+    assert isinstance(
+        problem.likelihood,
+        CorrelatedGaussianImageLikelihood,
+    )
+
+    np.testing.assert_array_equal(
+        problem.likelihood.correlation_kernel,
+        kernel,
+    )
+
+
+def test_correlated_fit_statistics_use_mahalanobis_quadratic():
+    """Correlated statistics must use r.T C^-1 r, not diagonal chi2."""
+    data = np.array(
+        [
+            [0.3, 0.9, -0.2],
+            [1.1, 0.4, 0.6],
+            [0.2, -0.1, 0.7],
+        ]
+    )
+
+    model = np.zeros_like(
+        data
+    )
+
+    noise = np.full_like(
+        data,
+        1.2,
+    )
+
+    mask = np.array(
+        [
+            [False, False, True],
+            [False, False, False],
+            [False, True, False],
+        ]
+    )
+
+    kernel = np.array(
+        [
+            [0.01, 0.04, 0.01],
+            [0.08, 1.00, 0.08],
+            [0.01, 0.04, 0.01],
+        ]
+    )
+
+    likelihood = CorrelatedGaussianImageLikelihood(
+        data=data,
+        noise=noise,
+        correlation_kernel=kernel,
+        mask=mask,
+        include_normalization=False,
+        cg_rtol=1.0e-12,
+    )
+
+    stats = _compute_fit_statistics(
+        data=data,
+        model_image=model,
+        noise=noise,
+        mask=mask,
+        n_parameters=2,
+        likelihood=likelihood,
+    )
+
+    assert stats["chi2"] == pytest.approx(
+        likelihood.quadratic_form(
+            model
+        ),
+        rel=1.0e-11,
+        abs=1.0e-11,
+    )
+
+    assert stats["ndof"] == (
+        likelihood.n_valid_pixels
+        - 2
+    )
+
+    np.testing.assert_allclose(
+        stats["norm_residual"][
+            ~mask
+        ],
+        (
+            (data - model)
+            / noise
+        )[
+            ~mask
+        ],
+    )
+
+    assert np.all(
+        np.isnan(
+            stats[
+                "norm_residual"
+            ][
+                mask
+            ]
+        )
+    )
+
+
+def test_fit_persistence_preserves_exact_noise_and_likelihood_metadata(
+    tmp_path,
+    monkeypatch,
+):
+    """Saved fits must reload the exact statistical noise state."""
+    config = resolve_config(
+        {
+            "object": {
+                "name": "test",
+            },
+            "data": {
+                "image_path": "image.fits",
+            },
+            "outputs": {
+                "root": str(
+                    tmp_path
+                ),
+            },
+            "fit": {
+                "models": [
+                    "single_sersic",
+                ],
+            },
+        }
+    )
+
+    fitted_noise = np.array(
+        [
+            [1.1, 1.2],
+            [1.3, 1.4],
+        ]
+    )
+
+    products = RealFitProducts(
+        model_name="single_sersic",
+        posterior=None,
+        best_parameters={
+            "flux": 1.0,
+        },
+        best_model_image=np.zeros(
+            (2, 2)
+        ),
+        residual=np.zeros(
+            (2, 2)
+        ),
+        norm_residual=np.zeros(
+            (2, 2)
+        ),
+        chi2=2.5,
+        ndof=3,
+        reduced_chi2=2.5 / 3.0,
+        noise=fitted_noise,
+        inference_bounds={
+            "xmin": 0,
+            "xmax": 2,
+            "ymin": 0,
+            "ymax": 2,
+        },
+        inference_mask=np.zeros(
+            (2, 2),
+            dtype=bool,
+        ),
+        likelihood_metadata={
+            "type": (
+                "correlated_gaussian"
+            ),
+            "fit_statistic": (
+                "mahalanobis_chi2"
+            ),
+            "residual_diagnostic": (
+                "marginal_standardized"
+            ),
+            "normalization_complete": False,
+        },
+    )
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit."
+        "load_image_preparation_products",
+        lambda config: SimpleNamespace(
+            noise=np.full(
+                (2, 2),
+                99.0,
+            ),
+        ),
+    )
+
+    save_real_fit_products(
+        config,
+        "single_sersic",
+        products,
+    )
+
+    loaded = load_real_fit_products(
+        config,
+        "single_sersic",
+    )
+
+    np.testing.assert_array_equal(
+        loaded.noise,
+        fitted_noise,
+    )
+
+    assert (
+        loaded.likelihood_metadata
+        == products.likelihood_metadata
+    )
+
+    summary_path = (
+        tmp_path
+        / "test"
+        / "fits"
+        / "single_sersic"
+        / "fit_summary.json"
+    )
+
+    summary = json.loads(
+        summary_path.read_text()
+    )
+
+    assert (
+        summary[
+            "likelihood"
+        ][
+            "type"
+        ]
+        == "correlated_gaussian"
+    )
+
+    assert (
+        summary[
+            "likelihood"
+        ][
+            "normalization_complete"
+        ]
+        is False
+    )
+
+
+def test_run_real_fit_passes_prepared_likelihood_state(
+    monkeypatch,
+):
+    """Real-fit execution must use one fixed prepared likelihood state."""
+    from baymorph.pipeline.likelihood_state import (
+        RealFitLikelihoodState,
+    )
+
+    resolved = {
+        "data": {
+            "image_path": "missing.fits",
+        },
+        "fit": {
+            "models": [
+                "single_sersic",
+            ],
+            "priors": {},
+            "background": {
+                "model": "constant",
+                "priors": {},
+            },
+            "likelihood": {
+                "type": (
+                    "correlated_gaussian"
+                ),
+                "include_normalization": False,
+            },
+            "sampler": {},
+            "region": {
+                "mode": "full",
+                "radius": None,
+            },
+            "comparison": {
+                "enabled": False,
+                "metric": "bayes_factor",
+            },
+        },
+    }
+
+    image_products = SimpleNamespace(
+        cutout_bounds={
+            "xmin": 0,
+            "xmax": 2,
+            "ymin": 0,
+            "ymax": 2,
+        }
+    )
+
+    region = SimpleNamespace(
+        target_x=1.0,
+        target_y=1.0,
+        noise=np.ones(
+            (2, 2)
+        ),
+    )
+
+    state = RealFitLikelihoodState(
+        likelihood_type=(
+            "correlated_gaussian"
+        ),
+        noise=np.full(
+            (2, 2),
+            1.5,
+        ),
+        correlation_kernel=np.ones(
+            (1, 1)
+        ),
+        metadata={
+            "type": (
+                "correlated_gaussian"
+            ),
+            "normalization_complete": False,
+        },
+    )
+
+    captured = {}
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.resolve_config",
+        lambda config: resolved,
+    )
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.validate_fit_priors",
+        lambda config: None,
+    )
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.make_output_tree",
+        lambda config: None,
+    )
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.save_resolved_config",
+        lambda config: None,
+    )
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit."
+        "load_image_preparation_products",
+        lambda config: image_products,
+    )
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit._load_psf_from_config",
+        lambda config: object(),
+    )
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.Observation.from_fits",
+        lambda path: None,
+    )
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit."
+        "_target_reference_coordinates",
+        lambda **kwargs: {
+            "target_x": 1.0,
+            "target_y": 1.0,
+        },
+    )
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit."
+        "_build_fit_inference_region",
+        lambda *args, **kwargs: region,
+    )
+
+    def fake_prepare_state(
+        config,
+        inference_region,
+    ):
+        captured[
+            "state_config"
+        ] = config
+
+        captured[
+            "state_region"
+        ] = inference_region
+
+        return state
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit."
+        "prepare_real_fit_likelihood_state",
+        fake_prepare_state,
+    )
+
+    products = RealFitProducts(
+        model_name="single_sersic",
+        posterior=None,
+        best_parameters={},
+        best_model_image=np.zeros(
+            (2, 2)
+        ),
+        residual=np.zeros(
+            (2, 2)
+        ),
+        norm_residual=np.zeros(
+            (2, 2)
+        ),
+        chi2=1.0,
+        ndof=1,
+        reduced_chi2=1.0,
+        noise=state.noise,
+    )
+
+    def fake_execute(
+        **kwargs,
+    ):
+        captured[
+            "execute"
+        ] = kwargs
+
+        return products
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit."
+        "_execute_single_model_fit",
+        fake_execute,
+    )
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit."
+        "save_real_fit_products",
+        lambda *args, **kwargs: None,
+    )
+
+    result = run_real_fit_from_config(
+        {}
+    )
+
+    assert result is products
+
+    assert (
+        captured[
+            "state_config"
+        ]
+        is resolved
+    )
+
+    assert (
+        captured[
+            "state_region"
+        ]
+        is region
+    )
+
+    assert (
+        captured[
+            "execute"
+        ][
+            "likelihood_state"
+        ]
+        is state
+    )

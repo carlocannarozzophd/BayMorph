@@ -18,7 +18,10 @@ from baymorph.fitting.model_factories import (
     make_single_sersic_psf_sky_model,
 )
 from baymorph.fitting.parameters import Parameter, ParameterSet
-from baymorph.likelihood import make_likelihood
+from baymorph.likelihood import (
+    CorrelatedGaussianImageLikelihood,
+    make_likelihood,
+)
 from baymorph.models import get_model
 from baymorph.observation.background import (
     BackgroundAppliedModel,
@@ -34,6 +37,10 @@ from baymorph.pipeline.image_preparation import load_image_preparation_products
 from baymorph.pipeline.inference_region import (
     InferenceRegion,
     build_inference_region,
+)
+from baymorph.pipeline.likelihood_state import (
+    RealFitLikelihoodState,
+    prepare_real_fit_likelihood_state,
 )
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
 from baymorph.pipeline.outputs import (
@@ -115,6 +122,10 @@ def run_real_fit_from_config(
         "likelihood",
         None,
     )
+    likelihood_state = prepare_real_fit_likelihood_state(
+        resolved,
+        inference_region,
+    )
     sampler_cfg = resolved["fit"]["sampler"]
 
     all_products = {}
@@ -131,6 +142,7 @@ def run_real_fit_from_config(
             ),
             references=prior_references,
             likelihood_cfg=likelihood_cfg,
+            likelihood_state=likelihood_state,
             sampler_cfg=sampler_cfg,
         )
 
@@ -230,6 +242,7 @@ def _execute_single_model_fit(
     background_cfg,
     references,
     likelihood_cfg,
+    likelihood_state: RealFitLikelihoodState,
     sampler_cfg,
 ):
     """Execute one complete Bayesian fit for one morphology model."""
@@ -251,8 +264,9 @@ def _execute_single_model_fit(
         parameters=parameters,
         likelihood_cfg=likelihood_cfg,
         data_fit=inference_region.data,
-        noise_fit=inference_region.noise,
+        noise_fit=likelihood_state.noise,
         mask_fit=inference_region.mask,
+        correlation_kernel_fit=likelihood_state.correlation_kernel,
     )
 
     backend = make_sampler(
@@ -274,11 +288,12 @@ def _execute_single_model_fit(
     stats = _compute_fit_statistics(
         data=inference_region.data,
         model_image=best_model_image,
-        noise=inference_region.noise,
+        noise=likelihood_state.noise,
         mask=inference_region.mask,
         n_parameters=len(
             parameter_names
         ),
+        likelihood=problem.likelihood,
     )
 
     return RealFitProducts(
@@ -291,9 +306,14 @@ def _execute_single_model_fit(
         chi2=stats["chi2"],
         ndof=stats["ndof"],
         reduced_chi2=stats["reduced_chi2"],
-        noise=inference_region.noise,
+        noise=likelihood_state.noise,
         inference_bounds=inference_region.bounds,
         inference_mask=inference_region.mask.copy(),
+        likelihood_metadata=(
+            None
+            if likelihood_state.metadata is None
+            else dict(likelihood_state.metadata)
+        ),
     )
 
 
@@ -326,6 +346,22 @@ def save_real_fit_products(
         paths["dir"] / "norm_residual.npy",
         products.norm_residual,
     )
+
+    noise_path = (
+        paths["dir"]
+        / "noise.npy"
+    )
+
+    if products.noise is not None:
+        np.save(
+            noise_path,
+            np.asarray(
+                products.noise,
+                dtype=float,
+            ),
+        )
+    elif noise_path.exists():
+        noise_path.unlink()
 
     inference_mask_path = (
         paths["dir"]
@@ -450,6 +486,13 @@ def save_real_fit_products(
         "sampler": json_compatible_metadata(
             sampler_cfg
         ),
+        "likelihood": (
+            None
+            if products.likelihood_metadata is None
+            else json_compatible_metadata(
+                products.likelihood_metadata
+            )
+        ),
         "inference_region": inference_region_summary,
     }
 
@@ -470,6 +513,7 @@ def save_real_fit_products(
             model_name,
         ),
         products=products,
+        likelihood_metadata=products.likelihood_metadata,
     )
 
 
@@ -478,6 +522,7 @@ def save_fit_summary_text(
     *,
     model_title: str,
     products: RealFitProducts,
+    likelihood_metadata: dict[str, Any] | None = None,
 ) -> None:
     """Save a human-readable text summary of a fit."""
     logz = (
@@ -497,6 +542,37 @@ def save_fit_summary_text(
 
     lines = [
         f"Model: {model_title}",
+    ]
+
+    if likelihood_metadata is not None:
+        normalization_complete = bool(
+            likelihood_metadata.get(
+                "normalization_complete",
+                True,
+            )
+        )
+
+        lines.extend(
+            [
+                (
+                    "Likelihood: "
+                    f"{likelihood_metadata.get('type', 'unknown')}"
+                ),
+                (
+                    "Likelihood normalization complete: "
+                    f"{normalization_complete}"
+                ),
+            ]
+        )
+
+        if not normalization_complete:
+            lines.append(
+                "logZ interpretation: relative; a fixed likelihood "
+                "normalization constant is omitted"
+            )
+
+    lines.extend(
+        [
         "",
         "Fit statistics",
         f"chi2 = {products.chi2:.8g}",
@@ -514,7 +590,8 @@ def save_fit_summary_text(
         ),
         "",
         "Best-fit parameters",
-    ]
+        ]
+    )
 
     for key, value in products.best_parameters.items():
         lines.append(
@@ -698,7 +775,19 @@ def load_real_fit_products(
         else None
     )
 
-    if inference_bounds is None:
+    noise_path = (
+        paths["dir"]
+        / "noise.npy"
+    )
+
+    if noise_path.exists():
+        noise = np.asarray(
+            np.load(
+                noise_path
+            ),
+            dtype=float,
+        )
+    elif inference_bounds is None:
         noise = np.asarray(
             image_products.noise,
             dtype=float,
@@ -761,6 +850,11 @@ def load_real_fit_products(
             }
         ),
         inference_mask=inference_mask,
+        likelihood_metadata=(
+            summary.get(
+                "likelihood"
+            )
+        ),
     )
 
 
@@ -1146,59 +1240,84 @@ def _compute_fit_statistics(
     noise,
     mask,
     n_parameters: int,
+    likelihood=None,
 ):
-    """Compute residuals and chi-squared fit statistics."""
+    """Compute residuals and likelihood-consistent fit statistics."""
     residual = (
         data
         - model_image
     )
 
-    valid = (
-        (~mask)
-        & np.isfinite(
-            data
+    if isinstance(
+        likelihood,
+        CorrelatedGaussianImageLikelihood,
+    ):
+        norm_residual = (
+            likelihood.marginal_standardized_residual(
+                model_image
+            )
         )
-        & np.isfinite(
-            model_image
-        )
-        & np.isfinite(
-            noise
-        )
-        & (
-            noise > 0
-        )
-    )
 
-    norm_residual = np.full_like(
-        residual,
-        np.nan,
-        dtype=float,
-    )
+        chi2 = float(
+            likelihood.quadratic_form(
+                model_image
+            )
+        )
 
-    norm_residual[
-        valid
-    ] = (
-        residual[
+        n_valid = int(
+            likelihood.n_valid_pixels
+        )
+    else:
+        valid = (
+            (~mask)
+            & np.isfinite(
+                data
+            )
+            & np.isfinite(
+                model_image
+            )
+            & np.isfinite(
+                noise
+            )
+            & (
+                noise > 0
+            )
+        )
+
+        norm_residual = np.full_like(
+            residual,
+            np.nan,
+            dtype=float,
+        )
+
+        norm_residual[
             valid
-        ]
-        / noise[
-            valid
-        ]
-    )
-
-    chi2 = float(
-        np.sum(
-            norm_residual[
+        ] = (
+            residual[
                 valid
             ]
-            ** 2
+            / noise[
+                valid
+            ]
         )
-    )
+
+        chi2 = float(
+            np.sum(
+                norm_residual[
+                    valid
+                ]
+                ** 2
+            )
+        )
+
+        n_valid = int(
+            np.sum(
+                valid
+            )
+        )
 
     ndof = int(
-        np.sum(
-            valid
-        )
+        n_valid
         - n_parameters
     )
 
@@ -1289,6 +1408,7 @@ def _build_image_inference_problem(
     data_fit,
     noise_fit,
     mask_fit,
+    correlation_kernel_fit=None,
 ):
     """Build one backend-neutral image inference problem."""
     likelihood = make_likelihood(
@@ -1296,6 +1416,7 @@ def _build_image_inference_problem(
         data=data_fit,
         noise=noise_fit,
         mask=mask_fit,
+        correlation_kernel=correlation_kernel_fit,
     )
 
     return ImageInferenceProblem(
@@ -1314,6 +1435,7 @@ def _run_sampler(
     likelihood_cfg,
     sampler_cfg,
     *,
+    correlation_kernel_fit=None,
     progress_label: str | None = None,
 ):
     """Build an inference problem and run one configured backend."""
@@ -1324,6 +1446,7 @@ def _run_sampler(
         data_fit=data_fit,
         noise_fit=noise_fit,
         mask_fit=mask_fit,
+        correlation_kernel_fit=correlation_kernel_fit,
     )
 
     backend = make_sampler(

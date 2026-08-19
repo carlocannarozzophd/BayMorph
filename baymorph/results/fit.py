@@ -26,9 +26,11 @@ class RealFitProducts:
     residual : ndarray
         Data-minus-model residual image on the inference footprint.
     norm_residual : ndarray
-        Residual image normalized by the noise map.
+        Marginally standardized residual image on the inference footprint.
+        For correlated likelihoods this is not a whitened residual.
     chi2 : float
-        Chi-squared value of the best-fit model.
+        Gaussian quadratic fit statistic. For correlated Gaussian likelihoods
+        this is the Mahalanobis quantity ``r.T @ C^-1 @ r``.
     ndof : int
         Number of degrees of freedom.
     reduced_chi2 : float
@@ -43,6 +45,8 @@ class RealFitProducts:
     inference_mask : ndarray of bool, optional
         Exact exclusion mask used by the likelihood on the inference
         footprint.
+    likelihood_metadata : dict, optional
+        Persisted statistical-model provenance for the fitted likelihood.
     radius : ndarray, optional
         Radial-bin centers used by radial-profile diagnostics.
     profile_data : ndarray, optional
@@ -67,6 +71,7 @@ class RealFitProducts:
 
     inference_bounds: dict[str, int] | None = None
     inference_mask: np.ndarray | None = None
+    likelihood_metadata: dict[str, Any] | None = None
 
     radius: np.ndarray | None = None
     profile_data: np.ndarray | None = None
@@ -108,6 +113,13 @@ class RealFitProducts:
                 if self.inference_bounds is None
                 else dict(
                     self.inference_bounds
+                )
+            ),
+            "likelihood": (
+                None
+                if self.likelihood_metadata is None
+                else dict(
+                    self.likelihood_metadata
                 )
             ),
             "best_parameters": dict(
