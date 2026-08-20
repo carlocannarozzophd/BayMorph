@@ -79,8 +79,13 @@ def test_simulated_notebook_uses_public_runner_workflow() -> None:
     )
 
     assert "BayMorphRunner" in source
-    assert "run_simulation_from_config" in source
+    assert "make_config_from_fits" in source
+    assert "make_observation" in source
     assert "runner.run(diagnostics=True)" in source
+    assert "runner.prepare_image()" in source
+    assert "runner.fit()" in source
+
+    assert "configs/simulated_galaxy.yaml" not in source
     assert "pool=" not in source
     assert "min_factor" not in source
     assert "max_factor" not in source
@@ -97,12 +102,18 @@ def test_observed_notebook_uses_config_maker() -> None:
     assert "BayMorphRunner" in source
     assert "runner.run(diagnostics=True)" in source
     assert "model_priors" in source
+    assert "correlated_gaussian" in source
+    assert "runner.prepare_image()" in source
+    assert "runner.build_psf()" in source
+    assert "runner.fit()" in source
+
     assert "pool=" not in source
     assert "min_factor" not in source
     assert "max_factor" not in source
 
+
 def test_public_notebooks_use_repository_root_relative_paths() -> None:
-    """Canonical notebooks must not depend on notebook-directory working paths."""
+    """Canonical notebooks must not depend on notebook-directory paths."""
     for name in EXPECTED_NOTEBOOKS:
         source = _notebook_source(
             NOTEBOOK_DIRECTORY
@@ -112,3 +123,24 @@ def test_public_notebooks_use_repository_root_relative_paths() -> None:
         assert "../configs/" not in source
         assert "../data/" not in source
         assert "../runs" not in source
+
+
+def test_public_notebooks_do_not_use_matplotlib_directly() -> None:
+    """Public notebooks must delegate all plotting to BayMorph."""
+    forbidden = (
+        "import matplotlib",
+        "from matplotlib",
+        "plt.",
+        ".imshow(",
+        ".subplots(",
+        ".colorbar(",
+    )
+
+    for name in EXPECTED_NOTEBOOKS:
+        source = _notebook_source(
+            NOTEBOOK_DIRECTORY
+            / name
+        )
+
+        for token in forbidden:
+            assert token not in source

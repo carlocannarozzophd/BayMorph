@@ -595,3 +595,44 @@ def test_config_maker_rejects_invalid_sampler_type(
             target_position="center",
             sampler=3,
         )
+
+
+def test_config_maker_accepts_explicit_likelihood_and_fit_region(
+    tmp_path,
+):
+    """Public config generation must support scientific fit choices."""
+    fits_path = tmp_path / "galaxy.fits"
+
+    _write_test_fits(
+        fits_path
+    )
+
+    config = make_config_from_fits(
+        fits_path,
+        target_position="center",
+        likelihood={
+            "type": "correlated_gaussian",
+            "include_normalization": False,
+        },
+        fit_region={
+            "mode": "circular",
+            "radius": 12.0,
+        },
+    )
+
+    assert config["fit"]["likelihood"] == {
+        "type": "correlated_gaussian",
+        "include_normalization": False,
+    }
+    assert config["fit"]["region"] == {
+        "mode": "circular",
+        "radius": 12.0,
+    }
+
+    resolved = resolve_config(
+        config
+    )
+
+    assert resolved["fit"]["likelihood"]["type"] == "correlated_gaussian"
+    assert resolved["fit"]["region"]["mode"] == "circular"
+    assert resolved["fit"]["region"]["radius"] == pytest.approx(12.0)

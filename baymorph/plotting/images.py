@@ -5,7 +5,7 @@ import numpy as np
 from matplotlib.colors import LogNorm
 from matplotlib.patches import Rectangle
 
-from baymorph.plotting.style import set_plot_style, style_axes
+from baymorph.plotting.style import make_plot, set_plot_style, style_axes
 
 BAYMORPH_IMAGE_CMAP = "gist_stern"
 
@@ -131,7 +131,7 @@ def plot_log_image(
     title: str = "",
     cmap: str = BAYMORPH_IMAGE_CMAP,
     colorbar_label: str = "Flux",
-    figsize: tuple[float, float] = (8, 8),
+    figsize: tuple[float, float] = (15, 15),
     show: bool = False,
 ):
     """Plot a single image using BayMorph logarithmic styling.
@@ -146,7 +146,7 @@ def plot_log_image(
         Matplotlib colormap used for the image.
     colorbar_label : str, default="Flux"
         Colorbar label.
-    figsize : tuple of float, default=(8, 8)
+    figsize : tuple of float, default=(15, 15)
         Figure size in inches.
     show : bool, default=False
         If True, call :func:`matplotlib.pyplot.show`.
@@ -648,10 +648,10 @@ def plot_pipeline_fit_maps(
         target_mask=target_mask,
     )
 
-    fig, axes = plt.subplots(
+    fig, axes = make_plot(
         2,
         4,
-        figsize=(40, 20),
+        flatten=False,
         constrained_layout=False,
     )
 
@@ -731,7 +731,7 @@ def plot_pipeline_fit_maps(
     _add_inset_colorbar(fig, axes[0, 3], im_model)
 
     axes[1, 0].set_title(
-        "Target & Masks",
+        r"Target \& Masks",
         fontsize=35,
     )
     _apply_baymorph_axes_style(axes[1, 0])

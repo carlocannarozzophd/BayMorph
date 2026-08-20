@@ -409,6 +409,8 @@ def make_config_from_fits(
     object_name: str | None = None,
     model_name: str = "single_sersic",
     model_priors: Mapping[str, Any] | None = None,
+    likelihood: Mapping[str, Any] | None = None,
+    fit_region: Mapping[str, Any] | None = None,
     sampler: str | Mapping[str, Any] | None = "nautilus",
     outputs_root: str | Path = "runs",
     overwrite: bool = True,
@@ -431,6 +433,12 @@ def make_config_from_fits(
         YAML path to write. If omitted, no file is written.
     object_name : str, optional
         Analysis object name. The FITS filename stem is used by default.
+    likelihood : mapping, optional
+        Explicit likelihood configuration. If omitted, BayMorph uses the
+        standard single-observation likelihood configuration.
+    fit_region : mapping, optional
+        Explicit inference-region configuration. If omitted, BayMorph uses the
+        standard single-observation inference region.
     outputs_root : str or pathlib.Path, default="runs"
         BayMorph output root.
     overwrite : bool, default=True
@@ -549,6 +557,26 @@ def make_config_from_fits(
             model_name: normalized_model_priors,
         }
 
+    if likelihood is not None:
+        if not isinstance(likelihood, Mapping):
+            raise TypeError(
+                "likelihood must be a mapping or None."
+            )
+
+        fit_config["likelihood"] = deepcopy(
+            dict(likelihood)
+        )
+
+    if fit_region is not None:
+        if not isinstance(fit_region, Mapping):
+            raise TypeError(
+                "fit_region must be a mapping or None."
+            )
+
+        fit_config["region"] = deepcopy(
+            dict(fit_region)
+        )
+
     if sampler_config is not None:
         fit_config["sampler"] = sampler_config
 
@@ -588,12 +616,44 @@ def make_config_from_fits(
         )
 
     if output_path is not None:
+        serialized_config = deepcopy(
+            config
+        )
+
+        serialized_config[
+            "data"
+        ][
+            "image_path"
+        ] = str(
+            fits_path.resolve()
+        )
+
+        serialized_outputs_root = Path(
+            outputs_root
+        )
+
+        if not serialized_outputs_root.is_absolute():
+            serialized_outputs_root = (
+                Path.cwd()
+                / serialized_outputs_root
+            )
+
+        serialized_config[
+            "outputs"
+        ][
+            "root"
+        ] = str(
+            serialized_outputs_root.resolve()
+        )
+
         _write_yaml(
             Path(
                 output_path
             ),
-            config,
+            serialized_config,
         )
+
+        config = serialized_config
 
     return config
 

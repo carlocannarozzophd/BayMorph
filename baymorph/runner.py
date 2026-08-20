@@ -23,6 +23,10 @@ from baymorph.pipeline.multi_observation_config import (
 from baymorph.pipeline.multi_observation_fit import (
     run_multi_observation_fit_from_config,
 )
+from baymorph.pipeline.noise_calibration import (
+    build_correlated_noise_calibration,
+    correlated_noise_calibration_path,
+)
 
 WorkflowMode = Literal[
     "single",
@@ -393,6 +397,130 @@ class BayMorphRunner:
 
         return self.psf_products
 
+    def _ensure_single_observation_noise_calibration(
+        self,
+    ) -> None:
+        """Build required fixed noise calibration before fitting.
+
+        The high-level runner owns workflow dependencies. A user selecting
+        the correlated Gaussian likelihood must not need to invoke a separate
+        calibration workflow manually.
+        """
+        likelihood_config = self.config[
+            "fit"
+        ].get(
+            "likelihood",
+            {
+                "type": "gaussian",
+            },
+        )
+
+        if isinstance(
+            likelihood_config,
+            str,
+        ):
+            likelihood_type = likelihood_config
+            calibration_config = {}
+        else:
+            likelihood_type = likelihood_config.get(
+                "type",
+                "gaussian",
+            )
+            calibration_config = likelihood_config.get(
+                "calibration",
+                {},
+            )
+
+        normalized_type = str(
+            likelihood_type
+        ).strip().lower()
+
+        if normalized_type not in {
+            "correlated_gaussian",
+            "correlated-gaussian",
+            "gaussian_correlated",
+            "gaussian-correlated",
+        }:
+            return
+
+        if calibration_config is None:
+            calibration_config = {}
+
+        if not isinstance(
+            calibration_config,
+            Mapping,
+        ):
+            raise TypeError(
+                "fit.likelihood.calibration must be a mapping."
+            )
+
+        calibration_path = (
+            correlated_noise_calibration_path(
+                self.config
+            )
+        )
+
+        overwrite = bool(
+            self.config[
+                "outputs"
+            ].get(
+                "overwrite",
+                False,
+            )
+        )
+
+        if (
+            calibration_path.exists()
+            and not overwrite
+        ):
+            return
+
+        build_correlated_noise_calibration(
+            self.config,
+            marginal_tile_size=int(
+                calibration_config.get(
+                    "marginal_tile_size",
+                    32,
+                )
+            ),
+            marginal_min_coverage=float(
+                calibration_config.get(
+                    "marginal_min_coverage",
+                    0.20,
+                )
+            ),
+            correlation_tile_size=int(
+                calibration_config.get(
+                    "correlation_tile_size",
+                    16,
+                )
+            ),
+            correlation_stride=int(
+                calibration_config.get(
+                    "correlation_stride",
+                    8,
+                )
+            ),
+            max_lag=int(
+                calibration_config.get(
+                    "max_lag",
+                    3,
+                )
+            ),
+            spectrum_grid_size=int(
+                calibration_config.get(
+                    "spectrum_grid_size",
+                    512,
+                )
+            ),
+            save=True,
+            overwrite=overwrite,
+        )
+
+        self._status(
+            "Correlated-noise calibration completed"
+        )
+
     def fit(self) -> Any:
         """Run Bayesian model fitting.
 
@@ -421,6 +549,8 @@ class BayMorphRunner:
             )
 
             return self.fit_result
+
+        self._ensure_single_observation_noise_calibration()
 
         self.fit_result = run_real_fit(
             self.config,

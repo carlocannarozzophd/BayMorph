@@ -4,6 +4,9 @@ import baymorph
 
 
 EXPECTED_PUBLIC_API = {
+    "PriorGuidance",
+    "ObservationInspection",
+    "ObservationAdvisor",
     "BayMorphRunner",
     "Observation",
     "ObservationMetadata",

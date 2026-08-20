@@ -1364,3 +1364,100 @@ def test_runner_multi_observation_corner_uses_joint_diagnostic(
     assert captured["result"] is fit_result
 
 
+
+
+def test_runner_fit_builds_required_correlated_noise_calibration(
+    monkeypatch,
+    tmp_path,
+):
+    """Correlated Gaussian fitting must be self-contained in the runner."""
+    config = make_runner_config()
+
+    config["fit"] = {
+        "likelihood": {
+            "type": "correlated_gaussian",
+            "include_normalization": False,
+        },
+    }
+
+    runner = BayMorphRunner(
+        config,
+        verbose=False,
+    )
+
+    calibration_path = (
+        tmp_path
+        / "correlated_gaussian_noise.npz"
+    )
+
+    monkeypatch.setattr(
+        "baymorph.runner.correlated_noise_calibration_path",
+        lambda config: calibration_path,
+    )
+
+    calls = []
+
+    def fake_build(
+        config,
+        **kwargs,
+    ):
+        calls.append(
+            (
+                "calibrate",
+                config,
+                kwargs,
+            )
+        )
+
+    monkeypatch.setattr(
+        "baymorph.runner.build_correlated_noise_calibration",
+        fake_build,
+    )
+
+    expected = object()
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_real_fit",
+        lambda config: (
+            calls.append(
+                (
+                    "fit",
+                    config,
+                )
+            )
+            or expected
+        ),
+    )
+
+    result = runner.fit()
+
+    assert result is expected
+
+    assert [
+        call[0]
+        for call in calls
+    ] == [
+        "calibrate",
+        "fit",
+    ]
+
+    calibration_kwargs = calls[0][2]
+
+    assert calibration_kwargs[
+        "marginal_tile_size"
+    ] == 32
+    assert calibration_kwargs[
+        "marginal_min_coverage"
+    ] == pytest.approx(0.20)
+    assert calibration_kwargs[
+        "correlation_tile_size"
+    ] == 16
+    assert calibration_kwargs[
+        "correlation_stride"
+    ] == 8
+    assert calibration_kwargs[
+        "max_lag"
+    ] == 3
+    assert calibration_kwargs[
+        "spectrum_grid_size"
+    ] == 512

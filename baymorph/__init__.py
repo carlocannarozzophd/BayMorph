@@ -11,6 +11,11 @@ from baymorph.models import (
     DoubleSersicModel,
     SersicModel,
 )
+from baymorph.pipeline.advisor import (
+    ObservationAdvisor,
+    ObservationInspection,
+    PriorGuidance,
+)
 from baymorph.pipeline.config_maker import (
     make_config_from_fits,
     make_multi_observation_config,
@@ -43,8 +48,11 @@ __all__ = [
     "ImageData",
     "InferenceResult",
     "Observation",
+    "ObservationAdvisor",
+    "ObservationInspection",
     "ObservationMetadata",
     "PosteriorSamples",
+    "PriorGuidance",
     "RealFitProducts",
     "SersicModel",
     "SyntheticObservation",
