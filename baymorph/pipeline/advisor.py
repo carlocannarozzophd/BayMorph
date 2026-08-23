@@ -9,10 +9,22 @@ from typing import Any
 
 import numpy as np
 
+from baymorph.analysis.prior_predictive import (
+    FluxPriorCalibration,
+    calibrate_single_sersic_flux_prior,
+)
 from baymorph.core.observation import Observation
-from baymorph.pipeline.config import DEFAULT_CONFIG
+from baymorph.pipeline.config import DEFAULT_CONFIG, load_resolved_config
 from baymorph.pipeline.config_maker import make_config_from_fits
-from baymorph.pipeline.image_preparation import prepare_real_fits_image
+from baymorph.pipeline.image_preparation import (
+    load_image_preparation_products,
+    prepare_real_fits_image,
+    prepare_real_image_from_config,
+)
+from baymorph.pipeline.psf_construction import (
+    load_empirical_psf,
+    run_psf_construction_from_config,
+)
 from baymorph.pipeline.preparation_steps import (
     estimate_target_geometry_from_image,
 )
@@ -43,7 +55,7 @@ class PriorGuidance:
     observed_scale_source: str | None = None
     observed_scale_role: str | None = None
     use_observed_scale_for_prior: bool = False
-    evidence_safe: bool = True
+    evidence_safe: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +86,230 @@ class ObservationInspection:
     target_axis_ratio: float | None
     target_position_angle: float | None
     target_area_pixels: int | None
+
+
+PRIOR_WIDTH_WARNING_DEX = 6.0
+
+
+@dataclass(frozen=True, slots=True)
+class _PriorAudit:
+    """Internal audit of one declared scientific prior."""
+
+    status: str
+    width_dex: float | None = None
+    observed_inside_bounds: bool | None = None
+    lower_margin_dex: float | None = None
+    upper_margin_dex: float | None = None
+    warnings: tuple[str, ...] = ()
+
+
+def _numeric_prior_bound(
+    value: Any,
+) -> float | None:
+    """Resolve numeric and supported symbolic prior bounds."""
+    if isinstance(
+        value,
+        (int, float, np.integer, np.floating),
+    ):
+        result = float(
+            value
+        )
+
+        return (
+            result
+            if np.isfinite(
+                result
+            )
+            else None
+        )
+
+    symbolic = {
+        "-pi": -np.pi,
+        "-pi/2": -0.5 * np.pi,
+        "0": 0.0,
+        "pi/2": 0.5 * np.pi,
+        "pi": np.pi,
+    }
+
+    return symbolic.get(
+        str(
+            value
+        ).strip().lower().replace(
+            " ",
+            "",
+        )
+    )
+
+
+def _audit_prior(
+    prior: Mapping[str, Any],
+    *,
+    observed_scale: float | None = None,
+) -> _PriorAudit:
+    """Audit prior volume without using the observation to define bounds."""
+    prior_type = str(
+        prior.get(
+            "type",
+            "",
+        )
+    ).strip().lower()
+
+    lower = _numeric_prior_bound(
+        prior.get(
+            "lower"
+        )
+    )
+
+    upper = _numeric_prior_bound(
+        prior.get(
+            "upper"
+        )
+    )
+
+    warnings: list[str] = []
+
+    width_dex = None
+    observed_inside_bounds = None
+    lower_margin_dex = None
+    upper_margin_dex = None
+
+    if (
+        prior_type == "log_uniform"
+        and lower is not None
+        and upper is not None
+        and lower > 0.0
+        and upper > lower
+    ):
+        width_dex = float(
+            np.log10(
+                upper / lower
+            )
+        )
+
+        if (
+            width_dex
+            >= PRIOR_WIDTH_WARNING_DEX
+        ):
+            warnings.append(
+                "prior spans "
+                f"{width_dex:.3f} dex; "
+                "Bayesian evidence may be strongly prior-volume sensitive"
+            )
+
+    if (
+        observed_scale is not None
+        and np.isfinite(
+            observed_scale
+        )
+        and lower is not None
+        and upper is not None
+    ):
+        observed_inside_bounds = bool(
+            lower
+            <= observed_scale
+            <= upper
+        )
+
+        if not observed_inside_bounds:
+            warnings.append(
+                "observed diagnostic scale lies outside the declared "
+                "prior support"
+            )
+
+        if (
+            prior_type == "log_uniform"
+            and observed_scale > 0.0
+            and lower > 0.0
+            and upper > 0.0
+            and observed_inside_bounds
+        ):
+            lower_margin_dex = float(
+                np.log10(
+                    observed_scale / lower
+                )
+            )
+
+            upper_margin_dex = float(
+                np.log10(
+                    upper / observed_scale
+                )
+            )
+
+    return _PriorAudit(
+        status=(
+            "WARNING"
+            if warnings
+            else "REVIEWED"
+        ),
+        width_dex=width_dex,
+        observed_inside_bounds=observed_inside_bounds,
+        lower_margin_dex=lower_margin_dex,
+        upper_margin_dex=upper_margin_dex,
+        warnings=tuple(
+            warnings
+        ),
+    )
+
+
+def _print_prior_audit(
+    prior: Mapping[str, Any],
+    *,
+    observed_scale: float | None = None,
+) -> _PriorAudit:
+    """Print an evidence-oriented audit of one declared prior."""
+    audit = _audit_prior(
+        prior,
+        observed_scale=observed_scale,
+    )
+
+    print(
+        "  bounds: "
+        f"[{prior.get('lower')}, "
+        f"{prior.get('upper')}]"
+    )
+
+    if audit.width_dex is not None:
+        print(
+            "  prior width: "
+            f"{audit.width_dex:.3f} dex"
+        )
+
+    if audit.observed_inside_bounds is not None:
+        print(
+            "  observed diagnostic scale inside bounds: "
+            + (
+                "YES"
+                if audit.observed_inside_bounds
+                else "NO"
+            )
+        )
+
+    if (
+        audit.lower_margin_dex is not None
+        and audit.upper_margin_dex is not None
+    ):
+        print(
+            "  observed-scale position: "
+            f"{audit.lower_margin_dex:.3f} dex above lower bound, "
+            f"{audit.upper_margin_dex:.3f} dex below upper bound"
+        )
+
+    print(
+        "  observed diagnostic used to define bounds: NO"
+    )
+
+    print(
+        "  evidence review: "
+        f"{audit.status}"
+    )
+
+    for warning in audit.warnings:
+        print(
+            "  warning: "
+            f"{warning}"
+        )
+
+    return audit
 
 
 class ObservationAdvisor:
@@ -359,7 +595,18 @@ class ObservationAdvisor:
             "theta": PriorGuidance(
                 parameter="theta",
                 family="uniform_axial",
-                observed_scale=inspection.target_position_angle,
+                observed_scale=(
+                    None
+                    if inspection.target_position_angle is None
+                    else float(
+                        (
+                            inspection.target_position_angle
+                            + 0.5 * np.pi
+                        )
+                        % np.pi
+                        - 0.5 * np.pi
+                    )
+                ),
                 rationale=(
                     "Position angle is axial: theta == theta + pi. "
                     "Use a complete declared axial domain rather than "
@@ -534,28 +781,167 @@ class ObservationAdvisor:
             **config_options,
         )
 
+    def calibrate_flux_prior(
+        self,
+        config: str | Path | Mapping[str, Any],
+        *,
+        prepare: bool = False,
+        build_psf: bool = False,
+        snr_threshold: float = 5.0,
+        required_detectable_fraction: float = 0.95,
+        required_unsaturated_fraction: float = 0.95,
+        n_draws: int = 256,
+        random_state: int | None = 0,
+        bootstrap_samples: int = 512,
+        confidence_level: float = 0.95,
+    ) -> FluxPriorCalibration:
+        """Calibrate single-Sersic flux bounds for one prepared observation.
+
+        The calibration uses the declared morphology priors together with
+        observation-level quantities required to translate those priors into
+        detectable and non-saturating flux support.
+
+        The measured target flux and image-derived target morphology
+        diagnostics are not used to define the calibrated bounds.
+
+        Parameters
+        ----------
+        config : mapping, str, or pathlib.Path
+            BayMorph configuration describing the observation.
+        prepare : bool, default=False
+            If True, run the canonical image-preparation pipeline before
+            calibration. Otherwise load existing preparation products.
+        build_psf : bool, default=False
+            If True, run the canonical empirical-PSF construction pipeline
+            before calibration. Otherwise load the existing empirical PSF.
+        snr_threshold : float, default=5
+            Quadrature model-S/N detectability threshold.
+        required_detectable_fraction : float, default=0.95
+            Required morphology fraction detectable at the lower bound.
+        required_unsaturated_fraction : float, default=0.95
+            Required morphology fraction remaining below saturation at the
+            upper bound.
+        n_draws : int, default=256
+            Number of morphology draws.
+        random_state : int or None, default=0
+            Random seed for morphology sampling.
+        bootstrap_samples : int, default=512
+            Number of bootstrap resamples used to quantify finite-ensemble
+            sensitivity.
+        confidence_level : float, default=0.95
+            Equal-tail bootstrap interval confidence level.
+
+        Returns
+        -------
+        FluxPriorCalibration
+            Joint detectability and saturation calibration.
+
+        Notes
+        -----
+        This is an observationally calibrated prior construction, not an
+        objective or universally evidence-safe prior. Its result is
+        conditional on the declared morphology priors, PSF, noise model,
+        footprint, mask, detector metadata, and calibration policy.
+        """
+        if isinstance(
+            config,
+            (str, Path),
+        ):
+            resolved = load_resolved_config(
+                config
+            )
+        else:
+            resolved = dict(
+                config
+            )
+
+        if prepare:
+            products = prepare_real_image_from_config(
+                resolved,
+                save=True,
+            )
+        else:
+            products = load_image_preparation_products(
+                resolved
+            )
+
+        if build_psf:
+            run_psf_construction_from_config(
+                resolved
+            )
+
+        psf = load_empirical_psf(
+            resolved
+        )
+
+        inspection = (
+            self._inspection
+            or self.inspect()
+        )
+
+        if inspection.saturation is None:
+            raise ValueError(
+                "Flux upper-bound calibration requires finite detector "
+                "saturation metadata."
+            )
+
+        try:
+            priors = resolved[
+                "fit"
+            ][
+                "priors"
+            ][
+                "single_sersic"
+            ]
+        except KeyError as exc:
+            raise ValueError(
+                "Flux calibration requires declared single-Sersic priors."
+            ) from exc
+
+        references = {
+            "target_x": float(
+                products.target_x
+            ),
+            "target_y": float(
+                products.target_y
+            ),
+        }
+
+        return calibrate_single_sersic_flux_prior(
+            priors=priors,
+            image_shape=products.prepared_data.shape,
+            psf=psf,
+            noise_sigma=products.noise,
+            saturation_level=inspection.saturation,
+            subtracted_background=products.background,
+            references=references,
+            mask=products.fitting_mask,
+            snr_threshold=snr_threshold,
+            required_detectable_fraction=required_detectable_fraction,
+            required_unsaturated_fraction=required_unsaturated_fraction,
+            n_draws=n_draws,
+            random_state=random_state,
+            bootstrap_samples=bootstrap_samples,
+            confidence_level=confidence_level,
+            unit=inspection.bunit,
+        )
+
     def configure(
         self,
         *,
         output_path: str | Path | None = None,
         input_fn: InputFunction = input,
+        flux_calibration: FluxPriorCalibration | None = None,
         **config_options: Any,
     ) -> dict[str, Any] | None:
-        """Interactively create an evidence-safe single-Sersic config.
+        """Interactively create an evidence-aware single-Sersic config.
 
-        The advisor reports image-derived numerical scales but never converts
-        them automatically into scientific-prior bounds.
+        Image-derived numerical scales are used only to audit declared priors.
+        They never determine scientific-prior bounds automatically.
 
-        Configuration choices that would invalidate the standard normalized
-        Bayesian-evidence interpretation are rejected unless corrected during
-        the interactive dialogue. Expert users who intentionally require such
-        configurations may use ``make_config`` or ``make_config_from_fits``
-        directly.
+        A ``WARNING`` status identifies a prior that deserves explicit review;
+        it does not imply that the prior is mathematically invalid.
         """
-        print(
-            self.summary()
-        )
-
         answer = input_fn(
             "Create a BayMorph configuration now? [y/N]: "
         ).strip().lower()
@@ -606,7 +992,8 @@ class ObservationAdvisor:
                 if item.observed_scale is not None:
                     if parameter == "theta":
                         observed_text = (
-                            f"{np.degrees(item.observed_scale) % 180.0:.6g} deg"
+                            f"{np.degrees(item.observed_scale):.6g} deg "
+                            "(axial equivalent in prior domain)"
                         )
                     else:
                         observed_text = (
@@ -617,14 +1004,37 @@ class ObservationAdvisor:
                         "  observed numerical scale: "
                         f"{observed_text}"
                     )
-                    print(
-                        "  data used to define prior: NO"
-                    )
 
             if parameter == "flux":
-                print(
-                    "  prior bounds: USER DECISION"
-                )
+                if (
+                    flux_calibration is not None
+                    and flux_calibration.candidate_prior is not None
+                ):
+                    calibrated = flux_calibration.candidate_prior
+
+                    print(
+                        "  calibrated candidate: "
+                        f"{calibrated['type']}("
+                        f"{calibrated['lower']:.6g}, "
+                        f"{calibrated['upper']:.6g})"
+                    )
+                    print(
+                        "  measured target diagnostic used to define "
+                        "bounds: NO"
+                    )
+                    print(
+                        "  calibration status: CALIBRATED"
+                    )
+                else:
+                    print(
+                        "  prior bounds: USER DECISION"
+                    )
+                    print(
+                        "  observed diagnostic used to define bounds: NO"
+                    )
+                    print(
+                        "  evidence review: PENDING USER BOUNDS"
+                    )
             else:
                 prior = reference_priors[
                     parameter
@@ -645,6 +1055,15 @@ class ObservationAdvisor:
                 print(
                     "  BayMorph reference prior: "
                     f"{prior_text}"
+                )
+
+                _print_prior_audit(
+                    prior,
+                    observed_scale=(
+                        None
+                        if item is None
+                        else item.observed_scale
+                    ),
                 )
 
             print()
@@ -718,53 +1137,175 @@ class ObservationAdvisor:
                 f"{flux_scale:.6g}"
             )
 
-        prior_type = input_fn(
-            "Flux prior type [log_uniform]: "
-        ).strip().lower()
+        use_calibrated = False
 
-        if not prior_type:
-            prior_type = "log_uniform"
+        if flux_calibration is not None:
+            calibrated_prior = flux_calibration.candidate_prior
 
-        if prior_type not in {
-            "uniform",
-            "log_uniform",
-        }:
-            raise ValueError(
-                "Flux prior type must be "
-                "'uniform' or 'log_uniform'."
+            if calibrated_prior is None:
+                raise ValueError(
+                    "Flux calibration did not produce a valid ordered "
+                    "log-uniform interval."
+                )
+
+            print()
+            print("CALIBRATED FLUX PRIOR")
+            print(
+                "  lower bound: "
+                f"{flux_calibration.chosen_flux_lower:.6g}"
+            )
+            print(
+                "  upper bound: "
+                f"{flux_calibration.chosen_flux_upper:.6g}"
             )
 
-        lower = _prompt_float(
-            input_fn,
-            "Flux prior lower bound "
-            "(scientific choice): ",
-        )
+            if flux_calibration.width_dex is not None:
+                print(
+                    "  prior width: "
+                    f"{flux_calibration.width_dex:.3f} dex"
+                )
 
-        upper = _prompt_float(
-            input_fn,
-            "Flux prior upper bound "
-            "(scientific choice): ",
-        )
+            if (
+                flux_calibration.lower_confidence_interval
+                is not None
+            ):
+                lower_ci = (
+                    flux_calibration.lower_confidence_interval
+                )
 
-        if not lower < upper:
-            raise ValueError(
-                "Flux prior requires lower < upper."
+                print(
+                    "  lower-bound MC interval: "
+                    f"[{lower_ci[0]:.6g}, "
+                    f"{lower_ci[1]:.6g}]"
+                )
+
+            if (
+                flux_calibration.upper_confidence_interval
+                is not None
+            ):
+                upper_ci = (
+                    flux_calibration.upper_confidence_interval
+                )
+
+                print(
+                    "  upper-bound MC interval: "
+                    f"[{upper_ci[0]:.6g}, "
+                    f"{upper_ci[1]:.6g}]"
+                )
+
+            print(
+                "  measured target diagnostic used to define bounds: NO"
+            )
+            print(
+                "  calibration status: CALIBRATED"
             )
 
-        if (
-            prior_type == "log_uniform"
-            and lower <= 0.0
-        ):
-            raise ValueError(
-                "Log-uniform flux prior requires lower > 0."
+            answer = input_fn(
+                "Use calibrated flux prior? [Y/n]: "
+            ).strip().lower()
+
+            use_calibrated = answer in {
+                "",
+                "y",
+                "yes",
+            }
+
+        if use_calibrated:
+            flux_prior = dict(
+                flux_calibration.candidate_prior
             )
 
-        model_priors = {
-            "flux": {
+            print()
+            print("FLUX PRIOR AUDIT")
+            print(
+                "  source: observational prior calibration"
+            )
+            print(
+                "  measured target diagnostic used to define bounds: NO"
+            )
+            print(
+                "  evidence review: CALIBRATED"
+            )
+        else:
+            prior_type = input_fn(
+                "Flux prior type [log_uniform]: "
+            ).strip().lower()
+
+            if not prior_type:
+                prior_type = "log_uniform"
+
+            if prior_type not in {
+                "uniform",
+                "log_uniform",
+            }:
+                raise ValueError(
+                    "Flux prior type must be "
+                    "'uniform' or 'log_uniform'."
+                )
+
+            lower = _prompt_float(
+                input_fn,
+                "Flux prior lower bound "
+                "(scientific choice): ",
+            )
+
+            upper = _prompt_float(
+                input_fn,
+                "Flux prior upper bound "
+                "(scientific choice): ",
+            )
+
+            if not lower < upper:
+                raise ValueError(
+                    "Flux prior requires lower < upper."
+                )
+
+            if (
+                prior_type == "log_uniform"
+                and lower <= 0.0
+            ):
+                raise ValueError(
+                    "Log-uniform flux prior requires lower > 0."
+                )
+
+            flux_prior = {
                 "type": prior_type,
                 "lower": lower,
                 "upper": upper,
             }
+
+            print()
+            print("FLUX PRIOR AUDIT")
+
+            if prior_type == "log_uniform":
+                print(
+                    "  interpretation: equal prior probability "
+                    "per logarithmic interval"
+                )
+
+            flux_audit = _print_prior_audit(
+                flux_prior,
+                observed_scale=flux_scale,
+            )
+
+            if flux_audit.status == "WARNING":
+                print()
+                proceed = input_fn(
+                    "Proceed with this warned flux prior? [y/N]: "
+                ).strip().lower()
+
+                if proceed not in {
+                    "y",
+                    "yes",
+                }:
+                    print(
+                        "Configuration cancelled: warned flux prior "
+                        "was not accepted."
+                    )
+                    return None
+
+        model_priors = {
+            "flux": flux_prior,
         }
 
         return self.make_config(
