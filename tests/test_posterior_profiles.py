@@ -341,3 +341,185 @@ def test_posterior_profile_bands_use_reference_elliptical_geometry():
         circular.total.p50,
         equal_nan=True,
     )
+
+
+def test_posterior_profile_bands_match_reference_profile_extraction():
+    from baymorph.analysis.radial_profiles import (
+        radial_profile_from_image,
+    )
+
+    shape = (
+        31,
+        31,
+    )
+
+    radii = np.asarray(
+        [
+            0.0,
+            2.0,
+            5.0,
+            9.0,
+            14.0,
+        ]
+    )
+
+    mask = np.zeros(
+        shape,
+        dtype=bool,
+    )
+    mask[15, 16] = True
+
+    component_a = np.arange(
+        shape[0] * shape[1],
+        dtype=float,
+    ).reshape(
+        shape
+    )
+
+    component_b = np.full(
+        shape,
+        3.0,
+        dtype=float,
+    )
+
+    component_a[10, 10] = np.nan
+
+    class FixedModel:
+        def render_components(
+            self,
+            image_shape,
+        ):
+            assert image_shape == shape
+
+            return {
+                "a": component_a,
+                "b": component_b,
+            }
+
+    result = compute_posterior_profile_bands(
+        posterior=np.asarray(
+            [
+                [
+                    1.0,
+                ],
+            ]
+        ),
+        model_factory=lambda sample: FixedModel(),
+        image_shape=shape,
+        radii=radii,
+        center_x=15.0,
+        center_y=15.0,
+        axis_ratio=0.7,
+        position_angle=0.4,
+        mask=mask,
+    )
+
+    expected_a = radial_profile_from_image(
+        component_a,
+        center_x=15.0,
+        center_y=15.0,
+        radii=radii,
+        mask=mask,
+        axis_ratio=0.7,
+        position_angle=0.4,
+    )
+
+    expected_b = radial_profile_from_image(
+        component_b,
+        center_x=15.0,
+        center_y=15.0,
+        radii=radii,
+        mask=mask,
+        axis_ratio=0.7,
+        position_angle=0.4,
+    )
+
+    expected_total = radial_profile_from_image(
+        component_a + component_b,
+        center_x=15.0,
+        center_y=15.0,
+        radii=radii,
+        mask=mask,
+        axis_ratio=0.7,
+        position_angle=0.4,
+    )
+
+    np.testing.assert_allclose(
+        result.components["a"].p50,
+        expected_a,
+        equal_nan=True,
+    )
+
+    np.testing.assert_allclose(
+        result.components["b"].p50,
+        expected_b,
+        equal_nan=True,
+    )
+
+    np.testing.assert_allclose(
+        result.total.p50,
+        expected_total,
+        equal_nan=True,
+    )
+
+
+def test_posterior_profile_geometry_is_computed_once(
+    monkeypatch,
+):
+    import baymorph.analysis.posterior_profiles as module
+
+    original = module.elliptical_radius_map
+
+    calls = 0
+
+    def counting_radius_map(
+        *args,
+        **kwargs,
+    ):
+        nonlocal calls
+        calls += 1
+
+        return original(
+            *args,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(
+        module,
+        "elliptical_radius_map",
+        counting_radius_map,
+    )
+
+    samples = np.asarray(
+        [
+            [
+                1.0,
+                2.0,
+            ],
+            [
+                3.0,
+                4.0,
+            ],
+            [
+                5.0,
+                6.0,
+            ],
+        ]
+    )
+
+    compute_posterior_profile_bands(
+        posterior=samples,
+        model_factory=dummy_model_factory,
+        image_shape=(
+            21,
+            21,
+        ),
+        radii=np.arange(
+            0.0,
+            6.0,
+        ),
+        center_x=10.0,
+        center_y=10.0,
+    )
+
+    assert calls == 1

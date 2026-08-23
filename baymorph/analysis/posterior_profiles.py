@@ -7,7 +7,7 @@ from typing import Callable
 
 import numpy as np
 
-from baymorph.analysis.radial_profiles import radial_profile_from_image
+from baymorph.analysis.radial_profiles import elliptical_radius_map
 
 
 @dataclass(frozen=True)
@@ -120,26 +120,145 @@ def _profile_band(
     )
 
 
-def _radial_profile(
-    image: np.ndarray,
+def _prepare_annulus_indices(
+    image_shape: tuple[int, int],
+    radii: np.ndarray,
     *,
     center_x: float,
     center_y: float,
-    radii: np.ndarray,
     mask: np.ndarray | None,
     axis_ratio: float,
     position_angle: float,
-) -> np.ndarray:
-    """Return one median elliptical radial profile."""
-    return radial_profile_from_image(
-        image,
+) -> tuple[np.ndarray, ...]:
+    """Precompute flattened pixel indices for fixed elliptical annuli."""
+    radii = np.asarray(
+        radii,
+        dtype=float,
+    )
+
+    if radii.ndim != 1:
+        raise ValueError(
+            "radii must be 1D."
+        )
+
+    if radii.size < 2:
+        raise ValueError(
+            "radii must contain at least two edges."
+        )
+
+    if not np.all(
+        np.isfinite(
+            radii
+        )
+    ):
+        raise ValueError(
+            "radii must contain only finite values."
+        )
+
+    if np.any(
+        np.diff(
+            radii
+        )
+        <= 0.0
+    ):
+        raise ValueError(
+            "radii must be strictly increasing."
+        )
+
+    radius_map = elliptical_radius_map(
+        image_shape,
         center_x=center_x,
         center_y=center_y,
-        radii=radii,
-        mask=mask,
         axis_ratio=axis_ratio,
         position_angle=position_angle,
     )
+
+    valid_geometry = np.ones(
+        image_shape,
+        dtype=bool,
+    )
+
+    if mask is not None:
+        mask = np.asarray(
+            mask,
+            dtype=bool,
+        )
+
+        if mask.shape != image_shape:
+            raise ValueError(
+                "mask must have the same shape as image."
+            )
+
+        valid_geometry &= ~mask
+
+    return tuple(
+        np.flatnonzero(
+            (
+                valid_geometry
+                & (
+                    radius_map
+                    >= radii[index]
+                )
+                & (
+                    radius_map
+                    < radii[index + 1]
+                )
+            ).ravel()
+        )
+        for index in range(
+            radii.size - 1
+        )
+    )
+
+
+def _radial_profile_from_annuli(
+    image: np.ndarray,
+    *,
+    image_shape: tuple[int, int],
+    annulus_indices: tuple[np.ndarray, ...],
+) -> np.ndarray:
+    """Return one median profile using precomputed annulus membership."""
+    image = np.asarray(
+        image,
+        dtype=float,
+    )
+
+    if image.shape != image_shape:
+        raise ValueError(
+            "rendered image shape does not match image_shape."
+        )
+
+    flat_image = image.ravel()
+
+    profile = np.full(
+        len(
+            annulus_indices
+        ),
+        np.nan,
+        dtype=float,
+    )
+
+    for index, pixel_indices in enumerate(
+        annulus_indices
+    ):
+        values = flat_image[
+            pixel_indices
+        ]
+
+        values = values[
+            np.isfinite(
+                values
+            )
+        ]
+
+        if values.size:
+            profile[
+                index
+            ] = np.median(
+                values
+            )
+
+    return profile
 
 
 def compute_posterior_profile_bands(
@@ -217,6 +336,16 @@ def compute_posterior_profile_bands(
         + radii[1:]
     )
 
+    annulus_indices = _prepare_annulus_indices(
+        image_shape,
+        radii,
+        center_x=center_x,
+        center_y=center_y,
+        mask=mask,
+        axis_ratio=axis_ratio,
+        position_angle=position_angle,
+    )
+
     total_profiles = []
     component_profiles: dict[
         str,
@@ -269,40 +398,49 @@ def compute_posterior_profile_bands(
             for name, image in components.items()
         }
 
-        total_image = np.sum(
-            np.stack(
-                list(
-                    component_images.values()
-                ),
-                axis=0,
-            ),
-            axis=0,
-        )
-
-        total_profiles.append(
-            _radial_profile(
-                total_image,
-                center_x=center_x,
-                center_y=center_y,
-                radii=radii,
-                mask=mask,
-                axis_ratio=axis_ratio,
-                position_angle=position_angle,
-            )
-        )
+        sample_component_profiles = {}
 
         for name, image in component_images.items():
+            profile = _radial_profile_from_annuli(
+                image,
+                image_shape=image_shape,
+                annulus_indices=annulus_indices,
+            )
+
             component_profiles[
                 name
             ].append(
-                _radial_profile(
-                    image,
-                    center_x=center_x,
-                    center_y=center_y,
-                    radii=radii,
-                    mask=mask,
-                    axis_ratio=axis_ratio,
-                    position_angle=position_angle,
+                profile
+            )
+
+            sample_component_profiles[
+                name
+            ] = profile
+
+        if len(
+            component_images
+        ) == 1:
+            total_profiles.append(
+                next(
+                    iter(
+                        sample_component_profiles.values()
+                    )
+                )
+            )
+        else:
+            total_image = np.zeros(
+                image_shape,
+                dtype=float,
+            )
+
+            for image in component_images.values():
+                total_image += image
+
+            total_profiles.append(
+                _radial_profile_from_annuli(
+                    total_image,
+                    image_shape=image_shape,
+                    annulus_indices=annulus_indices,
                 )
             )
 
