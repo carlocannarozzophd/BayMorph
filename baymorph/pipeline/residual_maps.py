@@ -204,160 +204,30 @@ def _multi_observation_title(
     )
 
 
-def _full_inference_bounds(
-    shape: tuple[int, int],
-) -> dict[str, int]:
-    """Return full-image half-open bounds for one prepared footprint."""
-    return {
-        "xmin": 0,
-        "xmax": int(
-            shape[1]
-        ),
-        "ymin": 0,
-        "ymax": int(
-            shape[0]
-        ),
-    }
-
-
-def _crop_to_inference_bounds(
-    array,
-    *,
-    bounds: Mapping[str, int],
-):
-    """Crop one preparation product to inference-footprint bounds."""
-    array = np.asarray(
-        array
-    )
-
-    try:
-        xmin = int(
-            bounds["xmin"]
-        )
-        xmax = int(
-            bounds["xmax"]
-        )
-        ymin = int(
-            bounds["ymin"]
-        )
-        ymax = int(
-            bounds["ymax"]
-        )
-    except (
-        KeyError,
-        TypeError,
-    ) as exc:
-        raise ValueError(
-            "Inference bounds must define xmin, xmax, ymin, and ymax."
-        ) from exc
-
-    if (
-        xmin < 0
-        or ymin < 0
-        or xmax <= xmin
-        or ymax <= ymin
-        or xmax > array.shape[1]
-        or ymax > array.shape[0]
-    ):
-        raise ValueError(
-            "Inference bounds are incompatible with preparation-product "
-            "shape."
-        )
-
-    return np.asarray(
-        array[
-            ymin:ymax,
-            xmin:xmax,
-        ]
-    )
-
-
-def _absolute_inference_bounds(
-    preparation_bounds,
-    inference_bounds: Mapping[str, int],
-):
-    """Translate inference bounds into original-image pixel coordinates."""
-    if preparation_bounds is None:
-        return None
-
-    try:
-        preparation_xmin = int(
-            preparation_bounds[
-                "xmin"
-            ]
-        )
-        preparation_ymin = int(
-            preparation_bounds[
-                "ymin"
-            ]
-        )
-    except (
-        KeyError,
-        TypeError,
-    ) as exc:
-        raise ValueError(
-            "Preparation cutout bounds must define xmin and ymin."
-        ) from exc
-
-    return {
-        "xmin": preparation_xmin
-        + int(
-            inference_bounds[
-                "xmin"
-            ]
-        ),
-        "xmax": preparation_xmin
-        + int(
-            inference_bounds[
-                "xmax"
-            ]
-        ),
-        "ymin": preparation_ymin
-        + int(
-            inference_bounds[
-                "ymin"
-            ]
-        ),
-        "ymax": preparation_ymin
-        + int(
-            inference_bounds[
-                "ymax"
-            ]
-        ),
-    }
-
-
 def _single_observation_plot_products(
     image_products,
     fit,
 ) -> dict[str, Any]:
-    """Return mutually consistent products on the fitted image footprint."""
-    bounds = getattr(
-        fit,
-        "inference_bounds",
-        None,
+    """Return aligned products on the prepared observation footprint."""
+    original_cutout = np.asarray(
+        image_products.cutout
     )
 
-    if bounds is None:
-        bounds = _full_inference_bounds(
-            image_products.prepared_data.shape
-        )
+    prepared_cutout = np.asarray(
+        image_products.prepared_data
+    )
 
-    original_cutout = _crop_to_inference_bounds(
-        image_products.cutout,
-        bounds=bounds,
+    segmentation = np.asarray(
+        image_products.segmentation
     )
-    prepared_cutout = _crop_to_inference_bounds(
-        image_products.prepared_data,
-        bounds=bounds,
+
+    target_mask = np.asarray(
+        image_products.target_segment
     )
-    segmentation = _crop_to_inference_bounds(
-        image_products.segmentation,
-        bounds=bounds,
-    )
-    target_mask = _crop_to_inference_bounds(
-        image_products.target_segment,
-        bounds=bounds,
+
+    fitting_mask = np.asarray(
+        image_products.fitting_mask,
+        dtype=bool,
     )
 
     noise = getattr(
@@ -367,31 +237,11 @@ def _single_observation_plot_products(
     )
 
     if noise is None:
-        noise = _crop_to_inference_bounds(
-            image_products.noise,
-            bounds=bounds,
-        )
+        noise = image_products.noise
 
     noise = np.asarray(
         noise,
         dtype=float,
-    )
-
-    inference_mask = getattr(
-        fit,
-        "inference_mask",
-        None,
-    )
-
-    if inference_mask is None:
-        inference_mask = _crop_to_inference_bounds(
-            image_products.fitting_mask,
-            bounds=bounds,
-        )
-
-    inference_mask = np.asarray(
-        inference_mask,
-        dtype=bool,
     )
 
     expected_shape = prepared_cutout.shape
@@ -406,8 +256,8 @@ def _single_observation_plot_products(
             noise,
         ),
         (
-            "inference_mask",
-            inference_mask,
+            "fitting_mask",
+            fitting_mask,
         ),
         (
             "segmentation",
@@ -426,7 +276,7 @@ def _single_observation_plot_products(
             array
         ).shape != expected_shape:
             raise ValueError(
-                f"{name} shape does not match the inference footprint."
+                f"{name} shape does not match the prepared footprint."
             )
 
     return {
@@ -434,14 +284,10 @@ def _single_observation_plot_products(
         "prepared_cutout": prepared_cutout,
         "noise": noise,
         "segmentation": segmentation,
-        "contaminant_mask": inference_mask,
+        "contaminant_mask": fitting_mask,
         "target_mask": target_mask,
-        "cutout_bounds": _absolute_inference_bounds(
-            image_products.cutout_bounds,
-            bounds,
-        ),
+        "cutout_bounds": image_products.cutout_bounds,
     }
-
 
 def _run_single_observation_residual_maps(
     config: Mapping[str, Any],

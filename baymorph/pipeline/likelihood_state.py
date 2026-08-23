@@ -22,7 +22,7 @@ class RealFitLikelihoodState:
     likelihood_type : str
         Normalized likelihood-family identifier.
     noise : ndarray
-        Marginal noise field on the exact inference footprint.
+        Marginal noise field on the prepared observation footprint.
     correlation_kernel : ndarray, optional
         Fixed stationary two-dimensional correlation kernel.
     metadata : dict, optional
@@ -37,23 +37,22 @@ class RealFitLikelihoodState:
 
 def prepare_real_fit_likelihood_state(
     config: dict[str, Any],
-    inference_region,
+    image_products,
 ) -> RealFitLikelihoodState:
-    """Prepare fixed likelihood inputs on the exact inference footprint.
+    """Prepare fixed likelihood inputs on the prepared observation footprint.
 
-    Independent-pixel likelihoods reuse the noise map already attached to the
-    inference region.
+    Independent-pixel likelihoods reuse the prepared noise map.
 
-    The correlated Gaussian likelihood instead loads the persisted
-    within-observation calibration and crops its marginal scale field using
-    exactly the same half-open bounds as the inference region.
+    The correlated Gaussian likelihood loads the persisted within-observation
+    calibration on the same prepared observation footprint.
 
     Parameters
     ----------
     config : dict
         Resolved BayMorph configuration.
-    inference_region : InferenceRegion
-        Exact statistical image footprint used by the fit.
+    image_products : object
+        Prepared observation products defining the statistical image
+        footprint.
 
     Returns
     -------
@@ -107,7 +106,7 @@ def prepare_real_fit_likelihood_state(
         != "correlated_gaussian"
     ):
         noise = np.array(
-            inference_region.noise,
+            image_products.noise,
             dtype=float,
             copy=True,
         )
@@ -161,34 +160,20 @@ def prepare_real_fit_likelihood_state(
             "calibration before fitting."
         ) from exc
 
-    bounds = inference_region.bounds
-
     noise = np.array(
-        calibration.marginal_sigma[
-            int(
-                bounds["ymin"]
-            ):
-            int(
-                bounds["ymax"]
-            ),
-            int(
-                bounds["xmin"]
-            ):
-            int(
-                bounds["xmax"]
-            ),
-        ],
+        calibration.marginal_sigma,
         dtype=float,
         copy=True,
     )
 
-    if (
-        noise.shape
-        != inference_region.shape
-    ):
+    prepared_shape = np.asarray(
+        image_products.prepared_data
+    ).shape
+
+    if noise.shape != prepared_shape:
         raise ValueError(
             "Correlated-noise marginal scale does not match the "
-            "inference-region shape after applying persisted bounds."
+            "prepared observation footprint."
         )
 
     if (
@@ -203,7 +188,7 @@ def prepare_real_fit_likelihood_state(
     ):
         raise ValueError(
             "Correlated-noise marginal scale must be finite and "
-            "strictly positive on the inference footprint."
+            "strictly positive on the prepared observation footprint."
         )
 
     kernel = np.array(

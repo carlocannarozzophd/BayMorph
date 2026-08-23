@@ -32,7 +32,6 @@ from baymorph.observation.model_parameter_transforms import (
 from baymorph.pipeline.image_preparation import (
     load_image_preparation_products,
 )
-from baymorph.pipeline.inference_region import build_inference_region
 from baymorph.pipeline.likelihood_state import (
     prepare_real_fit_likelihood_state,
 )
@@ -341,21 +340,16 @@ def _build_multi_observation_context(
             "fit"
         ] = effective_fit_config
 
-        inference_region = build_inference_region(
-            products,
-            mode="full",
-        )
-
         likelihood_state = prepare_real_fit_likelihood_state(
             effective_observation_config,
-            inference_region,
+            products,
         )
 
         likelihoods[observation_name] = make_likelihood(
             likelihood_config,
-            data=inference_region.data,
+            data=products.prepared_data,
             noise=likelihood_state.noise,
-            mask=inference_region.mask,
+            mask=products.fitting_mask,
             correlation_kernel=likelihood_state.correlation_kernel,
         )
 

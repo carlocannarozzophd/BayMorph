@@ -34,10 +34,6 @@ from baymorph.pipeline.config import (
     validate_fit_priors,
 )
 from baymorph.pipeline.image_preparation import load_image_preparation_products
-from baymorph.pipeline.inference_region import (
-    InferenceRegion,
-    build_inference_region,
-)
 from baymorph.pipeline.likelihood_state import (
     RealFitLikelihoodState,
     prepare_real_fit_likelihood_state,
@@ -107,16 +103,9 @@ def run_real_fit_from_config(
         observation=observation,
     )
 
-    inference_region = _build_fit_inference_region(
-        image_products,
-        references=preparation_references,
-        region_cfg=resolved["fit"]["region"],
+    prior_references = dict(
+        preparation_references
     )
-
-    prior_references = {
-        "target_x": inference_region.target_x,
-        "target_y": inference_region.target_y,
-    }
 
     likelihood_cfg = resolved["fit"].get(
         "likelihood",
@@ -124,7 +113,7 @@ def run_real_fit_from_config(
     )
     likelihood_state = prepare_real_fit_likelihood_state(
         resolved,
-        inference_region,
+        image_products,
     )
     sampler_cfg = resolved["fit"]["sampler"]
 
@@ -133,7 +122,7 @@ def run_real_fit_from_config(
     for model_name in resolved["fit"]["models"]:
         products = _execute_single_model_fit(
             model_name=model_name,
-            inference_region=inference_region,
+            image_products=image_products,
             psf=psf,
             prior_cfg=resolved["fit"]["priors"],
             background_cfg=resolved["fit"].get(
@@ -185,58 +174,10 @@ def run_real_fit_from_config(
     return all_products
 
 
-def _build_fit_inference_region(
-    image_products,
-    *,
-    references: dict[str, float],
-    region_cfg: dict[str, Any],
-) -> InferenceRegion:
-    """Build the likelihood footprint from prepared observation products."""
-    if not isinstance(
-        region_cfg,
-        dict,
-    ):
-        raise TypeError(
-            "fit.region must be a mapping."
-        )
-
-    unsupported = sorted(
-        set(region_cfg)
-        - {
-            "mode",
-            "radius",
-        }
-    )
-
-    if unsupported:
-        raise ValueError(
-            "Unsupported fit.region entries: "
-            f"{unsupported}."
-        )
-
-    return build_inference_region(
-        image_products,
-        mode=region_cfg.get(
-            "mode",
-            "full",
-        ),
-        radius=region_cfg.get(
-            "radius",
-            None,
-        ),
-        reference_x=references[
-            "target_x"
-        ],
-        reference_y=references[
-            "target_y"
-        ],
-    )
-
-
 def _execute_single_model_fit(
     *,
     model_name,
-    inference_region,
+    image_products,
     psf,
     prior_cfg,
     background_cfg,
@@ -263,9 +204,9 @@ def _execute_single_model_fit(
         model_factory=model_factory,
         parameters=parameters,
         likelihood_cfg=likelihood_cfg,
-        data_fit=inference_region.data,
+        data_fit=image_products.prepared_data,
         noise_fit=likelihood_state.noise,
-        mask_fit=inference_region.mask,
+        mask_fit=image_products.fitting_mask,
         correlation_kernel_fit=likelihood_state.correlation_kernel,
     )
 
@@ -282,14 +223,14 @@ def _execute_single_model_fit(
         result=result,
         parameter_names=parameter_names,
         model_factory=model_factory,
-        image_shape=inference_region.shape,
+        image_shape=image_products.prepared_data.shape,
     )
 
     stats = _compute_fit_statistics(
-        data=inference_region.data,
+        data=image_products.prepared_data,
         model_image=best_model_image,
         noise=likelihood_state.noise,
-        mask=inference_region.mask,
+        mask=image_products.fitting_mask,
         n_parameters=len(
             parameter_names
         ),
@@ -307,8 +248,6 @@ def _execute_single_model_fit(
         ndof=stats["ndof"],
         reduced_chi2=stats["reduced_chi2"],
         noise=likelihood_state.noise,
-        inference_bounds=inference_region.bounds,
-        inference_mask=inference_region.mask.copy(),
         likelihood_metadata=(
             None
             if likelihood_state.metadata is None
@@ -363,22 +302,6 @@ def save_real_fit_products(
     elif noise_path.exists():
         noise_path.unlink()
 
-    inference_mask_path = (
-        paths["dir"]
-        / "inference_mask.npy"
-    )
-
-    if products.inference_mask is not None:
-        np.save(
-            inference_mask_path,
-            np.asarray(
-                products.inference_mask,
-                dtype=bool,
-            ),
-        )
-    elif inference_mask_path.exists():
-        inference_mask_path.unlink()
-
     if products.posterior is not None:
         products.posterior.save(
             paths["posterior"]
@@ -400,58 +323,6 @@ def save_real_fit_products(
         )
 
     sampler_cfg = config["fit"]["sampler"]
-    region_cfg = config["fit"].get(
-        "region",
-        {
-            "mode": "full",
-            "radius": None,
-        },
-    )
-
-    inference_region_summary = None
-
-    if products.inference_bounds is not None:
-        inference_region_summary = {
-            "mode": str(
-                region_cfg.get(
-                    "mode",
-                    "full",
-                )
-            ),
-            "radius": region_cfg.get(
-                "radius",
-                None,
-            ),
-            "bounds": {
-                key: int(
-                    value
-                )
-                for key, value in products.inference_bounds.items()
-            },
-            "shape": [
-                int(
-                    products.best_model_image.shape[0]
-                ),
-                int(
-                    products.best_model_image.shape[1]
-                ),
-            ],
-            "n_rendered_pixels": int(
-                products.best_model_image.size
-            ),
-            "n_usable_pixels": (
-                None
-                if products.inference_mask is None
-                else int(
-                    np.count_nonzero(
-                        ~np.asarray(
-                            products.inference_mask,
-                            dtype=bool,
-                        )
-                    )
-                )
-            ),
-        }
 
     summary = {
         "observation": (
@@ -493,7 +364,6 @@ def save_real_fit_products(
                 products.likelihood_metadata
             )
         ),
-        "inference_region": inference_region_summary,
     }
 
     with open(
@@ -631,58 +501,6 @@ def save_bayesian_model_comparison(
         )
 
 
-def _crop_prepared_array(
-    array,
-    *,
-    bounds: dict[str, int],
-):
-    """Crop one prepared-image array to persisted inference bounds."""
-    array = np.asarray(
-        array
-    )
-
-    try:
-        xmin = int(
-            bounds["xmin"]
-        )
-        xmax = int(
-            bounds["xmax"]
-        )
-        ymin = int(
-            bounds["ymin"]
-        )
-        ymax = int(
-            bounds["ymax"]
-        )
-    except (
-        KeyError,
-        TypeError,
-    ) as exc:
-        raise ValueError(
-            "Inference bounds must define xmin, xmax, ymin, and ymax."
-        ) from exc
-
-    if (
-        xmin < 0
-        or ymin < 0
-        or xmax <= xmin
-        or ymax <= ymin
-        or xmax > array.shape[1]
-        or ymax > array.shape[0]
-    ):
-        raise ValueError(
-            "Persisted inference bounds are incompatible with "
-            "prepared-image shape."
-        )
-
-    return np.asarray(
-        array[
-            ymin:ymax,
-            xmin:xmax,
-        ]
-    )
-
-
 def load_real_fit_products(
     config: str | Path | dict[str, Any],
     model_name: str,
@@ -746,35 +564,6 @@ def load_real_fit_products(
             paths["posterior"]
         )
 
-    inference_region_summary = summary.get(
-        "inference_region"
-    )
-
-    if isinstance(
-        inference_region_summary,
-        dict,
-    ):
-        inference_bounds = inference_region_summary.get(
-            "bounds"
-        )
-    else:
-        inference_bounds = None
-
-    inference_mask_path = (
-        paths["dir"]
-        / "inference_mask.npy"
-    )
-
-    inference_mask = (
-        np.load(
-            inference_mask_path
-        ).astype(
-            bool
-        )
-        if inference_mask_path.exists()
-        else None
-    )
-
     noise_path = (
         paths["dir"]
         / "noise.npy"
@@ -787,33 +576,15 @@ def load_real_fit_products(
             ),
             dtype=float,
         )
-    elif inference_bounds is None:
-        noise = np.asarray(
-            image_products.noise,
-            dtype=float,
-        )
     else:
         noise = np.asarray(
-            _crop_prepared_array(
-                image_products.noise,
-                bounds=inference_bounds,
-            ),
+            image_products.noise,
             dtype=float,
         )
 
     if noise.shape != best_model_image.shape:
         raise ValueError(
             "Loaded inference noise shape does not match "
-            "the saved best-model image."
-        )
-
-    if (
-        inference_mask is not None
-        and inference_mask.shape
-        != best_model_image.shape
-    ):
-        raise ValueError(
-            "Loaded inference mask shape does not match "
             "the saved best-model image."
         )
 
@@ -839,17 +610,6 @@ def load_real_fit_products(
             summary["reduced_chi2"]
         ),
         noise=noise,
-        inference_bounds=(
-            None
-            if inference_bounds is None
-            else {
-                key: int(
-                    value
-                )
-                for key, value in inference_bounds.items()
-            }
-        ),
-        inference_mask=inference_mask,
         likelihood_metadata=(
             summary.get(
                 "likelihood"

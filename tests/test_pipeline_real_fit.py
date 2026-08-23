@@ -641,10 +641,6 @@ def _run_two_model_fit_for_comparison_test(
                 "type": "gaussian",
             },
             "sampler": {},
-            "region": {
-                "mode": "full",
-                "radius": None,
-            },
             "comparison": {
                 "enabled": comparison_enabled,
                 "metric": comparison_metric,

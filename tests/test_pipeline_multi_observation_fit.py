@@ -870,13 +870,15 @@ def test_multi_observation_uses_observation_specific_likelihood_state(
 
     def fake_prepare_likelihood_state(
         config,
-        inference_region,
+        image_products,
     ):
         likelihood_type = config["fit"]["likelihood"]["type"]
 
         return SimpleNamespace(
             noise=np.ones(
-                inference_region.shape,
+                np.asarray(
+                    image_products.prepared_data
+                ).shape,
                 dtype=float,
             ),
             correlation_kernel=(

@@ -210,16 +210,6 @@ def test_fit_persistence_preserves_exact_noise_and_likelihood_metadata(
         ndof=3,
         reduced_chi2=2.5 / 3.0,
         noise=fitted_noise,
-        inference_bounds={
-            "xmin": 0,
-            "xmax": 2,
-            "ymin": 0,
-            "ymax": 2,
-        },
-        inference_mask=np.zeros(
-            (2, 2),
-            dtype=bool,
-        ),
         likelihood_metadata={
             "type": (
                 "correlated_gaussian"
@@ -325,10 +315,6 @@ def test_run_real_fit_passes_prepared_likelihood_state(
                 "include_normalization": False,
             },
             "sampler": {},
-            "region": {
-                "mode": "full",
-                "radius": None,
-            },
             "comparison": {
                 "enabled": False,
                 "metric": "bayes_factor",
@@ -337,20 +323,24 @@ def test_run_real_fit_passes_prepared_likelihood_state(
     }
 
     image_products = SimpleNamespace(
+        prepared_data=np.zeros(
+            (2, 2),
+            dtype=float,
+        ),
+        noise=np.ones(
+            (2, 2),
+            dtype=float,
+        ),
+        fitting_mask=np.zeros(
+            (2, 2),
+            dtype=bool,
+        ),
         cutout_bounds={
             "xmin": 0,
             "xmax": 2,
             "ymin": 0,
             "ymax": 2,
-        }
-    )
-
-    region = SimpleNamespace(
-        target_x=1.0,
-        target_y=1.0,
-        noise=np.ones(
-            (2, 2)
-        ),
+        },
     )
 
     state = RealFitLikelihoodState(
@@ -419,23 +409,17 @@ def test_run_real_fit_passes_prepared_likelihood_state(
         },
     )
 
-    monkeypatch.setattr(
-        "baymorph.pipeline.real_fit."
-        "_build_fit_inference_region",
-        lambda *args, **kwargs: region,
-    )
-
     def fake_prepare_state(
         config,
-        inference_region,
+        image_products_arg,
     ):
         captured[
             "state_config"
         ] = config
 
         captured[
-            "state_region"
-        ] = inference_region
+            "state_products"
+        ] = image_products_arg
 
         return state
 
@@ -500,9 +484,9 @@ def test_run_real_fit_passes_prepared_likelihood_state(
 
     assert (
         captured[
-            "state_region"
+            "state_products"
         ]
-        is region
+        is image_products
     )
 
     assert (

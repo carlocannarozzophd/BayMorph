@@ -410,7 +410,6 @@ def make_config_from_fits(
     model_name: str = "single_sersic",
     model_priors: Mapping[str, Any] | None = None,
     likelihood: Mapping[str, Any] | None = None,
-    fit_region: Mapping[str, Any] | None = None,
     sampler: str | Mapping[str, Any] | None = "nautilus",
     outputs_root: str | Path = "runs",
     overwrite: bool = True,
@@ -436,7 +435,6 @@ def make_config_from_fits(
     likelihood : mapping, optional
         Explicit likelihood configuration. If omitted, BayMorph uses the
         standard single-observation likelihood configuration.
-    fit_region : mapping, optional
         Explicit inference-region configuration. If omitted, BayMorph uses the
         standard single-observation inference region.
     outputs_root : str or pathlib.Path, default="runs"
@@ -565,16 +563,6 @@ def make_config_from_fits(
 
         fit_config["likelihood"] = deepcopy(
             dict(likelihood)
-        )
-
-    if fit_region is not None:
-        if not isinstance(fit_region, Mapping):
-            raise TypeError(
-                "fit_region must be a mapping or None."
-            )
-
-        fit_config["region"] = deepcopy(
-            dict(fit_region)
         )
 
     if sampler_config is not None:

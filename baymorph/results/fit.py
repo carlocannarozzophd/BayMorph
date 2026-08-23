@@ -39,12 +39,6 @@ class RealFitProducts:
         Name of the fitted model.
     noise : ndarray, optional
         Noise map used during fitting.
-    inference_bounds : dict of str to int, optional
-        Half-open inference-footprint bounds in preparation-cutout
-        coordinates.
-    inference_mask : ndarray of bool, optional
-        Exact exclusion mask used by the likelihood on the inference
-        footprint.
     likelihood_metadata : dict, optional
         Persisted statistical-model provenance for the fitted likelihood.
     radius : ndarray, optional
@@ -69,8 +63,6 @@ class RealFitProducts:
     model_name: str = "unknown"
     noise: np.ndarray | None = None
 
-    inference_bounds: dict[str, int] | None = None
-    inference_mask: np.ndarray | None = None
     likelihood_metadata: dict[str, Any] | None = None
 
     radius: np.ndarray | None = None
@@ -93,8 +85,8 @@ class RealFitProducts:
         Returns
         -------
         dict
-            Model name, fit statistics, Bayesian evidence, inference bounds,
-            and best-fitting parameter values.
+            Model name, fit statistics, Bayesian evidence, and best-fitting
+            parameter values.
         """
         logz = None
         logzerr = None
@@ -108,13 +100,6 @@ class RealFitProducts:
             "statistics": self.statistics,
             "logz": logz,
             "logzerr": logzerr,
-            "inference_bounds": (
-                None
-                if self.inference_bounds is None
-                else dict(
-                    self.inference_bounds
-                )
-            ),
             "likelihood": (
                 None
                 if self.likelihood_metadata is None

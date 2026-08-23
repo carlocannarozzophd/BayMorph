@@ -10,90 +10,51 @@ from baymorph.pipeline.likelihood_state import (
 )
 
 
-def _inference_region():
-    """Return a minimal deterministic inference-region stand-in."""
-    return SimpleNamespace(
-        noise=np.full(
-            (3, 4),
-            2.0,
-        ),
-        shape=(3, 4),
-        bounds={
-            "xmin": 2,
-            "xmax": 6,
-            "ymin": 1,
-            "ymax": 4,
-        },
-    )
-
-
-def test_independent_gaussian_reuses_inference_noise():
-    """Independent Gaussian state must preserve the inference noise map."""
-    config = {
-        "fit": {
-            "likelihood": {
-                "type": "gaussian",
-            },
-        },
-    }
-
-    region = _inference_region()
-
-    state = (
-        prepare_real_fit_likelihood_state(
-            config,
-            region,
-        )
-    )
-
-    assert (
-        state.likelihood_type
-        == "gaussian"
-    )
-
-    np.testing.assert_array_equal(
-        state.noise,
-        region.noise,
-    )
-
-    assert (
-        state.correlation_kernel
-        is None
-    )
-
-    assert (
-        state.metadata[
-            "normalization_complete"
-        ]
-        is True
-    )
-
-
-def test_correlated_gaussian_crops_persisted_scale(
-    monkeypatch,
+def _image_products(
+    *,
+    shape=(3, 4),
+    noise=None,
 ):
-    """Correlated state must use exactly the persisted inference bounds."""
-    marginal_sigma = np.arange(
-        42,
-        dtype=float,
-    ).reshape(
-        6,
-        7,
-    ) + 1.0
+    """Return minimal prepared observation products."""
+    if noise is None:
+        noise = np.full(
+            shape,
+            2.0,
+            dtype=float,
+        )
 
-    kernel = np.array(
-        [
-            [0.0, 0.1, 0.0],
-            [0.2, 1.0, 0.2],
-            [0.0, 0.1, 0.0],
-        ]
+    return SimpleNamespace(
+        prepared_data=np.zeros(
+            shape,
+            dtype=float,
+        ),
+        noise=np.asarray(
+            noise,
+            dtype=float,
+        ),
+        fitting_mask=np.zeros(
+            shape,
+            dtype=bool,
+        ),
     )
 
-    calibration = SimpleNamespace(
-        marginal_sigma=(
-            marginal_sigma
+
+def _calibration(
+    marginal_sigma,
+):
+    """Return a deterministic correlated-noise calibration."""
+    return SimpleNamespace(
+        marginal_sigma=np.asarray(
+            marginal_sigma,
+            dtype=float,
         ),
-        correlation_kernel=kernel,
+        correlation_kernel=np.array(
+            [
+                [0.0, 0.1, 0.0],
+                [0.2, 1.0, 0.2],
+                [0.0, 0.1, 0.0],
+            ]
+        ),
         metadata={
             "schema_version": 1,
             "factorization": "C = S R S",
@@ -105,6 +66,57 @@ def test_correlated_gaussian_crops_persisted_scale(
             ),
             "max_lag": 1,
         },
+    )
+
+
+def test_independent_gaussian_reuses_prepared_noise():
+    """Independent Gaussian state must preserve the prepared noise map."""
+    config = {
+        "fit": {
+            "likelihood": {
+                "type": "gaussian",
+            },
+        },
+    }
+
+    products = _image_products()
+
+    state = prepare_real_fit_likelihood_state(
+        config,
+        products,
+    )
+
+    assert state.likelihood_type == "gaussian"
+
+    np.testing.assert_array_equal(
+        state.noise,
+        products.noise,
+    )
+
+    assert state.correlation_kernel is None
+
+    assert (
+        state.metadata[
+            "normalization_complete"
+        ]
+        is True
+    )
+
+
+def test_correlated_gaussian_uses_full_prepared_scale(
+    monkeypatch,
+):
+    """Correlated state must use the calibration on the prepared footprint."""
+    marginal_sigma = np.arange(
+        12,
+        dtype=float,
+    ).reshape(
+        3,
+        4,
+    ) + 1.0
+
+    calibration = _calibration(
+        marginal_sigma
     )
 
     monkeypatch.setattr(
@@ -132,28 +144,19 @@ def test_correlated_gaussian_crops_persisted_scale(
         },
     }
 
-    region = _inference_region()
-
-    state = (
-        prepare_real_fit_likelihood_state(
-            config,
-            region,
-        )
+    state = prepare_real_fit_likelihood_state(
+        config,
+        _image_products(),
     )
-
-    expected = marginal_sigma[
-        1:4,
-        2:6,
-    ]
 
     np.testing.assert_array_equal(
         state.noise,
-        expected,
+        marginal_sigma,
     )
 
     np.testing.assert_array_equal(
         state.correlation_kernel,
-        kernel,
+        calibration.correlation_kernel,
     )
 
     assert (
@@ -176,6 +179,42 @@ def test_correlated_gaussian_crops_persisted_scale(
         ]
         is False
     )
+
+
+def test_correlated_gaussian_rejects_calibration_shape_mismatch(
+    monkeypatch,
+):
+    """Calibration and prepared observation must have identical footprints."""
+    monkeypatch.setattr(
+        "baymorph.pipeline.likelihood_state."
+        "load_correlated_noise_calibration",
+        lambda config: _calibration(
+            np.ones(
+                (2, 2),
+                dtype=float,
+            )
+        ),
+    )
+
+    config = {
+        "fit": {
+            "likelihood": {
+                "type": (
+                    "correlated_gaussian"
+                ),
+                "include_normalization": False,
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="prepared observation footprint",
+    ):
+        prepare_real_fit_likelihood_state(
+            config,
+            _image_products(),
+        )
 
 
 def test_correlated_gaussian_requires_persisted_calibration(
@@ -214,7 +253,7 @@ def test_correlated_gaussian_requires_persisted_calibration(
     ):
         prepare_real_fit_likelihood_state(
             config,
-            _inference_region(),
+            _image_products(),
         )
 
 
@@ -237,5 +276,5 @@ def test_correlated_gaussian_rejects_incomplete_absolute_normalization():
     ):
         prepare_real_fit_likelihood_state(
             config,
-            _inference_region(),
+            _image_products(),
         )

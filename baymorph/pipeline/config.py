@@ -100,10 +100,6 @@ DEFAULT_CONFIG = {
             "type": "gaussian",
             "include_normalization": True,
         },
-        "region": {
-            "mode": "full",
-            "radius": None,
-        },
         "sampler": {
             "name": "nautilus",
         },
@@ -370,91 +366,6 @@ def load_config(path: str | Path) -> dict[str, Any]:
     return config
 
 
-def _validate_fit_region_config(
-    region_config: Any,
-) -> None:
-    """Validate the likelihood inference-region configuration."""
-    if not isinstance(
-        region_config,
-        dict,
-    ):
-        raise TypeError(
-            "fit.region must be a mapping."
-        )
-
-    supported_keys = {
-        "mode",
-        "radius",
-    }
-
-    unsupported_keys = sorted(
-        set(region_config)
-        - supported_keys
-    )
-
-    if unsupported_keys:
-        raise ValueError(
-            "Unsupported fit.region entries: "
-            f"{unsupported_keys}."
-        )
-
-    mode = str(
-        region_config.get(
-            "mode",
-            "full",
-        )
-    ).strip().lower()
-
-    if mode not in {
-        "full",
-        "circular",
-    }:
-        raise ValueError(
-            "fit.region.mode must be 'full' or 'circular'."
-        )
-
-    radius = region_config.get(
-        "radius",
-        None,
-    )
-
-    if mode == "full":
-        if radius is not None:
-            raise ValueError(
-                "fit.region.radius must be null when "
-                "fit.region.mode is 'full'."
-            )
-
-        return
-
-    if radius is None:
-        raise ValueError(
-            "fit.region.radius is required when "
-            "fit.region.mode is 'circular'."
-        )
-
-    if (
-        isinstance(radius, bool)
-        or not isinstance(
-            radius,
-            (int, float),
-        )
-    ):
-        raise TypeError(
-            "fit.region.radius must be a finite positive number."
-        )
-
-    radius = float(radius)
-
-    if (
-        not math.isfinite(radius)
-        or radius <= 0.0
-    ):
-        raise ValueError(
-            "fit.region.radius must be a finite positive number."
-        )
-
-
 def validate_config(config: dict[str, Any]) -> None:
     """Validate required top-level BayMorph configuration entries.
 
@@ -544,11 +455,6 @@ def validate_config(config: dict[str, Any]) -> None:
         "fit",
         {},
     )
-
-    if "region" in fit_config:
-        _validate_fit_region_config(
-            fit_config["region"]
-        )
 
     background_config = fit_config.get(
         "background",
@@ -766,19 +672,6 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
     validate_sampler_config(
         resolved["fit"]["sampler"]
     )
-
-    _validate_fit_region_config(
-        resolved["fit"]["region"]
-    )
-
-    resolved["fit"]["region"]["mode"] = str(
-        resolved["fit"]["region"]["mode"]
-    ).strip().lower()
-
-    if resolved["fit"]["region"]["radius"] is not None:
-        resolved["fit"]["region"]["radius"] = float(
-            resolved["fit"]["region"]["radius"]
-        )
 
     resolved["object"] = dict(
         resolved["object"]
