@@ -14,7 +14,11 @@ from baymorph.analysis.prior_predictive import (
     calibrate_single_sersic_flux_prior,
 )
 from baymorph.core.observation import Observation
-from baymorph.pipeline.config import DEFAULT_CONFIG, load_resolved_config
+from baymorph.pipeline.config import (
+    DEFAULT_CONFIG,
+    load_resolved_config,
+    resolve_config,
+)
 from baymorph.pipeline.config_maker import make_config_from_fits
 from baymorph.pipeline.image_preparation import (
     load_image_preparation_products,
@@ -867,7 +871,7 @@ class ObservationAdvisor:
                     "'single_sersic'."
                 )
 
-            resolved = self.make_config(
+            workspace = self.make_config(
                 model_name=model_name,
                 model_priors={
                     "flux": {
@@ -876,6 +880,10 @@ class ObservationAdvisor:
                     },
                 },
                 **config_options,
+            )
+
+            resolved = resolve_config(
+                workspace
             )
 
         else:
@@ -893,8 +901,10 @@ class ObservationAdvisor:
                     config
                 )
             else:
-                resolved = dict(
-                    config
+                resolved = resolve_config(
+                    dict(
+                        config
+                    )
                 )
 
         if prepare:

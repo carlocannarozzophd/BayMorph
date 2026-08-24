@@ -878,13 +878,10 @@ def test_advisor_flux_calibration_uses_canonical_prepared_products(
         },
     }
 
-    config = {
-        "fit": {
-            "priors": {
-                "single_sersic": priors,
-            },
-        },
-    }
+    config = advisor.make_config(
+        model_name="single_sersic",
+        model_priors=priors,
+    )
 
     products = SimpleNamespace(
         prepared_data=np.zeros(
@@ -951,10 +948,8 @@ def test_advisor_flux_calibration_uses_canonical_prepared_products(
     )
 
     assert result is expected
-    assert captured["priors"] == {
-        "re": priors["re"],
-    }
     assert "flux" not in captured["priors"]
+    assert captured["priors"]["re"] == priors["re"]
     assert captured["psf"] is psf
     assert captured["image_shape"] == (
         9,
@@ -1167,19 +1162,20 @@ def test_advisor_build_psf_runs_candidate_selection_before_construction(
         bunit="ADU/s",
     )
 
-    config = {
-        "fit": {
-            "priors": {
-                "single_sersic": {
-                    "re": {
-                        "type": "uniform",
-                        "lower": 1.0,
-                        "upper": 10.0,
-                    },
-                },
+    config = advisor.make_config(
+        model_name="single_sersic",
+        model_priors={
+            "flux": {
+                "type": "fixed",
+                "value": 1.0,
+            },
+            "re": {
+                "type": "uniform",
+                "lower": 1.0,
+                "upper": 10.0,
             },
         },
-    }
+    )
 
     products = SimpleNamespace(
         prepared_data=np.zeros(
@@ -1316,10 +1312,18 @@ def test_advisor_creates_internal_flux_calibration_workspace(
 
     captured = {}
 
+    def fake_prepare(
+        resolved,
+        save,
+    ):
+        captured["runtime_config"] = resolved
+        captured["save"] = save
+        return products
+
     monkeypatch.setattr(
         advisor_module,
         "prepare_real_image_from_config",
-        lambda resolved, save: products,
+        fake_prepare,
     )
 
     monkeypatch.setattr(
@@ -1331,9 +1335,7 @@ def test_advisor_creates_internal_flux_calibration_workspace(
     def fake_calibration(
         **kwargs,
     ):
-        captured.update(
-            kwargs
-        )
+        captured["calibration"] = kwargs
         return _make_test_flux_calibration()
 
     monkeypatch.setattr(
@@ -1355,4 +1357,17 @@ def test_advisor_creates_internal_flux_calibration_workspace(
 
     assert result is not None
     assert config_path.exists()
-    assert "flux" not in captured["priors"]
+
+    runtime_config = captured[
+        "runtime_config"
+    ]
+
+    assert "preparation" in runtime_config
+    assert "detection" in runtime_config["preparation"]
+    assert captured["save"] is True
+
+    calibration_kwargs = captured[
+        "calibration"
+    ]
+
+    assert "flux" not in calibration_kwargs["priors"]
