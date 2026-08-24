@@ -1135,3 +1135,121 @@ def test_advisor_calibrated_prior_is_not_labelled_safe(
     assert "CALIBRATED" in output
     assert "evidence status: SAFE" not in output
     assert "evidence review: SAFE" not in output
+
+
+def test_advisor_build_psf_runs_candidate_selection_before_construction(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """Requested PSF building must execute the complete empirical workflow."""
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    import baymorph.pipeline.advisor as advisor_module
+
+    fits_path = tmp_path / "galaxy.fits"
+
+    _write_source_fits(
+        fits_path
+    )
+
+    advisor = ObservationAdvisor(
+        fits_path,
+        target_position="center",
+    )
+
+    advisor._inspection = SimpleNamespace(
+        saturation=1000.0,
+        bunit="ADU/s",
+    )
+
+    config = {
+        "fit": {
+            "priors": {
+                "single_sersic": {
+                    "re": {
+                        "type": "uniform",
+                        "lower": 1.0,
+                        "upper": 10.0,
+                    },
+                },
+            },
+        },
+    }
+
+    products = SimpleNamespace(
+        prepared_data=np.zeros(
+            (
+                9,
+                9,
+            ),
+            dtype=float,
+        ),
+        noise=np.ones(
+            (
+                9,
+                9,
+            ),
+            dtype=float,
+        ),
+        fitting_mask=np.zeros(
+            (
+                9,
+                9,
+            ),
+            dtype=bool,
+        ),
+        background=0.0,
+        target_x=4.0,
+        target_y=4.0,
+    )
+
+    calls = []
+
+    monkeypatch.setattr(
+        advisor_module,
+        "prepare_real_image_from_config",
+        lambda resolved, save: products,
+    )
+
+    monkeypatch.setattr(
+        advisor_module,
+        "run_psf_candidate_selection_from_config",
+        lambda resolved: calls.append(
+            "candidates"
+        ),
+    )
+
+    monkeypatch.setattr(
+        advisor_module,
+        "run_psf_construction_from_config",
+        lambda resolved: calls.append(
+            "construction"
+        ),
+    )
+
+    monkeypatch.setattr(
+        advisor_module,
+        "load_empirical_psf",
+        lambda resolved: object(),
+    )
+
+    monkeypatch.setattr(
+        advisor_module,
+        "calibrate_single_sersic_flux_prior",
+        lambda **kwargs: _make_test_flux_calibration(),
+    )
+
+    advisor.calibrate_flux_prior(
+        config,
+        prepare=True,
+        build_psf=True,
+        n_draws=8,
+        bootstrap_samples=0,
+    )
+
+    assert calls == [
+        "candidates",
+        "construction",
+    ]

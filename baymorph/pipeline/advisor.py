@@ -21,6 +21,9 @@ from baymorph.pipeline.image_preparation import (
     prepare_real_fits_image,
     prepare_real_image_from_config,
 )
+from baymorph.pipeline.psf_candidates import (
+    run_psf_candidate_selection_from_config,
+)
 from baymorph.pipeline.psf_construction import (
     load_empirical_psf,
     run_psf_construction_from_config,
@@ -812,8 +815,9 @@ class ObservationAdvisor:
             If True, run the canonical image-preparation pipeline before
             calibration. Otherwise load existing preparation products.
         build_psf : bool, default=False
-            If True, run the canonical empirical-PSF construction pipeline
-            before calibration. Otherwise load the existing empirical PSF.
+            If True, run canonical PSF-candidate selection followed by
+            empirical-PSF construction before calibration. Otherwise load
+            the existing empirical PSF.
         snr_threshold : float, default=5
             Quadrature model-S/N detectability threshold.
         required_detectable_fraction : float, default=0.95
@@ -866,6 +870,9 @@ class ObservationAdvisor:
             )
 
         if build_psf:
+            run_psf_candidate_selection_from_config(
+                resolved
+            )
             run_psf_construction_from_config(
                 resolved
             )

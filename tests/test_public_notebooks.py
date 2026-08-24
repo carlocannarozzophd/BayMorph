@@ -144,3 +144,42 @@ def test_public_notebooks_do_not_use_matplotlib_directly() -> None:
 
         for token in forbidden:
             assert token not in source
+
+
+def test_observed_notebook_exposes_direct_and_guided_configuration() -> None:
+    """The real-data tutorial must expose both canonical config workflows."""
+    source = _notebook_source(
+        NOTEBOOK_DIRECTORY
+        / "02_Observed_SingleBand.ipynb"
+    )
+
+    assert "ObservationAdvisor" in source
+    assert "advisor.summary()" in source
+    assert "advisor.make_config(" in source
+    assert "advisor.calibrate_flux_prior(" in source
+    assert "advisor.configure(" in source
+    assert "make_config_from_fits(" in source
+
+    assert 'configuration_mode = "guided"' in source
+    assert 'configuration_mode == "guided"' in source
+    assert 'configuration_mode == "direct"' in source
+
+    assert "flux_calibration=flux_calibration" in source
+    assert "prepare=True" in source
+    assert "build_psf=True" in source
+    assert "direct_flux_prior = None" in source
+
+    assert "1.0e10" not in source
+    assert '"include_normalization": True' in source
+
+
+def test_public_notebooks_do_not_expose_fit_region() -> None:
+    """Canonical workflows must use the complete prepared usable footprint."""
+    for name in EXPECTED_NOTEBOOKS:
+        source = _notebook_source(
+            NOTEBOOK_DIRECTORY
+            / name
+        )
+
+        assert "fit_region" not in source
+        assert '"region"' not in source
