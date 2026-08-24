@@ -951,7 +951,10 @@ def test_advisor_flux_calibration_uses_canonical_prepared_products(
     )
 
     assert result is expected
-    assert captured["priors"] is priors
+    assert captured["priors"] == {
+        "re": priors["re"],
+    }
+    assert "flux" not in captured["priors"]
     assert captured["psf"] is psf
     assert captured["image_shape"] == (
         9,
@@ -1253,3 +1256,103 @@ def test_advisor_build_psf_runs_candidate_selection_before_construction(
         "candidates",
         "construction",
     ]
+
+
+
+def test_advisor_creates_internal_flux_calibration_workspace(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """Calibration must not require a user-declared preliminary flux prior."""
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    import baymorph.pipeline.advisor as advisor_module
+
+    fits_path = tmp_path / "galaxy.fits"
+    config_path = tmp_path / "config.yaml"
+
+    _write_source_fits(
+        fits_path
+    )
+
+    advisor = ObservationAdvisor(
+        fits_path,
+        target_position="center",
+    )
+
+    advisor._inspection = SimpleNamespace(
+        saturation=1000.0,
+        bunit="ADU/s",
+    )
+
+    products = SimpleNamespace(
+        prepared_data=np.zeros(
+            (
+                9,
+                9,
+            ),
+            dtype=float,
+        ),
+        noise=np.ones(
+            (
+                9,
+                9,
+            ),
+            dtype=float,
+        ),
+        fitting_mask=np.zeros(
+            (
+                9,
+                9,
+            ),
+            dtype=bool,
+        ),
+        background=0.0,
+        target_x=4.0,
+        target_y=4.0,
+    )
+
+    captured = {}
+
+    monkeypatch.setattr(
+        advisor_module,
+        "prepare_real_image_from_config",
+        lambda resolved, save: products,
+    )
+
+    monkeypatch.setattr(
+        advisor_module,
+        "load_empirical_psf",
+        lambda resolved: object(),
+    )
+
+    def fake_calibration(
+        **kwargs,
+    ):
+        captured.update(
+            kwargs
+        )
+        return _make_test_flux_calibration()
+
+    monkeypatch.setattr(
+        advisor_module,
+        "calibrate_single_sersic_flux_prior",
+        fake_calibration,
+    )
+
+    result = advisor.calibrate_flux_prior(
+        prepare=True,
+        build_psf=False,
+        output_path=config_path,
+        object_name="test_galaxy",
+        outputs_root=tmp_path / "runs",
+        psf_type="empirical",
+        n_draws=8,
+        bootstrap_samples=0,
+    )
+
+    assert result is not None
+    assert config_path.exists()
+    assert "flux" not in captured["priors"]

@@ -786,7 +786,7 @@ class ObservationAdvisor:
 
     def calibrate_flux_prior(
         self,
-        config: str | Path | Mapping[str, Any],
+        config: str | Path | Mapping[str, Any] | None = None,
         *,
         prepare: bool = False,
         build_psf: bool = False,
@@ -797,6 +797,7 @@ class ObservationAdvisor:
         random_state: int | None = 0,
         bootstrap_samples: int = 512,
         confidence_level: float = 0.95,
+        **config_options: Any,
     ) -> FluxPriorCalibration:
         """Calibrate single-Sersic flux bounds for one prepared observation.
 
@@ -809,8 +810,13 @@ class ObservationAdvisor:
 
         Parameters
         ----------
-        config : mapping, str, or pathlib.Path
-            BayMorph configuration describing the observation.
+        config : mapping, str, pathlib.Path, or None
+            Existing BayMorph configuration describing the observation.
+            If None, the Advisor creates a calibration workspace internally.
+            The temporary configuration contains a fixed positive flux
+            placeholder only to satisfy configuration validation. That
+            placeholder is removed before prior-predictive calibration and
+            never defines the scientific flux prior.
         prepare : bool, default=False
             If True, run the canonical image-preparation pipeline before
             calibration. Otherwise load existing preparation products.
@@ -847,17 +853,49 @@ class ObservationAdvisor:
         conditional on the declared morphology priors, PSF, noise model,
         footprint, mask, detector metadata, and calibration policy.
         """
-        if isinstance(
-            config,
-            (str, Path),
-        ):
-            resolved = load_resolved_config(
-                config
+        if config is None:
+            model_name = str(
+                config_options.pop(
+                    "model_name",
+                    "single_sersic",
+                )
             )
+
+            if model_name != "single_sersic":
+                raise NotImplementedError(
+                    "Flux prior calibration currently supports only "
+                    "'single_sersic'."
+                )
+
+            resolved = self.make_config(
+                model_name=model_name,
+                model_priors={
+                    "flux": {
+                        "type": "fixed",
+                        "value": 1.0,
+                    },
+                },
+                **config_options,
+            )
+
         else:
-            resolved = dict(
-                config
-            )
+            if config_options:
+                raise TypeError(
+                    "Configuration options may be supplied only when "
+                    "config=None."
+                )
+
+            if isinstance(
+                config,
+                (str, Path),
+            ):
+                resolved = load_resolved_config(
+                    config
+                )
+            else:
+                resolved = dict(
+                    config
+                )
 
         if prepare:
             products = prepare_real_image_from_config(
@@ -893,17 +931,27 @@ class ObservationAdvisor:
             )
 
         try:
-            priors = resolved[
-                "fit"
-            ][
-                "priors"
-            ][
-                "single_sersic"
-            ]
+            priors = dict(
+                resolved[
+                    "fit"
+                ][
+                    "priors"
+                ][
+                    "single_sersic"
+                ]
+            )
         except KeyError as exc:
             raise ValueError(
                 "Flux calibration requires declared single-Sersic priors."
             ) from exc
+
+        # Flux support is the quantity being calibrated. Any flux prior
+        # present in the workspace or an existing scientific configuration
+        # must therefore not influence the calibration.
+        priors.pop(
+            "flux",
+            None,
+        )
 
         references = {
             "target_x": float(

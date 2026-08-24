@@ -155,10 +155,12 @@ def test_observed_notebook_exposes_direct_and_guided_configuration() -> None:
 
     assert "ObservationAdvisor" in source
     assert "advisor.summary()" in source
-    assert "advisor.make_config(" in source
     assert "advisor.calibrate_flux_prior(" in source
     assert "advisor.configure(" in source
     assert "make_config_from_fits(" in source
+
+    assert "advisor.make_config(" not in source
+    assert "calibration_config" not in source
 
     assert 'configuration_mode = "guided"' in source
     assert 'configuration_mode == "guided"' in source
