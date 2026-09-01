@@ -575,7 +575,7 @@ def plot_radial_profile_diagnostics(
             color=band_color,
             alpha=band_alpha,
             linewidth=0,
-            label="68% posterior band",
+            label="68% posterior interval",
         )
 
         ax1.plot(

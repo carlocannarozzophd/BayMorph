@@ -64,6 +64,7 @@ class _MultiObservationBuildContext:
     problem: MultiObservationInferenceProblem
     image_products: dict[str, Any]
     observation_configs: dict[str, dict[str, Any]]
+    psfs: dict[str, Any]
 
 
 def build_multi_observation_problem_from_config(
@@ -391,6 +392,7 @@ def _build_multi_observation_context(
         problem=problem,
         image_products=image_products,
         observation_configs=observation_configs,
+        psfs=psfs,
     )
 
 

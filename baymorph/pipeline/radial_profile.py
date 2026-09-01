@@ -35,6 +35,7 @@ from baymorph.pipeline.outputs import (
     pipeline_paths,
 )
 from baymorph.pipeline.psf_construction import (
+    estimate_psf_core_fwhm,
     load_empirical_psf,
 )
 from baymorph.pipeline.real_fit import (
@@ -85,6 +86,95 @@ def _load_psf_from_config(config):
         f"Unsupported PSF type: {psf_type}"
     )
 
+
+
+def _psf_fwhm_pixels(
+    psf,
+) -> float | None:
+    """Return the spatial-resolution FWHM represented by a PSF.
+
+    Gaussian PSFs use their configured FWHM directly. Empirical PSFs use
+    the measured circularized core FWHM of the actual kernel used by the
+    fit. ``None`` is returned when no reliable positive finite estimate is
+    available.
+    """
+    if psf is None:
+        return None
+
+    configured_fwhm = getattr(
+        psf,
+        "fwhm",
+        None,
+    )
+
+    if configured_fwhm is not None:
+        configured_fwhm = float(
+            configured_fwhm
+        )
+
+        if (
+            np.isfinite(
+                configured_fwhm
+            )
+            and configured_fwhm > 0.0
+        ):
+            return configured_fwhm
+
+    kernel = getattr(
+        psf,
+        "kernel",
+        None,
+    )
+
+    if callable(
+        kernel
+    ):
+        kernel = kernel()
+    elif kernel is None:
+        kernel = psf
+
+    try:
+        fwhm = estimate_psf_core_fwhm(
+            np.asarray(
+                kernel,
+                dtype=float,
+            )
+        )
+    except (
+        TypeError,
+        ValueError,
+    ):
+        return None
+
+    if (
+        fwhm is None
+        or not np.isfinite(
+            fwhm
+        )
+        or fwhm <= 0.0
+    ):
+        return None
+
+    return float(
+        fwhm
+    )
+
+
+def _default_radial_dr(
+    psf,
+) -> float:
+    """Return the default PSF-aware radial-bin width in pixels."""
+    fwhm = _psf_fwhm_pixels(
+        psf
+    )
+
+    if fwhm is None:
+        return 1.0
+
+    return max(
+        1.0,
+        0.5 * fwhm,
+    )
 
 def _posterior_samples(posterior):
     """Return equal-weight posterior samples when available."""
@@ -349,11 +439,31 @@ def _radial_edges(
     radial_cfg: Mapping[str, Any],
     *,
     axis_ratio: float,
+    psf=None,
 ) -> np.ndarray:
-    """Build radial-bin edges for one observation."""
+    """Build radial-bin edges for one observation.
+
+    An explicitly configured ``dr`` always takes precedence. Otherwise the
+    diagnostic defaults to half the spatial-resolution FWHM of the fitted
+    PSF, with a one-pixel lower limit and a one-pixel fallback when the PSF
+    resolution cannot be estimated.
+    """
     max_radius = 0.5 * min(
         image_shape
     )
+
+    configured_dr = radial_cfg.get(
+        "dr"
+    )
+
+    if configured_dr is None:
+        dr = _default_radial_dr(
+            psf
+        )
+    else:
+        dr = float(
+            configured_dr
+        )
 
     return radial_bins(
         max_radius,
@@ -361,12 +471,7 @@ def _radial_edges(
             "binning",
             "fixed",
         ),
-        dr=float(
-            radial_cfg.get(
-                "dr",
-                1.0,
-            )
-        ),
+        dr=dr,
         min_pixels=int(
             radial_cfg.get(
                 "min_pixels",
@@ -381,7 +486,6 @@ def _radial_edges(
         ),
         axis_ratio=axis_ratio,
     )
-
 
 def _component_images(
     model,
@@ -530,6 +634,7 @@ def _run_single_observation_radial_profiles(
             image_products.prepared_data.shape,
             radial_cfg,
             axis_ratio=axis_ratio,
+            psf=psf,
         )
 
         model_factory = _make_model_factory(
@@ -751,6 +856,12 @@ def _run_multi_observation_radial_profiles(
 
     problem = context.problem
 
+    psfs = getattr(
+        context,
+        "psfs",
+        {},
+    )
+
     paths = multi_observation_paths(
         config
     )[
@@ -786,6 +897,10 @@ def _run_multi_observation_radial_profiles(
                 observation_name
             ]
 
+            observation_psf = psfs.get(
+                observation_name
+            )
+
             observation_fit = fit.observations[
                 observation_name
             ]
@@ -803,6 +918,7 @@ def _run_multi_observation_radial_profiles(
                 image_products.prepared_data.shape,
                 radial_cfg,
                 axis_ratio=axis_ratio,
+                psf=observation_psf,
             )
 
             best_model = (

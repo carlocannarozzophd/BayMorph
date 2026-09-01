@@ -512,6 +512,41 @@ def _combined_mask_rgb(contaminant_mask=None, target_mask=None):
     return image
 
 
+def _contaminant_mask_rgba(
+    contaminant_mask,
+    image_shape,
+):
+    """Return an RGBA overlay for pixels excluded from the fit."""
+    if contaminant_mask is None:
+        return None
+
+    mask = np.asarray(
+        contaminant_mask,
+        dtype=bool,
+    )
+
+    if mask.shape != image_shape:
+        raise ValueError(
+            "contaminant_mask shape must match the prepared image."
+        )
+
+    overlay = np.zeros(
+        (*image_shape, 4),
+        dtype=float,
+    )
+
+    overlay[
+        mask
+    ] = (
+        0.82,
+        0.82,
+        0.82,
+        1.0,
+    )
+
+    return overlay
+
+
 def _imshow_log(ax, image, *, title, cmap, vmin=None, vmax=None):
     """Display log-scaled image."""
     image = np.asarray(image, dtype=float)
@@ -628,13 +663,39 @@ def plot_pipeline_fit_maps(
 
     norm_residual[valid_noise] = residual[valid_noise] / noise[valid_noise]
 
+    mask_overlay = _contaminant_mask_rgba(
+        contaminant_mask,
+        residual.shape,
+    )
+
+    if contaminant_mask is None:
+        residual_scale_values = residual
+        norm_scale_values = norm_residual
+    else:
+        fit_mask = np.asarray(
+            contaminant_mask,
+            dtype=bool,
+        )
+
+        residual_scale_values = np.where(
+            fit_mask,
+            np.nan,
+            residual,
+        )
+
+        norm_scale_values = np.where(
+            fit_mask,
+            np.nan,
+            norm_residual,
+        )
+
     residual_limit = _robust_symmetric_limit(
-        residual,
+        residual_scale_values,
         fallback=1.0,
     )
 
     norm_limit = _robust_symmetric_limit(
-        norm_residual,
+        norm_scale_values,
         fallback=5.0,
     )
 
@@ -807,6 +868,13 @@ def plot_pipeline_fit_maps(
         vmax=residual_limit,
     )
 
+    if mask_overlay is not None:
+        axes[1, 2].imshow(
+            mask_overlay,
+            origin="lower",
+            interpolation="nearest",
+        )
+
     _add_inset_colorbar(
         fig,
         axes[1, 2],
@@ -826,6 +894,13 @@ def plot_pipeline_fit_maps(
         vmin=-norm_limit,
         vmax=norm_limit,
     )
+
+    if mask_overlay is not None:
+        axes[1, 3].imshow(
+            mask_overlay,
+            origin="lower",
+            interpolation="nearest",
+        )
 
     _add_inset_colorbar(
         fig,
