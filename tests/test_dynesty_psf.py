@@ -8,14 +8,15 @@ from baymorph.fitting import (
     Parameter,
     ParameterSet,
 )
+from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.likelihood import GaussianImageLikelihood
 from baymorph.models import SersicModel
 from baymorph.simulation import GaussianPSF
 
 
 
-def test_dynesty_accepts_psf():
-    """Dynesty should convolve rendered models with the supplied PSF."""
+def test_dynesty_uses_image_problem_psf():
+    """Dynesty should use PSF convolution owned by ImageInferenceProblem."""
     data = SersicModel(
         flux=1000.0,
         re=8.0,
@@ -66,11 +67,14 @@ def test_dynesty_accepts_psf():
             y0=30.0,
         )
 
-    fitter = DynestyFitter(
+    problem = ImageInferenceProblem(
         model_factory=model_factory,
         parameters=parameters,
         likelihood=likelihood,
         psf=psf,
+    )
+    fitter = DynestyFitter(
+        problem=problem,
     )
 
     theta = np.array(

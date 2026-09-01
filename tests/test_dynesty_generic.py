@@ -12,6 +12,7 @@ from baymorph.fitting import (
     Parameter,
     ParameterSet,
 )
+from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.likelihood import GaussianImageLikelihood
 from baymorph.models import SersicModel
 
@@ -81,10 +82,13 @@ def make_test_problem():
             y0=15.0,
         )
 
-    fitter = DynestyFitter(
+    problem = ImageInferenceProblem(
         model_factory=model_factory,
         parameters=parameters,
         likelihood=likelihood,
+    )
+    fitter = DynestyFitter(
+        problem=problem,
     )
 
     return fitter
@@ -158,7 +162,7 @@ def test_dynesty_generic_requires_parameter_set():
         TypeError,
         match="ParameterSet",
     ):
-        DynestyFitter(
+        ImageInferenceProblem(
             model_factory=model_factory,
             parameters=["flux"],
             likelihood=likelihood,

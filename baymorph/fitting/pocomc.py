@@ -14,7 +14,6 @@ from baymorph.fitting.execution import (
     SamplerExecution,
     sampler_pool,
 )
-from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.fitting.parameters import ParameterSet
 from baymorph.fitting.priors import (
     BetaPrior,
@@ -22,7 +21,6 @@ from baymorph.fitting.priors import (
     UniformPrior,
 )
 from baymorph.fitting.problem import InferenceProblem
-from baymorph.likelihood import ImageLikelihood
 from baymorph.results import (
     EvidenceEstimate,
     InferenceResult,
@@ -31,64 +29,34 @@ from baymorph.results import (
 
 
 class PocoMCFitter:
-    """Fit a BayMorph inference problem with pocoMC.
+    """Fit a backend-neutral inference problem with pocoMC.
 
     Parameters
     ----------
-    problem : InferenceProblem, optional
-        Backend-neutral inference problem.
-    model_factory : callable, optional
-        Legacy single-image model factory.
-    parameters : ParameterSet, optional
-        Legacy single-image fitted parameters.
-    likelihood : ImageLikelihood, optional
-        Legacy single-image likelihood.
+    problem : InferenceProblem
+        Complete backend-neutral inference problem.
 
     Notes
     -----
-    The backend intentionally reuses BayMorph's existing inference problem,
-    likelihood, parameter, and posterior-result infrastructure.
-
-    Dynesty-specific runtime arguments accepted by :meth:`run` are retained
-    temporarily so that the existing pipeline can dispatch either backend
-    without backend-specific branching.
+    BayMorph owns the prior, likelihood, and scientific problem definition
+    through ``InferenceProblem``. pocoMC-specific constructor and runtime
+    options are supplied to :meth:`run`.
     """
 
     def __init__(
         self,
-        model_factory=None,
-        parameters: ParameterSet | None = None,
-        likelihood: ImageLikelihood | None = None,
         *,
-        problem: InferenceProblem | None = None,
+        problem: InferenceProblem,
     ) -> None:
-        if problem is not None:
-            if any(
-                value is not None
-                for value in (
-                    model_factory,
-                    parameters,
-                    likelihood,
-                )
-            ):
-                raise ValueError(
-                    "problem cannot be combined with model_factory, "
-                    "parameters, or likelihood."
-                )
-
-            if not isinstance(problem, InferenceProblem):
-                raise TypeError(
-                    "problem must be an InferenceProblem instance."
-                )
-
-            self.problem = problem
-
-        else:
-            self.problem = ImageInferenceProblem(
-                model_factory=model_factory,
-                parameters=parameters,
-                likelihood=likelihood,
+        if not isinstance(
+            problem,
+            InferenceProblem,
+        ):
+            raise TypeError(
+                "problem must be an InferenceProblem instance."
             )
+
+        self.problem = problem
 
 
     @property

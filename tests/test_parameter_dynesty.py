@@ -8,13 +8,14 @@ from baymorph.fitting import (
     Parameter,
     ParameterSet,
 )
+from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.likelihood import GaussianImageLikelihood
 from baymorph.models import SersicModel
 
 
 
-def test_dynesty_accepts_parameter_set():
-    """DynestyFitter should accept a ParameterSet."""
+def test_dynesty_uses_image_problem_parameter_set():
+    """Dynesty should use parameters owned by ImageInferenceProblem."""
     data = SersicModel(
         flux=1000.0,
         re=8.0,
@@ -61,10 +62,13 @@ def test_dynesty_accepts_parameter_set():
             y0=30.0,
         )
 
-    fitter = DynestyFitter(
+    problem = ImageInferenceProblem(
         model_factory=model_factory,
         parameters=parameters,
         likelihood=likelihood,
+    )
+    fitter = DynestyFitter(
+        problem=problem,
     )
 
     assert fitter.ndim == 1

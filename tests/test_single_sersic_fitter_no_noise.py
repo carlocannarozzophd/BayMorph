@@ -7,6 +7,7 @@ from baymorph.fitting import (
     Parameter,
     ParameterSet,
 )
+from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.likelihood import GaussianImageLikelihood
 from baymorph.models import SersicModel
 
@@ -82,10 +83,13 @@ def test_single_sersic_fitter_no_noise_evaluates_truth():
             y0=y0,
         )
 
-    fitter = DynestyFitter(
+    problem = ImageInferenceProblem(
         model_factory=make_model,
         parameters=parameters,
         likelihood=likelihood,
+    )
+    fitter = DynestyFitter(
+        problem=problem,
     )
 
     theta_truth = np.array(

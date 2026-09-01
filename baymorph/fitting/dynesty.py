@@ -17,10 +17,7 @@ from baymorph.fitting.execution import (
     SamplerExecution,
     sampler_pool,
 )
-from baymorph.fitting.image_problem import ImageInferenceProblem
-from baymorph.fitting.parameters import ParameterSet
 from baymorph.fitting.problem import InferenceProblem
-from baymorph.likelihood import ImageLikelihood
 from baymorph.results import (
     EvidenceEstimate,
     InferenceResult,
@@ -210,79 +207,34 @@ class DynestyMultilineProgress:
 
 
 class DynestyFitter:
-    """Fit an image model with the Dynesty nested sampler.
+    """Fit a backend-neutral inference problem with Dynesty.
 
     Parameters
     ----------
-    model_factory : callable
-        Callable receiving model parameters as keyword arguments and returning
-        an object exposing a ``render(shape=...)`` method.
-    parameters : ParameterSet
-        Ordered definition of fitted parameters and their prior transforms.
-    likelihood : ImageLikelihood
-        Fully configured image likelihood. The likelihood owns the observed
-        image, mask, and all fixed statistical quantities.
-    psf : array-like, optional
-        Point-spread function applied to the rendered model before likelihood
-        evaluation. This should be omitted when ``model_factory`` already
-        returns a PSF-convolved model.
+    problem : InferenceProblem
+        Complete backend-neutral inference problem.
 
     Notes
     -----
-    The fitter is independent of the statistical model. It only requires a
-    likelihood satisfying
-
-    ``loglike = likelihood(model_image)``.
-
-    YAML interpretation and likelihood construction belong to the pipeline,
-    not to this fitting backend.
+    BayMorph owns the prior transform, likelihood, and scientific problem
+    definition through ``InferenceProblem``. Dynesty-specific constructor
+    and runtime options are supplied to :meth:`run`.
     """
 
     def __init__(
         self,
-        model_factory=None,
-        parameters: ParameterSet | None = None,
-        likelihood: ImageLikelihood | None = None,
-        psf=None,
         *,
-        problem: InferenceProblem | None = None,
+        problem: InferenceProblem,
     ) -> None:
-        if problem is not None:
-            if any(
-                value is not None
-                for value in (
-                    model_factory,
-                    parameters,
-                    likelihood,
-                    psf,
-                )
-            ):
-                raise ValueError(
-                    "problem cannot be combined with model_factory, "
-                    "parameters, likelihood, or psf."
-                )
+        if not isinstance(
+            problem,
+            InferenceProblem,
+        ):
+            raise TypeError(
+                "problem must be an InferenceProblem instance."
+            )
 
-            if not isinstance(problem, InferenceProblem):
-                raise TypeError(
-                    "problem must be an InferenceProblem instance."
-                )
-
-            self.problem = problem
-            return
-
-        self.problem = ImageInferenceProblem(
-            model_factory=model_factory,
-            parameters=parameters,
-            likelihood=likelihood,
-            psf=psf,
-        )
-
-        # Preserve the existing public single-image interface while the
-        # sampler backend delegates all inference operations to ``problem``.
-        self.model_factory = model_factory
-        self.parameters = parameters
-        self.likelihood = likelihood
-        self.psf = psf
+        self.problem = problem
 
     @property
     def ndim(self) -> int:

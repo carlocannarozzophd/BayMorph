@@ -83,17 +83,6 @@ def test_dynesty_accepts_inference_problem():
     )
 
 
-def test_dynesty_rejects_mixed_problem_construction():
-    with pytest.raises(
-        ValueError,
-        match="cannot be combined",
-    ):
-        DynestyFitter(
-            model_factory=lambda: None,
-            problem=QuadraticProblem(),
-        )
-
-
 def test_dynesty_problem_without_image_has_no_render_model():
     fitter = DynestyFitter(
         problem=QuadraticProblem()
@@ -105,4 +94,14 @@ def test_dynesty_problem_without_image_has_no_render_model():
     ):
         fitter.render_model(
             np.zeros(2)
+        )
+
+
+def test_dynesty_requires_inference_problem():
+    with pytest.raises(
+        TypeError,
+        match="problem must be an InferenceProblem",
+    ):
+        DynestyFitter(
+            problem=object(),
         )
