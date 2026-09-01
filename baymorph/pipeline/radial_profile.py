@@ -178,6 +178,27 @@ def _default_radial_dr(
 
 def _posterior_samples(posterior):
     """Return equal-weight posterior samples when available."""
+    nested_posterior = getattr(
+        posterior,
+        "posterior",
+        None,
+    )
+
+    if (
+        nested_posterior is not None
+        and hasattr(
+            nested_posterior,
+            "equal_weight_samples",
+        )
+    ):
+        return nested_posterior.equal_weight_samples
+
+    if hasattr(
+        posterior,
+        "equal_weight_samples",
+    ):
+        return posterior.equal_weight_samples
+
     if hasattr(
         posterior,
         "posterior_samples",

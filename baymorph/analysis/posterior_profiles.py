@@ -31,17 +31,47 @@ class PosteriorProfileResult:
 def _as_samples_array(
     posterior,
 ) -> np.ndarray:
-    """Return posterior samples as a two-dimensional array."""
-    if hasattr(
+    """Return a two-dimensional equal-weight posterior sample array.
+
+    Posterior containers exposing an equal-weight representation are
+    preferred over backend-native weighted samples. Raw arrays remain
+    supported and are interpreted as already equal-weight samples.
+    """
+    nested_posterior = getattr(
+        posterior,
+        "posterior",
+        None,
+    )
+
+    if (
+        nested_posterior is not None
+        and hasattr(
+            nested_posterior,
+            "equal_weight_samples",
+        )
+    ):
+        posterior = nested_posterior.equal_weight_samples
+
+    elif hasattr(
+        posterior,
+        "equal_weight_samples",
+    ):
+        posterior = posterior.equal_weight_samples
+
+    elif hasattr(
+        posterior,
+        "posterior_samples",
+    ):
+        posterior = posterior.posterior_samples
+
+    elif hasattr(
         posterior,
         "samples",
     ):
-        samples = posterior.samples
-    else:
-        samples = posterior
+        posterior = posterior.samples
 
     samples = np.asarray(
-        samples,
+        posterior,
         dtype=float,
     )
 
@@ -52,11 +82,19 @@ def _as_samples_array(
 
     if samples.shape[0] == 0:
         raise ValueError(
-            "posterior samples must contain at least one sample"
+            "posterior samples must not be empty"
+        )
+
+    if not np.all(
+        np.isfinite(
+            samples
+        )
+    ):
+        raise ValueError(
+            "posterior samples must contain only finite values"
         )
 
     return samples
-
 
 def _select_sample_indices(
     n_samples: int,
