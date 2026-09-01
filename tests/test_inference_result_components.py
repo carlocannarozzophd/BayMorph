@@ -211,3 +211,138 @@ def test_evidence_estimate_requires_method():
             logz=-3.0,
             method=" ",
         )
+
+
+def test_equal_weight_samples_preserve_equal_weights():
+    posterior = PosteriorSamples(
+        samples=np.asarray(
+            [
+                [0.0],
+                [1.0],
+                [2.0],
+                [3.0],
+            ]
+        ),
+        weights=np.ones(4),
+        parameter_names=[
+            "x",
+        ],
+    )
+
+    assert np.array_equal(
+        posterior.equal_weight_samples,
+        posterior.samples,
+    )
+
+
+def test_equal_weight_samples_are_deterministic():
+    posterior = PosteriorSamples(
+        samples=np.asarray(
+            [
+                [0.0],
+                [1.0],
+                [2.0],
+            ]
+        ),
+        weights=np.asarray(
+            [
+                0.1,
+                0.2,
+                0.7,
+            ]
+        ),
+        parameter_names=[
+            "x",
+        ],
+    )
+
+    first = posterior.equal_weight_samples
+    second = posterior.equal_weight_samples
+
+    assert np.array_equal(
+        first,
+        second,
+    )
+
+
+def test_equal_weight_samples_follow_weighted_mass():
+    posterior = PosteriorSamples(
+        samples=np.arange(
+            10,
+            dtype=float,
+        ).reshape(
+            10,
+            1,
+        ),
+        weights=np.asarray(
+            [
+                0.6,
+                0.3,
+                0.1,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+            ]
+        ),
+        parameter_names=[
+            "x",
+        ],
+    )
+
+    values = posterior.equal_weight_samples[
+        :,
+        0,
+    ]
+
+    assert np.count_nonzero(
+        values == 0.0
+    ) == 6
+    assert np.count_nonzero(
+        values == 1.0
+    ) == 3
+    assert np.count_nonzero(
+        values == 2.0
+    ) == 1
+
+    assert not np.any(
+        values >= 3.0
+    )
+
+
+def test_equal_weight_samples_exclude_zero_weight_samples():
+    posterior = PosteriorSamples(
+        samples=np.asarray(
+            [
+                [0.0],
+                [1.0],
+                [2.0],
+                [3.0],
+            ]
+        ),
+        weights=np.asarray(
+            [
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+            ]
+        ),
+        parameter_names=[
+            "x",
+        ],
+    )
+
+    assert np.array_equal(
+        posterior.equal_weight_samples,
+        np.full(
+            (
+                4,
+                1,
+            ),
+            3.0,
+        ),
+    )

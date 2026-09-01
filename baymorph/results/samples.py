@@ -5,9 +5,52 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from dynesty.utils import resample_equal
 
 from baymorph.stats import posterior_summary
+
+
+def _deterministic_equal_weight_samples(
+    samples: np.ndarray,
+    weights: np.ndarray,
+) -> np.ndarray:
+    """Return a deterministic equal-weight representation.
+
+    Fixed-offset systematic resampling maps the weighted empirical posterior
+    onto the same number of equal-weight samples. Midpoints of the uniform
+    probability cells are used instead of a random offset, so repeated access
+    introduces no hidden Monte Carlo variability.
+
+    Weighted samples remain the authoritative representation for posterior
+    statistics.
+    """
+    n_samples = int(
+        samples.shape[0]
+    )
+
+    cumulative = np.cumsum(
+        weights,
+        dtype=float,
+    )
+
+    cumulative[-1] = 1.0
+
+    positions = (
+        np.arange(
+            n_samples,
+            dtype=float,
+        )
+        + 0.5
+    ) / n_samples
+
+    indices = np.searchsorted(
+        cumulative,
+        positions,
+        side="right",
+    )
+
+    return samples[
+        indices
+    ]
 
 
 @dataclass
@@ -166,8 +209,8 @@ class PosteriorSamples:
 
     @property
     def equal_weight_samples(self) -> np.ndarray:
-        """Return equal-weight posterior samples."""
-        return resample_equal(
+        """Return a deterministic equal-weight posterior representation."""
+        return _deterministic_equal_weight_samples(
             self.samples,
             self.weights,
         )

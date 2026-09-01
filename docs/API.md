@@ -131,6 +131,20 @@ Its responsibilities include:
 - maximum-likelihood and posterior-median parameter access;
 - effective sample-size information.
 
+
+Weighted posterior samples are the authoritative statistical representation.
+Posterior summaries and scientific inference operate directly on their
+normalized weights.
+
+`equal_weight_samples` provides a deterministic derived representation for
+visualization and algorithms that explicitly require unweighted samples.
+BayMorph constructs it with fixed-offset systematic resampling of the weighted
+empirical posterior. The transformation preserves the number of stored samples
+and uses no hidden random-number generator.
+
+Equal-weight samples are therefore a diagnostic convenience rather than a
+replacement for the original weighted posterior.
+
 ### EvidenceEstimate
 
 `EvidenceEstimate` represents a Bayesian evidence estimate when the selected
