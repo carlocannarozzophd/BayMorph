@@ -30,7 +30,7 @@ from baymorph.pipeline.psf_construction import (
     load_empirical_psf,
 )
 from baymorph.pipeline.real_fit import (
-    _diagnostic_title,
+    _fit_diagnostic_title as _diagnostic_title,
 )
 from baymorph.plotting.images import (
     plot_pipeline_fit_maps,

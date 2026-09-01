@@ -76,7 +76,7 @@ def test_radial_plot_accepts_observed_percentiles_and_mean():
         axes[
             1
         ].get_xlabel()
-        == "Elliptical semi-major-axis radius [pix]"
+        == r"$R_{\rm ell}\,[\mathrm{pix}]$"
     )
 
     plt.close(

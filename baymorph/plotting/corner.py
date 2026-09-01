@@ -5,7 +5,12 @@ import numpy as np
 import scipy.special as ss
 from matplotlib import colormaps
 from matplotlib.colors import Colormap
-from matplotlib.ticker import AutoMinorLocator, MaxNLocator, NullLocator
+from matplotlib.ticker import (
+    AutoMinorLocator,
+    MaxNLocator,
+    NullLocator,
+    ScalarFormatter,
+)
 from scipy.interpolate import interp1d
 from scipy.ndimage import gaussian_filter, gaussian_filter1d
 from scipy.stats import gaussian_kde
@@ -209,6 +214,7 @@ def corner_plot(
     parameters,
     sigma=None,
     parameter_labels=None,
+    title=None,
     bins=30,
     fill_contours=True,
     cmap="bone_r",
@@ -241,6 +247,8 @@ def corner_plot(
         credible intervals. If None, ``[1, 2, 3]`` is used.
     parameter_labels : sequence of str, optional
         Labels displayed on the plot axes.
+    title : str, optional
+        Object label displayed in the unused upper-right corner region.
     bins : int, default=30
         Number of histogram bins.
     fill_contours : bool, default=True
@@ -366,9 +374,14 @@ def corner_plot(
             "the number of parameters."
         )
 
+    parameter_names = [
+        str(label)
+        for label in parameter_labels
+    ]
+
     parameter_labels = [
         latex_parameter_label(label)
-        for label in parameter_labels
+        for label in parameter_names
     ]
 
     fig, ax_grid = _resolve_corner_grid(
@@ -384,6 +397,34 @@ def corner_plot(
                 axis,
                 max_n_ticks=max_n_ticks,
             )
+
+            if parameter_names[j] in {
+                "x0",
+                "y0",
+            }:
+                x_formatter = ScalarFormatter(
+                    useOffset=False
+                )
+                x_formatter.set_scientific(
+                    False
+                )
+                axis.xaxis.set_major_formatter(
+                    x_formatter
+                )
+
+            if parameter_names[i] in {
+                "x0",
+                "y0",
+            }:
+                y_formatter = ScalarFormatter(
+                    useOffset=False
+                )
+                y_formatter.set_scientific(
+                    False
+                )
+                axis.yaxis.set_major_formatter(
+                    y_formatter
+                )
 
             if j > i:
                 axis.axis("off")
@@ -679,6 +720,59 @@ def corner_plot(
             wspace=0.05,
             hspace=0.05,
         )
+
+    if title and ax is None:
+        upper_triangle_centres = []
+
+        for i in range(n_params):
+            for j in range(i + 1, n_params):
+                bbox = ax_grid[
+                    i,
+                    j,
+                ].get_position()
+
+                upper_triangle_centres.append(
+                    (
+                        0.5 * (
+                            bbox.x0
+                            + bbox.x1
+                        ),
+                        0.5 * (
+                            bbox.y0
+                            + bbox.y1
+                        ),
+                    )
+                )
+
+        if upper_triangle_centres:
+            title_x = float(
+                np.mean(
+                    [
+                        centre[0]
+                        for centre
+                        in upper_triangle_centres
+                    ]
+                )
+            )
+
+            title_y = float(
+                np.mean(
+                    [
+                        centre[1]
+                        for centre
+                        in upper_triangle_centres
+                    ]
+                )
+            )
+
+            fig.text(
+                title_x,
+                title_y,
+                str(title),
+                ha="center",
+                va="center",
+                fontsize=42,
+            )
 
     fig.align_labels(ax_grid)
 

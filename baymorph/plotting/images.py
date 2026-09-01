@@ -563,7 +563,11 @@ def _imshow_log(ax, image, *, title, cmap, vmin=None, vmax=None):
         norm=LogNorm(vmin=vmin, vmax=vmax),
     )
 
-    ax.set_title(title, fontsize=35)
+    ax.set_title(
+        title,
+        fontsize=35,
+        pad=14,
+    )
     _apply_baymorph_axes_style(ax)
 
     return im
@@ -794,6 +798,7 @@ def plot_pipeline_fit_maps(
     axes[1, 0].set_title(
         r"Target \& Masks",
         fontsize=35,
+        pad=14,
     )
     _apply_baymorph_axes_style(axes[1, 0])
 
@@ -817,6 +822,7 @@ def plot_pipeline_fit_maps(
     axes[1, 1].set_title(
         "PSF",
         fontsize=35,
+        pad=14,
     )
     _apply_baymorph_axes_style(axes[1, 1])
 
@@ -857,6 +863,7 @@ def plot_pipeline_fit_maps(
     axes[1, 2].set_title(
         "Residual",
         fontsize=35,
+        pad=14,
     )
     _apply_baymorph_axes_style(axes[1, 2])
 
@@ -884,6 +891,7 @@ def plot_pipeline_fit_maps(
     axes[1, 3].set_title(
         "Residual / noise",
         fontsize=35,
+        pad=14,
     )
     _apply_baymorph_axes_style(axes[1, 3])
 

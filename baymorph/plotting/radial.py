@@ -131,6 +131,7 @@ def plot_radial_profile_diagnostics(
     profile_data_p84=None,
     profile_data_mean=None,
     legend_title=None,
+    title=None,
     ax=None,
 ):
     """Plot elliptical radial-profile diagnostics.
@@ -157,6 +158,8 @@ def plot_radial_profile_diagnostics(
         Mean observed intensity in each annulus.
     legend_title : str, optional
         Legend title.
+    title : str, optional
+        Object label displayed above standalone radial diagnostics.
     ax : matplotlib.axes.Axes, optional
         Existing axis replaced by the two-panel diagnostic layout.
 
@@ -409,6 +412,17 @@ def plot_radial_profile_diagnostics(
                 1
             ],
             sharex=ax1,
+        )
+
+    if title and ax is None:
+        fig.suptitle(
+            str(title),
+            fontsize=42,
+            y=0.985,
+        )
+
+        fig.subplots_adjust(
+            top=0.90,
         )
 
     ax1.plot(
@@ -908,17 +922,17 @@ def plot_radial_profile_diagnostics(
             )
 
     ax1.set_ylabel(
-        r"$\log I$",
+        r"$\log_{10} I$",
         fontsize=label_size,
     )
 
     ax2.set_ylabel(
-        r"$\Delta \log I$",
+        r"$\Delta \log_{10} I$",
         fontsize=label_size,
     )
 
     ax2.set_xlabel(
-        "Elliptical semi-major-axis radius [pix]",
+        r"$R_{\rm ell}\,[\mathrm{pix}]$",
         fontsize=label_size,
     )
 

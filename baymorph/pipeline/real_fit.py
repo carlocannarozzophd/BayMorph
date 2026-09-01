@@ -1186,6 +1186,63 @@ def _build_image_inference_problem(
     )
 
 
+def _object_label(
+    config: dict[str, Any],
+) -> str | None:
+    """Return a human-readable object label for diagnostic figures."""
+    object_cfg = config.get(
+        "object",
+        {},
+    )
+
+    if not isinstance(
+        object_cfg,
+        dict,
+    ):
+        return None
+
+    name = object_cfg.get(
+        "name"
+    )
+
+    if name is None:
+        return None
+
+    label = str(
+        name
+    ).strip()
+
+    if not label:
+        return None
+
+    return label.replace(
+        "_",
+        " ",
+    )
+
+
+def _fit_diagnostic_title(
+    config: dict[str, Any],
+    model_name: str,
+) -> str:
+    """Return an object- and model-aware diagnostic title."""
+    model_label = _diagnostic_title(
+        config,
+        model_name,
+    )
+
+    object_label = _object_label(
+        config
+    )
+
+    if object_label is None:
+        return model_label
+
+    return (
+        f"{object_label} | {model_label}"
+    )
+
+
 def _run_sampler(
     data_fit,
     noise_fit,

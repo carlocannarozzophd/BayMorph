@@ -129,6 +129,9 @@ def latex_parameter_label(
     if name.startswith("$") and name.endswith("$"):
         return name
 
+    if name == "background_level":
+        return r"$B$"
+
     for labels in MODEL_PARAMETER_LABELS.values():
         if name in labels:
             return labels[name]

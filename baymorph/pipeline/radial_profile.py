@@ -41,6 +41,7 @@ from baymorph.pipeline.psf_construction import (
 from baymorph.pipeline.real_fit import (
     _diagnostic_title,
     _make_model_factory,
+    _object_label,
 )
 from baymorph.plotting.radial import (
     plot_radial_profile_diagnostics,
@@ -630,6 +631,10 @@ def _run_single_observation_radial_profiles(
         {},
     )
 
+    object_title = _object_label(
+        config
+    )
+
     psf = _load_psf_from_config(
         config,
     )
@@ -773,6 +778,7 @@ def _run_single_observation_radial_profiles(
             profile_data_mean=data_statistics.mean,
             posterior_profiles=profile_bands,
             component_profiles=component_profiles,
+            title=object_title,
             legend_title=_diagnostic_title(
                 config,
                 model_name,
@@ -918,6 +924,26 @@ def _run_multi_observation_radial_profiles(
                 observation_name
             ]
 
+            observation_configs = getattr(
+                context,
+                "observation_configs",
+                {},
+            )
+
+            observation_config = observation_configs.get(
+                observation_name,
+                {},
+            )
+
+            object_title = _object_label(
+                observation_config
+            )
+
+            if object_title is None:
+                object_title = _object_label(
+                    config
+                )
+
             observation_psf = psfs.get(
                 observation_name
             )
@@ -1055,6 +1081,7 @@ def _run_multi_observation_radial_profiles(
                 profile_data_mean=data_statistics.mean,
                 posterior_profiles=profile_bands,
                 component_profiles=component_profiles,
+                title=object_title,
                 legend_title=(
                     f"{model_name} | observation: "
                     f"{observation_name}"

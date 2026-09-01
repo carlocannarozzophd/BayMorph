@@ -17,11 +17,33 @@ from baymorph.pipeline.multi_observation_outputs import (
     multi_observation_paths,
 )
 from baymorph.pipeline.outputs import pipeline_paths
+from baymorph.pipeline.real_fit import _object_label
 from baymorph.plotting import corner_plot
 
 
 def _posterior_samples(posterior):
-    """Return equal-weight posterior samples."""
+    """Return equal-weight posterior samples when available."""
+    nested_posterior = getattr(
+        posterior,
+        "posterior",
+        None,
+    )
+
+    if (
+        nested_posterior is not None
+        and hasattr(
+            nested_posterior,
+            "equal_weight_samples",
+        )
+    ):
+        return nested_posterior.equal_weight_samples
+
+    if hasattr(
+        posterior,
+        "equal_weight_samples",
+    ):
+        return posterior.equal_weight_samples
+
     if hasattr(
         posterior,
         "posterior_samples",
@@ -35,7 +57,6 @@ def _posterior_samples(posterior):
         return posterior.samples
 
     return posterior
-
 
 def _resolve_corner_config(
     config: str | Path | Mapping[str, Any],
@@ -132,14 +153,27 @@ def run_corner_diagnostics(
             exist_ok=True,
         )
 
-        fig, _, _ = corner_plot(
-            parameters=samples.T,
-            parameter_labels=fit.posterior.parameter_names,
-            sigma=[
+        corner_kwargs = {
+            "parameters": samples.T,
+            "parameter_labels": fit.posterior.parameter_names,
+            "sigma": [
                 1,
                 2,
                 3,
             ],
+        }
+
+        object_title = _object_label(
+            resolved_config
+        )
+
+        if object_title is not None:
+            corner_kwargs[
+                "title"
+            ] = object_title
+
+        fig, _, _ = corner_plot(
+            **corner_kwargs
         )
 
         fig.savefig(
