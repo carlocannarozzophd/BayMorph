@@ -11,7 +11,6 @@ from baymorph.fitting.backend import (
 )
 from baymorph.fitting.backends import register_builtin_backends
 from baymorph.fitting.dynesty import DynestyFitter
-from baymorph.fitting.native import NativeFitter
 from baymorph.fitting.parameters import ParameterSet
 from baymorph.fitting.pocomc import PocoMCFitter
 from baymorph.fitting.problem import InferenceProblem
@@ -50,7 +49,7 @@ def make_sampler(
 
     Returns
     -------
-    InferenceBackend, DynestyFitter, PocoMCFitter, or NativeFitter
+    InferenceBackend, DynestyFitter, or PocoMCFitter
         Configured inference implementation.
 
     Notes
@@ -145,17 +144,15 @@ def _make_legacy_sampler(
         )
 
     if sampler_name == "native":
-        return NativeFitter(
-            model_factory=model_factory,
-            parameters=parameters,
-            likelihood=likelihood,
-            config=sampler_config,
+        raise ValueError(
+            "The BayMorph native sampler is archived and is no longer "
+            "available."
         )
 
     raise ValueError(
         f"Unknown sampler {sampler_name!r}. "
         "Available legacy samplers are "
-        "'dynesty', 'pocomc', and 'native'."
+        "'dynesty' and 'pocomc'."
     )
 
 

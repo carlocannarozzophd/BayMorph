@@ -14,7 +14,6 @@ from baymorph.fitting.model_factories import (
     make_sersic_point_source_psf_sky_model,
     make_single_sersic_psf_sky_model,
 )
-from baymorph.fitting.native import NativeFitter
 from baymorph.fitting.parameters import (
     Parameter,
     ParameterSet,
@@ -38,7 +37,6 @@ __all__ = [
     "FixedPrior",
     "GridSearchResult",
     "LogUniformPrior",
-    "NativeFitter",
     "NormalPrior",
     "Parameter",
     "ParameterSet",
