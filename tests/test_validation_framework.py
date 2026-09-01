@@ -5,10 +5,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from baymorph.fitting.geometry import (
-    GeometryModel,
-    ParameterGeometry,
-)
 from baymorph.fitting.parameters import (
     Parameter,
     ParameterSet,
@@ -31,18 +27,10 @@ def make_problem() -> ValidationProblem:
             )
         ]
     )
-    geometry = GeometryModel(
-        [
-            ParameterGeometry(
-                "x"
-            )
-        ]
-    )
 
     return ValidationProblem(
         name="quadratic",
         parameters=parameters,
-        geometry=geometry,
         loglikelihood=lambda values: -0.5
         * float(
             values[0] ** 2
@@ -123,34 +111,6 @@ def test_validation_problem_exposes_dimension_and_evaluation():
     )
 
 
-def test_validation_problem_requires_matching_geometry():
-    parameters = ParameterSet(
-        [
-            Parameter(
-                "x",
-                -1.0,
-                1.0,
-            )
-        ]
-    )
-    geometry = GeometryModel(
-        [
-            ParameterGeometry(
-                "y"
-            )
-        ]
-    )
-
-    with pytest.raises(
-        ValueError,
-        match="identical parameter names",
-    ):
-        ValidationProblem(
-            name="invalid",
-            parameters=parameters,
-            geometry=geometry,
-            loglikelihood=lambda values: 0.0,
-        )
 
 
 def test_validation_problem_validates_reference_shapes():
@@ -163,7 +123,6 @@ def test_validation_problem_validates_reference_shapes():
         ValidationProblem(
             name="invalid",
             parameters=problem.parameters,
-            geometry=problem.geometry,
             loglikelihood=problem.loglikelihood,
             reference_mean=np.zeros(
                 2
