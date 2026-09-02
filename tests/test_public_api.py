@@ -24,6 +24,7 @@ EXPECTED_PUBLIC_API = {
     "PosteriorSamples",
     "RealFitProducts",
     "make_config_from_fits",
+    "make_observation",
     "make_multi_observation_config",
     "make_multi_parameters",
 }

@@ -33,6 +33,7 @@ from baymorph.simulation import (
     GaussianPSF,
     SyntheticObservation,
     SyntheticSersic,
+    make_observation,
 )
 
 __version__ = "0.3.0"
@@ -58,6 +59,7 @@ __all__ = [
     "SyntheticObservation",
     "SyntheticSersic",
     "make_config_from_fits",
+    "make_observation",
     "make_multi_observation_config",
     "make_multi_parameters",
 ]

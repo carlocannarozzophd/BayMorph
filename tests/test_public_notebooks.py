@@ -125,6 +125,24 @@ def test_public_notebooks_use_repository_root_relative_paths() -> None:
         assert "../runs" not in source
 
 
+def test_public_notebooks_use_stable_user_facing_imports() -> None:
+    """Tutorials must not depend on internal simulation or repository state."""
+    simulated = _notebook_source(
+        NOTEBOOK_DIRECTORY
+        / "01_Simulated_SingleBand.ipynb"
+    )
+    observed = _notebook_source(
+        NOTEBOOK_DIRECTORY
+        / "02_Observed_SingleBand.ipynb"
+    )
+
+    assert "from baymorph.simulation import make_observation" not in simulated
+    assert "make_observation" in simulated
+
+    assert "find_repository_root" not in observed
+    assert "repository_root" not in observed
+
+
 def test_public_notebooks_do_not_use_matplotlib_directly() -> None:
     """Public notebooks must delegate all plotting to BayMorph."""
     forbidden = (

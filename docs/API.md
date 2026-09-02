@@ -83,9 +83,11 @@ The current public simulation interfaces are:
 
 - `SyntheticObservation`
 - `SyntheticSersic`
+- `make_observation`
 
-These provide controlled synthetic data products for examples, validation, and
-scientific testing.
+`make_observation` is the high-level constructor for controlled synthetic
+astronomical observations. These interfaces support examples, validation, and
+scientific testing without exposing simulation implementation details.
 
 ## Canonical inference results
 
@@ -281,7 +283,11 @@ morphology priors are never generated silently.
 The stable top-level public namespace currently contains:
 
 - `BayMorphRunner`
+- `ObservationAdvisor`
+- `ObservationInspection`
+- `PriorGuidance`
 - `make_config_from_fits`
+- `make_observation`
 - `make_multi_observation_config`
 - `make_multi_parameters`
 - `Observation`
