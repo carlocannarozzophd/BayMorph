@@ -301,20 +301,17 @@ The stable top-level public namespace currently contains:
 
 These names are available directly from `baymorph`.
 
-## Legacy result compatibility
+## Legacy result archive compatibility
 
-`PosteriorResult` is the historical BayMorph result representation.
+Historical BayMorph posterior archives remain loadable through
+`InferenceResult.load()`.
 
-It is retained within `baymorph.results` for compatibility with legacy result
-archives and internal migration paths.
+Legacy archive fields are interpreted only at the persistence boundary and are
+immediately migrated into `PosteriorSamples` and `EvidenceEstimate`.
+The historical `PosteriorResult` runtime class is no longer part of BayMorph.
 
-It is not part of the stable top-level public API.
-
-New user code and documentation should use `InferenceResult`,
-`PosteriorSamples`, and `EvidenceEstimate`.
-
-Legacy persisted results may be migrated into the canonical
-`InferenceResult` representation when loaded.
+New code should use only `InferenceResult`, `PosteriorSamples`, and
+`EvidenceEstimate`.
 
 ## Internal APIs
 

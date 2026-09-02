@@ -7,7 +7,6 @@ from baymorph.results.multi_observation import (
     MultiObservationFitProducts,
     ObservationFitProducts,
 )
-from baymorph.results.posterior import PosteriorResult
 from baymorph.results.samples import PosteriorSamples
 
 
@@ -16,7 +15,6 @@ __all__ = [
     "InferenceResult",
     "MultiObservationFitProducts",
     "ObservationFitProducts",
-    "PosteriorResult",
     "PosteriorSamples",
     "RealFitProducts",
 ]

@@ -8,7 +8,6 @@ import pytest
 from baymorph.results import (
     EvidenceEstimate,
     InferenceResult,
-    PosteriorResult,
     PosteriorSamples,
 )
 
@@ -155,44 +154,51 @@ def test_inference_result_save_load_without_evidence(
 def test_inference_result_loads_legacy_posterior_archive(
     tmp_path,
 ):
-    legacy = PosteriorResult(
+    path = tmp_path / "legacy.npz"
+
+    np.savez_compressed(
+        path,
         samples=np.asarray(
             [
                 [1.0],
                 [2.0],
-            ]
+            ],
+            dtype=float,
         ),
         logwt=np.log(
             np.asarray(
                 [
                     0.4,
                     0.6,
-                ]
+                ],
+                dtype=float,
             )
         ),
         logz=np.asarray(
             [
                 0.0,
-            ]
+            ],
+            dtype=float,
         ),
-        parameter_names=[
-            "x",
-        ],
+        parameter_names=np.asarray(
+            [
+                "x",
+            ],
+            dtype=str,
+        ),
         logl=np.asarray(
             [
                 -2.0,
                 -1.0,
-            ]
+            ],
+            dtype=float,
         ),
         logzerr=np.asarray(
             [
                 0.3,
-            ]
+            ],
+            dtype=float,
         ),
-    )
-
-    path = legacy.save(
-        tmp_path / "legacy.npz"
     )
 
     loaded = InferenceResult.load(
@@ -207,23 +213,19 @@ def test_inference_result_loads_legacy_posterior_archive(
             ]
         )
     )
-
     assert loaded.logz == pytest.approx(
         0.0
     )
-
     assert loaded.logz_error == pytest.approx(
         0.3
     )
-
     assert (
         loaded.evidence_method
         == "legacy_baymorph"
     )
-
-    assert loaded.provenance == {
-        "source_format": "posterior_result_v1",
-    }
+    assert loaded.provenance[
+        "source_format"
+    ] == "posterior_result_v1"
 
 
 def test_inference_result_serializes_runtime_sampler_objects(

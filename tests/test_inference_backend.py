@@ -12,7 +12,10 @@ from baymorph.fitting.backend import (
 from baymorph.fitting.problem import (
     InferenceProblem,
 )
-from baymorph.results import PosteriorResult
+from baymorph.results import (
+    InferenceResult,
+    PosteriorSamples,
+)
 
 
 class ScalarProblem(InferenceProblem):
@@ -60,31 +63,33 @@ class DummyBackend(InferenceBackend):
         self,
         *,
         progress_label: str | None = None,
-    ) -> PosteriorResult:
+    ) -> InferenceResult:
         del progress_label
 
-        return PosteriorResult(
-            samples=np.asarray(
-                [[0.0]],
-                dtype=float,
-            ),
-            logwt=np.asarray(
-                [0.0],
-                dtype=float,
-            ),
-            logz=np.asarray(
-                [0.0],
-                dtype=float,
-            ),
-            parameter_names=["x"],
-            logl=np.asarray(
-                [0.0],
-                dtype=float,
-            ),
-            logzerr=np.asarray(
-                [0.0],
-                dtype=float,
-            ),
+        return InferenceResult(
+            posterior=PosteriorSamples(
+                samples=np.asarray(
+                    [
+                        [0.0],
+                    ],
+                    dtype=float,
+                ),
+                weights=np.asarray(
+                    [
+                        1.0,
+                    ],
+                    dtype=float,
+                ),
+                parameter_names=[
+                    "x",
+                ],
+                log_likelihood=np.asarray(
+                    [
+                        0.0,
+                    ],
+                    dtype=float,
+                ),
+            )
         )
 
 
@@ -210,7 +215,7 @@ def test_backend_fit_contract_returns_result():
 
     assert isinstance(
         result,
-        PosteriorResult,
+        InferenceResult,
     )
     assert result.parameter_names == [
         "x",

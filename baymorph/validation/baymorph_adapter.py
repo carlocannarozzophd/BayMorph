@@ -124,17 +124,7 @@ def recovery_fit_from_baymorph(
     *,
     metadata: dict[str, Any] | None = None,
 ) -> RecoveryFit:
-    """Convert legacy real-fit products into a validation recovery result.
-
-    Posterior medians are used as point estimates, while the 16th and 84th
-    percentiles define the default posterior intervals.
-
-    Notes
-    -----
-    This adapter is retained for the existing single-observation validation
-    workflow. New backend-neutral workflows should use
-    :func:`recovery_fit_from_inference_result`.
-    """
+    """Convert real-fit products into a validation recovery result."""
     posterior = fit_products.posterior
 
     if posterior is None:
@@ -142,66 +132,7 @@ def recovery_fit_from_baymorph(
             "BayMorph fit products must contain posterior results."
         )
 
-    parameter_names = tuple(
-        posterior.parameter_names
-    )
-
-    if not parameter_names:
-        raise ValueError(
-            "BayMorph posterior must contain at least one parameter."
-        )
-
-    estimates: dict[str, float] = {}
-    intervals: dict[
-        str,
-        tuple[float, float],
-    ] = {}
-
-    for name in parameter_names:
-        summary = posterior.summary(
-            name
-        )
-
-        estimates[name] = float(
-            summary["median"]
-        )
-        intervals[name] = (
-            float(summary["q16"]),
-            float(summary["q84"]),
-        )
-
-    logz = np.asarray(
-        posterior.logz,
-        dtype=float,
-    )
-
-    if logz.size == 0:
-        raise ValueError(
-            "BayMorph posterior must contain Bayesian-evidence values."
-        )
-
-    log_evidence = float(
-        logz[-1]
-    )
-
-    log_evidence_error = None
-
-    if posterior.logzerr is not None:
-        logzerr = np.asarray(
-            posterior.logzerr,
-            dtype=float,
-        )
-
-        if logzerr.size == 0:
-            raise ValueError(
-                "BayMorph posterior evidence errors cannot be empty."
-            )
-
-        log_evidence_error = float(
-            logzerr[-1]
-        )
-
-    fit_metadata = {
+    fit_metadata: dict[str, Any] = {
         "adapter": "baymorph",
         "model_name": fit_products.model_name,
         "chi2": float(
@@ -220,11 +151,7 @@ def recovery_fit_from_baymorph(
             metadata
         )
 
-    return RecoveryFit(
-        estimates=estimates,
-        intervals=intervals,
-        log_evidence=log_evidence,
-        log_evidence_error=log_evidence_error,
-        likelihood_evaluations=None,
+    return recovery_fit_from_inference_result(
+        posterior,
         metadata=fit_metadata,
     )

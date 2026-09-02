@@ -534,52 +534,140 @@ class InferenceResult:
         cls,
         path: Path,
     ) -> InferenceResult:
-        """Migrate a legacy PosteriorResult archive on load."""
-        from baymorph.results.posterior import (
-            PosteriorResult,
-        )
+        """Migrate the historical posterior archive format on load."""
+        with np.load(
+            path,
+            allow_pickle=False,
+        ) as archive:
+            files = set(
+                archive.files
+            )
 
-        legacy = PosteriorResult.load(
-            path
-        )
+            required = {
+                "samples",
+                "logwt",
+                "logz",
+                "parameter_names",
+            }
+            missing = sorted(
+                required - files
+            )
 
-        posterior = PosteriorSamples(
-            samples=np.asarray(
-                legacy.samples,
+            if missing:
+                names = ", ".join(
+                    missing
+                )
+                raise ValueError(
+                    "Legacy posterior archive is missing required "
+                    f"array(s): {names}."
+                )
+
+            samples = np.asarray(
+                archive["samples"],
                 dtype=float,
-            ),
-            weights=np.asarray(
-                legacy.weights,
+            )
+            logwt = np.asarray(
+                archive["logwt"],
                 dtype=float,
-            ),
-            parameter_names=list(
-                legacy.parameter_names
-            ),
-            log_likelihood=(
-                None
-                if legacy.logl is None
-                else np.asarray(
-                    legacy.logl,
+            ).reshape(-1)
+            logz = np.asarray(
+                archive["logz"],
+                dtype=float,
+            ).reshape(-1)
+
+            parameter_names = [
+                str(name)
+                for name in np.asarray(
+                    archive[
+                        "parameter_names"
+                    ]
+                )
+            ]
+
+            log_likelihood = (
+                np.asarray(
+                    archive["logl"],
                     dtype=float,
                 )
-            ),
+                if "logl" in files
+                else None
+            )
+
+            logzerr = (
+                np.asarray(
+                    archive["logzerr"],
+                    dtype=float,
+                ).reshape(-1)
+                if "logzerr" in files
+                else None
+            )
+
+        if logz.size == 0:
+            raise ValueError(
+                "Legacy posterior evidence history must not be empty."
+            )
+
+        if logwt.size != samples.shape[0]:
+            raise ValueError(
+                "Legacy posterior weights must match the number of samples."
+            )
+
+        final_logz = float(
+            logz[-1]
+        )
+
+        weights = np.exp(
+            logwt - final_logz
+        )
+
+        normalization = float(
+            np.sum(
+                weights
+            )
+        )
+
+        if (
+            not np.isfinite(
+                normalization
+            )
+            or normalization <= 0.0
+        ):
+            raise ValueError(
+                "Legacy posterior weights cannot be normalized."
+            )
+
+        weights = (
+            weights
+            / normalization
+        )
+
+        uncertainty = None
+
+        if logzerr is not None:
+            if logzerr.size == 0:
+                raise ValueError(
+                    "Legacy posterior evidence uncertainty "
+                    "history must not be empty."
+                )
+
+            uncertainty = float(
+                logzerr[-1]
+            )
+
+        posterior = PosteriorSamples(
+            samples=samples,
+            weights=weights,
+            parameter_names=parameter_names,
+            log_likelihood=log_likelihood,
         )
 
         evidence = EvidenceEstimate(
-            logz=legacy.final_logz,
-            uncertainty=(
-                None
-                if legacy.logzerr is None
-                else float(
-                    np.asarray(
-                        legacy.logzerr
-                    )[-1]
-                )
-            ),
+            logz=final_logz,
+            uncertainty=uncertainty,
             method="legacy_baymorph",
             uncertainty_kind=(
                 None
-                if legacy.logzerr is None
+                if uncertainty is None
                 else "legacy_backend_internal"
             ),
             provenance={
