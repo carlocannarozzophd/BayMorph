@@ -166,7 +166,7 @@ def test_sersic_pixel_integrator_supports_scalar_and_batched_coordinates():
     pixel_x = np.arange(9.0, 13.0)[None, :]
     pixel_y = np.arange(8.0, 11.0)[:, None]
 
-    batched = model._integrate_pixel(
+    batched = model._integrate_pixel_fixed(
         pixel_x=pixel_x,
         pixel_y=pixel_y,
         integration_order=7,
@@ -174,7 +174,7 @@ def test_sersic_pixel_integrator_supports_scalar_and_batched_coordinates():
     scalar = np.array(
         [
             [
-                model._integrate_pixel(
+                model._integrate_pixel_fixed(
                     pixel_x=x,
                     pixel_y=y,
                     integration_order=7,
@@ -321,7 +321,7 @@ def test_sersic_rectangle_integrator_recovers_pixel_integral():
     pixel_x = np.arange(9.0, 13.0)[None, :]
     pixel_y = np.arange(8.0, 11.0)[:, None]
 
-    pixel_flux = model._integrate_pixel(
+    pixel_flux = model._integrate_pixel_fixed(
         pixel_x=pixel_x,
         pixel_y=pixel_y,
         integration_order=7,

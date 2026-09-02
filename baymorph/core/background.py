@@ -125,11 +125,6 @@ def estimate_background_constant(
     )
 
 
-def estimate_background_sigma(*args, **kwargs):
-    """Backward-compatible alias."""
-    return estimate_background_constant(*args, **kwargs)
-
-
 def estimate_noise(
     data: np.ndarray,
     mask: np.ndarray | None = None,

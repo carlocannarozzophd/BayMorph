@@ -89,7 +89,7 @@ def run_image_preparation(
 
     Returns
     -------
-    ImagePreparationProducts
+    PreparedObservation
         Prepared image products.
     """
     return prepare_real_image_from_config(config)

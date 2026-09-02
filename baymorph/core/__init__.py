@@ -2,8 +2,8 @@
 
 from baymorph.core.background import (
     BackgroundResult,
+    estimate_background_constant,
     estimate_background_photutils,
-    estimate_background_sigma,
     estimate_noise,
     subtract_background,
 )
@@ -48,6 +48,7 @@ from baymorph.core.sky import (
 
 __all__ = [
     "BackgroundResult",
+    "estimate_background_constant",
     "DetectionResult",
     "ImageData",
     "Observation",
@@ -73,7 +74,6 @@ __all__ = [
     "detect_sources_mask",
     "detect_sources_segmentation",
     "estimate_background_photutils",
-    "estimate_background_sigma",
     "estimate_noise",
     "estimate_noise_map",
     "make_constant_noise_map",

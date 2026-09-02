@@ -795,7 +795,7 @@ def plot_image_preparation_report(
 
     Parameters
     ----------
-    products : ImagePreparationProducts
+    products : PreparedObservation
         Products returned by
         :func:`baymorph.pipeline.image_preparation.
         prepare_real_image_from_config`.
@@ -1190,5 +1190,3 @@ def plot_image_preparation_report(
         plt.show()
 
     return fig, axes
-
-

@@ -13,7 +13,6 @@ from astropy.io import fits
 from baymorph.core.background import (
     estimate_background_constant,
     estimate_background_photutils,
-    estimate_background_sigma,
     subtract_background,
 )
 from baymorph.core.detection import (
@@ -144,7 +143,7 @@ def prepare_real_fits_image(
             mask=mask,
         )
     except ValueError:
-        background_result = estimate_background_sigma(
+        background_result = estimate_background_constant(
             data,
         )
 
@@ -387,10 +386,6 @@ class PreparedObservation:
     preliminary_segmentation: np.ndarray | None = None
 
 
-# Backward compatibility for the v0.4 series.
-ImagePreparationProducts = PreparedObservation
-
-
 def make_target_cutout(
     data: np.ndarray,
     cutout: CutoutDefinition,
@@ -419,7 +414,7 @@ def prepare_real_image_from_config(
     config: str | Path | dict[str, Any],
     *,
     save: bool = True,
-) -> ImagePreparationProducts:
+) -> PreparedObservation:
     """Prepare a real galaxy image from a BayMorph configuration.
 
     Parameters
@@ -431,7 +426,7 @@ def prepare_real_image_from_config(
 
     Returns
     -------
-    ImagePreparationProducts
+    PreparedObservation
         Prepared target cutout, masks, segmentation products, and metadata.
 
     Raises
@@ -575,7 +570,7 @@ def prepare_real_image_from_config(
         background_result.sigma,
     )
 
-    products = ImagePreparationProducts(
+    products = PreparedObservation(
         cutout=cutout,
         prepared_data=prepared_data,
         noise=noise,
@@ -643,7 +638,7 @@ def prepare_real_image_from_config(
 
 def save_image_preparation_products(
     config: dict[str, Any],
-    products: ImagePreparationProducts,
+    products: PreparedObservation,
     *,
     observation: Observation | None = None,
 ) -> None:
@@ -653,7 +648,7 @@ def save_image_preparation_products(
     ----------
     config : dict
         Resolved BayMorph configuration.
-    products : ImagePreparationProducts
+    products : PreparedObservation
         Image-preparation products to save.
     observation : Observation, optional
         Original observation providing normalized observational metadata.
@@ -784,7 +779,7 @@ def save_image_preparation_products(
 
 def load_image_preparation_products(
     config: str | Path | dict[str, Any],
-) -> ImagePreparationProducts:
+) -> PreparedObservation:
     """Load saved image-preparation products and diagnostics.
 
     Parameters
@@ -795,7 +790,7 @@ def load_image_preparation_products(
 
     Returns
     -------
-    ImagePreparationProducts
+    PreparedObservation
         Reconstructed image-preparation products, including optional target
         geometry, radial profile, plateau, sky region, preliminary cutout,
         and preliminary segmentation when these were saved.
@@ -918,7 +913,7 @@ def load_image_preparation_products(
     else:
         sky_region = None
 
-    return ImagePreparationProducts(
+    return PreparedObservation(
         cutout=cutout,
         prepared_data=prepared_data,
         noise=noise,

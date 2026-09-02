@@ -1,4 +1,4 @@
-"""Tests for the joint multi-band image likelihood."""
+"""Tests for the joint multi-observation image likelihood."""
 
 import numpy as np
 import pytest
@@ -20,7 +20,7 @@ def make_likelihoods() -> dict[str, GaussianImageLikelihood]:
     }
 
 
-def test_multi_observation_likelihood_exposes_bands_and_shapes():
+def test_multi_observation_likelihood_exposes_observations_and_shapes():
     likelihood = MultiObservationLikelihood(
         make_likelihoods()
     )

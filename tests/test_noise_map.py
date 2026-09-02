@@ -31,7 +31,7 @@ def test_estimate_noise_map_shape():
 
     noise = estimate_noise_map(
         data,
-        sigma=1.5,
+        clip_sigma=1.5,
     )
 
     assert noise.shape == data.shape

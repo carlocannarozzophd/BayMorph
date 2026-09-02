@@ -320,27 +320,6 @@ def estimate_psf_core_fwhm(
 
     return 2.0 * half_maximum_radius
 
-def estimate_psf_fwhm(
-    psf: np.ndarray,
-) -> float | None:
-    """Return the equivalent-Gaussian PSF FWHM.
-
-    This compatibility alias preserves the historical API. New code
-    should use :func:`estimate_psf_equivalent_gaussian_fwhm`.
-
-    Parameters
-    ----------
-    psf : numpy.ndarray
-        Two-dimensional PSF image.
-
-    Returns
-    -------
-    float or None
-        Moment-based equivalent-Gaussian FWHM in pixels.
-    """
-    return estimate_psf_equivalent_gaussian_fwhm(psf)
-
-
 def psf_radial_profile(
     psf: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:

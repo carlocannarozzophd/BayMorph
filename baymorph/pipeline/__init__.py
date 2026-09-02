@@ -14,7 +14,6 @@ from baymorph.pipeline.cutout import (
     resolve_fixed_cutout,
 )
 from baymorph.pipeline.image_preparation import (
-    ImagePreparationProducts,
     RealFITSPreparation,
     load_image_preparation_products,
     make_target_cutout,
@@ -95,7 +94,6 @@ __all__ = [
     "load_runtime_report",
     "build_runtime_report",
     "CutoutDefinition",
-    "ImagePreparationProducts",
     "PSFCandidate",
     "RealFITSPreparation",
     "RealFitProducts",

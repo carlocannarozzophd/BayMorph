@@ -297,20 +297,6 @@ class SersicModel:
             integration_order=integration_order,
         )
 
-    def _integrate_pixel(
-        self,
-        pixel_x: ArrayLike,
-        pixel_y: ArrayLike,
-        *,
-        integration_order: int,
-    ) -> FloatArray:
-        """Backward-compatible alias for fixed pixel integration."""
-        return self._integrate_pixel_fixed(
-            pixel_x=pixel_x,
-            pixel_y=pixel_y,
-            integration_order=integration_order,
-        )
-
     def _integrate_pixel_adaptive(
         self,
         pixel_x: ArrayLike,

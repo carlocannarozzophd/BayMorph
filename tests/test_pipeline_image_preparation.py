@@ -1,7 +1,7 @@
 import numpy as np
 
 from baymorph.pipeline import (
-    ImagePreparationProducts,
+    PreparedObservation,
     load_image_preparation_products,
     make_target_cutout,
     pipeline_paths,
@@ -9,7 +9,6 @@ from baymorph.pipeline import (
     resolve_fixed_cutout,
     save_image_preparation_products,
 )
-from baymorph.pipeline import PreparedObservation
 
 
 def test_make_target_cutout_returns_expected_shape():
@@ -64,7 +63,7 @@ def test_save_and_load_image_preparation_products_roundtrip(tmp_path):
     paths = pipeline_paths(resolved)["image_preparation"]
     paths["dir"].mkdir(parents=True, exist_ok=True)
 
-    products = ImagePreparationProducts(
+    products = PreparedObservation(
         cutout=np.ones((10, 10)),
         prepared_data=np.ones((10, 10)) * 2,
         noise=np.ones((10, 10)) * 3,
@@ -101,7 +100,6 @@ def test_save_and_load_image_preparation_products_roundtrip(tmp_path):
 def test_prepared_observation_alias():
     """The legacy public name must remain available during v0.4."""
 
-    assert PreparedObservation is ImagePreparationProducts
 
 
 def test_prepare_real_image_from_config_combines_external_mask(

@@ -61,11 +61,6 @@ class MultiObservationLikelihood:
         )
 
     @property
-    def bands(self) -> tuple[str, ...]:
-        """Return observations through the legacy multi-band name."""
-        return self.observations
-
-    @property
     def image_shapes(self) -> dict[str, tuple[int, ...]]:
         """Return the model-image shape required by each observation."""
         return {

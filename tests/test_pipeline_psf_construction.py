@@ -247,25 +247,6 @@ def test_equivalent_gaussian_fwhm_rejects_invalid_inputs():
 
 
 
-def test_estimate_psf_fwhm_preserves_compatibility():
-    """The historical FWHM helper must remain a compatible alias."""
-    import pytest
-
-    from baymorph.pipeline.psf_construction import (
-        estimate_psf_equivalent_gaussian_fwhm,
-        estimate_psf_fwhm,
-    )
-    from baymorph.simulation.psf import GaussianPSF
-
-    psf = GaussianPSF(fwhm=2.5).kernel()
-
-    assert estimate_psf_fwhm(psf) == pytest.approx(
-        estimate_psf_equivalent_gaussian_fwhm(psf),
-        rel=1.0e-12,
-        abs=1.0e-12,
-    )
-
-
 def test_empirical_psf_peak_snr_default_is_resolved():
     """Empirical PSF construction must use an explicit S/N quality threshold."""
     config = {

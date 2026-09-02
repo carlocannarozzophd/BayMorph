@@ -42,7 +42,6 @@ def estimate_noise_map(
     mask: np.ndarray | None = None,
     clip_sigma: float = 3.0,
     maxiters: int = 5,
-    sigma: float | None = None,
 ) -> np.ndarray:
     """Estimate a constant noise map from an image.
 
@@ -60,18 +59,12 @@ def estimate_noise_map(
         Sigma-clipping threshold.
     maxiters : int, default=5
         Maximum number of sigma-clipping iterations.
-    sigma : float, optional
-        Backward-compatible alias for ``clip_sigma``. If provided, it takes
-        precedence over ``clip_sigma``.
 
     Returns
     -------
     ndarray
         Constant noise map with the same shape as ``image``.
     """
-    if sigma is not None:
-        clip_sigma = sigma
-
     data = np.asarray(image, dtype=float)
 
     valid = np.isfinite(data)
