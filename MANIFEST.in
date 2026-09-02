@@ -4,7 +4,7 @@ include CHANGELOG.md
 include CONTRIBUTING.md
 include CITATION.cff
 
-recursive-include baymorph/resources *.yaml *.ipynb
+recursive-include baymorph/resources *.yaml
 
 prune build
 prune dist
