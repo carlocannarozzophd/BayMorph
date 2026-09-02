@@ -58,14 +58,15 @@ def set_plot_style(
     """Apply the canonical BayMorph Matplotlib style.
 
     ``fontsize`` and ``usetex`` are retained temporarily for compatibility
-    with existing internal call sites. BayMorph plotting style is fixed:
-    LaTeX rendering, serif font at size 35, and axes linewidth 3.
+    with existing call sites. The canonical style uses Matplotlib mathtext
+    rather than an external LaTeX installation so that plotting behaviour
+    remains portable and reproducible across supported environments.
     """
     del fontsize, usetex
 
     plt.rc(
         "text",
-        usetex=True,
+        usetex=False,
     )
     plt.rc(
         "font",
