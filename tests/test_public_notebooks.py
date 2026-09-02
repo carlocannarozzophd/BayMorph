@@ -12,6 +12,7 @@ NOTEBOOK_DIRECTORY = PROJECT_ROOT / "notebooks"
 EXPECTED_NOTEBOOKS = {
     "01_Simulated_SingleBand.ipynb",
     "02_Observed_SingleBand.ipynb",
+    "03_MultiObservation_JointFit.ipynb",
 }
 
 
@@ -39,8 +40,8 @@ def _notebook_source(
     )
 
 
-def test_exactly_two_public_notebooks_exist() -> None:
-    """The repository exposes exactly two canonical public notebooks."""
+def test_exactly_three_public_notebooks_exist() -> None:
+    """The repository exposes exactly three canonical public notebooks."""
     notebooks = {
         path.name
         for path in NOTEBOOK_DIRECTORY.glob(
@@ -110,6 +111,45 @@ def test_observed_notebook_uses_config_maker() -> None:
     assert "pool=" not in source
     assert "min_factor" not in source
     assert "max_factor" not in source
+
+
+def test_multi_observation_notebook_uses_public_joint_workflow() -> None:
+    """The joint tutorial must use only the public multi-observation workflow."""
+    source = _notebook_source(
+        NOTEBOOK_DIRECTORY
+        / "03_MultiObservation_JointFit.ipynb"
+    )
+
+    assert "BayMorphRunner" in source
+    assert "make_multi_observation_config" in source
+    assert "make_multi_parameters" in source
+
+    assert 'parameter_frame="sky"' in source
+
+    assert '"q"' in source
+    assert '"position_angle"' in source
+    assert '"ra"' in source
+    assert '"dec"' in source
+
+    assert '"name": "nautilus"' in source
+
+    assert "runner.run(" in source
+    assert "diagnostics=True" in source
+
+    assert "runner.prepare_image()" in source
+    assert "runner.build_psf()" in source
+    assert "runner.fit()" in source
+
+    assert "from baymorph.pipeline" not in source
+    assert "from baymorph.fitting" not in source
+    assert "from baymorph.likelihood" not in source
+
+    assert "pool=" not in source
+    assert "fitter=" not in source
+    assert "n_processes=" not in source
+
+    assert "find_repository_root" not in source
+    assert "repository_root" not in source
 
 
 def test_public_notebooks_use_repository_root_relative_paths() -> None:

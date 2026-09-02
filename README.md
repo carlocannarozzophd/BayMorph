@@ -14,7 +14,9 @@
 <p align="center">
   <a href="#installation">Installation</a> ·
   <a href="#quick-start">Quick Start</a> ·
-  <a href="notebooks/01_Simulated_SingleBand.ipynb">Tutorial</a> ·
+  <a href="notebooks/01_Simulated_SingleBand.ipynb">Simulated Tutorial</a> ·
+  <a href="notebooks/02_Observed_SingleBand.ipynb">Observed Tutorial</a> ·
+  <a href="notebooks/03_MultiObservation_JointFit.ipynb">Multi-Observation Tutorial</a> ·
   <a href="docs/API.md">API</a> ·
   <a href="docs/architecture/ARCHITECTURE.md">Architecture</a> ·
   <a href="ROADMAP.md">Roadmap</a>
