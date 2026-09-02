@@ -41,6 +41,9 @@ from baymorph.validation.metrics import (
     weighted_posterior_rank,
 )
 from baymorph.validation.recovery import ParameterRecovery, RecoveryResult
+from baymorph.validation.reference import (
+    ReferenceValidationCase,
+)
 from baymorph.validation.report import summarize_recovery
 from baymorph.validation.simulation_grid import SimulationCase, SimulationGrid
 from baymorph.validation.truth import GroundTruth
@@ -76,6 +79,7 @@ __all__ = [
     "RecoveryExperiment",
     "RecoveryFit",
     "RecoveryResult",
+    "ReferenceValidationCase",
     "SimulationCase",
     "SimulationGrid",
     "benchmark_call",
