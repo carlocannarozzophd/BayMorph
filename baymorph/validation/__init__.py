@@ -41,6 +41,10 @@ from baymorph.validation.metrics import (
     weighted_posterior_rank,
 )
 from baymorph.validation.recovery import ParameterRecovery, RecoveryResult
+from baymorph.validation.run import (
+    ValidationRun,
+    execute_validation_case,
+)
 from baymorph.validation.reference import (
     ReferenceValidationCase,
 )
@@ -94,5 +98,7 @@ __all__ = [
     "recovery_fit_from_baymorph",
     "recovery_fit_from_inference_result",
     "build_synthetic_observation",
+    "ValidationRun",
+    "execute_validation_case",
     "ValidationWorkspace",
 ]
