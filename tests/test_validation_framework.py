@@ -9,14 +9,17 @@ from baymorph.fitting.parameters import (
     Parameter,
     ParameterSet,
 )
+from baymorph.validation.reference import (
+    CallableInferenceProblem,
+    ReferenceValidationCase,
+)
 from validation import (
-    ValidationProblem,
     ValidationResult,
     compare_results,
 )
 
 
-def make_problem() -> ValidationProblem:
+def make_problem() -> ReferenceValidationCase:
     """Create a simple one-dimensional validation problem."""
     parameters = ParameterSet(
         [
@@ -28,12 +31,14 @@ def make_problem() -> ValidationProblem:
         ]
     )
 
-    return ValidationProblem(
+    return ReferenceValidationCase(
         name="quadratic",
-        parameters=parameters,
-        loglikelihood=lambda values: -0.5
-        * float(
-            values[0] ** 2
+        problem=CallableInferenceProblem(
+            parameters=parameters,
+            log_likelihood=lambda values: -0.5
+            * float(
+                values[0] ** 2
+            ),
         ),
         reference_logz=-1.0,
         reference_mean=np.asarray(
@@ -96,11 +101,11 @@ def make_result(
     )
 
 
-def test_validation_problem_exposes_dimension_and_evaluation():
+def test_reference_case_owns_canonical_inference_problem():
     problem = make_problem()
 
-    assert problem.ndim == 1
-    assert problem.evaluate(
+    assert problem.problem.ndim == 1
+    assert problem.problem.log_likelihood(
         np.asarray(
             [
                 1.0
@@ -111,23 +116,6 @@ def test_validation_problem_exposes_dimension_and_evaluation():
     )
 
 
-
-
-def test_validation_problem_validates_reference_shapes():
-    problem = make_problem()
-
-    with pytest.raises(
-        ValueError,
-        match="reference_mean shape",
-    ):
-        ValidationProblem(
-            name="invalid",
-            parameters=problem.parameters,
-            loglikelihood=problem.loglikelihood,
-            reference_mean=np.zeros(
-                2
-            ),
-        )
 
 
 def test_validation_result_normalizes_weights():
