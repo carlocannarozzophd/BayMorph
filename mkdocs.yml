@@ -72,6 +72,7 @@ nav:
   - Production Workflow: architecture/PRODUCTION_WORKFLOW.md
   - Multi-Observation Workflow: architecture/MULTI_OBSERVATION_PUBLIC_WORKFLOW.md
   - Validation: architecture/VALIDATION.md
+  - Validation Architecture: architecture/VALIDATION_ARCHITECTURE.md
   - Architecture Decisions:
     - Policy: architecture/decisions/README.md
 
@@ -80,7 +81,7 @@ nav:
 - Research:
 
   - Paper Blueprint: research/PAPER_BLUEPRINT.md
-  - Multi-Observation Formulation: research/MULTIBAND_FORMULATION.md
+  - Multi-Observation Formulation: research/MULTI_OBSERVATION_FORMULATION.md
   - Preparation-Free Multi-Observation Recovery: research/PREPARATION_FREE_MULTI_OBSERVATION_RECOVERY.md
   - Multi-Observation Simulation-Based Calibration: research/MULTI_OBSERVATION_SBC.md
   - Adaptive Rendering: research/ADAPTIVE_RENDERING.md

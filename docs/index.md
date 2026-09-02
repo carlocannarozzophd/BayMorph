@@ -71,10 +71,11 @@ Inference backends evaluate the probabilistic problem but do not define it.
 
 ## Production inference
 
-BayMorph currently provides two production inference backends:
+BayMorph currently provides three production inference backends:
 
-- **pocoMC**, the default backend;
-- **Dynesty**, with both static and dynamic nested sampling.
+- **Nautilus**, the default backend;
+- **Dynesty**, with both static and dynamic nested sampling;
+- **pocoMC**.
 
 Sampler-specific numerical arguments retain the names and semantics defined by
 the upstream libraries.

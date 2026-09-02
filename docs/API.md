@@ -180,9 +180,10 @@ result types.
 
 BayMorph currently supports:
 
-- pocoMC as the default production backend;
+- Nautilus as the default production backend;
 - Dynesty static nested sampling;
-- Dynesty dynamic nested sampling.
+- Dynesty dynamic nested sampling;
+- pocoMC.
 
 Backend-specific fitter and adapter classes are not part of the stable
 top-level API.

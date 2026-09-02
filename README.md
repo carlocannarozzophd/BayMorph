@@ -126,7 +126,7 @@ The current scope intentionally excludes:
 | Rendering | Detector-pixel integration, extended-domain rendering, PSF convolution, adaptive integration infrastructure |
 | PSF workflows | Analytic Gaussian PSFs and empirical PSF construction |
 | Likelihoods | Gaussian likelihoods, with additional likelihood infrastructure under development |
-| Inference | Backend-neutral inference problems with pocoMC and Dynesty production backends |
+| Inference | Backend-neutral inference problems with Nautilus, Dynesty, and pocoMC production backends |
 | Dynesty modes | Static and dynamic nested sampling |
 | Posterior products | Weighted posterior samples, summaries, diagnostics, and canonical backend-neutral inference results |
 | Evidence | Bayesian evidence and evidence-aware model comparison |
@@ -164,8 +164,8 @@ BayMorph is observation-centred and backend-neutral.
 The probabilistic problem is defined independently of the numerical inference
 backend.
 
-Changing from pocoMC to Dynesty does not redefine the scientific model, prior,
-likelihood, parameter meaning, or result interpretation.
+Changing among Nautilus, Dynesty, and pocoMC does not redefine the scientific
+model, prior, likelihood, parameter meaning, or result interpretation.
 
 The authoritative architectural documentation is available under
 [`docs/architecture/`](docs/architecture/).
@@ -195,8 +195,9 @@ baymorph --help
 The standard BayMorph installation includes the currently supported production
 inference backends:
 
-- pocoMC;
-- Dynesty.
+- Nautilus, the default production backend;
+- Dynesty;
+- pocoMC.
 
 ### Development installation
 
@@ -253,7 +254,6 @@ baymorph config data/galaxy.fits \
   --target-x 500 \
   --target-y 500 \
   --model single_sersic \
-  --sampler pocomc \
   --output configs/galaxy.yaml
 
 baymorph run configs/galaxy.yaml
@@ -300,9 +300,9 @@ run directory to preserve reproducibility.
 
 ## Inference backends
 
-pocoMC is the default production inference backend.
+Nautilus is the default production inference backend.
 
-A sampler configuration has a deliberately thin BayMorph envelope:
+A sampler configuration has a deliberately thin BayMorph envelope. For example, a non-default pocoMC configuration is:
 
 ~~~yaml
 sampler:
