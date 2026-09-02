@@ -11,7 +11,7 @@ from baymorph.results import (
     PosteriorSamples,
 )
 from baymorph.validation.run import ValidationRun
-from validation import compare_results
+from baymorph.validation.benchmark import compare_results
 
 
 def make_run(

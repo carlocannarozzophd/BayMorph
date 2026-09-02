@@ -9,6 +9,8 @@ from time import perf_counter
 from types import MappingProxyType
 from typing import Any
 
+import numpy as np
+
 from baymorph.fitting.backend import InferenceBackend
 from baymorph.results import InferenceResult
 from baymorph.validation.reference import ReferenceValidationCase
@@ -223,3 +225,91 @@ def execute_validation_case(
             else metadata
         ),
     )
+
+
+def with_validation_seed(
+    backend_name: str,
+    config: Mapping[str, Any],
+    seed: int | None,
+) -> dict[str, Any]:
+    """Return production-backend configuration for one validation seed.
+
+    Random-seed configuration remains backend-native. This helper exists only
+    in the research validation harness and does not alter BayMorph's production
+    inference API.
+    """
+    name = str(
+        backend_name
+    ).strip().lower()
+
+    if not name:
+        raise ValueError(
+            "backend_name must not be empty."
+        )
+
+    resolved = dict(
+        config
+    )
+
+    configured_name = resolved.get(
+        "name"
+    )
+
+    if (
+        configured_name is not None
+        and str(
+            configured_name
+        ).strip().lower()
+        != name
+    ):
+        raise ValueError(
+            "Validation backend name conflicts with sampler configuration."
+        )
+
+    resolved[
+        "name"
+    ] = name
+
+    init = dict(
+        resolved.get(
+            "init",
+            {},
+        )
+    )
+
+    seed_key = {
+        "dynesty": "rstate",
+        "nautilus": "seed",
+        "pocomc": "random_state",
+    }.get(
+        name
+    )
+
+    if seed_key is not None:
+        if seed_key in init:
+            raise ValueError(
+                f"{name} seed configuration is owned by the "
+                "validation campaign."
+            )
+
+        if seed is not None:
+            if name == "dynesty":
+                init[
+                    seed_key
+                ] = np.random.default_rng(
+                    int(
+                        seed
+                    )
+                )
+            else:
+                init[
+                    seed_key
+                ] = int(
+                    seed
+                )
+
+    resolved[
+        "init"
+    ] = init
+
+    return resolved

@@ -14,7 +14,12 @@ from baymorph.validation.calibration import (
     load_calibration_case,
     summarize_calibration,
 )
-from baymorph.validation.benchmark import BenchmarkResult, benchmark_call
+from baymorph.validation.benchmark import (
+    BenchmarkResult,
+    ComparisonReport,
+    benchmark_call,
+    compare_results,
+)
 from baymorph.validation.experiment import (
     RecoveryExperiment,
     RecoveryFit,
@@ -41,14 +46,27 @@ from baymorph.validation.metrics import (
     weighted_posterior_rank,
 )
 from baymorph.validation.recovery import ParameterRecovery, RecoveryResult
+from baymorph.validation.repeatability import (
+    RepeatabilityRecord,
+    RepeatabilitySummary,
+    run_repeatability,
+    summarize_repeatability,
+)
 from baymorph.validation.run import (
     ValidationRun,
     execute_validation_case,
+    with_validation_seed,
 )
 from baymorph.validation.reference import (
     ReferenceValidationCase,
 )
-from baymorph.validation.report import summarize_recovery
+from baymorph.validation.report import (
+    ValidationCheck,
+    ValidationReport,
+    ValidationTolerances,
+    summarize_recovery,
+    validate_result,
+)
 from baymorph.validation.simulation_grid import SimulationCase, SimulationGrid
 from baymorph.validation.truth import GroundTruth
 from baymorph.validation.baymorph_adapter import (
@@ -83,10 +101,16 @@ __all__ = [
     "RecoveryExperiment",
     "RecoveryFit",
     "RecoveryResult",
+    "summarize_repeatability",
+    "run_repeatability",
+    "RepeatabilitySummary",
+    "RepeatabilityRecord",
     "ReferenceValidationCase",
     "SimulationCase",
     "SimulationGrid",
     "benchmark_call",
+    "compare_results",
+    "ComparisonReport",
     "bias",
     "build_preparation_free_multi_observation_case",
     "coverage_fraction",
@@ -100,5 +124,10 @@ __all__ = [
     "build_synthetic_observation",
     "ValidationRun",
     "execute_validation_case",
+    "with_validation_seed",
+    "validate_result",
+    "ValidationTolerances",
+    "ValidationReport",
+    "ValidationCheck",
     "ValidationWorkspace",
 ]
