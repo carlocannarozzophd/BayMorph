@@ -277,3 +277,192 @@ def test_generator_supports_relative_centroid_priors() -> None:
     for case in cases:
         assert 15.0 <= case.parameters["x0"] <= 16.0
         assert 15.0 <= case.parameters["y0"] <= 16.0
+
+
+def controlled_latents() -> dict[str, float]:
+    """Return one valid controlled latent vector."""
+    return {
+        "total_flux": 2000.0,
+        "outer_re_pixels": 6.0,
+        "sersic_n": 2.5,
+        "inner_n": 4.0,
+        "outer_n": 1.7,
+        "outer_q": 0.7,
+        "inner_q": 0.9,
+        "position_angle_radians": 0.2,
+        "component_angle_offset_radians": 0.1,
+        "inner_flux_fraction": 0.35,
+        "inner_re_fraction": 0.4,
+        "point_source_fraction": 0.15,
+        "centroid_x_offset_pixels": 0.25,
+        "centroid_y_offset_pixels": -0.25,
+        "sky": 3.0,
+        "psf_fwhm_pixels": 2.0,
+        "noise_sigma": 1.5,
+    }
+
+
+def controlled_population_priors() -> dict:
+    """Return fixed priors for the controlled latent population."""
+    return {
+        name: fixed_prior(value)
+        for name, value in controlled_latents().items()
+    }
+
+
+def total_model_flux(
+    model_name: str,
+    parameters: dict[str, float],
+) -> float:
+    """Return the total flux represented by a model parameter vector."""
+    if model_name == "single_sersic":
+        return parameters["flux"]
+
+    if model_name == "sersic_point_source":
+        return (
+            parameters["flux_sersic"]
+            + parameters["flux_point_source"]
+        )
+
+    return (
+        parameters["flux_bulge"]
+        + parameters["flux_disk"]
+    )
+
+
+def test_controlled_mapping_conserves_total_flux() -> None:
+    """Every model mapping must preserve the common total flux."""
+    from baymorph.models import registered_models
+    from baymorph.validation.model_screening_dataset import (
+        controlled_parameters_from_latents,
+    )
+
+    latents = controlled_latents()
+
+    for model_name in registered_models():
+        parameters = controlled_parameters_from_latents(
+            model_name=model_name,
+            latents=latents,
+            image_shape=(32, 32),
+        )
+
+        assert total_model_flux(
+            model_name,
+            parameters,
+        ) == pytest.approx(
+            latents["total_flux"]
+        )
+
+
+def test_controlled_mapping_preserves_common_outer_scale() -> None:
+    """The common size latent must map to every outer component."""
+    from baymorph.models import registered_models
+    from baymorph.validation.model_screening_dataset import (
+        controlled_parameters_from_latents,
+    )
+
+    latents = controlled_latents()
+
+    for model_name in registered_models():
+        parameters = controlled_parameters_from_latents(
+            model_name=model_name,
+            latents=latents,
+            image_shape=(32, 32),
+        )
+
+        if model_name in {
+            "single_sersic",
+            "sersic_point_source",
+        }:
+            measured_outer_re = parameters["re"]
+        else:
+            measured_outer_re = parameters["re_disk"]
+
+        assert measured_outer_re == pytest.approx(
+            latents["outer_re_pixels"]
+        )
+
+
+def test_controlled_generator_is_balanced() -> None:
+    """The controlled generator must return equal class counts."""
+    from collections import Counter
+
+    from baymorph.models import registered_models
+    from baymorph.validation.model_screening_dataset import (
+        generate_controlled_model_screening_cases,
+    )
+
+    cases = list(
+        generate_controlled_model_screening_cases(
+            population_priors=controlled_population_priors(),
+            n_per_model=2,
+            image_shape=(32, 32),
+            random_state=12,
+        )
+    )
+
+    counts = Counter(
+        case.model_name
+        for case in cases
+    )
+
+    assert counts == {
+        model_name: 2
+        for model_name in registered_models()
+    }
+    assert len(
+        {
+            case.random_seed
+            for case in cases
+        }
+    ) == len(cases)
+
+    for case in cases:
+        assert total_model_flux(
+            case.model_name,
+            dict(case.parameters),
+        ) == pytest.approx(2000.0)
+        assert case.psf_fwhm == pytest.approx(2.0)
+        assert case.noise_sigma == pytest.approx(1.5)
+
+
+def test_controlled_mapping_rejects_invalid_fraction() -> None:
+    """Invalid component fractions must fail before rendering."""
+    from baymorph.validation.model_screening_dataset import (
+        controlled_parameters_from_latents,
+    )
+
+    latents = controlled_latents()
+    latents["inner_flux_fraction"] = 1.2
+
+    with pytest.raises(
+        ValueError,
+        match="inner_flux_fraction",
+    ):
+        controlled_parameters_from_latents(
+            model_name="bulge_disk",
+            latents=latents,
+            image_shape=(32, 32),
+        )
+
+
+def test_controlled_priors_require_complete_contract() -> None:
+    """Controlled generation must reject missing latent priors."""
+    from baymorph.validation.model_screening_dataset import (
+        generate_controlled_model_screening_cases,
+    )
+
+    priors = controlled_population_priors()
+    del priors["total_flux"]
+
+    with pytest.raises(
+        ValueError,
+        match="complete latent contract",
+    ):
+        list(
+            generate_controlled_model_screening_cases(
+                population_priors=priors,
+                n_per_model=1,
+                image_shape=(32, 32),
+            )
+        )
