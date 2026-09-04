@@ -1,5 +1,9 @@
 """Stable top-level public API for BayMorph."""
 
+from baymorph.analysis.model_screening import (
+    ModelScreeningReport,
+    ModelScreeningScore,
+)
 from baymorph.core import (
     ImageData,
     Observation,
@@ -20,6 +24,10 @@ from baymorph.pipeline.config_maker import (
     make_config_from_fits,
     make_multi_observation_config,
 )
+from baymorph.pipeline.model_screening_advisor import (
+    SingleObservationModelAdvisor,
+    SingleObservationScreeningResult,
+)
 from baymorph.pipeline.multi_parameters import make_multi_parameters
 from baymorph.results import (
     EvidenceEstimate,
@@ -35,6 +43,10 @@ from baymorph.simulation import (
     SyntheticSersic,
     make_observation,
 )
+from baymorph.validation.model_screening_persistence import (
+    ModelScreeningClassifierArtifact,
+    load_model_screening_classifier,
+)
 
 __version__ = "0.3.0"
 
@@ -48,6 +60,9 @@ __all__ = [
     "GaussianPSF",
     "ImageData",
     "InferenceResult",
+    "ModelScreeningClassifierArtifact",
+    "ModelScreeningReport",
+    "ModelScreeningScore",
     "Observation",
     "ObservationAdvisor",
     "ObservationInspection",
@@ -56,10 +71,13 @@ __all__ = [
     "PriorGuidance",
     "RealFitProducts",
     "SersicModel",
+    "SingleObservationModelAdvisor",
+    "SingleObservationScreeningResult",
     "SyntheticObservation",
     "SyntheticSersic",
+    "load_model_screening_classifier",
     "make_config_from_fits",
-    "make_observation",
     "make_multi_observation_config",
     "make_multi_parameters",
+    "make_observation",
 ]
