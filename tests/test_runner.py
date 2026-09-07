@@ -768,6 +768,11 @@ def test_runner_runs_multi_observation_fit(
         verbose=False,
     )
 
+    monkeypatch.setattr(
+        "baymorph.runner.resolve_multi_observation_observation_configs",
+        lambda config, base_dir=None: {},
+    )
+
     def fake_fit(config):
         captured["config"] = config
         return expected
@@ -801,6 +806,11 @@ def test_runner_multi_observation_fit_preserves_config_path(
 
     expected = object()
     captured = {}
+
+    monkeypatch.setattr(
+        "baymorph.runner.resolve_multi_observation_observation_configs",
+        lambda config, base_dir=None: {},
+    )
 
     def fake_fit(config):
         captured["config"] = config
@@ -1461,3 +1471,116 @@ def test_runner_fit_builds_required_correlated_noise_calibration(
     assert calibration_kwargs[
         "spectrum_grid_size"
     ] == 512
+
+
+def test_runner_multi_observation_fit_builds_noise_calibrations(
+    monkeypatch,
+    tmp_path,
+):
+    """Joint fitting must calibrate every correlated observation first."""
+    observation_configs = {
+        "g": {
+            "object": {
+                "name": "galaxy_g",
+            },
+            "outputs": {
+                "root": str(tmp_path),
+                "overwrite": False,
+            },
+            "fit": {
+                "likelihood": {
+                    "type": "correlated_gaussian",
+                    "include_normalization": False,
+                    "calibration": {
+                        "max_lag": 5,
+                    },
+                },
+            },
+        },
+        "r": {
+            "object": {
+                "name": "galaxy_r",
+            },
+            "outputs": {
+                "root": str(tmp_path),
+                "overwrite": False,
+            },
+            "fit": {
+                "likelihood": {
+                    "type": "gaussian",
+                    "include_normalization": True,
+                },
+            },
+        },
+    }
+
+    monkeypatch.setattr(
+        "baymorph.runner.resolve_multi_observation_observation_configs",
+        lambda config, base_dir=None: observation_configs,
+    )
+
+    events = []
+
+    monkeypatch.setattr(
+        "baymorph.runner.correlated_noise_calibration_path",
+        lambda config: (
+            tmp_path
+            / (
+                config["object"]["name"]
+                + "_correlated_noise.npz"
+            )
+        ),
+    )
+
+    def fake_build_calibration(
+        config,
+        **kwargs,
+    ):
+        events.append(
+            (
+                "calibrate",
+                config["object"]["name"],
+                kwargs,
+            )
+        )
+
+    monkeypatch.setattr(
+        "baymorph.runner.build_correlated_noise_calibration",
+        fake_build_calibration,
+    )
+
+    expected_result = object()
+
+    def fake_joint_fit(config):
+        events.append(
+            (
+                "fit",
+                config,
+            )
+        )
+        return expected_result
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_multi_observation_fit_from_config",
+        fake_joint_fit,
+    )
+
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    result = runner.fit()
+
+    assert result is expected_result
+
+    assert [
+        event[0]
+        for event in events
+    ] == [
+        "calibrate",
+        "fit",
+    ]
+
+    assert events[0][1] == "galaxy_g"
+    assert events[0][2]["max_lag"] == 5

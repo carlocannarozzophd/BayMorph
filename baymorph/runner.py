@@ -397,16 +397,19 @@ class BayMorphRunner:
 
         return self.psf_products
 
-    def _ensure_single_observation_noise_calibration(
+    def _ensure_observation_noise_calibration(
         self,
+        config: Mapping[str, Any],
+        *,
+        observation_name: str | None = None,
     ) -> None:
-        """Build required fixed noise calibration before fitting.
+        """Build one required fixed noise calibration before fitting.
 
         The high-level runner owns workflow dependencies. A user selecting
         the correlated Gaussian likelihood must not need to invoke a separate
         calibration workflow manually.
         """
-        likelihood_config = self.config[
+        likelihood_config = config[
             "fit"
         ].get(
             "likelihood",
@@ -456,12 +459,12 @@ class BayMorphRunner:
 
         calibration_path = (
             correlated_noise_calibration_path(
-                self.config
+                config
             )
         )
 
         overwrite = bool(
-            self.config[
+            config[
                 "outputs"
             ].get(
                 "overwrite",
@@ -476,7 +479,7 @@ class BayMorphRunner:
             return
 
         build_correlated_noise_calibration(
-            self.config,
+            config,
             marginal_tile_size=int(
                 calibration_config.get(
                     "marginal_tile_size",
@@ -517,9 +520,36 @@ class BayMorphRunner:
             overwrite=overwrite,
         )
 
+        if observation_name is None:
+            message = "Correlated-noise calibration completed"
+        else:
+            message = (
+                "Correlated-noise calibration completed for "
+                f"observation '{observation_name}'"
+            )
+
         self._status(
-            "Correlated-noise calibration completed"
+            message
         )
+
+    def _ensure_multi_observation_noise_calibrations(
+        self,
+    ) -> None:
+        """Build required noise calibrations for all observations."""
+        observation_configs = (
+            resolve_multi_observation_observation_configs(
+                self.config,
+                base_dir=self.config_base_dir,
+            )
+        )
+
+        for observation_name, observation_config in (
+            observation_configs.items()
+        ):
+            self._ensure_observation_noise_calibration(
+                observation_config,
+                observation_name=observation_name,
+            )
 
     def fit(self) -> Any:
         """Run Bayesian model fitting.
@@ -530,6 +560,8 @@ class BayMorphRunner:
             Fitting products for a single- or multi-observation analysis.
         """
         if self.is_multi_observation:
+            self._ensure_multi_observation_noise_calibrations()
+
             config_source = (
                 self.config_path
                 if self.config_path is not None
@@ -550,7 +582,9 @@ class BayMorphRunner:
 
             return self.fit_result
 
-        self._ensure_single_observation_noise_calibration()
+        self._ensure_observation_noise_calibration(
+            self.config
+        )
 
         self.fit_result = run_real_fit(
             self.config,
