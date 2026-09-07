@@ -23,20 +23,20 @@ def test_object_label_is_human_readable():
     """Object identifiers should become readable diagnostic labels."""
     config = {
         "object": {
-            "name": "TARGET_g",
+            "name": "example_galaxy_g",
         }
     }
 
     assert _object_label(
         config
-    ) == "TARGET g"
+    ) == "example galaxy g"
 
     assert (
         _fit_diagnostic_title(
             config,
             "single_sersic",
         )
-        == "TARGET g | Single Sérsic"
+        == "example galaxy g | Single Sérsic"
     )
 
 
@@ -91,13 +91,13 @@ def test_corner_displays_object_title():
             "y",
             "z",
         ],
-        title="TARGET g",
+        title="example galaxy g",
     )
 
     titles = [
         text
         for text in fig.texts
-        if text.get_text() == "TARGET g"
+        if text.get_text() == "example galaxy g"
     ]
 
     assert len(
@@ -184,7 +184,7 @@ def test_radial_plot_uses_latex_labels_and_object_title():
                 2.1,
             ]
         ),
-        title="TARGET g",
+        title="example galaxy g",
     )
 
     assert (
@@ -211,7 +211,7 @@ def test_radial_plot_uses_latex_labels_and_object_title():
     assert fig._suptitle is not None
     assert (
         fig._suptitle.get_text()
-        == "TARGET g"
+        == "example galaxy g"
     )
 
     plt.close(

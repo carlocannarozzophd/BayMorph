@@ -101,9 +101,11 @@ def test_observed_notebook_uses_config_maker() -> None:
 
     assert "make_config_from_fits" in source
     assert "BayMorphRunner" in source
-    assert "runner.run(diagnostics=True)" in source
+    assert "runner.run(" in source
+    assert "diagnostics=True" in source
     assert "model_priors" in source
-    assert "correlated_gaussian" in source
+    assert '"type": "gaussian"' in source
+    assert "observed_galaxy.fits" in source
     assert "runner.prepare_image()" in source
     assert "runner.build_psf()" in source
     assert "runner.fit()" in source
@@ -128,8 +130,11 @@ def test_multi_observation_notebook_uses_public_joint_workflow() -> None:
 
     assert '"q"' in source
     assert '"position_angle"' in source
-    assert '"ra"' in source
-    assert '"dec"' in source
+    assert "shared_parameters" in source
+    assert "shared=shared_parameters" in source
+    assert "flux_prior_bounds" in source
+    assert "observed_galaxy_g.fits" in source
+    assert "validated astrometric registration" in source
 
     assert '"name": "nautilus"' in source
 

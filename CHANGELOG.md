@@ -31,6 +31,8 @@ and the project follows Semantic Versioning in spirit.
 * Canonical simulated single-observation, observed single-observation, and
   multi-observation public notebooks.
 * Packaging tests for runtime, development, and interactive dependencies.
+* Public-source boundary checks preventing observational data and generated
+  research products from entering release artifacts.
 
 ### Changed
 
@@ -49,6 +51,11 @@ and the project follows Semantic Versioning in spirit.
   documentation around the production contracts.
 * Refocused the roadmap on real multi-observation production fits and paper
   closure.
+* Generalized the observed single- and multi-observation notebooks for
+  user-supplied FITS data, explicit target seeds, and observation-specific
+  flux priors.
+* Adopted normalized Gaussian likelihoods as neutral tutorial defaults while
+  requiring explicit validation for correlated-noise models.
 
 ### Removed
 
@@ -57,6 +64,8 @@ and the project follows Semantic Versioning in spirit.
 * Legacy multiband compatibility modules and obsolete configuration paths.
 * Obsolete validation backends, notebooks, audit artifacts, and broken
   benchmarks.
+* Target-specific public configuration and tracked generated benchmark tables,
+  research summaries, and figures.
 
 ### Fixed
 

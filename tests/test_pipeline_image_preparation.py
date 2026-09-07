@@ -53,7 +53,7 @@ def test_make_target_cutout_shifts_cutout_inside_image():
 
 def test_save_and_load_image_preparation_products_roundtrip(tmp_path):
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": str(tmp_path / "outputs"), "overwrite": True},
     }

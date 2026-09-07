@@ -203,6 +203,18 @@ inference backends:
 - Dynesty;
 - pocoMC.
 
+### Distribution boundary
+
+The public BayMorph distribution contains software, generic examples, tests,
+and documentation. BayMorph does not include observational data and does not
+include generated results such as run directories, fitted posteriors,
+benchmark tables, or research figures.
+
+Users supply their own FITS observations and choose where BayMorph writes
+analysis products. The public single- and multi-observation notebooks are
+generic templates and contain no target-specific coordinates, flux priors, or
+stored execution output.
+
 ### Development installation
 
 ~~~bash

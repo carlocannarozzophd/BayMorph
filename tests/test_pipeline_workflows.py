@@ -16,7 +16,7 @@ from baymorph.pipeline import (
 
 def minimal_config(tmp_path):
     return {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": str(tmp_path / "outputs")},
     }
@@ -101,7 +101,7 @@ def test_run_psf_construction_requires_psf_candidates(tmp_path):
 
 def test_run_psf_construction_requires_candidate_file(tmp_path):
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": str(tmp_path / "outputs")},
     }

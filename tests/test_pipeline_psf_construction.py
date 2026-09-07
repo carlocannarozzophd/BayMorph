@@ -24,7 +24,7 @@ from baymorph.pipeline import (
 
 def test_save_and_load_empirical_psf_roundtrip(tmp_path):
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": str(tmp_path / "outputs"), "overwrite": True},
     }
@@ -129,7 +129,7 @@ def test_recenter_cutout_moves_peak_toward_center():
 
 def test_save_empirical_psf_metadata(tmp_path):
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {
             "root": str(tmp_path / "outputs"),
@@ -250,7 +250,7 @@ def test_equivalent_gaussian_fwhm_rejects_invalid_inputs():
 def test_empirical_psf_peak_snr_default_is_resolved():
     """Empirical PSF construction must use an explicit S/N quality threshold."""
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": "outputs"},
     }

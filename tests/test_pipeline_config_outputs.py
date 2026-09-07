@@ -18,14 +18,14 @@ from baymorph.core.observation import Observation
 
 def test_resolve_minimal_config():
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": "outputs"},
     }
 
     resolved = resolve_config(config)
 
-    assert resolved["object"]["name"] == "NGC1234"
+    assert resolved["object"]["name"] == "example_galaxy"
     assert resolved["data"]["image_path"] == "data/image.fits"
     assert resolved["outputs"]["root"] == "outputs"
     assert "psf" in resolved
@@ -34,7 +34,7 @@ def test_resolve_minimal_config():
 
 def test_missing_required_section_raises():
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "outputs": {"root": "outputs"},
     }
 
@@ -44,7 +44,7 @@ def test_missing_required_section_raises():
 
 def test_output_tree_creation(tmp_path):
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": str(tmp_path / "outputs")},
         "fit": {"models": ["single_sersic", "double_sersic"]},
@@ -53,7 +53,7 @@ def test_output_tree_creation(tmp_path):
     resolved = resolve_config(config)
     base = make_output_tree(resolved)
 
-    assert base == tmp_path / "outputs" / "NGC1234"
+    assert base == tmp_path / "outputs" / "example_galaxy"
     assert (base / "psf").is_dir()
     assert (base / "fits").is_dir()
     assert (base / "model_comparison").is_dir()
@@ -64,7 +64,7 @@ def test_output_tree_creation(tmp_path):
 
 def test_output_tree_creation_uses_only_requested_models(tmp_path):
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": str(tmp_path / "outputs")},
         "fit": {"models": ["single_sersic"]},
@@ -79,7 +79,7 @@ def test_output_tree_creation_uses_only_requested_models(tmp_path):
 
 def test_save_resolved_config(tmp_path):
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": str(tmp_path / "outputs")},
     }
@@ -92,7 +92,7 @@ def test_save_resolved_config(tmp_path):
     with path.open("r") as f:
         loaded = yaml.safe_load(f)
 
-    assert loaded["object"]["name"] == "NGC1234"
+    assert loaded["object"]["name"] == "example_galaxy"
 
 
 def test_load_resolved_config(tmp_path):
@@ -100,7 +100,7 @@ def test_load_resolved_config(tmp_path):
     path.write_text(
         """
 object:
-  name: NGC1234
+  name: example_galaxy
 data:
   image_path: data/image.fits
 outputs:
@@ -110,7 +110,7 @@ outputs:
 
     config = load_resolved_config(path)
 
-    assert config["object"]["name"] == "NGC1234"
+    assert config["object"]["name"] == "example_galaxy"
     assert "diagnostics" in config
 
 
@@ -132,7 +132,7 @@ def test_official_learn_config_loads():
 
 def test_pipeline_paths_are_canonical(tmp_path):
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": str(tmp_path / "outputs")},
         "fit": {"models": ["single_sersic", "double_sersic"]},
@@ -141,7 +141,7 @@ def test_pipeline_paths_are_canonical(tmp_path):
     resolved = resolve_config(config)
     paths = pipeline_paths(resolved)
 
-    base = tmp_path / "outputs" / "NGC1234"
+    base = tmp_path / "outputs" / "example_galaxy"
 
     assert paths["base"] == base
     assert paths["config_resolved"] == base / "config_resolved.yaml"
@@ -164,7 +164,7 @@ def test_pipeline_paths_are_canonical(tmp_path):
 
 def test_pipeline_paths_use_only_requested_models(tmp_path):
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": str(tmp_path / "outputs")},
         "fit": {"models": ["single_sersic"]},
@@ -179,7 +179,7 @@ def test_pipeline_paths_use_only_requested_models(tmp_path):
 
 def test_resolve_config_applies_nested_defaults():
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": "outputs"},
     }
@@ -205,7 +205,7 @@ def test_resolve_config_applies_nested_defaults():
 
 def test_resolve_config_preserves_user_nested_overrides():
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": "outputs"},
         "preparation": {
@@ -232,7 +232,7 @@ def test_resolve_config_preserves_user_nested_overrides():
 
 def test_resolve_config_preserves_psf_candidate_selection_overrides():
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": "outputs"},
         "psf": {
@@ -521,7 +521,7 @@ def test_simulated_galaxy_config_is_mirrored_and_resolves_diagnostics():
 def test_resolve_config_rejects_archived_native_sampler():
     config = {
         "object": {
-            "name": "NGC1234",
+            "name": "example_galaxy",
         },
         "data": {
             "image_path": "data/image.fits",
@@ -547,21 +547,21 @@ def test_runtime_report_path_is_canonical(tmp_path):
     from baymorph.pipeline import pipeline_paths
 
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": str(tmp_path)},
     }
 
     path = pipeline_paths(config)["runtime_report"]
 
-    assert path == tmp_path / "NGC1234" / "runtime_report.yaml"
+    assert path == tmp_path / "example_galaxy" / "runtime_report.yaml"
 
 
 def test_build_runtime_report_returns_independent_data(tmp_path):
     from baymorph.pipeline import build_runtime_report
 
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": str(tmp_path)},
     }
@@ -579,7 +579,7 @@ def test_build_runtime_report_returns_independent_data(tmp_path):
     config["object"]["name"] = "modified"
     runtime["image_preparation"]["background"] = 9.0
 
-    assert report["config"]["object"]["name"] == "NGC1234"
+    assert report["config"]["object"]["name"] == "example_galaxy"
     assert report["runtime"]["image_preparation"]["background"] == 1.5
     assert report["config"]["fit"]["sampler"]["name"] == "nautilus"
 
@@ -592,7 +592,7 @@ def test_runtime_report_roundtrip(tmp_path):
     )
 
     config = {
-        "object": {"name": "NGC1234"},
+        "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": str(tmp_path)},
     }
@@ -613,5 +613,5 @@ def test_runtime_report_roundtrip(tmp_path):
     )
     loaded = load_runtime_report(config)
 
-    assert path == tmp_path / "NGC1234" / "runtime_report.yaml"
+    assert path == tmp_path / "example_galaxy" / "runtime_report.yaml"
     assert loaded == report

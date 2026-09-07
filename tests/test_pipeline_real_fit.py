@@ -177,7 +177,7 @@ def test_real_fit_products_preserve_posterior_round_trip(
     config = resolve_config(
         {
             "object": {
-                "name": "NGC1234",
+                "name": "example_galaxy",
             },
             "data": {
                 "image_path": "data/image.fits",

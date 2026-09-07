@@ -49,6 +49,9 @@ venv/
 /output/
 /outputs/
 
+/benchmarks/results/
+/docs/research/figures/
+
 # ------------------------------------------------------------------
 # Sampler checkpoints
 # ------------------------------------------------------------------
@@ -59,9 +62,8 @@ venv/
 # ------------------------------------------------------------------
 # Generated numerical products
 #
-# These broad rules are retained temporarily. Scientific validation
-# reference products will receive a dedicated version-control policy
-# during the validation-provenance cleanup milestone.
+# Scientific inputs and generated results remain outside the public
+# repository. Reproducible research artifacts are preserved externally.
 # ------------------------------------------------------------------
 
 *.npy
