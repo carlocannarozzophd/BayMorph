@@ -257,8 +257,7 @@ does not infer morphology priors from image intensities.
 ### `make_multi_observation_config`
 
 `make_multi_observation_config` creates one configuration for each observation
-plus the joint configuration required for correlated multi-observation
-inference.
+plus the joint configuration required for multi-observation inference.
 
 Observation identifiers are opaque user-defined labels. BayMorph does not
 infer filters, instruments, epochs, or parameter coupling from their names.
@@ -277,6 +276,29 @@ observation-specific, and fixed parameters remain explicit modelling choices.
 Explicit prior bounds are required where they cannot be defined safely from
 the scientific model and deterministic observation metadata. Data-scaled
 morphology priors are never generated silently.
+
+## Model screening advisor
+
+`SingleObservationModelAdvisor` performs preparation-free screening of one
+FITS observation against the implemented morphology-model classes.
+
+The workflow:
+
+- reads normalized observational metadata;
+- extracts deterministic, interpretable image features;
+- applies a persisted simulation-trained classifier;
+- returns a ranked `ModelScreeningReport`;
+- always leaves production model selection to the user.
+
+`load_model_screening_classifier` loads a validated
+`ModelScreeningClassifierArtifact`. Screening outputs are represented by
+`SingleObservationScreeningResult`, `ModelScreeningReport`, and
+`ModelScreeningScore`.
+
+Screening scores are conditional on the declared simulation and training
+distributions. They are not real-data posterior model probabilities and are
+not Bayesian evidences. Screening does not perform production cleaning,
+masking, background modelling, PSF construction, or inference.
 
 ## Public top-level namespace
 
@@ -305,6 +327,12 @@ The stable top-level public namespace currently contains:
 - `EvidenceEstimate`
 - `InferenceResult`
 - `RealFitProducts`
+- `SingleObservationModelAdvisor`
+- `SingleObservationScreeningResult`
+- `ModelScreeningReport`
+- `ModelScreeningScore`
+- `ModelScreeningClassifierArtifact`
+- `load_model_screening_classifier`
 
 These names are available directly from `baymorph`.
 

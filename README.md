@@ -107,7 +107,8 @@ BayMorph currently focuses on:
 - Bayesian statistical inference;
 - physically motivated forward modelling;
 - single-observation inference;
-- correlated multi-observation inference;
+- multi-observation inference with explicit conditional-independence assumptions;
+- within-observation correlated-noise likelihoods;
 - reproducible scientific workflows;
 - scientific validation.
 
@@ -124,17 +125,18 @@ The current scope intentionally excludes:
 | --- | --- |
 | Observation preparation | FITS ingestion, target identification, automatic and fixed cutouts, background and noise estimation |
 | Detection and masking | Source detection, segmentation, contaminant identification, fitting-mask construction |
-| Morphology models | Single- and double-Sérsic models, composite models, analytic total-flux normalization |
+| Morphology models | Single-Sérsic, double-Sérsic, bulge-disc, and Sérsic plus point-source models |
 | Rendering | Detector-pixel integration, extended-domain rendering, PSF convolution, adaptive integration infrastructure |
 | PSF workflows | Analytic Gaussian PSFs and empirical PSF construction |
-| Likelihoods | Gaussian likelihoods, with additional likelihood infrastructure under development |
+| Likelihoods | Diagonal Gaussian and validated within-observation correlated Gaussian likelihoods |
 | Inference | Backend-neutral inference problems with Nautilus, Dynesty, and pocoMC production backends |
 | Dynesty modes | Static and dynamic nested sampling |
 | Posterior products | Weighted posterior samples, summaries, diagnostics, and canonical backend-neutral inference results |
 | Evidence | Bayesian evidence and evidence-aware model comparison |
 | Diagnostics | Model images, residuals, normalized residuals, radial profiles, posterior diagnostics, and reports |
 | Validation | Mathematical, numerical, statistical, backend, and workflow validation infrastructure |
-| Multi-observation architecture | Observation-centred representations and joint inference abstractions |
+| Multi-observation inference | Canonical joint workflow with explicit parameter coupling and conditionally factorized observation likelihoods |
+| Model screening | Experimental simulation-conditioned ranking with mandatory user model selection |
 
 ## Architecture
 
@@ -384,7 +386,7 @@ provenance and fit summaries.
 
 ## Learn BayMorph
 
-BayMorph provides exactly two canonical public notebooks.
+BayMorph provides three canonical public notebooks.
 
 The recommended starting point is:
 
@@ -397,12 +399,13 @@ The observed single-observation workflow is:
 
     notebooks/02_Observed_SingleBand.ipynb
 
-Both notebooks use the public configuration and runner interfaces. Sampler
-selection remains explicit, while multiprocessing and backend-specific
-execution machinery remain package-owned.
+The joint multi-observation workflow is:
 
-Multi-observation inference remains part of the scientific API and is
-documented separately from the minimal public notebook workflow.
+    notebooks/03_MultiObservation_JointFit.ipynb
+
+All three notebooks use the public configuration and runner interfaces.
+Sampler selection remains explicit, while multiprocessing and
+backend-specific execution machinery remain package-owned.
 
 ## Documentation
 
@@ -424,19 +427,19 @@ package.
 
 Current priorities are:
 
-1. probabilistic formulation;
-2. BayMorph manuscript;
-3. architecture;
-4. implementation;
-5. validation.
+1. complete the first real multi-observation production fit;
+2. validate its posterior, evidence, diagnostics, and persisted products;
+3. freeze and scale the workflow to the remaining galaxy sample;
+4. complete the BayMorph manuscript;
+5. prepare the paper-associated software release.
 
 The native BayMorph nested sampler is archived and is not an active development
-priority.
-
-This archived sampler is distinct from the supported Dynesty backend.
+priority. General cross-observation residual covariance is not a current
+production capability.
 
 The long-term scientific objective is coherent Bayesian inference from
-correlated observations of the same underlying astronomical object.
+multiple observations of the same astronomical object, with all dependence
+assumptions stated explicitly.
 
 ## Contributing
 

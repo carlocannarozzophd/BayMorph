@@ -1,7 +1,7 @@
 site_name: BayMorph Scientific Documentation
 site_description: >-
   Scientific documentation for BayMorph, an open-source Bayesian framework
-  for astronomical morphology and correlated multi-observation inference.
+  for astronomical morphology and multi-observation inference.
 site_author: Carlo Cannarozzo
 site_url: https://carlocannarozzophd.github.io/BayMorph/
 
