@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,11 @@ from baymorph.fitting.observation_covariates import (
 from baymorph.fitting.parameters import Parameter
 from baymorph.models import get_model
 from baymorph.models.geometry import sky_parameter_names
-from baymorph.pipeline.config import load_resolved_config
+from baymorph.pipeline.config import (
+    load_config,
+    load_resolved_config,
+    resolve_config,
+)
 from baymorph.pipeline.prior_config import parse_prior_config
 
 SINGLE_SERSIC_PARAMETER_NAMES = (
@@ -60,6 +65,34 @@ def resolve_multi_observation_observation_configs(
         if base_dir is not None
         else Path.cwd()
     )
+
+    fit_config = config.get(
+        "fit",
+        {},
+    )
+
+    if not isinstance(
+        fit_config,
+        Mapping,
+    ):
+        raise TypeError(
+            "Multi-observation fit configuration must be a mapping."
+        )
+
+    global_likelihood = fit_config.get(
+        "likelihood"
+    )
+
+    if (
+        global_likelihood is not None
+        and not isinstance(
+            global_likelihood,
+            Mapping,
+        )
+    ):
+        raise TypeError(
+            "Multi-observation fit.likelihood must be a mapping."
+        )
 
     resolved: dict[
         str,
@@ -129,10 +162,51 @@ def resolve_multi_observation_observation_configs(
                 / config_path
             )
 
+        if global_likelihood is None:
+            resolved[
+                observation
+            ] = load_resolved_config(
+                config_path
+            )
+            continue
+
+        raw_observation_config = load_config(
+            config_path
+        )
+        observation_fit = raw_observation_config.get(
+            "fit",
+            {},
+        )
+
+        if not isinstance(
+            observation_fit,
+            Mapping,
+        ):
+            raise TypeError(
+                f"Observation '{observation}' fit configuration "
+                "must be a mapping."
+            )
+
+        if "likelihood" not in observation_fit:
+            raw_observation_config = deepcopy(
+                raw_observation_config
+            )
+            observation_fit = dict(
+                observation_fit
+            )
+            observation_fit[
+                "likelihood"
+            ] = deepcopy(
+                global_likelihood
+            )
+            raw_observation_config[
+                "fit"
+            ] = observation_fit
+
         resolved[
             observation
-        ] = load_resolved_config(
-            config_path
+        ] = resolve_config(
+            raw_observation_config
         )
 
     return resolved

@@ -614,3 +614,63 @@ def test_multi_observation_config_accepts_sampler_name(
         assert observation_config["fit"]["sampler"] == {
             "name": "dynesty",
         }
+
+
+def test_multi_observation_config_resolves_likelihood_per_observation(
+    tmp_path: Path,
+) -> None:
+    """Global likelihood applies unless an observation overrides it."""
+    first_fits = tmp_path / "g.fits"
+    second_fits = tmp_path / "r.fits"
+
+    _write_fits(
+        first_fits
+    )
+    _write_fits(
+        second_fits
+    )
+
+    observations = {
+        "g": first_fits,
+        "r": second_fits,
+    }
+
+    global_likelihood = {
+        "type": "correlated_gaussian",
+        "include_normalization": False,
+    }
+    observation_override = {
+        "type": "gaussian",
+        "include_normalization": True,
+    }
+
+    output_dir = tmp_path / "configs"
+
+    joint = make_multi_observation_config(
+        observations,
+        target_positions={
+            "g": "center",
+            "r": "center",
+        },
+        parameters=_sky_parameters(
+            observations
+        ),
+        output_dir=output_dir,
+        likelihood=global_likelihood,
+        outputs_root=tmp_path / "runs",
+        observation_options={
+            "r": {
+                "likelihood": observation_override,
+            },
+        },
+    )
+
+    assert joint["fit"]["likelihood"] == global_likelihood
+
+    resolved = resolve_multi_observation_observation_configs(
+        joint,
+        base_dir=output_dir,
+    )
+
+    assert resolved["g"]["fit"]["likelihood"] == global_likelihood
+    assert resolved["r"]["fit"]["likelihood"] == observation_override

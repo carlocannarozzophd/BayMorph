@@ -34,6 +34,7 @@ _OBSERVATION_OPTION_KEYS = {
     "fixed_size",
     "psf_type",
     "gaussian_fwhm_pixels",
+    "likelihood",
 }
 
 
@@ -946,7 +947,7 @@ def make_multi_observation_config(
     observation_options : mapping, optional
         Per-observation overrides accepted by ``make_config_from_fits``:
         ``object_name``, ``overwrite``, ``cutout_mode``, ``fixed_size``,
-        ``psf_type``, and ``gaussian_fwhm_pixels``.
+        ``psf_type``, ``gaussian_fwhm_pixels``, and ``likelihood``.
 
     Returns
     -------
@@ -1071,9 +1072,12 @@ def make_multi_observation_config(
             object_name=options.get(
                 "object_name"
             ),
-                model_name=model_name,
-                sampler=normalized_sampler,
-                _require_complete_priors=False,
+            model_name=model_name,
+            likelihood=options.get(
+                "likelihood"
+            ),
+            sampler=normalized_sampler,
+            _require_complete_priors=False,
             outputs_root=outputs_root,
             overwrite=bool(
                 options.get(
