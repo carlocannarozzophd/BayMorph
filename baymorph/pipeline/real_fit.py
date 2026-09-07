@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -302,7 +303,60 @@ def save_real_fit_products(
     elif noise_path.exists():
         noise_path.unlink()
 
+    prior_boundary_diagnostics = None
+
     if products.posterior is not None:
+        from baymorph.results.prior_boundaries import (
+            audit_posterior_prior_boundaries,
+        )
+
+        model_priors = (
+            config.get(
+                "fit",
+                {}
+            )
+            .get(
+                "priors",
+                {}
+            )
+            .get(
+                model_name,
+                {}
+            )
+        )
+
+        prior_boundary_diagnostics = (
+            audit_posterior_prior_boundaries(
+                products.posterior.posterior,
+                model_priors,
+            )
+        )
+
+        products.posterior.diagnostics[
+            "prior_boundary_diagnostics"
+        ] = prior_boundary_diagnostics
+
+        if (
+            prior_boundary_diagnostics[
+                "status"
+            ]
+            == "boundary_contact"
+        ):
+            flagged = ", ".join(
+                prior_boundary_diagnostics[
+                    "flagged_parameters"
+                ]
+            )
+
+            warnings.warn(
+                "Posterior contact with a declared prior boundary "
+                f"was detected for: {flagged}. Posterior summaries "
+                "and Bayesian-evidence interpretation may be "
+                "sensitive to the declared prior support.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
         products.posterior.save(
             paths["posterior"]
         )
@@ -362,6 +416,13 @@ def save_real_fit_products(
             if products.likelihood_metadata is None
             else json_compatible_metadata(
                 products.likelihood_metadata
+            )
+        ),
+        "prior_boundary_diagnostics": (
+            None
+            if prior_boundary_diagnostics is None
+            else json_compatible_metadata(
+                prior_boundary_diagnostics
             )
         ),
     }

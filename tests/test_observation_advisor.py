@@ -998,7 +998,7 @@ def test_advisor_configuration_accepts_calibrated_flux_prior(
     answers = iter(
         [
             "y",
-            "",
+            "y",
         ]
     )
 
@@ -1112,7 +1112,7 @@ def test_advisor_calibrated_prior_is_not_labelled_safe(
     answers = iter(
         [
             "y",
-            "",
+            "y",
         ]
     )
 
@@ -1371,3 +1371,59 @@ def test_advisor_creates_internal_flux_calibration_workspace(
     ]
 
     assert "flux" not in calibration_kwargs["priors"]
+
+
+def test_flux_prior_coverage_guard_uses_logarithmic_prior_measure():
+    """Bright diagnostics near a log-prior edge must require review."""
+    from baymorph.pipeline.advisor import (
+        _flux_prior_requires_review,
+        _prior_volume_position,
+    )
+
+    calibrated_prior = {
+        "type": "log_uniform",
+        "lower": 12510.587338311978,
+        "upper": 5830215.232335205,
+    }
+
+    observed_scale = 4.91838e6
+
+    position = _prior_volume_position(
+        calibrated_prior,
+        observed_scale,
+    )
+
+    assert position == pytest.approx(
+        0.9723196232653571,
+    )
+    assert _flux_prior_requires_review(
+        calibrated_prior,
+        observed_scale,
+    )
+
+
+def test_flux_prior_coverage_guard_accepts_interior_logarithmic_scale():
+    """Diagnostics in the interior of a log prior need no edge warning."""
+    from baymorph.pipeline.advisor import (
+        _flux_prior_requires_review,
+        _prior_volume_position,
+    )
+
+    calibrated_prior = {
+        "type": "log_uniform",
+        "lower": 1.0,
+        "upper": 100.0,
+    }
+
+    observed_scale = 10.0
+
+    assert _prior_volume_position(
+        calibrated_prior,
+        observed_scale,
+    ) == pytest.approx(
+        0.5
+    )
+    assert not _flux_prior_requires_review(
+        calibrated_prior,
+        observed_scale,
+    )

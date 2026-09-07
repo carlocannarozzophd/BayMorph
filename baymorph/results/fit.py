@@ -110,6 +110,13 @@ class RealFitProducts:
             "best_parameters": dict(
                 self.best_parameters
             ),
+            "prior_boundary_diagnostics": (
+                None
+                if self.posterior is None
+                else self.posterior.diagnostics.get(
+                    "prior_boundary_diagnostics"
+                )
+            ),
         }
 
     def corner(

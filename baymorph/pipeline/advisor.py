@@ -258,6 +258,103 @@ def _audit_prior(
     )
 
 
+
+def _prior_volume_position(
+    prior: Mapping[str, Any],
+    observed_scale: float | None,
+) -> float | None:
+    """Return an observed scale's position in the declared prior measure."""
+    if observed_scale is None:
+        return None
+
+    value = float(
+        observed_scale
+    )
+
+    lower = _numeric_prior_bound(
+        prior.get(
+            "lower"
+        )
+    )
+    upper = _numeric_prior_bound(
+        prior.get(
+            "upper"
+        )
+    )
+
+    if (
+        lower is None
+        or upper is None
+        or not np.isfinite(
+            value
+        )
+        or not lower < upper
+    ):
+        return None
+
+    prior_type = str(
+        prior.get(
+            "type",
+            "uniform",
+        )
+    ).strip().lower()
+
+    if prior_type == "log_uniform":
+        if (
+            value <= 0.0
+            or lower <= 0.0
+        ):
+            return None
+
+        return float(
+            np.log(
+                value
+                / lower
+            )
+            / np.log(
+                upper
+                / lower
+            )
+        )
+
+    if prior_type == "uniform":
+        return float(
+            (
+                value
+                - lower
+            )
+            / (
+                upper
+                - lower
+            )
+        )
+
+    return None
+
+
+def _flux_prior_requires_review(
+    prior: Mapping[str, Any],
+    observed_scale: float | None,
+    *,
+    edge_fraction: float = 0.05,
+) -> bool:
+    """Return whether a flux diagnostic lies near or outside a prior edge."""
+    position = _prior_volume_position(
+        prior,
+        observed_scale,
+    )
+
+    if position is None:
+        return False
+
+    return bool(
+        position <= edge_fraction
+        or position >= (
+            1.0
+            - edge_fraction
+        )
+    )
+
 def _print_prior_audit(
     prior: Mapping[str, Any],
     *,
@@ -1265,15 +1362,61 @@ class ObservationAdvisor:
                 "  calibration status: CALIBRATED"
             )
 
-            answer = input_fn(
-                "Use calibrated flux prior? [Y/n]: "
-            ).strip().lower()
+            prior_position = _prior_volume_position(
+                calibrated_prior,
+                flux_scale,
+            )
 
-            use_calibrated = answer in {
-                "",
-                "y",
-                "yes",
-            }
+            requires_review = _flux_prior_requires_review(
+                calibrated_prior,
+                flux_scale,
+            )
+
+            if prior_position is not None:
+                print(
+                    "  observed diagnostic prior-volume position: "
+                    f"{prior_position:.3%}"
+                )
+
+            if requires_review:
+                print()
+                print("CALIBRATION COVERAGE WARNING")
+                print(
+                    "The observed target flux diagnostic lies within "
+                    "the outer 5% of the calibrated prior measure or "
+                    "outside its bounds."
+                )
+                print(
+                    "Automatic acceptance is unsafe because the fitted "
+                    "posterior may contact a prior boundary."
+                )
+                print(
+                    "BayMorph will not widen the prior using the target "
+                    "diagnostic. Supply a sample-level scientific prior "
+                    "or explicitly accept this candidate for diagnostic "
+                    "use only."
+                )
+
+                answer = input_fn(
+                    "Use calibrated flux prior for a diagnostic run "
+                    "despite this warning? [y/N]: "
+                ).strip().lower()
+
+                use_calibrated = answer in {
+                    "y",
+                    "yes",
+                }
+
+            else:
+                answer = input_fn(
+                    "Use calibrated flux prior? [Y/n]: "
+                ).strip().lower()
+
+                use_calibrated = answer in {
+                    "",
+                    "y",
+                    "yes",
+                }
 
         if use_calibrated:
             flux_prior = dict(

@@ -11,6 +11,7 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* Added prior-volume coverage review for observationally calibrated flux priors and weighted post-fit diagnostics for posterior contact with declared prior boundaries.
 * Canonical multi-observation configuration, preparation, joint-inference,
   persistence, and diagnostic workflows.
 * Explicit shared, observation-specific, fixed, deterministic, and
