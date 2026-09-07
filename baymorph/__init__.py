@@ -43,7 +43,7 @@ from baymorph.simulation import (
     SyntheticSersic,
     make_observation,
 )
-from baymorph.validation.model_screening_persistence import (
+from baymorph.analysis.model_screening_persistence import (
     ModelScreeningClassifierArtifact,
     load_model_screening_classifier,
 )

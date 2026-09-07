@@ -20,7 +20,7 @@ from baymorph.core.observation import (
     ObservationMetadata,
 )
 from baymorph.pipeline.advisor import ObservationAdvisor
-from baymorph.validation.model_screening_classifier import (
+from baymorph.analysis.model_screening_classifier import (
     LinearDiscriminantScreeningClassifier,
 )
 

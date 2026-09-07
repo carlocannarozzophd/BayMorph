@@ -14,7 +14,7 @@ from baymorph.analysis.model_screening_features import (
 from baymorph.validation.model_screening_classifier import (
     fit_linear_discriminant_screening_classifier,
 )
-from baymorph.validation.model_screening_persistence import (
+from baymorph.analysis.model_screening_persistence import (
     MODEL_SCREENING_ARTIFACT_VERSION,
     MODEL_SCREENING_CLASSIFIER_TYPE,
     load_model_screening_classifier,

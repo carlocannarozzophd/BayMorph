@@ -13,7 +13,7 @@ from scipy.special import logsumexp
 from baymorph.analysis.model_screening_features import (
     ModelScreeningFeatureVector,
 )
-from baymorph.validation.model_screening_classifier import (
+from baymorph.analysis.model_screening_classifier import (
     LinearDiscriminantScreeningClassifier,
 )
 

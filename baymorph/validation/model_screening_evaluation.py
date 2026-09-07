@@ -12,8 +12,10 @@ from numpy.typing import NDArray
 from baymorph.analysis.model_screening_features import (
     ModelScreeningFeatureVector,
 )
-from baymorph.validation.model_screening_classifier import (
+from baymorph.analysis.model_screening_classifier import (
     LinearDiscriminantScreeningClassifier,
+)
+from baymorph.validation.model_screening_classifier import (
     fit_linear_discriminant_screening_classifier,
 )
 

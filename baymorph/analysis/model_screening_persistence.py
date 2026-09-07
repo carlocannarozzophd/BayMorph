@@ -12,7 +12,7 @@ from typing import Any
 
 import numpy as np
 
-from baymorph.validation.model_screening_classifier import (
+from baymorph.analysis.model_screening_classifier import (
     LinearDiscriminantScreeningClassifier,
 )
 
