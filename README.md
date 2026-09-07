@@ -245,12 +245,12 @@ baymorph init my_analysis
 cd my_analysis
 ~~~
 
-The initialized workspace contains the canonical example configuration and
-directories for notebooks, user data, and run products. Public tutorial
-notebooks live only in the BayMorph repository and are not duplicated inside
-the installed package. The workspace is only a convenience: BayMorph does not
-require a special project format and can also be used directly inside an
-existing working directory.
+The initialized workspace contains the canonical example configuration,
+the three generic tutorial notebooks, and empty directories for user data and
+run products. The notebooks are copied from the installed BayMorph package and
+contain no observational data or stored execution output. The workspace is
+only a convenience: BayMorph does not require a special project format and can
+also be used directly inside an existing working directory.
 
 The recommended first workflow is notebook-based:
 

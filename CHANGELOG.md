@@ -30,6 +30,8 @@ and the project follows Semantic Versioning in spirit.
   analyses, and simulation-based calibration infrastructure.
 * Canonical simulated single-observation, observed single-observation, and
   multi-observation public notebooks.
+* Packaged generic tutorial notebooks copied into new user workspaces by
+  `baymorph init`.
 * Packaging tests for runtime, development, and interactive dependencies.
 * Public-source boundary checks preventing observational data and generated
   research products from entering release artifacts.

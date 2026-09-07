@@ -83,6 +83,37 @@ def test_packaged_config_contents_match() -> None:
         )
 
 
-def test_notebooks_are_not_duplicated_inside_package() -> None:
-    """Public notebooks must have one canonical repository location."""
-    assert not PACKAGED_NOTEBOOK_DIRECTORY.exists()
+def test_packaged_notebooks_match_repository_sources() -> None:
+    """Packaged notebooks must exactly match their public sources."""
+    repository_directory = (
+        PROJECT_ROOT
+        / "notebooks"
+    )
+
+    repository_notebooks = {
+        filename.name
+        for filename in repository_directory.glob(
+            "*.ipynb"
+        )
+        if filename.is_file()
+    }
+
+    packaged_notebooks = {
+        filename.name
+        for filename in PACKAGED_NOTEBOOK_DIRECTORY.glob(
+            "*.ipynb"
+        )
+        if filename.is_file()
+    }
+
+    assert packaged_notebooks
+    assert packaged_notebooks == repository_notebooks
+
+    for notebook_name in packaged_notebooks:
+        assert (
+            PACKAGED_NOTEBOOK_DIRECTORY
+            / notebook_name
+        ).read_bytes() == (
+            repository_directory
+            / notebook_name
+        ).read_bytes()

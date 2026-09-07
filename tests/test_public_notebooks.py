@@ -53,8 +53,8 @@ def test_exactly_three_public_notebooks_exist() -> None:
     assert notebooks == EXPECTED_NOTEBOOKS
 
 
-def test_no_other_repository_notebooks_exist() -> None:
-    """Notebook duplication must not reappear elsewhere in the repository."""
+def test_only_public_and_packaged_notebooks_exist() -> None:
+    """Notebook copies must remain limited to public and packaged resources."""
     notebooks = {
         path.relative_to(
             PROJECT_ROOT
@@ -65,11 +65,24 @@ def test_no_other_repository_notebooks_exist() -> None:
         if ".git" not in path.parts
     }
 
-    assert notebooks == {
+    expected_public = {
         Path("notebooks")
         / name
         for name in EXPECTED_NOTEBOOKS
     }
+
+    expected_packaged = {
+        Path(
+            "baymorph/resources/notebooks"
+        )
+        / name
+        for name in EXPECTED_NOTEBOOKS
+    }
+
+    assert notebooks == (
+        expected_public
+        | expected_packaged
+    )
 
 
 def test_simulated_notebook_uses_public_runner_workflow() -> None:

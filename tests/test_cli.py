@@ -102,9 +102,19 @@ def test_init_command_creates_project_tree(
         / "simulated_galaxy.yaml"
     ).is_file()
 
-    assert not any(
-        (project / "notebooks").iterdir()
-    )
+    assert {
+        filename.name
+        for filename in (
+            project
+            / "notebooks"
+        ).glob(
+            "*.ipynb"
+        )
+    } == {
+        "01_Simulated_SingleBand.ipynb",
+        "02_Observed_SingleBand.ipynb",
+        "03_MultiObservation_JointFit.ipynb",
+    }
 
 
 def test_init_rejects_nonempty_directory_without_force(

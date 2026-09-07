@@ -115,6 +115,12 @@ def _command_init(args: argparse.Namespace) -> int:
         force=args.force,
     )
 
+    _copy_resource_tree(
+        "notebooks",
+        project_dir / "notebooks",
+        force=args.force,
+    )
+
     print(f"BayMorph project created at:\n{project_dir}")
     return 0
 
