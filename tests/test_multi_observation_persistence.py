@@ -270,3 +270,63 @@ def test_save_multi_observation_fit_products_persists_statistics(
         "flux": 2.5,
         "x0": 4.0,
     }
+
+
+def test_multi_observation_persistence_preserves_likelihood_metadata(
+    tmp_path,
+):
+    """Persisted summaries must identify each observation likelihood."""
+    config = _config(
+        tmp_path
+    )
+    products = _products()
+
+    likelihood_metadata = {
+        "type": "correlated_gaussian",
+        "normalization_complete": False,
+        "fit_statistic": "mahalanobis_chi2",
+        "residual_diagnostic": "marginal_standardized",
+    }
+
+    products.observations[
+        "observation_a"
+    ].likelihood_metadata = likelihood_metadata
+
+    save_multi_observation_fit_products(
+        config,
+        products,
+    )
+
+    paths = multi_observation_paths(
+        config
+    )["fits"]["single_sersic"]
+
+    with paths[
+        "fit_summary"
+    ].open() as stream:
+        joint_summary = json.load(
+            stream
+        )
+
+    with paths[
+        "observations"
+    ][
+        "observation_a"
+    ][
+        "summary"
+    ].open() as stream:
+        observation_summary = json.load(
+            stream
+        )
+
+    assert observation_summary[
+        "likelihood"
+    ] == likelihood_metadata
+
+    assert joint_summary[
+        "observations"
+    ][
+        "observation_a"
+    ][
+        "likelihood"
+    ] == likelihood_metadata

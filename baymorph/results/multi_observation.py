@@ -24,13 +24,17 @@ class ObservationFitProducts:
     residual : ndarray
         Data-minus-model residual image.
     norm_residual : ndarray
-        Residual image normalized by the noise map.
+        Marginally standardized residual image. For correlated likelihoods,
+        this is not a whitened residual.
     chi2 : float
-        Chi-squared contribution from this observation.
+        Gaussian quadratic statistic. For correlated Gaussian likelihoods,
+        this is the Mahalanobis quantity ``r.T @ C^-1 @ r``.
     n_valid_pixels : int
         Number of pixels contributing to the fit statistic.
     noise : ndarray
         Noise map used for this observation.
+    likelihood_metadata : dict, optional
+        Statistical-model provenance for this observation's likelihood.
     """
 
     parameters: dict[str, float]
@@ -40,6 +44,7 @@ class ObservationFitProducts:
     chi2: float
     n_valid_pixels: int
     noise: np.ndarray
+    likelihood_metadata: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         """Normalize and validate observation-level fit products."""
@@ -96,6 +101,19 @@ class ObservationFitProducts:
         if self.n_valid_pixels <= 0:
             raise ValueError(
                 "Observation fit products require at least one valid pixel."
+            )
+
+        if self.likelihood_metadata is not None:
+            if not isinstance(
+                self.likelihood_metadata,
+                dict,
+            ):
+                raise TypeError(
+                    "Observation likelihood metadata must be a dictionary."
+                )
+
+            self.likelihood_metadata = dict(
+                self.likelihood_metadata
             )
 
     @property
@@ -259,7 +277,16 @@ class MultiObservationFitProducts:
                 self.best_parameters
             ),
             "observations": {
-                name: products.statistics
+                name: {
+                    **products.statistics,
+                    "likelihood": (
+                        None
+                        if products.likelihood_metadata is None
+                        else dict(
+                            products.likelihood_metadata
+                        )
+                    ),
+                }
                 for name, products in self.observations.items()
             },
         }

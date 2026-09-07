@@ -910,3 +910,169 @@ def test_multi_observation_uses_observation_specific_likelihood_state(
         problem.likelihood._likelihoods["r"].__class__.__name__
         == "CorrelatedGaussianImageLikelihood"
     )
+
+
+def test_multi_observation_products_use_likelihood_consistent_statistics():
+    """Joint products must use each observation's actual likelihood state."""
+    from baymorph.likelihood import CorrelatedGaussianImageLikelihood
+    from baymorph.results import (
+        InferenceResult,
+        PosteriorSamples,
+    )
+
+    data = np.asarray(
+        [
+            [1.0, 2.0, 0.5],
+            [0.0, 1.5, 0.0],
+            [0.5, 0.0, 1.0],
+        ],
+        dtype=float,
+    )
+    model_image = np.zeros_like(
+        data
+    )
+    likelihood_noise = np.full_like(
+        data,
+        2.0,
+    )
+    preparation_noise = np.full_like(
+        data,
+        10.0,
+    )
+    mask = np.zeros_like(
+        data,
+        dtype=bool,
+    )
+    correlation_kernel = np.asarray(
+        [
+            [0.0, 0.05, 0.0],
+            [0.05, 1.0, 0.05],
+            [0.0, 0.05, 0.0],
+        ],
+        dtype=float,
+    )
+
+    likelihood = CorrelatedGaussianImageLikelihood(
+        data=data,
+        noise=likelihood_noise,
+        correlation_kernel=correlation_kernel,
+        mask=mask,
+        include_normalization=False,
+        cg_rtol=1.0e-12,
+    )
+
+    likelihood_metadata = {
+        "type": "correlated_gaussian",
+        "normalization_complete": False,
+        "fit_statistic": "mahalanobis_chi2",
+        "residual_diagnostic": "marginal_standardized",
+    }
+
+    problem = SimpleNamespace(
+        parameter_layout=SimpleNamespace(
+            observations=(
+                "g",
+            ),
+        ),
+        ndim=1,
+        representation_factory=SimpleNamespace(
+            parameter_transforms={},
+        ),
+        render_models=lambda sample: {
+            "g": model_image,
+        },
+        routed_parameters=lambda sample: {
+            "g": {
+                "flux": float(
+                    sample[0]
+                ),
+            },
+        },
+    )
+
+    context = SimpleNamespace(
+        problem=problem,
+        image_products={
+            "g": SimpleNamespace(
+                prepared_data=data,
+                noise=preparation_noise,
+                fitting_mask=mask,
+            ),
+        },
+        likelihoods={
+            "g": likelihood,
+        },
+        likelihood_states={
+            "g": SimpleNamespace(
+                noise=likelihood_noise,
+                metadata=likelihood_metadata,
+            ),
+        },
+    )
+
+    inference_result = InferenceResult(
+        posterior=PosteriorSamples(
+            samples=np.asarray(
+                [
+                    [1.0],
+                ],
+                dtype=float,
+            ),
+            weights=np.asarray(
+                [
+                    1.0,
+                ],
+                dtype=float,
+            ),
+            parameter_names=[
+                "flux__g",
+            ],
+            log_likelihood=np.asarray(
+                [
+                    -1.0,
+                ],
+                dtype=float,
+            ),
+        ),
+        diagnostics={},
+        provenance={
+            "backend": "test",
+        },
+    )
+
+    products = (
+        multi_observation_fit
+        ._build_multi_observation_fit_products(
+            context=context,
+            inference_result=inference_result,
+            model_name="single_sersic",
+        )
+    )
+
+    observation = products.observations["g"]
+
+    assert observation.chi2 == pytest.approx(
+        likelihood.quadratic_form(
+            model_image
+        ),
+        rel=1.0e-11,
+        abs=1.0e-11,
+    )
+
+    np.testing.assert_allclose(
+        observation.noise,
+        likelihood_noise,
+    )
+    np.testing.assert_allclose(
+        observation.norm_residual,
+        data / likelihood_noise,
+    )
+
+    assert observation.likelihood_metadata == likelihood_metadata
+    assert products.chi2 == pytest.approx(
+        observation.chi2
+    )
+    assert products.ndof == (
+        likelihood.n_valid_pixels
+        - problem.ndim
+    )

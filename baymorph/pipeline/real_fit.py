@@ -1094,6 +1094,7 @@ def _compute_fit_statistics(
         "residual": residual,
         "norm_residual": norm_residual,
         "chi2": chi2,
+        "n_valid_pixels": n_valid,
         "ndof": ndof,
         "reduced_chi2": reduced_chi2,
     }

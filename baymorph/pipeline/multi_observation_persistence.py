@@ -13,6 +13,7 @@ from baymorph.pipeline.multi_observation_outputs import (
     multi_observation_paths,
 )
 from baymorph.results import MultiObservationFitProducts
+from baymorph.results.inference import json_compatible_metadata
 
 
 def save_multi_observation_fit_products(
@@ -110,6 +111,13 @@ def save_multi_observation_fit_products(
                     "n_valid_pixels": int(
                         observation_products.n_valid_pixels
                     ),
+                    "likelihood": (
+                        None
+                        if observation_products.likelihood_metadata is None
+                        else json_compatible_metadata(
+                            observation_products.likelihood_metadata
+                        )
+                    ),
                 },
                 stream,
                 indent=2,
@@ -144,6 +152,13 @@ def _joint_summary(
                 ),
                 "n_valid_pixels": int(
                     observation_products.n_valid_pixels
+                ),
+                "likelihood": (
+                    None
+                    if observation_products.likelihood_metadata is None
+                    else json_compatible_metadata(
+                        observation_products.likelihood_metadata
+                    )
                 ),
             }
             for name, observation_products

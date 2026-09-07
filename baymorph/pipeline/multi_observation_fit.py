@@ -18,7 +18,10 @@ from baymorph.fitting.multi_observation_problem import (
 from baymorph.fitting.representations import (
     RepresentationFactory,
 )
-from baymorph.likelihood import make_likelihood
+from baymorph.likelihood import (
+    ImageLikelihood,
+    make_likelihood,
+)
 from baymorph.likelihood.multi_observation import (
     MultiObservationLikelihood,
 )
@@ -33,6 +36,7 @@ from baymorph.pipeline.image_preparation import (
     load_image_preparation_products,
 )
 from baymorph.pipeline.likelihood_state import (
+    RealFitLikelihoodState,
     prepare_real_fit_likelihood_state,
 )
 from baymorph.pipeline.multi_observation_noise import (
@@ -47,6 +51,7 @@ from baymorph.pipeline.multi_observation_config import (
     resolve_multi_observation_config,
 )
 from baymorph.pipeline.real_fit import (
+    _compute_fit_statistics,
     _load_psf_from_config,
     _resolve_model_factory,
 )
@@ -65,6 +70,8 @@ class _MultiObservationBuildContext:
     image_products: dict[str, Any]
     observation_configs: dict[str, dict[str, Any]]
     psfs: dict[str, Any]
+    likelihoods: dict[str, ImageLikelihood]
+    likelihood_states: dict[str, RealFitLikelihoodState]
 
 
 def build_multi_observation_problem_from_config(
@@ -304,6 +311,7 @@ def _build_multi_observation_context(
             ) from exc
 
     likelihoods = {}
+    likelihood_states = {}
 
     for observation_name, products in image_products.items():
         observation_config = observation_configs[
@@ -345,6 +353,10 @@ def _build_multi_observation_context(
             effective_observation_config,
             products,
         )
+
+        likelihood_states[
+            observation_name
+        ] = likelihood_state
 
         likelihoods[observation_name] = make_likelihood(
             likelihood_config,
@@ -393,6 +405,8 @@ def _build_multi_observation_context(
         image_products=image_products,
         observation_configs=observation_configs,
         psfs=psfs,
+        likelihoods=likelihoods,
+        likelihood_states=likelihood_states,
     )
 
 
@@ -450,13 +464,21 @@ def _build_multi_observation_fit_products(
                 )
             )
 
-        diagnostics = _observation_fit_diagnostics(
+        likelihood_state = context.likelihood_states[
+            observation_name
+        ]
+
+        diagnostics = _compute_fit_statistics(
             data=products.prepared_data,
             model_image=model_images[
                 observation_name
             ],
-            noise=products.noise,
+            noise=likelihood_state.noise,
             mask=products.fitting_mask,
+            n_parameters=0,
+            likelihood=context.likelihoods[
+                observation_name
+            ],
         )
 
         joint_chi2 += diagnostics[
@@ -485,7 +507,14 @@ def _build_multi_observation_fit_products(
             n_valid_pixels=diagnostics[
                 "n_valid_pixels"
             ],
-            noise=products.noise,
+            noise=likelihood_state.noise,
+            likelihood_metadata=(
+                None
+                if likelihood_state.metadata is None
+                else dict(
+                    likelihood_state.metadata
+                )
+            ),
         )
 
     ndof = (
@@ -513,113 +542,6 @@ def _build_multi_observation_fit_products(
         ndof=ndof,
         reduced_chi2=reduced_chi2,
     )
-
-
-def _observation_fit_diagnostics(
-    *,
-    data: np.ndarray,
-    model_image: np.ndarray,
-    noise: np.ndarray,
-    mask: np.ndarray | None,
-) -> dict[str, Any]:
-    """Compute observation-level residual and chi-squared diagnostics."""
-    data_array = np.asarray(
-        data,
-        dtype=float,
-    )
-    model_array = np.asarray(
-        model_image,
-        dtype=float,
-    )
-    noise_array = np.asarray(
-        noise,
-        dtype=float,
-    )
-
-    if (
-        model_array.shape != data_array.shape
-        or noise_array.shape != data_array.shape
-    ):
-        raise ValueError(
-            "Data, model, and noise arrays must have matching shapes."
-        )
-
-    valid = (
-        np.isfinite(
-            data_array
-        )
-        & np.isfinite(
-            model_array
-        )
-        & np.isfinite(
-            noise_array
-        )
-        & (
-            noise_array > 0.0
-        )
-    )
-
-    if mask is not None:
-        mask_array = np.asarray(
-            mask,
-            dtype=bool,
-        )
-
-        if mask_array.shape != data_array.shape:
-            raise ValueError(
-                "Mask must match the observation image shape."
-            )
-
-        valid &= ~mask_array
-
-    if not np.any(
-        valid
-    ):
-        raise ValueError(
-            "Observation diagnostics require at least one valid pixel."
-        )
-
-    residual = (
-        data_array
-        - model_array
-    )
-
-    norm_residual = np.full_like(
-        residual,
-        np.nan,
-        dtype=float,
-    )
-
-    norm_residual[
-        valid
-    ] = (
-        residual[
-            valid
-        ]
-        / noise_array[
-            valid
-        ]
-    )
-
-    chi2 = float(
-        np.sum(
-            norm_residual[
-                valid
-            ]
-            ** 2
-        )
-    )
-
-    return {
-        "residual": residual,
-        "norm_residual": norm_residual,
-        "chi2": chi2,
-        "n_valid_pixels": int(
-            np.sum(
-                valid
-            )
-        ),
-    }
 
 
 def _build_sky_parameter_transforms(
