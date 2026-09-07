@@ -42,6 +42,7 @@ classifiers = [
 dependencies = [
     "numpy",
     "scipy",
+    "scikit-image",
     "astropy",
     "photutils>=3.0",
     "matplotlib",
@@ -54,12 +55,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+interactive = [
+    "anywidget",
+    "ipython",
+    "ipywidgets",
+    "plotly",
+]
 dev = [
     "pytest",
     "jupyter",
     "ipykernel",
     "black",
     "ruff==0.15.16",
+    "scikit-learn",
     "build",
     "twine",
 ]
