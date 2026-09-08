@@ -172,3 +172,44 @@ def test_background_level_uses_sky_prior_alias() -> None:
 
     assert background["prior_name"] == "sky"
     assert background["boundary_contact"]
+
+
+def test_unresolved_relative_prior_is_not_compared_to_absolute_samples() -> None:
+    """Relative offsets must not be audited as absolute coordinates."""
+    posterior = PosteriorSamples(
+        samples=np.asarray(
+            [
+                [
+                    345.4,
+                ],
+                [
+                    345.5,
+                ],
+            ]
+        ),
+        weights=np.asarray(
+            [
+                0.5,
+                0.5,
+            ]
+        ),
+        parameter_names=[
+            "x0",
+        ],
+    )
+
+    diagnostics = audit_posterior_prior_boundaries(
+        posterior,
+        {
+            "x0": {
+                "type": "uniform",
+                "lower": -8.0,
+                "upper": 8.0,
+                "relative_to": "target_x",
+            },
+        },
+    )
+
+    assert diagnostics["status"] == "not_evaluated"
+    assert diagnostics["flagged_parameters"] == []
+    assert diagnostics["parameters"] == {}

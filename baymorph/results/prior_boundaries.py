@@ -70,6 +70,11 @@ def _prior_measure_positions(
     prior: Mapping[str, Any],
 ) -> np.ndarray | None:
     """Map samples to their position in a supported prior measure."""
+    if prior.get(
+        "relative_to"
+    ) is not None:
+        return None
+
     lower = _numeric_bound(
         prior.get(
             "lower"
