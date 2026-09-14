@@ -30,7 +30,13 @@ def observation_metadata_dict(
         "instrument": metadata.instrument,
         "filter": metadata.filter_name,
         "pixel_scale_arcsec": metadata.pixel_scale,
-        "seeing_fwhm_arcsec": metadata.seeing_fwhm,
+        "seeing_fwhm": metadata.seeing_fwhm,
+        "seeing_fwhm_unit": metadata.seeing_fwhm_unit,
+        "seeing_fwhm_arcsec": (
+            metadata.seeing_fwhm
+            if metadata.seeing_fwhm_unit == "arcsec"
+            else None
+        ),
         "zeropoint": metadata.zeropoint,
         "gain": metadata.gain,
         "saturation": metadata.saturation,

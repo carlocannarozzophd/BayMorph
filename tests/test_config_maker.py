@@ -114,6 +114,9 @@ def _write_test_fits(
             "FWHM"
         ] = 0.8
         header[
+            "FWHMUNIT"
+        ] = "arcsec"
+        header[
             "SATLEVEL"
         ] = 50000.0
 
@@ -633,3 +636,55 @@ def test_config_maker_accepts_explicit_likelihood(
     )
 
     assert "region" not in resolved["fit"]
+
+
+def test_config_maker_uses_pixel_header_fwhm_directly(tmp_path):
+    """A pixel-valued FITS FWHM must not be divided by pixel scale."""
+    fits_path = tmp_path / "gaussian_pixels.fits"
+    _write_test_fits(fits_path)
+
+    with fits.open(fits_path, mode="update") as hdul:
+        hdul[0].header["FWHM"] = 4.0
+        hdul[0].header["FWHMUNIT"] = "pixels"
+
+    config = make_config_from_fits(
+        fits_path,
+        target_position="center",
+        psf_type="gaussian",
+    )
+
+    assert config["psf"]["gaussian"]["fwhm"] == pytest.approx(4.0)
+
+
+def test_config_maker_rejects_ambiguous_header_fwhm(tmp_path):
+    """A unitless FITS FWHM must require an explicit pixel override."""
+    fits_path = tmp_path / "gaussian_ambiguous.fits"
+    _write_test_fits(fits_path)
+
+    with fits.open(fits_path, mode="update") as hdul:
+        del hdul[0].header["FWHMUNIT"]
+
+    with pytest.raises(
+        ValueError,
+        match="FITS FWHM unit is unresolved",
+    ):
+        make_config_from_fits(
+            fits_path,
+            target_position="center",
+            psf_type="gaussian",
+        )
+
+
+def test_config_maker_gaussian_override_has_priority(tmp_path):
+    """An explicit Gaussian FWHM must override FITS metadata."""
+    fits_path = tmp_path / "gaussian_override.fits"
+    _write_test_fits(fits_path)
+
+    config = make_config_from_fits(
+        fits_path,
+        target_position="center",
+        psf_type="gaussian",
+        gaussian_fwhm_pixels=2.75,
+    )
+
+    assert config["psf"]["gaussian"]["fwhm"] == pytest.approx(2.75)

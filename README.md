@@ -15,7 +15,8 @@
   <a href="#installation">Installation</a> ·
   <a href="#quick-start">Quick Start</a> ·
   <a href="notebooks/01_Simulated_SingleBand.ipynb">Simulated Tutorial</a> ·
-  <a href="notebooks/02_Observed_SingleBand.ipynb">Observed Tutorial</a> ·
+  <a href="notebooks/02A_Observed_Assessment_and_Config.ipynb">Observed Assessment</a> ·
+  <a href="notebooks/02B_Observed_Fit.ipynb">Observed Fit</a> ·
   <a href="notebooks/03_MultiObservation_JointFit.ipynb">Multi-Observation Tutorial</a> ·
   <a href="docs/API.md">API</a> ·
   <a href="docs/architecture/ARCHITECTURE.md">Architecture</a> ·
@@ -409,7 +410,8 @@ configuration through posterior inference and diagnostics.
 
 The observed single-observation workflow is:
 
-    notebooks/02_Observed_SingleBand.ipynb
+    notebooks/02A_Observed_Assessment_and_Config.ipynb
+    notebooks/02B_Observed_Fit.ipynb
 
 The joint multi-observation workflow is:
 

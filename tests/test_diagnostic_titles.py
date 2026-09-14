@@ -285,3 +285,28 @@ def test_corner_coordinate_axes_disable_additive_offsets():
     plt.close(
         fig
     )
+
+
+
+def test_configured_diagnostic_title_is_complete_override():
+    """An explicit diagnostic title must not receive an object prefix."""
+    config = {
+        "object": {
+            "name": "simulated_galaxy",
+        },
+        "diagnostics": {
+            "titles": {
+                "single_sersic": (
+                    "Simulated single-Sérsic observation"
+                ),
+            },
+        },
+    }
+
+    assert (
+        _fit_diagnostic_title(
+            config,
+            "single_sersic",
+        )
+        == "Simulated single-Sérsic observation"
+    )

@@ -17,6 +17,7 @@ from baymorph.models import (
 )
 from baymorph.pipeline.advisor import (
     ObservationAdvisor,
+    ObservationConfigProposal,
     ObservationInspection,
     PriorGuidance,
 )
@@ -65,6 +66,7 @@ __all__ = [
     "ModelScreeningScore",
     "Observation",
     "ObservationAdvisor",
+    "ObservationConfigProposal",
     "ObservationInspection",
     "ObservationMetadata",
     "PosteriorSamples",

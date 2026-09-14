@@ -11,6 +11,8 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* Discovered project-root-relative configurations from nested working directories and resolved their paths against the project root.
+* Runner-driven all-in-one simulated-galaxy workflow and streamlined parameter-recovery tutorial.
 * Added prior-volume coverage review for observationally calibrated flux priors and weighted post-fit diagnostics for posterior contact with declared prior boundaries.
 * Canonical multi-observation configuration, preparation, joint-inference,
   persistence, and diagnostic workflows.
@@ -39,6 +41,7 @@ and the project follows Semantic Versioning in spirit.
 
 ### Changed
 
+* Aligned single-image colorbars with their image panels and standardized pixel-axis and colorbar styling.
 * Replaced legacy multiband terminology and runtime objects with the general
   multi-observation architecture.
 * Made inference backends consume only backend-neutral `InferenceProblem`

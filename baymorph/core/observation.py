@@ -46,7 +46,10 @@ class ObservationMetadata:
     saturation : float, optional
         Saturation level in the image pixel-value units.
     seeing_fwhm : float, optional
-        Seeing or PSF FWHM reported in the header, normally in arcseconds.
+        Raw seeing or PSF FWHM value reported in the FITS header.
+    seeing_fwhm_unit : {"arcsec", "pixels"}, optional
+        Explicitly declared unit of ``seeing_fwhm``. No unit is inferred
+        from the numerical value alone.
     zeropoint : float, optional
         Photometric zeropoint.
     filter_name : str, optional
@@ -80,6 +83,7 @@ class ObservationMetadata:
     gain: float | None = None
     saturation: float | None = None
     seeing_fwhm: float | None = None
+    seeing_fwhm_unit: str | None = None
     zeropoint: float | None = None
 
     filter_name: str | None = None
@@ -140,6 +144,18 @@ class ObservationMetadata:
         celestial_wcs = _read_celestial_wcs(header)
         scale_x, scale_y, scale_mean = _read_pixel_scales(celestial_wcs)
 
+        seeing_fwhm = _optional_finite_float(
+            header,
+            "FWHM",
+        )
+        seeing_fwhm_unit = (
+            _read_seeing_fwhm_unit(
+                header
+            )
+            if seeing_fwhm is not None
+            else None
+        )
+
         return cls(
             width=width,
             height=height,
@@ -153,7 +169,8 @@ class ObservationMetadata:
                 header,
                 ("SATLEVEL", "SATURATE"),
             ),
-            seeing_fwhm=_optional_finite_float(header, "FWHM"),
+            seeing_fwhm=seeing_fwhm,
+            seeing_fwhm_unit=seeing_fwhm_unit,
             zeropoint=_optional_finite_float(header, "PHOTZP"),
             filter_name=_optional_clean_string(header, "FILTER"),
             telescope=_optional_clean_string(header, "TELESCOP"),
@@ -192,6 +209,65 @@ class ObservationMetadata:
             image.header,
             image_shape=image.shape,
         )
+
+
+def resolve_seeing_fwhm_pixels(
+    metadata: ObservationMetadata,
+    *,
+    pixel_scale_arcsec: float | None,
+) -> float | None:
+    """Resolve an explicitly unit-tagged seeing FWHM in pixels.
+
+    Parameters
+    ----------
+    metadata : ObservationMetadata
+        Metadata containing the raw FWHM value and its explicit unit.
+    pixel_scale_arcsec : float, optional
+        Pixel scale in arcseconds per pixel. This is required only when the
+        FWHM unit is ``"arcsec"``.
+
+    Returns
+    -------
+    float or None
+        FWHM in pixels, or ``None`` when the FWHM unit is unresolved or an
+        arcsecond value cannot be converted with a valid pixel scale.
+
+    Raises
+    ------
+    ValueError
+        If the FWHM unit is unsupported or an explicitly unit-tagged FWHM is
+        not finite and positive.
+    """
+    unit = metadata.seeing_fwhm_unit
+
+    if unit not in {
+        None,
+        "arcsec",
+        "pixels",
+    }:
+        raise ValueError(
+            "seeing_fwhm_unit must be 'arcsec', 'pixels', or None."
+        )
+
+    if metadata.seeing_fwhm is None or unit is None:
+        return None
+
+    value = float(metadata.seeing_fwhm)
+
+    if not np.isfinite(value) or value <= 0.0:
+        raise ValueError("seeing_fwhm must be finite and positive.")
+
+    if unit == "pixels":
+        return value
+
+    if (
+        pixel_scale_arcsec is None
+        or not np.isfinite(pixel_scale_arcsec)
+        or pixel_scale_arcsec <= 0.0
+    ):
+        return None
+
+    return value / float(pixel_scale_arcsec)
 
 
 @dataclass(frozen=True)
@@ -361,6 +437,106 @@ def _optional_positive_int(
         return None
 
     return value
+
+
+def _normalize_seeing_fwhm_unit(
+    value: Any,
+) -> str | None:
+    """Normalize one explicit FITS FWHM-unit declaration."""
+    if value is None:
+        return None
+
+    normalized = "".join(
+        character.lower()
+        if character.isalpha()
+        else " "
+        for character in str(
+            value
+        )
+    )
+
+    tokens = set(
+        normalized.split()
+    )
+    recognized = set()
+
+    if tokens & {
+        "arcsec",
+        "arcsecond",
+        "arcseconds",
+        "asec",
+    }:
+        recognized.add(
+            "arcsec"
+        )
+
+    if tokens & {
+        "pix",
+        "pixel",
+        "pixels",
+    }:
+        recognized.add(
+            "pixels"
+        )
+
+    if len(
+        recognized
+    ) != 1:
+        return None
+
+    return recognized.pop()
+
+
+def _read_seeing_fwhm_unit(
+    header: fits.Header | None,
+) -> str | None:
+    """Read an explicit FWHM unit without numerical inference."""
+    if header is None:
+        return None
+
+    declarations = set()
+
+    for keyword in (
+        "FWHMUNIT",
+        "SEEUNIT",
+    ):
+        unit = _normalize_seeing_fwhm_unit(
+            header.get(
+                keyword
+            )
+        )
+
+        if unit is not None:
+            declarations.add(
+                unit
+            )
+
+    if "FWHM" in header:
+        try:
+            comment = header.comments[
+                "FWHM"
+            ]
+        except (
+            KeyError,
+            TypeError,
+        ):
+            comment = None
+
+        comment_unit = _normalize_seeing_fwhm_unit(
+            comment
+        )
+
+        if comment_unit is not None:
+            declarations.add(
+                comment_unit
+            )
+
+    if len(
+        declarations
+    ) != 1:
+        return None
+
+    return declarations.pop()
 
 
 def _optional_finite_float(

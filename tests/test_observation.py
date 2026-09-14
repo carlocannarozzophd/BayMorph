@@ -7,7 +7,11 @@ import pytest
 from astropy.io import fits
 
 from baymorph.core.image import ImageData
-from baymorph.core.observation import Observation, ObservationMetadata
+from baymorph.core.observation import (
+    Observation,
+    ObservationMetadata,
+    resolve_seeing_fwhm_pixels,
+)
 
 
 def make_complete_header() -> fits.Header:
@@ -375,3 +379,186 @@ def test_observation_from_fits_missing_file_raises(
         FileNotFoundError,
     ):
         Observation.from_fits(filename)
+
+
+def test_fwhm_unit_requires_explicit_metadata() -> None:
+    """A bare numerical FWHM must not acquire an inferred unit."""
+    header = make_complete_header()
+    header[
+        "FWHM"
+    ] = (
+        0.78812181,
+        "FWHM median",
+    )
+
+    metadata = ObservationMetadata.from_header(
+        header
+    )
+
+    assert metadata.seeing_fwhm == pytest.approx(
+        0.78812181
+    )
+    assert metadata.seeing_fwhm_unit is None
+
+
+def test_fwhm_unit_reads_explicit_header_keyword() -> None:
+    """Recognized explicit FITS unit keywords should be normalized."""
+    for declared, expected in (
+        (
+            "arcseconds",
+            "arcsec",
+        ),
+        (
+            "pix",
+            "pixels",
+        ),
+    ):
+        header = make_complete_header()
+        header[
+            "FWHMUNIT"
+        ] = declared
+
+        metadata = ObservationMetadata.from_header(
+            header
+        )
+
+        assert metadata.seeing_fwhm_unit == expected
+
+
+def test_fwhm_unit_reads_explicit_card_comment() -> None:
+    """An explicit unit in the FWHM card comment should be retained."""
+    header = make_complete_header()
+    header[
+        "FWHM"
+    ] = (
+        3.75,
+        "Median FWHM [pixels]",
+    )
+
+    metadata = ObservationMetadata.from_header(
+        header
+    )
+
+    assert metadata.seeing_fwhm == pytest.approx(
+        3.75
+    )
+    assert metadata.seeing_fwhm_unit == "pixels"
+
+
+def test_conflicting_fwhm_unit_declarations_are_unresolved() -> None:
+    """Conflicting FITS declarations must never trigger conversion."""
+    header = make_complete_header()
+    header[
+        "FWHM"
+    ] = (
+        0.8,
+        "Median FWHM [pixels]",
+    )
+    header[
+        "FWHMUNIT"
+    ] = "arcsec"
+
+    metadata = ObservationMetadata.from_header(
+        header
+    )
+
+    assert metadata.seeing_fwhm == pytest.approx(
+        0.8
+    )
+    assert metadata.seeing_fwhm_unit is None
+
+@pytest.mark.parametrize(
+    (
+        "seeing_fwhm",
+        "unit",
+        "pixel_scale_arcsec",
+        "expected",
+    ),
+    [
+        (0.8, "arcsec", 0.2, 4.0),
+        (4.0, "pixels", None, 4.0),
+    ],
+)
+def test_resolve_seeing_fwhm_pixels_uses_explicit_units(
+    seeing_fwhm: float,
+    unit: str,
+    pixel_scale_arcsec: float | None,
+    expected: float,
+) -> None:
+    """Explicit FWHM units should determine the pixel conversion."""
+    metadata = ObservationMetadata(
+        width=1,
+        height=1,
+        center_x=0.0,
+        center_y=0.0,
+        seeing_fwhm=seeing_fwhm,
+        seeing_fwhm_unit=unit,
+    )
+
+    resolved = resolve_seeing_fwhm_pixels(
+        metadata,
+        pixel_scale_arcsec=pixel_scale_arcsec,
+    )
+
+    assert resolved == pytest.approx(expected)
+
+
+def test_resolve_seeing_fwhm_pixels_rejects_implicit_conversion() -> None:
+    """An unresolved FWHM unit must not trigger numerical conversion."""
+    metadata = ObservationMetadata(
+        width=1,
+        height=1,
+        center_x=0.0,
+        center_y=0.0,
+        seeing_fwhm=0.8,
+        seeing_fwhm_unit=None,
+    )
+
+    assert resolve_seeing_fwhm_pixels(
+        metadata,
+        pixel_scale_arcsec=0.2,
+    ) is None
+
+
+@pytest.mark.parametrize(
+    "pixel_scale_arcsec",
+    [None, 0.0, -0.2, np.nan],
+)
+def test_resolve_arcsec_fwhm_requires_valid_pixel_scale(
+    pixel_scale_arcsec: float | None,
+) -> None:
+    """Arcsecond FWHM requires a finite positive pixel scale."""
+    metadata = ObservationMetadata(
+        width=1,
+        height=1,
+        center_x=0.0,
+        center_y=0.0,
+        seeing_fwhm=0.8,
+        seeing_fwhm_unit="arcsec",
+    )
+
+    assert resolve_seeing_fwhm_pixels(
+        metadata,
+        pixel_scale_arcsec=pixel_scale_arcsec,
+    ) is None
+
+
+def test_resolve_seeing_fwhm_pixels_rejects_unknown_unit() -> None:
+    """Unsupported explicit FWHM units must fail clearly."""
+    metadata = ObservationMetadata(
+        width=1,
+        height=1,
+        center_x=0.0,
+        center_y=0.0,
+        seeing_fwhm=800.0,
+        seeing_fwhm_unit="mas",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="seeing_fwhm_unit",
+    ):
+        resolve_seeing_fwhm_pixels(
+            metadata,
+            pixel_scale_arcsec=0.2,
+        )

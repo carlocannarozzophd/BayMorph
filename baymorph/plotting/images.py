@@ -4,8 +4,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LogNorm
 from matplotlib.patches import Rectangle
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from baymorph.plotting.style import make_plot, set_plot_style, style_axes
+from baymorph.plotting.style import (
+    computer_modern_text,
+    make_plot,
+    set_plot_style,
+    style_axes,
+    style_colorbar,
+)
 
 BAYMORPH_IMAGE_CMAP = "gist_stern"
 
@@ -87,6 +94,10 @@ def show_log_image(
     None
         The figure is created using the active Matplotlib state.
     """
+    title = computer_modern_text(
+        title
+    )
+
     vmin, vmax = _log_limits(
         image,
     )
@@ -193,25 +204,41 @@ def plot_log_image(
         ),
     )
 
+    title = computer_modern_text(title)
+
     if title:
         ax.set_title(
             title,
+            pad=20.0,
         )
 
     ax.set_xlabel(
-        "x [pix]",
+        r"$X$ [pix]",
     )
     ax.set_ylabel(
-        "y [pix]",
+        r"$Y$ [pix]",
     )
 
-    fig.colorbar(
+    divider = make_axes_locatable(
+        ax
+    )
+    colorbar_ax = divider.append_axes(
+        "right",
+        size="5%",
+        pad=0.4,
+    )
+    colorbar = fig.colorbar(
         im,
-        ax=ax,
-        label=colorbar_label,
+        cax=colorbar_ax,
+    )
+    colorbar.set_label(
+        colorbar_label
+    )
+    style_colorbar(
+        colorbar
     )
 
-    plt.tight_layout()
+    fig.tight_layout()
 
     if show:
         plt.show()
@@ -403,6 +430,8 @@ def plot_log_data_model_residual(
             ax=axes[3],
             label=r"$\sigma$",
         )
+
+    title = computer_modern_text(title)
 
     if title:
         fig.suptitle(
@@ -728,6 +757,8 @@ def plot_pipeline_fit_maps(
         wspace=0.10,
         hspace=0.18,
     )
+
+    title = computer_modern_text(title)
 
     if title:
         fig.suptitle(

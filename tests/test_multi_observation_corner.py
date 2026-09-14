@@ -99,6 +99,7 @@ def test_multi_observation_corner_uses_joint_posterior_and_joint_path(
         parameters,
         parameter_labels,
         sigma,
+        title,
     ):
         captured[
             "parameters"
@@ -109,6 +110,9 @@ def test_multi_observation_corner_uses_joint_posterior_and_joint_path(
         captured[
             "sigma"
         ] = sigma
+        captured[
+            "title"
+        ] = title
 
         return (
             figure,
@@ -156,6 +160,10 @@ def test_multi_observation_corner_uses_joint_posterior_and_joint_path(
         2,
         3,
     ]
+
+    assert captured[
+        "title"
+    ] == "Single Sérsic"
 
     assert figure.saved_path == (
         tmp_path

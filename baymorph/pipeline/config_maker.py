@@ -12,7 +12,10 @@ from typing import Any
 
 import yaml
 
-from baymorph.core.observation import Observation
+from baymorph.core.observation import (
+    Observation,
+    resolve_seeing_fwhm_pixels,
+)
 from baymorph.pipeline.prior_config import parse_prior_config
 from baymorph.pipeline.config import (
     resolve_config,
@@ -249,28 +252,34 @@ def _gaussian_psf_config(
     gaussian_fwhm_pixels: float | None,
 ) -> dict[str, Any]:
     """Build an explicitly requested Gaussian-PSF configuration."""
-    fwhm_pixels = _finite_positive(
-        gaussian_fwhm_pixels
-    )
-
-    if fwhm_pixels is None:
-        seeing = _finite_positive(
-            observation.metadata.seeing_fwhm
+    if gaussian_fwhm_pixels is not None:
+        fwhm_pixels = _finite_positive(
+            gaussian_fwhm_pixels
         )
 
-        if (
-            seeing is None
-            or pixel_scale is None
-        ):
+        if fwhm_pixels is None:
             raise ValueError(
-                "Gaussian PSF generation requires gaussian_fwhm_pixels or "
-                "both seeing and pixel-scale metadata in the FITS file."
+                "gaussian_fwhm_pixels must be finite and positive."
             )
-
-        fwhm_pixels = (
-            seeing
-            / pixel_scale
+    else:
+        fwhm_pixels = resolve_seeing_fwhm_pixels(
+            observation.metadata,
+            pixel_scale_arcsec=pixel_scale,
         )
+
+        if fwhm_pixels is None:
+            if (
+                observation.metadata.seeing_fwhm is not None
+                and observation.metadata.seeing_fwhm_unit is None
+            ):
+                reason = "the FITS FWHM unit is unresolved"
+            else:
+                reason = "no explicitly convertible FITS FWHM is available"
+
+            raise ValueError(
+                "Gaussian PSF generation requires gaussian_fwhm_pixels "
+                f"because {reason}."
+            )
 
     return {
         "type": "gaussian",
@@ -450,8 +459,9 @@ def make_config_from_fits(
         PSF strategy.
     gaussian_fwhm_pixels : float, optional
         Gaussian PSF FWHM in detector pixels. When Gaussian mode is requested
-        and this value is omitted, BayMorph converts FITS seeing metadata to
-        pixels when both seeing and pixel scale are available.
+        and this value is omitted, BayMorph uses FITS FWHM metadata only when
+        its unit is explicitly declared as pixels, or as arcseconds with a
+        valid celestial pixel scale.
 
     Returns
     -------

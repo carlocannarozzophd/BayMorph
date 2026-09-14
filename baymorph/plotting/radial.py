@@ -5,7 +5,10 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 
-from baymorph.plotting.style import style_axes
+from baymorph.plotting.style import (
+    computer_modern_text,
+    style_axes,
+)
 
 
 def _safe_log10(values):
@@ -412,6 +415,11 @@ def plot_radial_profile_diagnostics(
                 1
             ],
             sharex=ax1,
+        )
+
+    if title is not None:
+        title = computer_modern_text(
+            title
         )
 
     if title and ax is None:

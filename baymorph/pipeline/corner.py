@@ -17,7 +17,9 @@ from baymorph.pipeline.multi_observation_outputs import (
     multi_observation_paths,
 )
 from baymorph.pipeline.outputs import pipeline_paths
-from baymorph.pipeline.real_fit import _object_label
+from baymorph.pipeline.real_fit import (
+    _fit_diagnostic_title,
+)
 from baymorph.plotting import corner_plot
 
 
@@ -163,14 +165,12 @@ def run_corner_diagnostics(
             ],
         }
 
-        object_title = _object_label(
-            resolved_config
+        corner_kwargs[
+            "title"
+        ] = _fit_diagnostic_title(
+            resolved_config,
+            model_name,
         )
-
-        if object_title is not None:
-            corner_kwargs[
-                "title"
-            ] = object_title
 
         fig, _, _ = corner_plot(
             **corner_kwargs

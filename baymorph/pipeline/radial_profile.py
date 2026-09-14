@@ -631,10 +631,6 @@ def _run_single_observation_radial_profiles(
         {},
     )
 
-    object_title = _object_label(
-        config
-    )
-
     psf = _load_psf_from_config(
         config,
     )
@@ -778,11 +774,11 @@ def _run_single_observation_radial_profiles(
             profile_data_mean=data_statistics.mean,
             posterior_profiles=profile_bands,
             component_profiles=component_profiles,
-            title=object_title,
-            legend_title=_diagnostic_title(
+            title=_diagnostic_title(
                 config,
                 model_name,
             ),
+            legend_title=None,
         )
 
         output_path = paths[

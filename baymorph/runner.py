@@ -11,6 +11,7 @@ from baymorph.pipeline import (
     run_psf_candidate_selection,
     run_psf_construction,
     run_real_fit,
+    run_simulation_from_config,
 )
 from baymorph.pipeline.config import (
     load_config,
@@ -75,6 +76,43 @@ def _workflow_mode_from_config(
     return "single"
 
 
+def _locate_config_path(
+    config: str | Path,
+) -> Path:
+    """Locate a project-root-relative configuration path.
+
+    Relative paths are checked from the current directory upward through its
+    parents. Absolute paths are preserved. If no file is found, the path
+    relative to the current directory is returned so the normal configuration
+    loader can report the missing file.
+    """
+    requested = Path(
+        config
+    ).expanduser()
+
+    if requested.is_absolute():
+        return requested.resolve()
+
+    search_start = Path.cwd().resolve()
+
+    for directory in (
+        search_start,
+        *search_start.parents,
+    ):
+        candidate = (
+            directory
+            / requested
+        ).resolve()
+
+        if candidate.is_file():
+            return candidate
+
+    return (
+        search_start
+        / requested
+    ).resolve()
+
+
 class BayMorphRunner:
     """Coordinate the high-level BayMorph analysis workflows.
 
@@ -103,12 +141,15 @@ class BayMorphRunner:
     ) -> None:
         self.config_path: Path | None = None
         self.config_base_dir: Path | None = None
+        self.project_root: Path | None = None
 
         if isinstance(
             config,
             (str, Path),
         ):
-            self.config_path = Path(config)
+            self.config_path = _locate_config_path(
+                config
+            )
             self.config_base_dir = (
                 self.config_path.parent
             )
@@ -145,8 +186,19 @@ class BayMorphRunner:
             else:
                 self.config = raw_config
 
+        if (
+            self.workflow_mode == "single"
+            and self.config_path is not None
+            and self.config_path.parent.name == "configs"
+        ):
+            self.project_root = (
+                self.config_path.parent.parent
+            )
+            self._anchor_project_paths()
+
         self.verbose = bool(verbose)
 
+        self.simulation_observation: Any = None
         self.image_preparation_products: Any = None
         self.psf_candidate_products: Any = None
         self.psf_products: Any = None
@@ -178,6 +230,52 @@ class BayMorphRunner:
             config,
             verbose=verbose,
         )
+
+    def _anchor_project_paths(self) -> None:
+        """Anchor primary relative paths to the discovered project root."""
+        if self.project_root is None:
+            return
+
+        for section_name, key in (
+            (
+                "outputs",
+                "root",
+            ),
+            (
+                "data",
+                "image_path",
+            ),
+        ):
+            section = self.config.get(
+                section_name
+            )
+
+            if not isinstance(
+                section,
+                dict,
+            ):
+                continue
+
+            value = section.get(
+                key
+            )
+
+            if value is None:
+                continue
+
+            path_value = Path(
+                value
+            ).expanduser()
+
+            if path_value.is_absolute():
+                continue
+
+            section[key] = str(
+                (
+                    self.project_root
+                    / path_value
+                ).resolve()
+            )
 
     @property
     def is_multi_observation(self) -> bool:
@@ -222,6 +320,11 @@ class BayMorphRunner:
         )
 
     @property
+    def simulation(self) -> Any:
+        """Return the generated synthetic observation, when available."""
+        return self.simulation_observation
+
+    @property
     def image(self) -> Any:
         """Return the image-preparation products."""
         return self.image_preparation_products
@@ -260,6 +363,41 @@ class BayMorphRunner:
             raise RuntimeError(
                 f"Run fit() before {diagnostic_name}()."
             )
+
+    def simulate(self) -> Any:
+        """Generate and persist the configured synthetic observation.
+
+        Returns
+        -------
+        SyntheticObservation
+            Generated intrinsic, convolved, sky-added, and noisy images.
+
+        Raises
+        ------
+        ValueError
+            If the configuration does not define a simulation.
+        """
+        self._require_single_observation(
+            "simulate"
+        )
+
+        if "simulation" not in self.config:
+            raise ValueError(
+                "simulate() requires a top-level 'simulation' "
+                "configuration."
+            )
+
+        self.simulation_observation = (
+            run_simulation_from_config(
+                self.config
+            )
+        )
+
+        self._status(
+            "Synthetic observation generated"
+        )
+
+        return self.simulation_observation
 
     def prepare_image(self) -> Any:
         """Run image preparation for the configured observations.
@@ -739,6 +877,12 @@ class BayMorphRunner:
         Any
             Fitting products for the configured analysis.
         """
+        if (
+            not self.is_multi_observation
+            and "simulation" in self.config
+        ):
+            self.simulate()
+
         self.prepare_image()
 
         if self.is_multi_observation:

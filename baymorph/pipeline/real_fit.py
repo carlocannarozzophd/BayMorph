@@ -1288,6 +1288,33 @@ def _fit_diagnostic_title(
     model_name: str,
 ) -> str:
     """Return an object- and model-aware diagnostic title."""
+    diagnostics_cfg = config.get(
+        "diagnostics",
+        {},
+    )
+
+    if isinstance(
+        diagnostics_cfg,
+        dict,
+    ):
+        configured_titles = diagnostics_cfg.get(
+            "titles",
+            {},
+        )
+
+        if (
+            isinstance(
+                configured_titles,
+                dict,
+            )
+            and model_name in configured_titles
+        ):
+            return str(
+                configured_titles[
+                    model_name
+                ]
+            )
+
     model_label = _diagnostic_title(
         config,
         model_name,

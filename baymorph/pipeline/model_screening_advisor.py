@@ -55,40 +55,16 @@ class SingleObservationScreeningResult:
             f"Telescope: {_format_optional(metadata.telescope)}",
             f"Instrument: {_format_optional(metadata.instrument)}",
             f"Image unit: {_format_optional(metadata.bunit)}",
-            (
-                "Pixel scale: "
-                f"{_format_number(metadata.pixel_scale)} arcsec/pixel"
-            ),
-            (
-                "Header seeing FWHM: "
-                f"{_format_number(metadata.seeing_fwhm)}"
-            ),
-            (
-                "Photometric zeropoint: "
-                f"{_format_number(metadata.zeropoint)}"
-            ),
-            (
-                "Exposure time: "
-                f"{_format_number(metadata.exposure_time)}"
-            ),
-            (
-                "Total exposure time: "
-                f"{_format_number(metadata.total_exposure_time)}"
-            ),
-            (
-                "Saturation level: "
-                f"{_format_number(metadata.saturation)}"
-            ),
+            (f"Pixel scale: {_format_number(metadata.pixel_scale)} arcsec/pixel"),
+            (f"Header seeing FWHM: {_format_number(metadata.seeing_fwhm)}"),
+            (f"Photometric zeropoint: {_format_number(metadata.zeropoint)}"),
+            (f"Exposure time: {_format_number(metadata.exposure_time)}"),
+            (f"Total exposure time: {_format_number(metadata.total_exposure_time)}"),
+            (f"Saturation level: {_format_number(metadata.saturation)}"),
             "",
             "SCREENING INPUTS",
-            (
-                "Target seed: "
-                f"({self.target_x:.6f}, {self.target_y:.6f}) pixels"
-            ),
-            (
-                "Diagnostic PSF FWHM: "
-                f"{self.psf_fwhm_pixels:.6f} pixels"
-            ),
+            (f"Target seed: ({self.target_x:.6f}, {self.target_y:.6f}) pixels"),
+            (f"Diagnostic PSF FWHM: {self.psf_fwhm_pixels:.6f} pixels"),
             f"PSF scale source: {self.psf_fwhm_source}",
             f"Background source: {self.background_source}",
             f"Noise source: {self.noise_source}",
@@ -100,12 +76,8 @@ class SingleObservationScreeningResult:
                 "This stage does not perform production cleaning, masking, "
                 "background modelling, PSF construction, or inference."
             ),
-            (
-                "The diagnostic PSF scale is not a production PSF model."
-            ),
-            (
-                "The user must choose the production model."
-            ),
+            ("The diagnostic PSF scale is not a production PSF model."),
+            ("The user must choose the production model."),
         ]
 
         return "\n".join(lines)
@@ -131,22 +103,16 @@ class SingleObservationModelAdvisor(ObservationAdvisor):
         ``psf_fwhm_pixels`` directly or declare whether the header value is
         expressed in ``"arcsec"`` or ``"pixels"``.
         """
-        observation = Observation.from_fits(
-            self.fits_path
-        )
+        observation = Observation.from_fits(self.fits_path)
         data = np.asarray(
             observation.image.data,
             dtype=float,
         )
 
         if data.ndim != 2:
-            raise ValueError(
-                "Model screening requires a two-dimensional FITS image."
-            )
+            raise ValueError("Model screening requires a two-dimensional FITS image.")
 
-        target_x, target_y = self._resolve_target(
-            observation
-        )
+        target_x, target_y = self._resolve_target(observation)
         if target_x is None or target_y is None:
             raise ValueError(
                 "Model screening requires target_position. Supply pixel "
@@ -168,9 +134,7 @@ class SingleObservationModelAdvisor(ObservationAdvisor):
             noise_sigma=noise_sigma,
             target_mask=target_mask,
         )
-        report = classifier.screen(
-            features
-        )
+        report = classifier.screen(features)
 
         return SingleObservationScreeningResult(
             path=self.fits_path.resolve(),
@@ -184,14 +148,10 @@ class SingleObservationModelAdvisor(ObservationAdvisor):
             psf_fwhm_pixels=resolved_psf_fwhm,
             psf_fwhm_source=psf_source,
             background_source=(
-                "caller_supplied"
-                if background is not None
-                else "robust_image_border"
+                "caller_supplied" if background is not None else "robust_image_border"
             ),
             noise_source=(
-                "caller_supplied"
-                if noise_sigma is not None
-                else "robust_image_border"
+                "caller_supplied" if noise_sigma is not None else "robust_image_border"
             ),
             features=features,
             report=report,
@@ -206,20 +166,14 @@ def _resolve_psf_fwhm_pixels(
 ) -> tuple[float, str]:
     """Resolve an explicit, auditable diagnostic PSF scale."""
     if psf_fwhm_pixels is not None:
-        value = float(
-            psf_fwhm_pixels
-        )
+        value = float(psf_fwhm_pixels)
         if not np.isfinite(value) or value <= 0.0:
-            raise ValueError(
-                "psf_fwhm_pixels must be finite and positive."
-            )
+            raise ValueError("psf_fwhm_pixels must be finite and positive.")
 
         return value, "caller_supplied_pixels"
 
     if metadata.seeing_fwhm is None:
-        raise ValueError(
-            "No FITS FWHM value is available. Supply psf_fwhm_pixels."
-        )
+        raise ValueError("No FITS FWHM value is available. Supply psf_fwhm_pixels.")
 
     if header_fwhm_unit is None:
         raise ValueError(
@@ -227,14 +181,10 @@ def _resolve_psf_fwhm_pixels(
             "set header_fwhm_unit to 'arcsec' or 'pixels'."
         )
 
-    normalized_unit = str(
-        header_fwhm_unit
-    ).strip().lower()
+    normalized_unit = str(header_fwhm_unit).strip().lower()
 
     if normalized_unit == "pixels":
-        value = float(
-            metadata.seeing_fwhm
-        )
+        value = float(metadata.seeing_fwhm)
         source = "fits_header_fwhm_declared_pixels"
     elif normalized_unit == "arcsec":
         if (
@@ -247,15 +197,10 @@ def _resolve_psf_fwhm_pixels(
                 "the FITS FWHM from arcseconds to pixels."
             )
 
-        value = float(
-            metadata.seeing_fwhm
-            / metadata.pixel_scale
-        )
+        value = float(metadata.seeing_fwhm / metadata.pixel_scale)
         source = "fits_header_fwhm_declared_arcsec"
     else:
-        raise ValueError(
-            "header_fwhm_unit must be exactly 'arcsec' or 'pixels'."
-        )
+        raise ValueError("header_fwhm_unit must be exactly 'arcsec' or 'pixels'.")
 
     if not np.isfinite(value) or value <= 0.0:
         raise ValueError(

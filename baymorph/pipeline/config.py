@@ -9,7 +9,10 @@ from typing import Any
 
 import yaml
 
-from baymorph.core.observation import Observation
+from baymorph.core.observation import (
+    Observation,
+    resolve_seeing_fwhm_pixels,
+)
 from baymorph.fitting.execution import resolve_sampler_execution
 
 REQUIRED_TOP_LEVEL_KEYS = ("object", "data", "outputs")
@@ -713,57 +716,17 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
 
 def _estimate_psf_half_size_limits(
     *,
-    seeing_fwhm_arcsec: float,
-    pixel_scale_arcsec: float,
+    seeing_fwhm_pixels: float,
 ) -> tuple[int, int]:
-    """Estimate PSF candidate cutout limits from observational sampling.
-
-    Parameters
-    ----------
-    seeing_fwhm_arcsec : float
-        Seeing full width at half maximum in arcseconds.
-    pixel_scale_arcsec : float
-        Image pixel scale in arcseconds per pixel.
-
-    Returns
-    -------
-    tuple of int
-        Minimum and maximum PSF candidate cutout half-sizes, in pixels.
-
-    Raises
-    ------
-    ValueError
-        If either input is non-positive.
-    """
-    if seeing_fwhm_arcsec <= 0:
+    """Estimate PSF candidate cutout limits from the seeing in pixels."""
+    if seeing_fwhm_pixels <= 0:
         raise ValueError(
-            "seeing_fwhm_arcsec must be positive."
+            "seeing_fwhm_pixels must be positive."
         )
-
-    if pixel_scale_arcsec <= 0:
-        raise ValueError(
-            "pixel_scale_arcsec must be positive."
-        )
-
-    seeing_fwhm_pixels = (
-        seeing_fwhm_arcsec
-        / pixel_scale_arcsec
-    )
-
-    min_half_size = int(
-        math.ceil(
-            4.0 * seeing_fwhm_pixels
-        )
-    )
-    max_half_size = int(
-        math.ceil(
-            10.0 * seeing_fwhm_pixels
-        )
-    )
 
     return (
-        min_half_size,
-        max_half_size,
+        int(math.ceil(4.0 * seeing_fwhm_pixels)),
+        int(math.ceil(10.0 * seeing_fwhm_pixels)),
     )
 
 
@@ -846,43 +809,58 @@ def resolve_runtime_config(
             needs_min_half_size
             or needs_max_half_size
         ):
-            seeing_fwhm = (
-                observation.metadata.seeing_fwhm
-            )
-
-            pixel_scale = None
+            pixel_scale_arcsec = None
 
             if data_cfg is not None:
                 pixel_scale = data_cfg.get(
                     "pixel_scale"
                 )
 
-            if (
-                seeing_fwhm is not None
-                and isinstance(
+                if isinstance(
                     pixel_scale,
                     (int, float),
-                )
-            ):
+                ):
+                    pixel_scale_arcsec = float(
+                        pixel_scale
+                    )
+
+            seeing_fwhm_pixels = resolve_seeing_fwhm_pixels(
+                observation.metadata,
+                pixel_scale_arcsec=pixel_scale_arcsec,
+            )
+
+            candidate_defaults = DEFAULT_CONFIG[
+                "psf"
+            ][
+                "empirical"
+            ][
+                "candidate_selection"
+            ]
+
+            if seeing_fwhm_pixels is None:
+                estimated_min_half_size = candidate_defaults[
+                    "min_half_size"
+                ]
+                estimated_max_half_size = candidate_defaults[
+                    "max_half_size"
+                ]
+            else:
                 (
                     estimated_min_half_size,
                     estimated_max_half_size,
                 ) = _estimate_psf_half_size_limits(
-                    seeing_fwhm_arcsec=seeing_fwhm,
-                    pixel_scale_arcsec=float(
-                        pixel_scale
-                    ),
+                    seeing_fwhm_pixels=seeing_fwhm_pixels,
                 )
 
-                if needs_min_half_size:
-                    candidate_cfg[
-                        "min_half_size"
-                    ] = estimated_min_half_size
+            if needs_min_half_size:
+                candidate_cfg[
+                    "min_half_size"
+                ] = estimated_min_half_size
 
-                if needs_max_half_size:
-                    candidate_cfg[
-                        "max_half_size"
-                    ] = estimated_max_half_size
+            if needs_max_half_size:
+                candidate_cfg[
+                    "max_half_size"
+                ] = estimated_max_half_size
 
         if candidate_cfg.get(
             "max_peak"

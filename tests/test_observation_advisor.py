@@ -1427,3 +1427,30 @@ def test_flux_prior_coverage_guard_accepts_interior_logarithmic_scale():
         calibrated_prior,
         observed_scale,
     )
+
+
+def test_header_fwhm_formatter_preserves_unit_uncertainty() -> None:
+    """Advisor output must distinguish explicit and unresolved units."""
+    from baymorph.pipeline.advisor import _format_header_fwhm
+
+    assert (
+        _format_header_fwhm(
+            0.78812181,
+            None,
+        )
+        == "0.788122 (unit unresolved; not converted)"
+    )
+    assert (
+        _format_header_fwhm(
+            0.78812181,
+            "arcsec",
+        )
+        == "0.788122 arcsec"
+    )
+    assert (
+        _format_header_fwhm(
+            3.75,
+            "pixels",
+        )
+        == "3.75 pixels"
+    )

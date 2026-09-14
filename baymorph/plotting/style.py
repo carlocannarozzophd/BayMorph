@@ -15,6 +15,33 @@ MINOR_TICK_LENGTH = 5
 TICK_WIDTH = 3
 
 
+def computer_modern_text(
+    value: str,
+) -> str:
+    """Return text compatible with bundled Computer Modern fonts.
+
+    Matplotlib's bundled ``cmr10`` font does not contain precomposed
+    accented Unicode glyphs. Relevant accents are therefore rendered
+    through Computer Modern MathText without requiring external LaTeX.
+    """
+    text = str(
+        value
+    )
+
+    replacements = {
+        "é": r"$\acute{\mathrm{e}}$",
+        "É": r"$\acute{\mathrm{E}}$",
+    }
+
+    for character, replacement in replacements.items():
+        text = text.replace(
+            character,
+            replacement,
+        )
+
+    return text
+
+
 def canonical_figsize(
     nrows: int = 1,
     ncols: int = 1,
@@ -64,18 +91,18 @@ def set_plot_style(
     """
     del fontsize, usetex
 
-    plt.rc(
-        "text",
-        usetex=False,
-    )
-    plt.rc(
-        "font",
-        family="serif",
-        size=FONT_SIZE,
-    )
-    plt.rc(
-        "axes",
-        linewidth=AXES_LINEWIDTH,
+    plt.rcParams.update(
+        {
+            "text.usetex": False,
+            "font.family": "serif",
+            "font.serif": [
+                "cmr10",
+            ],
+            "font.size": FONT_SIZE,
+            "mathtext.fontset": "cm",
+            "axes.linewidth": AXES_LINEWIDTH,
+            "axes.formatter.use_mathtext": True,
+        }
     )
 
 
@@ -137,6 +164,27 @@ def style_axes(
         _style_single_axis(
             single_ax
         )
+
+
+def style_colorbar(
+    colorbar,
+) -> None:
+    """Match colorbar ticks and outline to the canonical axis style."""
+    colorbar.ax.tick_params(
+        which="major",
+        length=MAJOR_TICK_LENGTH,
+        width=TICK_WIDTH,
+        direction="out",
+    )
+    colorbar.ax.tick_params(
+        which="minor",
+        length=MINOR_TICK_LENGTH,
+        width=TICK_WIDTH,
+        direction="out",
+    )
+    colorbar.outline.set_linewidth(
+        AXES_LINEWIDTH
+    )
 
 
 def make_plot(

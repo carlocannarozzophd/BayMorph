@@ -215,13 +215,13 @@ def corner_plot(
     sigma=None,
     parameter_labels=None,
     title=None,
-    bins=30,
+    bins=50,
     fill_contours=True,
     cmap="bone_r",
-    density1d="hist",
-    kde_bw_method=None,
+    density1d="kde",
+    kde_bw_method="scott",
     smooth_1d=0.0,
-    smooth_2d=1.0,
+    smooth_2d=3.0,
     show_medians=True,
     write_medians=False,
     hist_color=None,
@@ -249,19 +249,19 @@ def corner_plot(
         Labels displayed on the plot axes.
     title : str, optional
         Object label displayed in the unused upper-right corner region.
-    bins : int, default=30
+    bins : int, default=50
         Number of histogram bins.
     fill_contours : bool, default=True
         If True, draw filled two-dimensional contour regions.
     cmap : str or matplotlib.colors.Colormap, default="bone_r"
         Colormap used for credible regions.
-    density1d : {"hist", "kde"}, default="hist"
+    density1d : {"hist", "kde"}, default="kde"
         Method used for one-dimensional marginal distributions.
-    kde_bw_method : str, scalar, or callable, optional
+    kde_bw_method : str, scalar, or callable, default="scott"
         Bandwidth method passed to :class:`scipy.stats.gaussian_kde`.
     smooth_1d : float, default=0.0
         Gaussian smoothing scale applied to one-dimensional histograms.
-    smooth_2d : float, default=1.0
+    smooth_2d : float, default=3.0
         Gaussian smoothing scale applied to two-dimensional histograms.
     show_medians : bool, default=True
         If True, draw median markers and median lines.
@@ -292,6 +292,12 @@ def corner_plot(
     cmap_max : float, default=0.90
         Upper colormap sampling value.
 
+    Notes
+    -----
+    Smoothing affects only the displayed density estimates. Posterior
+    summaries, median markers, credible-interval boundaries, and Bayesian
+    evidence remain defined by the unsmoothed posterior samples.
+
     Returns
     -------
     fig : matplotlib.figure.Figure
@@ -309,7 +315,7 @@ def corner_plot(
         labels does not match the number of parameters, or if incompatible
         figure/axis arguments are supplied.
     """
-    from .style import set_plot_style
+    from .style import computer_modern_text, set_plot_style
 
     set_plot_style()
 
@@ -719,6 +725,11 @@ def corner_plot(
             top=0.98,
             wspace=0.05,
             hspace=0.05,
+        )
+
+    if title is not None:
+        title = computer_modern_text(
+            title
         )
 
     if title and ax is None:

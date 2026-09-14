@@ -615,3 +615,78 @@ def test_runtime_report_roundtrip(tmp_path):
 
     assert path == tmp_path / "example_galaxy" / "runtime_report.yaml"
     assert loaded == report
+
+
+@pytest.mark.parametrize(
+    (
+        "seeing_fwhm",
+        "unit",
+        "pixel_scale",
+        "configured",
+        "expected",
+    ),
+    [
+        (0.8, "arcsec", 0.2, ("auto", "auto"), (16, 40)),
+        (4.0, "pixels", None, ("auto", "auto"), (16, 40)),
+        (0.8, None, 0.2, ("auto", "auto"), (12, 30)),
+        (0.8, "arcsec", 0.2, (23, "auto"), (23, 40)),
+    ],
+    ids=(
+        "arcsec-conversion",
+        "pixel-value",
+        "unresolved-unit-defaults",
+        "explicit-value-preserved",
+    ),
+)
+def test_resolve_runtime_config_resolves_psf_candidate_auto_sizes(
+    seeing_fwhm,
+    unit,
+    pixel_scale,
+    configured,
+    expected,
+):
+    """Empirical PSF auto sizes must use only explicit FWHM units."""
+    header = fits.Header()
+    header["FWHM"] = (
+        seeing_fwhm,
+        "FWHM median",
+    )
+
+    if unit is not None:
+        header["FWHMUNIT"] = unit
+
+    observation = Observation.from_image(
+        ImageData(
+            data=np.zeros((21, 31), dtype=float),
+            header=header,
+        )
+    )
+
+    config = {
+        "psf": {
+            "empirical": {
+                "candidate_selection": {
+                    "min_half_size": configured[0],
+                    "max_half_size": configured[1],
+                }
+            }
+        }
+    }
+
+    if pixel_scale is not None:
+        config["data"] = {
+            "pixel_scale": pixel_scale,
+        }
+
+    resolved = resolve_runtime_config(
+        config,
+        observation,
+    )
+    candidate = resolved["psf"]["empirical"][
+        "candidate_selection"
+    ]
+
+    assert (
+        candidate["min_half_size"],
+        candidate["max_half_size"],
+    ) == expected

@@ -61,16 +61,9 @@ def test_examples_command_copies_configurations(
 
     assert main() == 0
 
-    assert (
-        destination
-        / "configs"
-        / "simulated_galaxy.yaml"
-    ).is_file()
+    assert (destination / "configs" / "simulated_galaxy.yaml").is_file()
 
-    assert not (
-        destination
-        / "notebooks"
-    ).exists()
+    assert not (destination / "notebooks").exists()
 
 
 def test_init_command_creates_project_tree(
@@ -96,23 +89,12 @@ def test_init_command_creates_project_tree(
     assert (project / "data").is_dir()
     assert (project / "runs").is_dir()
 
-    assert (
-        project
-        / "configs"
-        / "simulated_galaxy.yaml"
-    ).is_file()
+    assert (project / "configs" / "simulated_galaxy.yaml").is_file()
 
-    assert {
-        filename.name
-        for filename in (
-            project
-            / "notebooks"
-        ).glob(
-            "*.ipynb"
-        )
-    } == {
+    assert {filename.name for filename in (project / "notebooks").glob("*.ipynb")} == {
         "01_Simulated_SingleBand.ipynb",
-        "02_Observed_SingleBand.ipynb",
+        "02A_Observed_Assessment_and_Config.ipynb",
+        "02B_Observed_Fit.ipynb",
         "03_MultiObservation_JointFit.ipynb",
     }
 
@@ -153,9 +135,7 @@ def test_config_command_writes_yaml_with_explicit_center(
     fits_path = tmp_path / "galaxy.fits"
     output_path = tmp_path / "galaxy.yaml"
 
-    _write_fits(
-        fits_path
-    )
+    _write_fits(fits_path)
 
     monkeypatch.setattr(
         "sys.argv",
@@ -179,23 +159,11 @@ def test_config_command_writes_yaml_with_explicit_center(
         "r",
         encoding="utf-8",
     ) as stream:
-        config = yaml.safe_load(
-            stream
-        )
+        config = yaml.safe_load(stream)
 
-    assert config[
-        "data"
-    ][
-        "target_position"
-    ] == "center"
+    assert config["data"]["target_position"] == "center"
 
-    assert config[
-        "data"
-    ][
-        "image_path"
-    ] == str(
-        fits_path
-    )
+    assert config["data"]["image_path"] == str(fits_path)
 
 
 def test_config_command_accepts_explicit_pixel_seed(
@@ -206,9 +174,7 @@ def test_config_command_accepts_explicit_pixel_seed(
     fits_path = tmp_path / "galaxy.fits"
     output_path = tmp_path / "galaxy.yaml"
 
-    _write_fits(
-        fits_path
-    )
+    _write_fits(fits_path)
 
     monkeypatch.setattr(
         "sys.argv",
@@ -235,15 +201,9 @@ def test_config_command_accepts_explicit_pixel_seed(
         "r",
         encoding="utf-8",
     ) as stream:
-        config = yaml.safe_load(
-            stream
-        )
+        config = yaml.safe_load(stream)
 
-    assert config[
-        "data"
-    ][
-        "target_position"
-    ] == {
+    assert config["data"]["target_position"] == {
         "x": 14.5,
         "y": 9.5,
     }
@@ -256,9 +216,7 @@ def test_config_command_requires_complete_target_seed(
     """The CLI must never infer an unspecified target position."""
     fits_path = tmp_path / "galaxy.fits"
 
-    _write_fits(
-        fits_path
-    )
+    _write_fits(fits_path)
 
     monkeypatch.setattr(
         "sys.argv",
@@ -284,9 +242,7 @@ def test_config_command_rejects_conflicting_target_modes(
     """Detector-centre and explicit-coordinate seeds are exclusive."""
     fits_path = tmp_path / "galaxy.fits"
 
-    _write_fits(
-        fits_path
-    )
+    _write_fits(fits_path)
 
     monkeypatch.setattr(
         "sys.argv",
@@ -310,9 +266,7 @@ def test_config_command_rejects_conflicting_target_modes(
 
 def test_make_config_from_fits_is_top_level_public_api() -> None:
     """The FITS configuration maker is exposed by the stable public API."""
-    assert callable(
-        baymorph.make_config_from_fits
-    )
+    assert callable(baymorph.make_config_from_fits)
 
 
 def test_config_command_exposes_model_and_sampler(
@@ -323,9 +277,7 @@ def test_config_command_exposes_model_and_sampler(
     fits_path = tmp_path / "galaxy.fits"
     output_path = tmp_path / "galaxy.yaml"
 
-    _write_fits(
-        fits_path
-    )
+    _write_fits(fits_path)
 
     monkeypatch.setattr(
         "sys.argv",
@@ -357,9 +309,7 @@ def test_config_command_exposes_model_and_sampler(
         "r",
         encoding="utf-8",
     ) as stream:
-        config = yaml.safe_load(
-            stream
-        )
+        config = yaml.safe_load(stream)
 
     assert config["fit"]["models"] == [
         "double_sersic",

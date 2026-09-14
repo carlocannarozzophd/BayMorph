@@ -7,6 +7,7 @@ EXPECTED_PUBLIC_API = {
     "PriorGuidance",
     "ObservationInspection",
     "ObservationAdvisor",
+    "ObservationConfigProposal",
     "BayMorphRunner",
     "Observation",
     "ObservationMetadata",

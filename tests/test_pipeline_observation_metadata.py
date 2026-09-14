@@ -51,7 +51,11 @@ def test_observation_metadata_dict():
 
     assert metadata["pixel_scale_arcsec"] == pytest.approx(0.2)
 
-    assert metadata["seeing_fwhm_arcsec"] == 0.72
+    assert metadata["seeing_fwhm"] == 0.72
+
+    assert metadata["seeing_fwhm_unit"] is None
+
+    assert metadata["seeing_fwhm_arcsec"] is None
 
     assert metadata["zeropoint"] == 30.0
 
@@ -66,3 +70,32 @@ def test_observation_metadata_dict():
     assert metadata["background_header"] == 12.3
 
     assert metadata["bunit"] == "ADU"
+
+
+def test_explicit_arcsec_fwhm_is_persisted_safely() -> None:
+    """The legacy arcsec field requires an explicit arcsec declaration."""
+    from types import SimpleNamespace
+
+    from baymorph.core.observation import ObservationMetadata
+    from baymorph.pipeline.observation_metadata import (
+        observation_metadata_dict,
+    )
+
+    observation = SimpleNamespace(
+        metadata=ObservationMetadata(
+            width=11,
+            height=9,
+            center_x=5.0,
+            center_y=4.0,
+            seeing_fwhm=0.72,
+            seeing_fwhm_unit="arcsec",
+        )
+    )
+
+    metadata = observation_metadata_dict(
+        observation
+    )
+
+    assert metadata["seeing_fwhm"] == 0.72
+    assert metadata["seeing_fwhm_unit"] == "arcsec"
+    assert metadata["seeing_fwhm_arcsec"] == 0.72
