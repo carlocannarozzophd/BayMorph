@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import dataclasses
+import hashlib
+import importlib.metadata
 import json
+import sys
 import warnings
 from pathlib import Path
 from typing import Any
@@ -117,6 +121,27 @@ def run_real_fit_from_config(
         image_products,
     )
     sampler_cfg = resolved["fit"]["sampler"]
+    sampler_name = str(
+        sampler_cfg.get(
+            "name",
+            "",
+        )
+    ).strip().lower()
+    configured_checkpoint_path = sampler_cfg.get(
+        "init",
+        {},
+    ).get(
+        "checkpoint_path"
+    )
+    emcee_checkpoint_is_auto = (
+        sampler_name == "emcee"
+        and isinstance(
+            configured_checkpoint_path,
+            str,
+        )
+        and configured_checkpoint_path.strip().lower()
+        == "auto"
+    )
 
     all_products = {}
 
@@ -134,6 +159,13 @@ def run_real_fit_from_config(
             likelihood_cfg=likelihood_cfg,
             likelihood_state=likelihood_state,
             sampler_cfg=sampler_cfg,
+            checkpoint_directory=(
+                pipeline_paths(
+                    resolved
+                )["fits"][model_name]["dir"]
+                if emcee_checkpoint_is_auto
+                else None
+            ),
         )
 
         save_real_fit_products(
@@ -175,6 +207,626 @@ def run_real_fit_from_config(
     return all_products
 
 
+def _qualified_class_name(
+    value,
+) -> str:
+    """Return a stable module-qualified class name."""
+    value_type = type(
+        value
+    )
+
+    return (
+        f"{value_type.__module__}."
+        f"{value_type.__qualname__}"
+    )
+
+
+def _checkpoint_array_signature(
+    value,
+) -> dict[str, Any]:
+    """Return a canonical signature for one numerical array."""
+    array = np.ascontiguousarray(
+        np.asarray(
+            value
+        )
+    )
+
+    if array.dtype.hasobject:
+        raise TypeError(
+            "Checkpoint signatures do not support object arrays."
+        )
+
+    return {
+        "dtype": array.dtype.str,
+        "shape": list(
+            array.shape
+        ),
+        "sha256": hashlib.sha256(
+            array.tobytes(
+                order="C"
+            )
+        ).hexdigest(),
+    }
+
+
+def _checkpoint_signature_value(
+    value,
+):
+    """Convert one value into strict canonical signature metadata."""
+    if value is None:
+        return None
+
+    if isinstance(
+        value,
+        np.ndarray,
+    ):
+        return {
+            "__array__": _checkpoint_array_signature(
+                value
+            )
+        }
+
+    if isinstance(
+        value,
+        np.generic,
+    ):
+        return _checkpoint_signature_value(
+            value.item()
+        )
+
+    if isinstance(
+        value,
+        Path,
+    ):
+        return {
+            "__path__": str(
+                value
+            )
+        }
+
+    if isinstance(
+        value,
+        bool,
+    ):
+        return value
+
+    if isinstance(
+        value,
+        int,
+    ):
+        return value
+
+    if isinstance(
+        value,
+        float,
+    ):
+        if not np.isfinite(
+            value
+        ):
+            raise ValueError(
+                "Checkpoint signature scalars must be finite."
+            )
+
+        return value
+
+    if isinstance(
+        value,
+        str,
+    ):
+        return value
+
+    if isinstance(
+        value,
+        bytes,
+    ):
+        return {
+            "__bytes_sha256__": hashlib.sha256(
+                value
+            ).hexdigest()
+        }
+
+    if isinstance(
+        value,
+        dict,
+    ):
+        if not all(
+            isinstance(
+                key,
+                str,
+            )
+            for key in value
+        ):
+            raise TypeError(
+                "Checkpoint signature mappings require string keys."
+            )
+
+        return {
+            key: _checkpoint_signature_value(
+                value[
+                    key
+                ]
+            )
+            for key in sorted(
+                value
+            )
+        }
+
+    if isinstance(
+        value,
+        (list, tuple),
+    ):
+        return [
+            _checkpoint_signature_value(
+                item
+            )
+            for item in value
+        ]
+
+    raise TypeError(
+        "Unsupported checkpoint-signature value "
+        f"{_qualified_class_name(value)!r}."
+    )
+
+
+def _prior_checkpoint_signature(
+    prior,
+) -> dict[str, Any]:
+    """Return the complete canonical state of one active prior."""
+    if dataclasses.is_dataclass(
+        prior
+    ):
+        state = {
+            field.name: getattr(
+                prior,
+                field.name,
+            )
+            for field in dataclasses.fields(
+                prior
+            )
+        }
+    else:
+        try:
+            state = dict(
+                vars(
+                    prior
+                )
+            )
+        except TypeError as exc:
+            raise TypeError(
+                "Checkpointing requires priors with canonical "
+                "dataclass fields or instance state."
+            ) from exc
+
+    return {
+        "class": _qualified_class_name(
+            prior
+        ),
+        "state": _checkpoint_signature_value(
+            state
+        ),
+    }
+
+
+def _runtime_psf_checkpoint_signature(
+    psf,
+) -> dict[str, Any] | None:
+    """Return the effective numerical state of the runtime PSF."""
+    if psf is None:
+        return None
+
+    if isinstance(
+        psf,
+        np.ndarray,
+    ):
+        return {
+            "class": _qualified_class_name(
+                psf
+            ),
+            "array": _checkpoint_array_signature(
+                psf
+            ),
+        }
+
+    try:
+        candidate_array = np.asarray(
+            psf
+        )
+    except (
+        TypeError,
+        ValueError,
+    ):
+        candidate_array = None
+
+    if (
+        candidate_array is not None
+        and candidate_array.ndim > 0
+        and not candidate_array.dtype.hasobject
+    ):
+        return {
+            "class": _qualified_class_name(
+                psf
+            ),
+            "array": _checkpoint_array_signature(
+                candidate_array
+            ),
+        }
+
+    if dataclasses.is_dataclass(
+        psf
+    ):
+        state = {
+            field.name: getattr(
+                psf,
+                field.name,
+            )
+            for field in dataclasses.fields(
+                psf
+            )
+        }
+    else:
+        try:
+            state = dict(
+                vars(
+                    psf
+                )
+            )
+        except TypeError:
+            state = None
+
+        if state is None:
+            slots = getattr(
+                type(
+                    psf
+                ),
+                "__slots__",
+                (),
+            )
+
+            if isinstance(
+                slots,
+                str,
+            ):
+                slots = (
+                    slots,
+                )
+
+            state = {
+                name: getattr(
+                    psf,
+                    name,
+                )
+                for name in slots
+                if not name.startswith(
+                    "__"
+                )
+                and hasattr(
+                    psf,
+                    name,
+                )
+            }
+
+    return {
+        "class": _qualified_class_name(
+            psf
+        ),
+        "state": _checkpoint_signature_value(
+            state
+        ),
+    }
+
+
+def _baymorph_source_signature() -> dict[str, Any]:
+    """Hash the installed BayMorph Python source tree."""
+    package_root = Path(
+        __file__
+    ).resolve().parents[
+        1
+    ]
+
+    source_paths = sorted(
+        package_root.rglob(
+            "*.py"
+        ),
+        key=lambda path: path.relative_to(
+            package_root
+        ).as_posix(),
+    )
+
+    if not source_paths:
+        raise RuntimeError(
+            "No BayMorph Python sources were found for "
+            "checkpoint fingerprinting."
+        )
+
+    digest = hashlib.sha256()
+
+    for source_path in source_paths:
+        relative = source_path.relative_to(
+            package_root
+        ).as_posix().encode(
+            "utf-8"
+        )
+        contents = source_path.read_bytes()
+
+        digest.update(
+            len(
+                relative
+            ).to_bytes(
+                8,
+                "big",
+            )
+        )
+        digest.update(
+            relative
+        )
+        digest.update(
+            len(
+                contents
+            ).to_bytes(
+                8,
+                "big",
+            )
+        )
+        digest.update(
+            contents
+        )
+
+    return {
+        "algorithm": "sha256",
+        "file_count": len(
+            source_paths
+        ),
+        "digest": digest.hexdigest(),
+    }
+
+
+def _checkpoint_runtime_versions() -> dict[str, Any]:
+    """Return conservative numerical-runtime version metadata."""
+    versions: dict[str, Any] = {
+        "python": (
+            f"{sys.version_info.major}."
+            f"{sys.version_info.minor}."
+            f"{sys.version_info.micro}"
+        ),
+    }
+
+    for distribution in (
+        "baymorph",
+        "numpy",
+        "scipy",
+        "astropy",
+        "photutils",
+        "scikit-image",
+    ):
+        try:
+            versions[
+                distribution
+            ] = importlib.metadata.version(
+                distribution
+            )
+        except importlib.metadata.PackageNotFoundError:
+            versions[
+                distribution
+            ] = None
+
+    return versions
+
+
+def _real_fit_problem_signature(
+    *,
+    model_name,
+    problem,
+    likelihood_cfg,
+    data_fit,
+    noise_fit,
+    mask_fit,
+    correlation_kernel_fit,
+) -> str:
+    """Return a strict signature of one real-fit posterior target."""
+    parameter_state = []
+
+    for parameter in problem.parameters.all_parameters:
+        parameter_state.append(
+            {
+                "name": parameter.name,
+                "sampled": not parameter.is_fixed,
+                "prior": _prior_checkpoint_signature(
+                    parameter.prior
+                ),
+            }
+        )
+
+    model_factory = problem.model_factory
+
+    model_state = {
+        "class": _qualified_class_name(
+            model_factory
+        ),
+        "model_name": str(
+            model_factory.model_name
+        ),
+        "background_model": str(
+            model_factory.background_model
+        ),
+        "morphology_parameter_names": list(
+            model_factory.morphology_parameter_names
+        ),
+        "psf": _runtime_psf_checkpoint_signature(
+            model_factory.psf
+        ),
+    }
+
+    payload = {
+        "schema": "baymorph_real_fit_problem_v1",
+        "problem_class": _qualified_class_name(
+            problem
+        ),
+        "model": {
+            "requested_name": str(
+                model_name
+            ),
+            "runtime": model_state,
+        },
+        "parameters": parameter_state,
+        "likelihood": {
+            "class": _qualified_class_name(
+                problem.likelihood
+            ),
+            "configuration": _checkpoint_signature_value(
+                (
+                    {}
+                    if likelihood_cfg is None
+                    else dict(
+                        likelihood_cfg
+                    )
+                )
+            ),
+            "data": _checkpoint_array_signature(
+                data_fit
+            ),
+            "noise": _checkpoint_array_signature(
+                noise_fit
+            ),
+            "mask": _checkpoint_array_signature(
+                mask_fit
+            ),
+            "correlation_kernel": (
+                None
+                if correlation_kernel_fit is None
+                else _checkpoint_array_signature(
+                    correlation_kernel_fit
+                )
+            ),
+        },
+        "baymorph_source": _baymorph_source_signature(),
+        "runtime_versions": _checkpoint_runtime_versions(),
+    }
+
+    canonical = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    )
+
+    return (
+        "sha256:"
+        + hashlib.sha256(
+            canonical.encode(
+                "utf-8"
+            )
+        ).hexdigest()
+    )
+
+
+def _prepare_emcee_sampler_config(
+    sampler_cfg,
+    *,
+    model_name,
+    problem,
+    likelihood_cfg,
+    data_fit,
+    noise_fit,
+    mask_fit,
+    correlation_kernel_fit,
+    checkpoint_directory,
+):
+    """Resolve automatic emcee checkpointing for one real fit."""
+    sampler_name = str(
+        sampler_cfg.get(
+            "name",
+            "",
+        )
+    ).strip().lower()
+
+    if sampler_name != "emcee":
+        return sampler_cfg
+
+    runtime_config = dict(
+        sampler_cfg
+    )
+    init_config = dict(
+        runtime_config.get(
+            "init",
+            {},
+        )
+    )
+    runtime_config[
+        "init"
+    ] = init_config
+
+    configured_path = init_config.get(
+        "checkpoint_path"
+    )
+
+    if configured_path is None:
+        return runtime_config
+
+    if (
+        isinstance(
+            configured_path,
+            str,
+        )
+        and configured_path.strip().lower() == "auto"
+    ):
+        if checkpoint_directory is None:
+            raise ValueError(
+                "emcee checkpoint_path='auto' requires a "
+                "pipeline-managed model output directory."
+            )
+
+        init_config[
+            "checkpoint_path"
+        ] = str(
+            (
+                Path(
+                    checkpoint_directory
+                )
+                / "emcee_checkpoint.h5"
+            ).expanduser().resolve()
+        )
+
+    init_config.setdefault(
+        "checkpoint_mode",
+        "fresh",
+    )
+
+    generated_signature = _real_fit_problem_signature(
+        model_name=model_name,
+        problem=problem,
+        likelihood_cfg=likelihood_cfg,
+        data_fit=data_fit,
+        noise_fit=noise_fit,
+        mask_fit=mask_fit,
+        correlation_kernel_fit=correlation_kernel_fit,
+    )
+
+    declared_signature = init_config.get(
+        "checkpoint_signature"
+    )
+
+    if declared_signature is not None:
+        if (
+            not isinstance(
+                declared_signature,
+                str,
+            )
+            or declared_signature.strip()
+            != generated_signature
+        ):
+            raise ValueError(
+                "The declared emcee checkpoint_signature does "
+                "not match the current scientific problem."
+            )
+
+    init_config[
+        "checkpoint_signature"
+    ] = generated_signature
+
+    return runtime_config
+
+
 def _execute_single_model_fit(
     *,
     model_name,
@@ -186,6 +838,7 @@ def _execute_single_model_fit(
     likelihood_cfg,
     likelihood_state: RealFitLikelihoodState,
     sampler_cfg,
+    checkpoint_directory=None,
 ):
     """Execute one complete Bayesian fit for one morphology model."""
     parameter_names, parameters = _build_parameter_set(
@@ -211,8 +864,24 @@ def _execute_single_model_fit(
         correlation_kernel_fit=likelihood_state.correlation_kernel,
     )
 
+    runtime_sampler_cfg = (
+        _prepare_emcee_sampler_config(
+            sampler_cfg,
+            model_name=model_name,
+            problem=problem,
+            likelihood_cfg=likelihood_cfg,
+            data_fit=image_products.prepared_data,
+            noise_fit=likelihood_state.noise,
+            mask_fit=image_products.fitting_mask,
+            correlation_kernel_fit=(
+                likelihood_state.correlation_kernel
+            ),
+            checkpoint_directory=checkpoint_directory,
+        )
+    )
+
     backend = make_sampler(
-        sampler_cfg,
+        runtime_sampler_cfg,
         problem=problem,
     )
 
@@ -377,6 +1046,19 @@ def save_real_fit_products(
         )
 
     sampler_cfg = config["fit"]["sampler"]
+
+    if products.posterior is not None:
+        runtime_sampler_cfg = (
+            products.posterior.provenance.get(
+                "sampler"
+            )
+        )
+
+        if isinstance(
+            runtime_sampler_cfg,
+            dict,
+        ):
+            sampler_cfg = runtime_sampler_cfg
 
     summary = {
         "observation": (

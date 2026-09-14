@@ -183,8 +183,30 @@ class InferenceResult:
         return self.posterior.log_prior
 
     @property
-    def effective_sample_size(self) -> float:
-        """Return posterior importance-weight effective sample size."""
+    def effective_sample_size(self) -> float | None:
+        """Return the backend-appropriate effective sample size.
+
+        Importance-sampled backends use the posterior-weight effective
+        sample size. For correlated emcee chains, the autocorrelation-based
+        estimate is returned only when it is available.
+        """
+        backend = str(
+            self.provenance.get(
+                "backend",
+                "",
+            )
+        ).strip().lower()
+
+        if backend == "emcee":
+            value = self.diagnostics.get(
+                "mcmc_effective_sample_size"
+            )
+
+            if value is None:
+                return None
+
+            return float(value)
+
         return self.posterior.effective_sample_size
 
     def summary(

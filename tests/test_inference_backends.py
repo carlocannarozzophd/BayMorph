@@ -11,6 +11,7 @@ from baymorph.fitting.backend import (
 )
 from baymorph.fitting.backends import (
     DynestyBackend,
+    EmceeBackend,
     NautilusBackend,
     PocoMCBackend,
     register_builtin_backends,
@@ -262,6 +263,45 @@ def test_nautilus_backend_rejects_flat_native_option():
         )
 
 
+def test_emcee_backend_preserves_config_and_declares_no_evidence():
+    backend = EmceeBackend(
+        problem=ScalarProblem(),
+        config={
+            "name": "emcee",
+            "execution": {
+                "processes": 2,
+                "progress": False,
+            },
+            "init": {
+                "nwalkers": 32,
+                "seed": 42,
+            },
+            "run": {
+                "burn_in": 100,
+                "max_steps": 1000,
+            },
+        },
+    )
+
+    assert backend.name == "emcee"
+    assert backend.produces_evidence is False
+    assert backend.config == {
+        "name": "emcee",
+        "execution": {
+            "processes": 2,
+            "progress": False,
+        },
+        "init": {
+            "nwalkers": 32,
+            "seed": 42,
+        },
+        "run": {
+            "burn_in": 100,
+            "max_steps": 1000,
+        },
+    }
+
+
 def test_builtin_backends_register_cleanly():
     registry = BackendRegistry()
 
@@ -271,6 +311,7 @@ def test_builtin_backends_register_cleanly():
 
     assert registry.names == (
         "dynesty",
+        "emcee",
         "nautilus",
         "pocomc",
     )

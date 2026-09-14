@@ -38,6 +38,39 @@ def test_default_sampler_is_nautilus():
     }
 
 
+def test_emcee_sampler_configuration_is_resolved():
+    config = _base_config()
+    config["fit"] = {
+        "sampler": {
+            "name": "emcee",
+            "init": {
+                "nwalkers": 32,
+                "seed": 42,
+            },
+            "run": {
+                "max_steps": 1000,
+            },
+        }
+    }
+
+    resolved = resolve_config(config)
+
+    assert resolved["fit"]["sampler"] == {
+        "name": "emcee",
+        "execution": {
+            "processes": "auto",
+            "progress": True,
+        },
+        "init": {
+            "nwalkers": 32,
+            "seed": 42,
+        },
+        "run": {
+            "max_steps": 1000,
+        },
+    }
+
+
 def test_pocomc_native_kwargs_are_preserved_verbatim():
     config = _base_config()
 
@@ -249,3 +282,21 @@ def test_sampler_execution_override_is_preserved():
         "processes": 3,
         "progress": False,
     }
+
+def test_emcee_rejects_enabled_evidence_comparison():
+    config = _base_config()
+    config["fit"] = {
+        "sampler": {
+            "name": "emcee",
+        },
+        "comparison": {
+            "enabled": True,
+            "metric": "bayes_factor",
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="posterior-only.*evidence",
+    ):
+        resolve_config(config)

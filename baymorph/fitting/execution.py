@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -163,14 +163,36 @@ def _configure_worker_threads() -> None:
     )
 
 
+def _configure_sampler_worker(
+    initializer: Callable[..., None],
+    initargs: tuple[Any, ...],
+) -> None:
+    """Configure worker threads and run a sampler-specific initializer."""
+    _configure_worker_threads()
+    initializer(*initargs)
+
+
 @contextmanager
 def sampler_pool(
     processes: int,
+    *,
+    initializer: Callable[..., None] | None = None,
+    initargs: tuple[Any, ...] = (),
 ) -> Iterator[Any | None]:
     """Provide one cleanly managed local sampler process pool."""
     processes = resolve_process_count(
         processes
     )
+
+    if initializer is None and initargs:
+        raise ValueError(
+            "sampler_pool initargs require an initializer."
+        )
+
+    if initializer is not None and not callable(initializer):
+        raise TypeError(
+            "sampler_pool initializer must be callable."
+        )
 
     if processes == 1:
         yield None
@@ -183,10 +205,20 @@ def sampler_pool(
             "Parallel BayMorph inference requires the multiprocess package."
         ) from exc
 
-    pool = mp.Pool(
-        processes=processes,
-        initializer=_configure_worker_threads,
-    )
+    if initializer is None:
+        pool = mp.Pool(
+            processes=processes,
+            initializer=_configure_worker_threads,
+        )
+    else:
+        pool = mp.Pool(
+            processes=processes,
+            initializer=_configure_sampler_worker,
+            initargs=(
+                initializer,
+                tuple(initargs),
+            ),
+        )
 
     try:
         yield pool

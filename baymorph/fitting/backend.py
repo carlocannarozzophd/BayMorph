@@ -46,6 +46,11 @@ class InferenceBackend(ABC):
         )
 
     @property
+    def produces_evidence(self) -> bool:
+        """Return whether this backend produces Bayesian evidence."""
+        return True
+
+    @property
     @abstractmethod
     def name(self) -> str:
         """Return the stable backend identifier."""

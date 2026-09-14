@@ -3,6 +3,9 @@
 from baymorph.fitting.dynesty import (
     DynestyFitter,
 )
+from baymorph.fitting.emcee import (
+    EmceeFitter,
+)
 from baymorph.fitting.grid import (
     GridSearchResult,
     grid_search_1d,
@@ -34,6 +37,7 @@ from baymorph.fitting.sampler_factory import make_sampler
 __all__ = [
     "BetaPrior",
     "DynestyFitter",
+    "EmceeFitter",
     "FixedPrior",
     "GridSearchResult",
     "LogUniformPrior",

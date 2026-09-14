@@ -517,6 +517,177 @@ def test_compute_bayesian_model_comparison():
     )
 
 
+def test_run_sampler_executes_emcee_image_problem():
+    """The image pipeline must support posterior-only emcee inference."""
+    data = np.ones(
+        (3, 3),
+        dtype=float,
+    )
+    noise = np.full(
+        data.shape,
+        0.1,
+    )
+    mask = np.zeros(
+        data.shape,
+        dtype=bool,
+    )
+
+    parameters = ParameterSet(
+        [
+            Parameter(
+                "level",
+                0.0,
+                2.0,
+            )
+        ]
+    )
+
+    class ConstantImageModel:
+        def __init__(
+            self,
+            level: float,
+        ) -> None:
+            self.level = float(
+                level
+            )
+
+        def render(
+            self,
+            shape,
+        ):
+            return np.full(
+                shape,
+                self.level,
+                dtype=float,
+            )
+
+    def model_factory(
+        *,
+        level,
+    ):
+        return ConstantImageModel(
+            level
+        )
+
+    result = _run_sampler(
+        data_fit=data,
+        noise_fit=noise,
+        mask_fit=mask,
+        parameters=parameters,
+        model_factory=model_factory,
+        likelihood_cfg={
+            "type": "gaussian",
+        },
+        sampler_cfg={
+            "name": "emcee",
+            "execution": {
+                "processes": 1,
+                "progress": False,
+            },
+            "init": {
+                "nwalkers": 12,
+                "seed": 42,
+            },
+            "run": {
+                "burn_in": 4,
+                "max_steps": 8,
+                "check_interval": 100,
+                "min_autocorr_times": 50.0,
+                "tau_tolerance": 0.05,
+            },
+        },
+        progress_label="constant_image",
+    )
+
+    assert isinstance(
+        result,
+        InferenceResult,
+    )
+    assert result.parameter_names == [
+        "level",
+    ]
+    assert result.samples.ndim == 2
+    assert result.samples.shape[0] > 0
+    assert result.samples.shape[1] == 1
+    assert np.all(
+        result.samples >= 0.0
+    )
+    assert np.all(
+        result.samples <= 2.0
+    )
+
+    assert result.log_likelihood is not None
+    assert result.log_likelihood.shape == (
+        result.samples.shape[0],
+    )
+    assert np.all(
+        np.isfinite(
+            result.log_likelihood
+        )
+    )
+
+    np.testing.assert_allclose(
+        result.weights,
+        np.full(
+            result.samples.shape[0],
+            1.0 / result.samples.shape[0],
+        ),
+    )
+
+    assert result.evidence is None
+    assert result.logz is None
+    assert result.logz_error is None
+    assert result.evidence_method is None
+
+    assert result.provenance[
+        "backend"
+    ] == "emcee"
+    assert result.provenance[
+        "inference_kind"
+    ] == "posterior_only"
+
+    execution = result.provenance[
+        "sampler"
+    ][
+        "execution"
+    ]
+    assert execution == {
+        "requested_processes": 1,
+        "processes": 1,
+        "progress": False,
+    }
+
+    assert (
+        result.diagnostics["evidence_available"]
+        is False
+    )
+    assert result.diagnostics[
+        "stored_samples"
+    ] == result.samples.shape[0]
+
+    assert (
+        result.posterior.effective_sample_size
+        == pytest.approx(
+            float(
+                result.samples.shape[0]
+            )
+        )
+    )
+
+    mcmc_ess = result.diagnostics[
+        "mcmc_effective_sample_size"
+    ]
+    if mcmc_ess is None:
+        assert result.effective_sample_size is None
+    else:
+        assert (
+            result.effective_sample_size
+            == pytest.approx(
+                mcmc_ess
+            )
+        )
+
+
 def test_run_sampler_builds_problem_and_backend(
     monkeypatch,
 ):
