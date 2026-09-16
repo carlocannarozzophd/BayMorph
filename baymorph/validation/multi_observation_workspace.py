@@ -262,6 +262,7 @@ class MultiObservationValidationWorkspace:
                                 observation_truth.image_shape
                             )
                         ),
+                        "sky_margin": 5.0,
                     },
                 },
                 "outputs": {

@@ -27,6 +27,12 @@ from baymorph.pipeline.multi_observation_fit import (
 from baymorph.pipeline.noise_calibration import (
     build_correlated_noise_calibration,
     correlated_noise_calibration_path,
+    correlated_noise_settings_from_config,
+)
+from baymorph.pipeline.vecchia_factorization import (
+    DEFAULT_MIN_CONDITIONAL_VARIANCE,
+    PRODUCTION_VECCHIA_NEIGHBORS,
+    ensure_vecchia_factorization_artifact,
 )
 
 WorkflowMode = Literal[
@@ -541,41 +547,21 @@ class BayMorphRunner:
         *,
         observation_name: str | None = None,
     ) -> None:
-        """Build one required fixed noise calibration before fitting.
-
-        The high-level runner owns workflow dependencies. A user selecting
-        the correlated Gaussian likelihood must not need to invoke a separate
-        calibration workflow manually.
-        """
-        likelihood_config = config[
-            "fit"
-        ].get(
+        """Build or validate immutable correlated-noise fit artifacts."""
+        likelihood_config = config["fit"].get(
             "likelihood",
-            {
-                "type": "gaussian",
-            },
+            {"type": "gaussian"},
         )
-
-        if isinstance(
-            likelihood_config,
-            str,
-        ):
+        if isinstance(likelihood_config, str):
             likelihood_type = likelihood_config
-            calibration_config = {}
+        elif isinstance(likelihood_config, Mapping):
+            likelihood_type = likelihood_config.get("type", "gaussian")
         else:
-            likelihood_type = likelihood_config.get(
-                "type",
-                "gaussian",
-            )
-            calibration_config = likelihood_config.get(
-                "calibration",
-                {},
+            raise TypeError(
+                "fit.likelihood must be a string or mapping."
             )
 
-        normalized_type = str(
-            likelihood_type
-        ).strip().lower()
-
+        normalized_type = str(likelihood_type).strip().lower()
         if normalized_type not in {
             "correlated_gaussian",
             "correlated-gaussian",
@@ -583,91 +569,68 @@ class BayMorphRunner:
             "gaussian-correlated",
         }:
             return
-
-        if calibration_config is None:
-            calibration_config = {}
-
-        if not isinstance(
-            calibration_config,
-            Mapping,
-        ):
+        if not isinstance(likelihood_config, Mapping):
             raise TypeError(
-                "fit.likelihood.calibration must be a mapping."
+                "Correlated Gaussian production fitting requires a "
+                "fit.likelihood mapping."
             )
 
-        calibration_path = (
-            correlated_noise_calibration_path(
-                config
+        settings = correlated_noise_settings_from_config(config)
+        calibration_path = correlated_noise_calibration_path(config)
+        if not calibration_path.is_file():
+            build_correlated_noise_calibration(
+                config,
+                **settings,
+                save=True,
+                overwrite=False,
             )
+
+        suffix = (
+            ""
+            if observation_name is None
+            else f" for observation '{observation_name}'"
         )
-
-        overwrite = bool(
-            config[
-                "outputs"
-            ].get(
-                "overwrite",
-                False,
-            )
-        )
-
-        if (
-            calibration_path.exists()
-            and not overwrite
-        ):
-            return
-
-        build_correlated_noise_calibration(
-            config,
-            marginal_tile_size=int(
-                calibration_config.get(
-                    "marginal_tile_size",
-                    32,
-                )
-            ),
-            marginal_min_coverage=float(
-                calibration_config.get(
-                    "marginal_min_coverage",
-                    0.20,
-                )
-            ),
-            correlation_tile_size=int(
-                calibration_config.get(
-                    "correlation_tile_size",
-                    16,
-                )
-            ),
-            correlation_stride=int(
-                calibration_config.get(
-                    "correlation_stride",
-                    8,
-                )
-            ),
-            max_lag=int(
-                calibration_config.get(
-                    "max_lag",
-                    3,
-                )
-            ),
-            spectrum_grid_size=int(
-                calibration_config.get(
-                    "spectrum_grid_size",
-                    512,
-                )
-            ),
-            save=True,
-            overwrite=overwrite,
-        )
-
-        if observation_name is None:
-            message = "Correlated-noise calibration completed"
-        else:
-            message = (
-                "Correlated-noise calibration completed for "
-                f"observation '{observation_name}'"
-            )
-
         self._status(
-            message
+            "Ready: correlated-noise calibration" + suffix
+        )
+
+        factorization_config = likelihood_config.get("factorization")
+        if factorization_config is None:
+            return
+        if not isinstance(factorization_config, Mapping):
+            raise TypeError(
+                "fit.likelihood.factorization must be a mapping."
+            )
+
+        factorization_type = (
+            str(factorization_config.get("type", ""))
+            .strip()
+            .lower()
+            .replace("-", "_")
+        )
+        if factorization_type != "nearest_neighbor":
+            raise ValueError(
+                "Correlated Gaussian production fitting supports only "
+                "factorization.type='nearest_neighbor'."
+            )
+
+        ensure_vecchia_factorization_artifact(
+            config,
+            max_neighbors=int(
+                factorization_config.get(
+                    "max_neighbors",
+                    PRODUCTION_VECCHIA_NEIGHBORS,
+                )
+            ),
+            min_conditional_variance=float(
+                factorization_config.get(
+                    "min_conditional_variance",
+                    DEFAULT_MIN_CONDITIONAL_VARIANCE,
+                )
+            ),
+        )
+        self._status(
+            "Ready: nearest-neighbour factorization" + suffix
         )
 
     def _ensure_multi_observation_noise_calibrations(

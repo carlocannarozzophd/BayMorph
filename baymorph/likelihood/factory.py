@@ -16,6 +16,10 @@ from baymorph.likelihood.gaussian import GaussianImageLikelihood
 from baymorph.likelihood.poisson_gaussian import (
     PoissonGaussianImageLikelihood,
 )
+from baymorph.likelihood.vecchia_gaussian import (
+    VecchiaCorrelatedGaussianImageLikelihood,
+    VecchiaFactorization,
+)
 
 
 def make_likelihood(
@@ -25,6 +29,8 @@ def make_likelihood(
     noise: np.ndarray | float | None = None,
     mask: np.ndarray | None = None,
     correlation_kernel: np.ndarray | None = None,
+    correlation_logdet: float | None = None,
+    vecchia_factorization: VecchiaFactorization | None = None,
 ) -> ImageLikelihood:
     """Construct an image likelihood from configuration.
 
@@ -50,6 +56,13 @@ def make_likelihood(
     correlation_kernel : array-like, optional
         Fixed two-dimensional stationary correlation kernel. Required by the
         correlated Gaussian likelihood and ignored by all other likelihoods.
+    correlation_logdet : float, optional
+        Generated log determinant of the exact masked correlation matrix.
+        Pipeline callers supply this separately from user configuration.
+    vecchia_factorization : VecchiaFactorization, optional
+        Precomputed, source-validated nearest-neighbour conditional Gaussian
+        factorization. Required when ``factorization.type`` is
+        ``"nearest_neighbor"``.
 
     Returns
     -------
@@ -92,6 +105,8 @@ def make_likelihood(
             noise=noise,
             mask=mask,
             correlation_kernel=correlation_kernel,
+            correlation_logdet=correlation_logdet,
+            vecchia_factorization=vecchia_factorization,
         )
 
     if likelihood_type == "cash":
@@ -165,8 +180,15 @@ def _make_correlated_gaussian_likelihood(
     noise: np.ndarray | float | None,
     mask: np.ndarray | None,
     correlation_kernel: np.ndarray | None,
-) -> CorrelatedGaussianImageLikelihood:
+    correlation_logdet: float | None,
+    vecchia_factorization: VecchiaFactorization | None,
+) -> ImageLikelihood:
     """Construct a correlated Gaussian image likelihood."""
+    calibration = config.pop("calibration", None)
+    if calibration is not None and not isinstance(calibration, Mapping):
+        raise TypeError("correlated_gaussian calibration must be a mapping.")
+    config.pop("correlation_logdet_fingerprint", None)
+
     gaussian_noise = config.pop(
         "noise",
         noise,
@@ -189,10 +211,38 @@ def _make_correlated_gaussian_likelihood(
         False,
     )
 
-    correlation_logdet = config.pop(
-        "correlation_logdet",
+    factorization_config = config.pop(
+        "factorization",
         None,
     )
+
+    if factorization_config is not None:
+        return _make_vecchia_correlated_gaussian_likelihood(
+            config=config,
+            factorization_config=factorization_config,
+            data=data,
+            noise=gaussian_noise,
+            mask=mask,
+            correlation_kernel=correlation_kernel,
+            correlation_logdet=correlation_logdet,
+            vecchia_factorization=vecchia_factorization,
+            include_normalization=include_normalization,
+        )
+
+    if vecchia_factorization is not None:
+        raise ValueError(
+            "A nearest-neighbour factorization was supplied without setting "
+            "factorization.type='nearest_neighbor'."
+        )
+
+    configured_logdet = config.pop("correlation_logdet", None)
+    if correlation_logdet is not None and configured_logdet is not None:
+        raise ValueError(
+            "correlation_logdet must come from either the generated pipeline "
+            "artifact or low-level configuration, not both."
+        )
+    if correlation_logdet is None:
+        correlation_logdet = configured_logdet
 
     cg_rtol = config.pop(
         "cg_rtol",
@@ -218,6 +268,86 @@ def _make_correlated_gaussian_likelihood(
         correlation_logdet=correlation_logdet,
         cg_rtol=cg_rtol,
         cg_maxiter=cg_maxiter,
+    )
+
+
+def _make_vecchia_correlated_gaussian_likelihood(
+    *,
+    config: dict[str, Any],
+    factorization_config: Mapping[str, Any],
+    data: np.ndarray,
+    noise: np.ndarray | float,
+    mask: np.ndarray | None,
+    correlation_kernel: np.ndarray,
+    correlation_logdet: float | None,
+    vecchia_factorization: VecchiaFactorization | None,
+    include_normalization: bool,
+) -> VecchiaCorrelatedGaussianImageLikelihood:
+    """Construct an explicitly configured nearest-neighbour likelihood."""
+    if not isinstance(factorization_config, Mapping):
+        raise TypeError(
+            "correlated_gaussian factorization must be a mapping."
+        )
+
+    options = dict(factorization_config)
+    factorization_type = str(
+        options.pop(
+            "type",
+            "",
+        )
+    ).strip().lower()
+
+    if factorization_type != "nearest_neighbor":
+        raise ValueError(
+            "correlated_gaussian factorization.type must be exactly "
+            "'nearest_neighbor'."
+        )
+
+    if (
+        correlation_logdet is not None
+        or "correlation_logdet" in config
+    ):
+        raise ValueError(
+            "Nearest-neighbour inference cannot use correlation_logdet; "
+            "normalization and quadratic form must come from the same "
+            "factorization artifact."
+        )
+
+    if vecchia_factorization is None:
+        raise ValueError(
+            "factorization.type='nearest_neighbor' requires a precomputed "
+            "and source-validated factorization artifact."
+        )
+
+    max_neighbors = options.pop(
+        "max_neighbors",
+        64,
+    )
+    min_conditional_variance = options.pop(
+        "min_conditional_variance",
+        1.0e-12,
+    )
+
+    _reject_unknown_options(
+        options,
+        likelihood_type=(
+            "correlated_gaussian nearest-neighbour factorization"
+        ),
+    )
+    _reject_unknown_options(
+        config,
+        likelihood_type="correlated_gaussian",
+    )
+
+    return VecchiaCorrelatedGaussianImageLikelihood(
+        data=data,
+        noise=noise,
+        correlation_kernel=correlation_kernel,
+        mask=mask,
+        factorization=vecchia_factorization,
+        max_neighbors=max_neighbors,
+        min_conditional_variance=min_conditional_variance,
+        include_normalization=include_normalization,
     )
 
 

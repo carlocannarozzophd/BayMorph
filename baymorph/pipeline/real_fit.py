@@ -42,6 +42,7 @@ from baymorph.pipeline.image_preparation import load_image_preparation_products
 from baymorph.pipeline.likelihood_state import (
     RealFitLikelihoodState,
     prepare_real_fit_likelihood_state,
+    require_complete_likelihood_normalization,
 )
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
 from baymorph.pipeline.outputs import (
@@ -127,6 +128,12 @@ def run_real_fit_from_config(
             "",
         )
     ).strip().lower()
+
+    if sampler_name != "emcee":
+        require_complete_likelihood_normalization(
+            likelihood_state
+        )
+
     configured_checkpoint_path = sampler_cfg.get(
         "init",
         {},

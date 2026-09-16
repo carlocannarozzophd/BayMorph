@@ -169,13 +169,15 @@ def test_empirical_psf_auto_size_is_rejected() -> None:
         resolve_config(config)
 
 
-def test_resolved_config_omits_empirical_psf_construction_options() -> None:
-    """Resolved configurations must omit obsolete PSF construction options."""
+def test_resolved_config_exposes_only_empirical_psf_centering_gate() -> None:
+    """Resolved configs must freeze the empirical-PSF centering gate."""
     resolved = resolve_config(_minimal_config())
 
     empirical = resolved["psf"]["empirical"]
 
-    assert "construction" not in empirical
+    assert empirical["construction"] == {
+        "centroid_tolerance_pixels": 0.05,
+    }
 
 
 def test_empirical_psf_normalize_option_is_rejected() -> None:
@@ -202,4 +204,4 @@ def test_resolved_config_omits_empirical_psf_normalize_option() -> None:
 
     empirical = resolved["psf"]["empirical"]
 
-    assert "construction" not in empirical
+    assert "normalize" not in empirical["construction"]

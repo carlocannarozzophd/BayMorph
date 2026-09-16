@@ -38,6 +38,7 @@ from baymorph.pipeline.image_preparation import (
 from baymorph.pipeline.likelihood_state import (
     RealFitLikelihoodState,
     prepare_real_fit_likelihood_state,
+    require_complete_likelihood_normalization,
 )
 from baymorph.pipeline.multi_observation_noise import (
     estimate_cross_observation_noise_diagnostics,
@@ -126,6 +127,11 @@ def run_multi_observation_inference_from_config(
         base_dir=base_dir,
     )
 
+    _require_evidence_safe_likelihoods(
+        fit_config=fit_config,
+        context=context,
+    )
+
     noise_diagnostics = (
         _estimate_pre_fit_noise_diagnostics(
             context=context,
@@ -164,6 +170,11 @@ def run_multi_observation_fit_from_config(
     context = _build_multi_observation_context(
         raw_config,
         base_dir=base_dir,
+    )
+
+    _require_evidence_safe_likelihoods(
+        fit_config=fit_config,
+        context=context,
     )
 
     noise_diagnostics = (
@@ -214,6 +225,39 @@ def _estimate_pre_fit_noise_diagnostics(
     )
 
     return diagnostics
+
+
+def _require_evidence_safe_likelihoods(
+    *,
+    fit_config: Mapping[str, Any],
+    context: _MultiObservationBuildContext,
+) -> None:
+    """Block evidence-producing backends on incomplete normalizations."""
+    sampler_config = fit_config.get(
+        "sampler",
+        {},
+    )
+
+    if not isinstance(
+        sampler_config,
+        Mapping,
+    ):
+        raise ValueError(
+            "Multi-observation fit configuration requires a "
+            "'sampler' mapping."
+        )
+
+    sampler_name = str(
+        sampler_config.get(
+            "name",
+            "",
+        )
+    ).strip().lower()
+
+    if sampler_name != "emcee":
+        require_complete_likelihood_normalization(
+            context.likelihood_states
+        )
 
 
 def _run_multi_observation_inference(
@@ -364,6 +408,7 @@ def _build_multi_observation_context(
             noise=likelihood_state.noise,
             mask=products.fitting_mask,
             correlation_kernel=likelihood_state.correlation_kernel,
+            vecchia_factorization=likelihood_state.vecchia_factorization,
         )
 
     likelihood = MultiObservationLikelihood(

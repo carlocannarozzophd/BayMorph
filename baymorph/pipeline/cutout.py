@@ -49,6 +49,9 @@ def _resolve_centered_cutout(
     if len(image_shape) != 2:
         raise ValueError("'image_shape' must contain exactly two dimensions.")
 
+    if not np.isfinite(center_x) or not np.isfinite(center_y):
+        raise ValueError("Cutout centre coordinates must be finite.")
+
     if size <= 0:
         raise ValueError("Cutout size must be positive.")
 
@@ -221,6 +224,9 @@ def resolve_preliminary_auto_cutout(
     ValueError
         If the segment, coordinates, or configuration are invalid.
     """
+    if not np.isfinite(initial_factor):
+        raise ValueError("'initial_factor' must be finite.")
+
     if initial_factor <= 1.0:
         raise ValueError("'initial_factor' must be greater than 1.")
 
@@ -311,17 +317,21 @@ def resolve_plateau_cutout(
     CutoutDefinition
         Final plateau-based cutout.
     """
+    if not np.isfinite(plateau_radius):
+        raise ValueError("'plateau_radius' must be finite.")
+
     if plateau_radius < 0.0:
         raise ValueError("'plateau_radius' must be non-negative.")
+
+    if not np.isfinite(sky_margin):
+        raise ValueError("'sky_margin' must be finite.")
 
     if sky_margin < 0.0:
         raise ValueError("'sky_margin' must be non-negative.")
 
     half_size = plateau_radius + sky_margin
 
-    requested_size = int(
-        np.ceil(2.0 * half_size)
-    )
+    requested_size = 2 * int(np.ceil(half_size)) + 1
 
     requested_size = _apply_size_limits(
         requested_size,
@@ -336,6 +346,70 @@ def resolve_plateau_cutout(
         size=requested_size,
         mode="auto",
     )
+
+
+
+def validate_plateau_cutout_containment(
+    *,
+    image_shape: tuple[int, int],
+    center_x: float,
+    center_y: float,
+    plateau_radius: float,
+    sky_margin: float,
+) -> None:
+    """Require a cutout to contain its plateau and sky margin."""
+    if len(image_shape) != 2:
+        raise ValueError("'image_shape' must contain exactly two dimensions.")
+
+    ny, nx = (int(image_shape[0]), int(image_shape[1]))
+    if ny <= 0 or nx <= 0:
+        raise ValueError("Image dimensions must be positive.")
+
+    values = {
+        "center_x": float(center_x),
+        "center_y": float(center_y),
+        "plateau_radius": float(plateau_radius),
+        "sky_margin": float(sky_margin),
+    }
+
+    for name, value in values.items():
+        if not np.isfinite(value):
+            raise ValueError(f"'{name}' must be finite.")
+
+    if values["plateau_radius"] < 0.0:
+        raise ValueError("'plateau_radius' must be non-negative.")
+
+    if values["sky_margin"] < 0.0:
+        raise ValueError("'sky_margin' must be non-negative.")
+
+    distances = {
+        "left": values["center_x"] + 0.5,
+        "right": nx - 0.5 - values["center_x"],
+        "bottom": values["center_y"] + 0.5,
+        "top": ny - 0.5 - values["center_y"],
+    }
+
+    if min(distances.values()) < 0.0:
+        raise ValueError("The fitted centre lies outside the final cutout.")
+
+    required = values["plateau_radius"] + values["sky_margin"]
+    failing = {
+        edge: distance
+        for edge, distance in distances.items()
+        if distance + 1.0e-9 < required
+    }
+
+    if failing:
+        available = ", ".join(
+            f"{edge}={distance:.3f}"
+            for edge, distance in failing.items()
+        )
+        raise RuntimeError(
+            "Automatic cutout does not contain the final plateau radius "
+            f"plus sky margin: required={required:.3f} pixels; "
+            f"insufficient edge distances: {available}. Increase the "
+            "automatic cutout limit or use a scientifically fixed cutout."
+        )
 
 
 def resolve_cutout(

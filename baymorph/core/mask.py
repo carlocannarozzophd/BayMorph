@@ -136,6 +136,16 @@ def _as_boolean_mask(
     if array.ndim != 2:
         raise ValueError(f"'{name}' must be a two-dimensional array.")
 
+    try:
+        finite = np.isfinite(array)
+    except TypeError as exc:
+        raise ValueError(
+            f"'{name}' must contain finite numeric or boolean values."
+        ) from exc
+
+    if not np.all(finite):
+        raise ValueError(f"'{name}' contains non-finite pixel values.")
+
     return np.array(
         array,
         dtype=bool,
@@ -306,20 +316,47 @@ def build_fitting_mask(
     automatic_mask,
     *,
     external_mask=None,
+    mode: str = "union",
 ):
-    """Construct the canonical fitting mask."""
+    """Construct a union mask or use a curated mask verbatim."""
 
     mask = _as_boolean_mask(
         automatic_mask,
         name="automatic_mask",
     )
 
+    resolved_mode = str(mode).strip().lower()
+
+    if resolved_mode not in {"union", "exact", "replace"}:
+        raise ValueError(
+            "'mode' must be one of 'union', 'exact', or 'replace'."
+        )
+
     if external_mask is None:
+        if resolved_mode in {"exact", "replace"}:
+            raise ValueError(
+                "An external mask is required when fitting-mask mode is "
+                f"{resolved_mode!r}."
+            )
         return mask
+
+    curated = _as_boolean_mask(
+        external_mask,
+        name="external_mask",
+    )
+
+    if curated.shape != mask.shape:
+        raise ValueError(
+            "The external mask must have the same shape as the automatic "
+            "mask."
+        )
+
+    if resolved_mode in {"exact", "replace"}:
+        return curated
 
     return union(
         mask,
-        external_mask,
+        curated,
     )
 
 

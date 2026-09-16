@@ -7,6 +7,7 @@ import pytest
 
 from baymorph.pipeline.likelihood_state import (
     prepare_real_fit_likelihood_state,
+    require_complete_likelihood_normalization,
 )
 
 
@@ -133,6 +134,12 @@ def test_correlated_gaussian_uses_full_prepared_scale(
         ),
     )
 
+    monkeypatch.setattr(
+        "baymorph.pipeline.likelihood_state."
+        "validate_correlated_noise_calibration_sources",
+        lambda *args, **kwargs: None,
+    )
+
     config = {
         "fit": {
             "likelihood": {
@@ -194,6 +201,12 @@ def test_correlated_gaussian_rejects_calibration_shape_mismatch(
                 dtype=float,
             )
         ),
+    )
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.likelihood_state."
+        "validate_correlated_noise_calibration_sources",
+        lambda *args, **kwargs: None,
     )
 
     config = {
@@ -272,9 +285,93 @@ def test_correlated_gaussian_rejects_incomplete_absolute_normalization():
 
     with pytest.raises(
         ValueError,
-        match="correlation_logdet",
+        match="factorization.type='nearest_neighbor'",
     ):
         prepare_real_fit_likelihood_state(
             config,
+            _image_products(),
+        )
+
+
+
+@pytest.mark.parametrize(
+    ("likelihood", "complete"),
+    [
+        ({"type": "gaussian"}, True),
+        ({"type": "gaussian", "include_normalization": False}, False),
+        ({"type": "cash"}, False),
+        ({"type": "cash", "include_data_term": True}, True),
+        ({"type": "poisson_gaussian"}, True),
+    ],
+)
+def test_normalization_metadata_matches_likelihood_options(
+    likelihood,
+    complete,
+):
+    """Evidence status must reflect the effective normalization options."""
+    state = prepare_real_fit_likelihood_state(
+        {"fit": {"likelihood": likelihood}},
+        _image_products(),
+    )
+
+    assert state.metadata["normalization_complete"] is complete
+
+
+def test_evidence_gate_rejects_incomplete_observation():
+    """An incomplete likelihood must block absolute evidence."""
+    state = prepare_real_fit_likelihood_state(
+        {
+            "fit": {
+                "likelihood": {
+                    "type": "gaussian",
+                    "include_normalization": False,
+                },
+            },
+        },
+        _image_products(),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="completely normalized likelihood",
+    ):
+        require_complete_likelihood_normalization({"g": state})
+
+
+def test_likelihood_noise_override_is_rejected():
+    """Prepared noise is authoritative for real-image inference."""
+    with pytest.raises(
+        ValueError,
+        match="prepared-noise product is authoritative",
+    ):
+        prepare_real_fit_likelihood_state(
+            {
+                "fit": {
+                    "likelihood": {
+                        "type": "gaussian",
+                        "noise": 9.0,
+                    },
+                },
+            },
+            _image_products(),
+        )
+
+
+def test_correlated_logdet_cannot_come_from_yaml():
+    """A scalar YAML value cannot certify the masked covariance domain."""
+    with pytest.raises(
+        ValueError,
+        match="configuration-supplied correlation_logdet",
+    ):
+        prepare_real_fit_likelihood_state(
+            {
+                "fit": {
+                    "likelihood": {
+                        "type": "correlated_gaussian",
+                        "include_normalization": False,
+                        "correlation_logdet": 1.0,
+                    },
+                },
+            },
             _image_products(),
         )

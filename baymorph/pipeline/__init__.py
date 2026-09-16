@@ -12,6 +12,7 @@ from baymorph.pipeline.cutout import (
     CutoutDefinition,
     resolve_cutout,
     resolve_fixed_cutout,
+    validate_plateau_cutout_containment,
 )
 from baymorph.pipeline.image_preparation import (
     RealFITSPreparation,
@@ -127,6 +128,7 @@ __all__ = [
     "resolve_config",
     "resolve_cutout",
     "resolve_fixed_cutout",
+    "validate_plateau_cutout_containment",
     "resolve_runtime_config",
     "run_corner_diagnostics",
     "run_image_preparation",

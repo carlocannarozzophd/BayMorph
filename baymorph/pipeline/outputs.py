@@ -166,6 +166,7 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
             "prepared_image": base / "image_preparation" / "prepared_image.fits",
             "noise_map": base / "image_preparation" / "noise_map.fits",
             "mask": base / "image_preparation" / "mask.fits",
+            "fitting_mask": base / "image_preparation" / "fitting_mask.fits",
         },
         "psf": {
             "dir": base / "psf",

@@ -4,6 +4,7 @@ from astropy.io import fits
 
 
 from baymorph.core import (
+    build_fitting_mask,
     connected_source_mask,
     star_halo_mask,
     intersection,
@@ -516,6 +517,92 @@ def test_build_automatic_mask_rejects_missing_target_label():
         build_automatic_mask(
             segmentation,
             target_label=3,
+        )
+
+
+def test_build_fitting_mask_exact_replaces_automatic_mask():
+    automatic = np.array(
+        [
+            [True, True, False],
+            [False, False, True],
+        ],
+        dtype=bool,
+    )
+    curated = np.array(
+        [
+            [False, True, False],
+            [True, False, False],
+        ],
+        dtype=bool,
+    )
+
+    result = build_fitting_mask(
+        automatic,
+        external_mask=curated,
+        mode="exact",
+    )
+
+    assert np.array_equal(result, curated)
+    assert not result[0, 0]
+    assert not np.shares_memory(result, curated)
+
+
+def test_build_fitting_mask_replace_alias_matches_exact():
+    automatic = np.ones((3, 3), dtype=bool)
+    curated = np.eye(3, dtype=bool)
+
+    result = build_fitting_mask(
+        automatic,
+        external_mask=curated,
+        mode="replace",
+    )
+
+    assert np.array_equal(result, curated)
+
+
+def test_build_fitting_mask_union_preserves_legacy_behavior():
+    automatic = np.array([[True, False]], dtype=bool)
+    curated = np.array([[False, True]], dtype=bool)
+
+    result = build_fitting_mask(
+        automatic,
+        external_mask=curated,
+    )
+
+    assert result.all()
+
+
+@pytest.mark.parametrize("mode", ["exact", "replace"])
+def test_build_fitting_mask_replacement_requires_curated_mask(mode):
+    with pytest.raises(
+        ValueError,
+        match="external mask is required",
+    ):
+        build_fitting_mask(
+            np.zeros((2, 2), dtype=bool),
+            mode=mode,
+        )
+
+
+def test_build_fitting_mask_rejects_non_finite_input():
+    automatic = np.zeros((2, 2))
+    automatic[0, 1] = np.nan
+
+    with pytest.raises(
+        ValueError,
+        match="non-finite",
+    ):
+        build_fitting_mask(automatic)
+
+
+def test_build_fitting_mask_rejects_unknown_mode():
+    with pytest.raises(
+        ValueError,
+        match="must be one of",
+    ):
+        build_fitting_mask(
+            np.zeros((2, 2), dtype=bool),
+            mode="subtract",
         )
 
 

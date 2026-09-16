@@ -201,7 +201,10 @@ def test_noise_diagnostic_precedes_sampler(
         "fit": {
             "models": [
                 "single_sersic",
-            ]
+            ],
+            "sampler": {
+                "name": "emcee",
+            },
         }
     }
 

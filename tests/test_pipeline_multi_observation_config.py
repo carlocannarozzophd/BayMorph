@@ -1060,17 +1060,26 @@ def test_observation_config_resolution_accepts_covariates(
 ):
     calls = []
 
-    def fake_load_resolved_config(path):
-        calls.append(
-            Path(path)
-        )
+    def fake_load_config(path):
+        path = Path(path)
+        calls.append(path)
+        band = path.stem
+
         return {
-            "resolved_path": str(path),
+            "object": {
+                "name": f"target_{band}",
+            },
+            "data": {
+                "image_path": f"data/{band}.fits",
+            },
+            "outputs": {
+                "root": "runs",
+            },
         }
 
     monkeypatch.setattr(
-        "baymorph.pipeline.multi_observation_config.load_resolved_config",
-        fake_load_resolved_config,
+        "baymorph.pipeline.multi_observation_config.load_config",
+        fake_load_config,
     )
 
     config = {
@@ -1081,7 +1090,7 @@ def test_observation_config_resolution_accepts_covariates(
                     "wavelength": {
                         "value": 4770.0,
                         "unit": "Angstrom",
-                    }
+                    },
                 },
             },
             "r": {
@@ -1090,24 +1099,23 @@ def test_observation_config_resolution_accepts_covariates(
                     "wavelength": {
                         "value": 6231.0,
                         "unit": "Angstrom",
-                    }
+                    },
                 },
             },
-        }
+        },
     }
 
-    resolved = (
-        resolve_multi_observation_observation_configs(
-            config,
-            base_dir=tmp_path,
-        )
+    resolved = resolve_multi_observation_observation_configs(
+        config,
+        base_dir=tmp_path,
     )
 
     assert set(resolved) == {
         "g",
         "r",
     }
-
+    assert resolved["g"]["object"]["name"] == "target_g"
+    assert resolved["r"]["object"]["name"] == "target_r"
     assert calls == [
         tmp_path / "g.yaml",
         tmp_path / "r.yaml",

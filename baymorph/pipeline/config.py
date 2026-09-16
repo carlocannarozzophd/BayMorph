@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from copy import deepcopy
+from numbers import Real
 from pathlib import Path
 from typing import Any
 
@@ -61,6 +62,7 @@ SAMPLER_DEFAULTS = {
 DEFAULT_CONFIG = {
     "data": {
         "mask_path": None,
+        "mask_mode": "union",
         "pixel_scale": None,
         "target_position": None,
         "cutout": {
@@ -103,6 +105,9 @@ DEFAULT_CONFIG = {
                 "min_half_size": 12,
                 "max_half_size": 30,
                 "isolation_margin": 2,
+            },
+            "construction": {
+                "centroid_tolerance_pixels": 0.05,
             },
         },
     },
@@ -428,6 +433,28 @@ def validate_config(config: dict[str, Any]) -> None:
             "supported by the single-band production workflow."
         )
 
+    mask_mode = str(
+        config["data"].get("mask_mode", "union")
+    ).strip().lower()
+
+    if mask_mode not in {"union", "exact", "replace"}:
+        raise ValueError(
+            "Config data.mask_mode must be one of 'union', 'exact', or "
+            "'replace'."
+        )
+
+    if (
+        mask_mode in {"exact", "replace"}
+        and not (
+            config["data"].get("mask_path")
+            or config["data"].get("external_mask_path")
+        )
+    ):
+        raise ValueError(
+            "Config data.mask_path is required when data.mask_mode is "
+            f"{mask_mode!r}."
+        )
+
     if "root" not in config["outputs"]:
         raise ValueError(
             "Config section 'outputs' must contain 'root'."
@@ -447,6 +474,34 @@ def validate_config(config: dict[str, Any]) -> None:
         .get("empirical", {})
         .get("construction", {})
     )
+    psf_candidate_config = (
+        config
+        .get("psf", {})
+        .get("empirical", {})
+        .get("candidate_selection", {})
+    )
+
+    if "max_peak" in psf_candidate_config:
+        max_peak = psf_candidate_config["max_peak"]
+
+        if max_peak == "auto":
+            raise ValueError(
+                "psf.empirical.candidate_selection.max_peak='auto' is "
+                "unsafe because FITS saturation-keyword units are not "
+                "guaranteed to match the science-image units. Supply an "
+                "explicit finite positive numerical max_peak."
+            )
+
+        if (
+            isinstance(max_peak, bool)
+            or not isinstance(max_peak, Real)
+            or not math.isfinite(float(max_peak))
+            or float(max_peak) <= 0.0
+        ):
+            raise ValueError(
+                "psf.empirical.candidate_selection.max_peak must be a "
+                "finite positive number."
+            )
 
     if "auto_size" in psf_construction_config:
         raise ValueError(
@@ -462,6 +517,20 @@ def validate_config(config: dict[str, Any]) -> None:
             "'psf.empirical.construction.normalize'. "
             "BayMorph always normalizes PSF kernels to unit sum."
         )
+
+    if "centroid_tolerance_pixels" in psf_construction_config:
+        tolerance = psf_construction_config["centroid_tolerance_pixels"]
+
+        if (
+            isinstance(tolerance, bool)
+            or not isinstance(tolerance, Real)
+            or not math.isfinite(float(tolerance))
+            or float(tolerance) <= 0.0
+        ):
+            raise ValueError(
+                "psf.empirical.construction.centroid_tolerance_pixels "
+                "must be a finite positive number."
+            )
 
     fit_config = config.get(
         "fit",
@@ -884,28 +953,12 @@ def resolve_runtime_config(
         if candidate_cfg.get(
             "max_peak"
         ) == "auto":
-            saturation = (
-                observation.metadata.saturation
+            raise ValueError(
+                "psf.empirical.candidate_selection.max_peak='auto' is "
+                "unsafe for observed data because FITS saturation-keyword "
+                "units are not guaranteed to match the science-image "
+                "units. Supply an explicit finite numerical max_peak."
             )
-
-            if saturation is not None:
-                candidate_cfg[
-                    "max_peak"
-                ] = saturation
-            else:
-                candidate_cfg[
-                    "max_peak"
-                ] = (
-                    DEFAULT_CONFIG[
-                        "psf"
-                    ][
-                        "empirical"
-                    ][
-                        "candidate_selection"
-                    ][
-                        "max_peak"
-                    ]
-                )
 
     return resolved
 

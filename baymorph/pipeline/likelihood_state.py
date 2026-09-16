@@ -2,14 +2,26 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 
+from baymorph.likelihood.vecchia_gaussian import (
+    VecchiaFactorization,
+)
 from baymorph.pipeline.noise_calibration import (
     correlated_noise_calibration_path,
+    correlated_noise_settings_from_config,
     load_correlated_noise_calibration,
+    validate_correlated_noise_calibration_sources,
+)
+from baymorph.pipeline.vecchia_factorization import (
+    load_vecchia_factorization_artifact,
+    load_vecchia_factorization_manifest,
+    vecchia_factorization_manifest_path,
+    vecchia_factorization_path,
 )
 
 
@@ -25,6 +37,8 @@ class RealFitLikelihoodState:
         Marginal noise field on the prepared observation footprint.
     correlation_kernel : ndarray, optional
         Fixed stationary two-dimensional correlation kernel.
+    vecchia_factorization : VecchiaFactorization, optional
+        Source-validated nearest-neighbour conditional factorization.
     metadata : dict, optional
         Scientific and numerical provenance of the likelihood state.
     """
@@ -32,7 +46,36 @@ class RealFitLikelihoodState:
     likelihood_type: str
     noise: np.ndarray
     correlation_kernel: np.ndarray | None = None
+    vecchia_factorization: VecchiaFactorization | None = None
     metadata: dict[str, Any] | None = None
+
+
+def require_complete_likelihood_normalization(
+    likelihood_states: RealFitLikelihoodState | Mapping[str, RealFitLikelihoodState],
+) -> None:
+    """Require complete normalization before absolute-evidence inference."""
+    if isinstance(likelihood_states, RealFitLikelihoodState):
+        states = {"observation": likelihood_states}
+    else:
+        states = dict(likelihood_states)
+
+    incomplete = []
+    for observation, state in states.items():
+        metadata = state.metadata or {}
+        if metadata.get("normalization_complete", False) is not True:
+            reason = metadata.get(
+                "normalization_reason",
+                "normalization status is not complete",
+            )
+            incomplete.append(f"{observation}: {reason}")
+
+    if incomplete:
+        raise ValueError(
+            "Absolute Bayesian evidence requires a completely normalized "
+            "likelihood for every observation. Incomplete: "
+            + "; ".join(incomplete)
+            + "."
+        )
 
 
 def prepare_real_fit_likelihood_state(
@@ -101,6 +144,12 @@ def prepare_real_fit_likelihood_state(
         )
     )
 
+    if "noise" in likelihood_options:
+        raise ValueError(
+            "Real-image inference does not accept fit.likelihood.noise. "
+            "The persisted prepared-noise product is authoritative."
+        )
+
     if (
         likelihood_type
         != "correlated_gaussian"
@@ -119,10 +168,11 @@ def prepare_real_fit_likelihood_state(
             likelihood_type=likelihood_type,
             noise=noise,
             correlation_kernel=None,
-            metadata={
-                "type": likelihood_type,
-                "normalization_complete": True,
-            },
+            vecchia_factorization=None,
+            metadata=_normalization_metadata(
+                likelihood_type,
+                likelihood_options,
+            ),
         )
 
     include_normalization = bool(
@@ -132,19 +182,68 @@ def prepare_real_fit_likelihood_state(
         )
     )
 
-    if (
-        include_normalization
-        and likelihood_options.get(
-            "correlation_logdet"
-        )
-        is None
-    ):
+    if "correlation_logdet" in likelihood_options:
         raise ValueError(
-            "Correlated Gaussian real-image inference cannot use "
-            "include_normalization=True without an explicit "
-            "correlation_logdet. Set include_normalization=False "
-            "for posterior inference with the current fixed-noise "
-            "calibration."
+            "Real-image correlated Gaussian inference does not accept a "
+            "configuration-supplied correlation_logdet."
+        )
+
+    factorization_config = likelihood_options.get(
+        "factorization"
+    )
+    max_neighbors = 64
+    min_conditional_variance = 1.0e-12
+
+    if factorization_config is not None:
+        if not isinstance(
+            factorization_config,
+            Mapping,
+        ):
+            raise TypeError(
+                "Correlated Gaussian factorization must be a mapping."
+            )
+
+        factorization_options = dict(
+            factorization_config
+        )
+        factorization_type = str(
+            factorization_options.pop(
+                "type",
+                "",
+            )
+        ).strip().lower()
+
+        if factorization_type != "nearest_neighbor":
+            raise ValueError(
+                "Correlated Gaussian factorization.type must be exactly "
+                "'nearest_neighbor'."
+            )
+
+        max_neighbors = factorization_options.pop(
+            "max_neighbors",
+            64,
+        )
+        min_conditional_variance = factorization_options.pop(
+            "min_conditional_variance",
+            1.0e-12,
+        )
+
+        if factorization_options:
+            unknown = ", ".join(
+                sorted(
+                    factorization_options
+                )
+            )
+            raise ValueError(
+                "Unsupported nearest-neighbour factorization options: "
+                f"{unknown}."
+            )
+
+    elif include_normalization:
+        raise ValueError(
+            "Normalized correlated Gaussian evidence requires "
+            "factorization.type='nearest_neighbor' and its validated "
+            "immutable artifact."
         )
 
     try:
@@ -159,6 +258,52 @@ def prepare_real_fit_likelihood_state(
             "correlated-noise calibration. Build the correlated-noise "
             "calibration before fitting."
         ) from exc
+
+    settings = correlated_noise_settings_from_config(
+        config
+    )
+    validate_correlated_noise_calibration_sources(
+        calibration,
+        image_products,
+        settings=settings,
+    )
+
+    vecchia_factorization = None
+    vecchia_manifest = None
+    vecchia_path = None
+
+    if factorization_config is not None:
+        vecchia_factorization = (
+            load_vecchia_factorization_artifact(
+                config,
+                max_neighbors=max_neighbors,
+                min_conditional_variance=(
+                    min_conditional_variance
+                ),
+            )
+        )
+        vecchia_manifest = (
+            load_vecchia_factorization_manifest(
+                config,
+                max_neighbors=max_neighbors,
+            )
+        )
+        vecchia_path = vecchia_factorization_path(
+            config,
+            max_neighbors=max_neighbors,
+        )
+
+        if (
+            include_normalization
+            and not np.isfinite(
+                vecchia_factorization
+                .correlation_logdet
+            )
+        ):
+            raise ValueError(
+                "Normalized nearest-neighbour inference requires a finite "
+                "log determinant from the validated factorization."
+            )
 
     noise = np.array(
         calibration.marginal_sigma,
@@ -209,10 +354,15 @@ def prepare_real_fit_likelihood_state(
             "correlated_gaussian"
         ),
         "factorization": (
-            calibration.metadata.get(
+            "nearest_neighbor_conditional_gaussian"
+            if vecchia_factorization is not None
+            else calibration.metadata.get(
                 "factorization",
                 "C = S R S",
             )
+        ),
+        "approximate_likelihood": (
+            vecchia_factorization is not None
         ),
         "calibration_path": str(
             correlated_noise_calibration_path(
@@ -239,11 +389,85 @@ def prepare_real_fit_likelihood_state(
                 "max_lag"
             )
         ),
-        "normalization_complete": (
+        "vecchia_factorization_path": (
+            None
+            if vecchia_path is None
+            else str(
+                vecchia_path
+            )
+        ),
+        "vecchia_factorization_manifest_path": (
+            None
+            if vecchia_path is None
+            else str(
+                vecchia_factorization_manifest_path(
+                    config,
+                    max_neighbors=max_neighbors,
+                )
+            )
+        ),
+        "vecchia_factorization_payload_sha256": (
+            None
+            if vecchia_manifest is None
+            else vecchia_manifest.get(
+                "payload_sha256"
+            )
+        ),
+        "vecchia_factorization_schema": (
+            None
+            if vecchia_manifest is None
+            else vecchia_manifest.get(
+                "schema"
+            )
+        ),
+        "vecchia_factorization_schema_version": (
+            None
+            if vecchia_manifest is None
+            else vecchia_manifest.get(
+                "schema_version"
+            )
+        ),
+        "vecchia_factorization_algorithm": (
+            None
+            if vecchia_manifest is None
+            else vecchia_manifest.get(
+                "algorithm"
+            )
+        ),
+        "vecchia_max_neighbors": (
+            None
+            if vecchia_factorization is None
+            else int(
+                vecchia_factorization.max_neighbors
+            )
+        ),
+        "normalization_complete": bool(
             include_normalization
+            and vecchia_factorization is not None
+        ),
+        "evidence_scope": (
+            "approximate_absolute"
+            if (
+                include_normalization
+                and vecchia_factorization is not None
+            )
+            else "posterior_only"
+        ),
+        "normalization_reason": (
+            "complete normalized nearest-neighbour approximate "
+            "correlated Gaussian likelihood"
+            if (
+                include_normalization
+                and vecchia_factorization is not None
+            )
+            else (
+                "correlated Gaussian normalization is disabled"
+            )
         ),
         "fit_statistic": (
-            "mahalanobis_chi2"
+            "nearest_neighbor_innovation_quadratic"
+            if vecchia_factorization is not None
+            else "mahalanobis_chi2"
         ),
         "residual_diagnostic": (
             "marginal_standardized"
@@ -256,8 +480,43 @@ def prepare_real_fit_likelihood_state(
         ),
         noise=noise,
         correlation_kernel=kernel,
+        vecchia_factorization=vecchia_factorization,
         metadata=metadata,
     )
+
+
+def _normalization_metadata(
+    likelihood_type: str,
+    options: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Describe whether one likelihood is complete for absolute evidence."""
+    if likelihood_type == "gaussian":
+        complete = bool(options.get("include_normalization", True))
+        reason = (
+            "complete independent Gaussian normalization"
+            if complete
+            else "independent Gaussian normalization is disabled"
+        )
+    elif likelihood_type == "cash":
+        complete = bool(options.get("include_data_term", False))
+        reason = (
+            "complete Poisson data normalization"
+            if complete
+            else "Poisson data factorial term is omitted"
+        )
+    elif likelihood_type == "poisson_gaussian":
+        complete = True
+        reason = "complete marginalized Poisson-Gaussian normalization"
+    else:
+        complete = False
+        reason = f"normalization contract is undefined for {likelihood_type!r}"
+
+    return {
+        "type": likelihood_type,
+        "normalization_complete": complete,
+        "evidence_scope": "absolute" if complete else "posterior_only",
+        "normalization_reason": reason,
+    }
 
 
 def _normalize_likelihood_type(

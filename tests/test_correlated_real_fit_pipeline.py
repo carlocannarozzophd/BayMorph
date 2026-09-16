@@ -314,7 +314,9 @@ def test_run_real_fit_passes_prepared_likelihood_state(
                 ),
                 "include_normalization": False,
             },
-            "sampler": {},
+            "sampler": {
+                "name": "emcee",
+            },
             "comparison": {
                 "enabled": False,
                 "metric": "bayes_factor",

@@ -19,7 +19,6 @@ from baymorph.models import get_model
 from baymorph.models.geometry import sky_parameter_names
 from baymorph.pipeline.config import (
     load_config,
-    load_resolved_config,
     resolve_config,
 )
 from baymorph.pipeline.prior_config import parse_prior_config
@@ -83,6 +82,9 @@ def resolve_multi_observation_observation_configs(
         "likelihood"
     )
 
+    if "likelihood" in fit_config and global_likelihood is None:
+        raise ValueError("Multi-observation fit.likelihood cannot be null.")
+
     if (
         global_likelihood is not None
         and not isinstance(
@@ -94,10 +96,21 @@ def resolve_multi_observation_observation_configs(
             "Multi-observation fit.likelihood must be a mapping."
         )
 
+    if global_likelihood is not None:
+        _joint_likelihood(
+            global_likelihood,
+            "Multi-observation fit.likelihood",
+        )
+    _constant_background(
+        fit_config,
+        "Multi-observation fit",
+    )
+
     resolved: dict[
         str,
         dict[str, Any],
     ] = {}
+    config_owners: dict[Path, str] = {}
 
     for observation, observation_config in observations.items():
         if (
@@ -162,13 +175,13 @@ def resolve_multi_observation_observation_configs(
                 / config_path
             )
 
-        if global_likelihood is None:
-            resolved[
-                observation
-            ] = load_resolved_config(
-                config_path
-            )
-            continue
+        config_path = config_path.expanduser().resolve(strict=False)
+        _claim_path(
+            config_path,
+            observation,
+            config_owners,
+            "child configuration paths",
+        )
 
         raw_observation_config = load_config(
             config_path
@@ -187,7 +200,23 @@ def resolve_multi_observation_observation_configs(
                 "must be a mapping."
             )
 
-        if "likelihood" not in observation_fit:
+        if "likelihood" in observation_fit:
+            child_likelihood = observation_fit["likelihood"]
+            if child_likelihood is None:
+                raise ValueError(
+                    f"Observation '{observation}' fit.likelihood "
+                    "cannot be null."
+                )
+            if not isinstance(child_likelihood, Mapping):
+                raise TypeError(
+                    f"Observation '{observation}' fit.likelihood "
+                    "must be a mapping."
+                )
+            _joint_likelihood(
+                child_likelihood,
+                f"Observation '{observation}' fit.likelihood",
+            )
+        elif global_likelihood is not None:
             raw_observation_config = deepcopy(
                 raw_observation_config
             )
@@ -203,13 +232,110 @@ def resolve_multi_observation_observation_configs(
                 "fit"
             ] = observation_fit
 
-        resolved[
-            observation
-        ] = resolve_config(
-            raw_observation_config
+        item = resolve_config(raw_observation_config)
+        _constant_background(
+            item["fit"],
+            f"Observation '{observation}' fit",
+        )
+        _joint_likelihood(
+            item["fit"]["likelihood"],
+            f"Observation '{observation}' resolved fit.likelihood",
+        )
+        resolved[observation] = item
+
+    _unique_resources(resolved)
+    return resolved
+
+
+def _joint_likelihood(value, context):
+    kind = value.get("type")
+    if not isinstance(kind, str) or not kind.strip():
+        raise ValueError(
+            f"{context} must explicitly define a non-empty 'type'."
+        )
+    if "noise" in value:
+        raise ValueError(
+            f"{context} cannot define 'noise'."
         )
 
-    return resolved
+
+def _constant_background(fit, context):
+    background = fit.get("background")
+    if background is None:
+        if "background" in fit:
+            raise TypeError(
+                f"{context}.background must be a mapping."
+            )
+        return
+    if not isinstance(background, Mapping):
+        raise TypeError(
+            f"{context}.background must be a mapping."
+        )
+    model = str(
+        background.get("model", "constant")
+    ).strip().lower()
+    if model != "constant":
+        raise ValueError(
+            f"{context}.background.model must be 'constant' "
+            "for joint inference."
+        )
+
+
+def _path(value, context):
+    if (
+        not isinstance(value, (str, Path))
+        or not str(value).strip()
+    ):
+        raise ValueError(
+            f"{context} must be a non-empty path."
+        )
+    return Path(value).expanduser().resolve(strict=False)
+
+
+def _claim_path(path, observation, owners, resource):
+    previous = owners.get(path)
+    if previous is not None:
+        raise ValueError(
+            f"Observations must use distinct {resource}; "
+            f"'{previous}' and '{observation}' both resolve to {path}."
+        )
+    owners[path] = observation
+
+
+def _unique_resources(configs):
+    images = {}
+    outputs = {}
+
+    for observation, config in configs.items():
+        image = _path(
+            config["data"]["image_path"],
+            f"Observation '{observation}' data.image_path",
+        )
+        _claim_path(
+            image,
+            observation,
+            images,
+            "FITS image paths",
+        )
+
+        root = _path(
+            config["outputs"]["root"],
+            f"Observation '{observation}' outputs.root",
+        )
+        name = str(config["object"]["name"]).strip()
+        if not name:
+            raise ValueError(
+                f"Observation '{observation}' object.name "
+                "must be non-empty."
+            )
+
+        namespace = (root / name).resolve(strict=False)
+        _claim_path(
+            namespace,
+            observation,
+            outputs,
+            "preparation output namespaces",
+        )
 
 
 def build_multi_observation_parameter_layout(

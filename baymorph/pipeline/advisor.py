@@ -333,6 +333,38 @@ class ObservationConfigProposal:
     ) -> str:
         """Return a concise proposal summary for human review."""
         target = self.config["data"]["target_position"]
+        sampler_name = str(
+            self.config.get(
+                "fit",
+                {},
+            )
+            .get(
+                "sampler",
+                {},
+            )
+            .get(
+                "name",
+                "not specified",
+            )
+        ).strip().lower()
+        posterior_only = sampler_name == "emcee"
+
+        if posterior_only:
+            sampler_scope = (
+                "Selected sampler: emcee (posterior only; "
+                "Bayesian evidence unavailable)."
+            )
+            comparison_scope = (
+                "This posterior-only run cannot establish a preferred model "
+                "through Bayes factors; use an evidence-producing backend "
+                "for that comparison."
+            )
+        else:
+            sampler_scope = f"Selected sampler: {sampler_name}."
+            comparison_scope = (
+                "A preferred model can be established only through "
+                "appropriate evidence-producing fits and diagnostics."
+            )
 
         lines = [
             "BayMorph Configuration Proposal",
@@ -356,16 +388,14 @@ class ObservationConfigProposal:
                 "Flux coverage review: "
                 + ("REQUIRED" if self.requires_flux_review else "clear")
             ),
+            sampler_scope,
             "",
             "MODEL-SCREENING SCOPE",
             (
                 "The starting model is a user decision, not a pre-fit "
                 "Bayesian model preference."
             ),
-            (
-                "A preferred model can be established only through the "
-                "configured inference and evidence comparison."
-            ),
+            comparison_scope,
         ]
 
         if self.warnings:
@@ -1333,7 +1363,8 @@ class ObservationAdvisor:
                 "The observed target flux diagnostic lies outside or near "
                 "an edge of the proposed flux-prior measure. The prior was "
                 "not widened automatically; posterior boundary diagnostics "
-                "must be reviewed before interpreting the evidence."
+                "must be reviewed before interpreting the posterior or any "
+                "evidence comparison."
             )
 
         warnings.append(

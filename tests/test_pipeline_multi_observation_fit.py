@@ -886,6 +886,7 @@ def test_multi_observation_uses_observation_specific_likelihood_state(
                 if likelihood_type == "correlated_gaussian"
                 else None
             ),
+            vecchia_factorization=None,
         )
 
     monkeypatch.setattr(

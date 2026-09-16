@@ -257,6 +257,94 @@ def test_resolve_config_preserves_psf_candidate_selection_overrides():
     assert candidate_cfg["max_half_size"] == 50
 
 
+def test_resolve_config_defaults_production_mask_and_psf_contract():
+    config = {
+        "object": {"name": "example_galaxy"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": "outputs"},
+    }
+
+    resolved = resolve_config(config)
+
+    assert resolved["data"]["mask_mode"] == "union"
+    assert (
+        resolved["psf"]["empirical"]["construction"]
+        ["centroid_tolerance_pixels"]
+        == pytest.approx(0.05)
+    )
+
+
+@pytest.mark.parametrize("mode", ["unknown", "", None])
+def test_resolve_config_rejects_invalid_mask_mode(mode):
+    config = {
+        "object": {"name": "example_galaxy"},
+        "data": {
+            "image_path": "data/image.fits",
+            "mask_mode": mode,
+        },
+        "outputs": {"root": "outputs"},
+    }
+
+    with pytest.raises(ValueError, match="data.mask_mode"):
+        resolve_config(config)
+
+
+@pytest.mark.parametrize("mode", ["exact", "replace"])
+def test_resolve_config_requires_mask_path_for_replacement(mode):
+    config = {
+        "object": {"name": "example_galaxy"},
+        "data": {
+            "image_path": "data/image.fits",
+            "mask_mode": mode,
+        },
+        "outputs": {"root": "outputs"},
+    }
+
+    with pytest.raises(ValueError, match="data.mask_path is required"):
+        resolve_config(config)
+
+
+def test_resolve_config_rejects_auto_psf_max_peak():
+    config = {
+        "object": {"name": "example_galaxy"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": "outputs"},
+        "psf": {
+            "empirical": {
+                "candidate_selection": {"max_peak": "auto"},
+            },
+        },
+    }
+
+    with pytest.raises(ValueError, match="saturation-keyword units"):
+        resolve_config(config)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [None, True, "50000", 0.0, -1.0, float("nan")],
+)
+def test_resolve_config_requires_finite_positive_numeric_psf_max_peak(
+    value,
+):
+    config = {
+        "object": {"name": "example_galaxy"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": "outputs"},
+        "psf": {
+            "empirical": {
+                "candidate_selection": {"max_peak": value},
+            },
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="max_peak must be a finite positive number",
+    ):
+        resolve_config(config)
+
+
 def test_resolve_runtime_config_preserves_numeric_target_position():
     image = ImageData(
         data=np.zeros((20, 30), dtype=float),
@@ -412,63 +500,41 @@ def test_resolve_runtime_config_keeps_auto_without_metadata_pixel_scale():
     assert resolved["data"]["pixel_scale"] == "auto"
 
 
-def test_resolve_runtime_config_resolves_auto_max_peak():
+def test_resolve_runtime_config_rejects_auto_max_peak_with_satlevel():
     image = ImageData(
         data=np.zeros((21, 31), dtype=float),
         header=fits.Header({"SATLEVEL": 54321.0}),
     )
-
     observation = Observation.from_image(image)
-
     config = {
         "psf": {
             "empirical": {
-                "candidate_selection": {
-                    "max_peak": "auto",
-                }
-            }
-        }
+                "candidate_selection": {"max_peak": "auto"},
+            },
+        },
     }
 
-    resolved = resolve_runtime_config(
-        config,
-        observation,
+    with pytest.raises(ValueError, match="saturation-keyword units"):
+        resolve_runtime_config(config, observation)
+
+
+def test_resolve_runtime_config_rejects_auto_max_peak_without_metadata():
+    observation = Observation.from_image(
+        ImageData(data=np.zeros((21, 31), dtype=float))
     )
-
-    assert (
-        resolved["psf"]["empirical"]
-        ["candidate_selection"]["max_peak"]
-        == 54321.0
-    )
-
-
-def test_resolve_runtime_config_keeps_default_max_peak_without_metadata():
-    image = ImageData(
-        data=np.zeros((21, 31), dtype=float),
-    )
-
-    observation = Observation.from_image(image)
-
     config = {
         "psf": {
             "empirical": {
-                "candidate_selection": {
-                    "max_peak": "auto",
-                }
-            }
-        }
+                "candidate_selection": {"max_peak": "auto"},
+            },
+        },
     }
 
-    resolved = resolve_runtime_config(
-        config,
-        observation,
-    )
-
-    assert (
-        resolved["psf"]["empirical"]
-        ["candidate_selection"]["max_peak"]
-        == 80000
-    )
+    with pytest.raises(
+        ValueError,
+        match="Supply an explicit finite numerical max_peak",
+    ):
+        resolve_runtime_config(config, observation)
 
 
 def test_resolve_runtime_config_preserves_explicit_max_peak():

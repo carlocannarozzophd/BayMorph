@@ -211,9 +211,7 @@ def test_config_maker_builds_minimal_runnable_config(
         "auto"
     ] is True
 
-    assert candidate["max_peak"] == pytest.approx(
-        50000.0
-    )
+    assert "max_peak" not in candidate
 
     assert "min_half_size" not in candidate
     assert "max_half_size" not in candidate
@@ -300,7 +298,7 @@ def test_config_maker_empirical_psf_resolves_numeric_candidate_limits(
         )
 
     assert candidate["max_peak"] == pytest.approx(
-        50000.0
+        80000.0
     )
 
     assert candidate["min_half_size"] > 0

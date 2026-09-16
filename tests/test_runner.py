@@ -1461,23 +1461,23 @@ def test_runner_fit_builds_required_correlated_noise_calibration(
     ] == pytest.approx(0.20)
     assert calibration_kwargs[
         "correlation_tile_size"
-    ] == 16
+    ] == 48
     assert calibration_kwargs[
         "correlation_stride"
     ] == 8
     assert calibration_kwargs[
         "max_lag"
-    ] == 3
+    ] == 20
     assert calibration_kwargs[
         "spectrum_grid_size"
     ] == 512
 
 
-def test_runner_multi_observation_fit_builds_noise_calibrations(
+def test_runner_multi_observation_fit_builds_noise_artifacts(
     monkeypatch,
     tmp_path,
 ):
-    """Joint fitting must calibrate every correlated observation first."""
+    """Joint fitting must prepare every correlated-noise artifact first."""
     observation_configs = {
         "g": {
             "object": {
@@ -1490,9 +1490,13 @@ def test_runner_multi_observation_fit_builds_noise_calibrations(
             "fit": {
                 "likelihood": {
                     "type": "correlated_gaussian",
-                    "include_normalization": False,
+                    "include_normalization": True,
                     "calibration": {
                         "max_lag": 5,
+                    },
+                    "factorization": {
+                        "type": "nearest_neighbor",
+                        "max_neighbors": 64,
                     },
                 },
             },
@@ -1549,6 +1553,23 @@ def test_runner_multi_observation_fit_builds_noise_calibrations(
         fake_build_calibration,
     )
 
+    def fake_ensure_factorization(
+        config,
+        **kwargs,
+    ):
+        events.append(
+            (
+                "factorization",
+                config["object"]["name"],
+                kwargs,
+            )
+        )
+
+    monkeypatch.setattr(
+        "baymorph.runner.ensure_vecchia_factorization_artifact",
+        fake_ensure_factorization,
+    )
+
     expected_result = object()
 
     def fake_joint_fit(config):
@@ -1579,8 +1600,11 @@ def test_runner_multi_observation_fit_builds_noise_calibrations(
         for event in events
     ] == [
         "calibrate",
+        "factorization",
         "fit",
     ]
 
     assert events[0][1] == "galaxy_g"
     assert events[0][2]["max_lag"] == 5
+    assert events[1][1] == "galaxy_g"
+    assert events[1][2]["max_neighbors"] == 64

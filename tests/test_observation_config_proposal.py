@@ -149,6 +149,47 @@ def test_proposal_blocks_required_flux_review(
     assert not output_path.exists()
 
 
+def test_emcee_proposal_summary_marks_evidence_unavailable(
+    tmp_path: Path,
+) -> None:
+    """An emcee proposal must not imply that the run produces evidence."""
+    proposal = ObservationConfigProposal(
+        config={
+            "data": {
+                "image_path": "data/observed.fits",
+                "target_position": {
+                    "x": 20.0,
+                    "y": 20.0,
+                },
+            },
+            "fit": {
+                "sampler": {
+                    "name": "emcee",
+                },
+            },
+        },
+        output_path=(
+            tmp_path
+            / "emcee.yaml"
+        ),
+        starting_model="single_sersic",
+        flux_prior={
+            "type": "log_uniform",
+            "lower": 100.0,
+            "upper": 1000.0,
+        },
+        flux_prior_source="explicit scientific prior",
+        requires_flux_review=False,
+    )
+
+    summary = proposal.summary()
+
+    assert "posterior only" in summary
+    assert "Bayesian evidence unavailable" in summary
+    assert "cannot establish a preferred model" in summary
+    assert "configured inference and evidence comparison" not in summary
+
+
 def test_proposal_requires_exactly_one_flux_prior_source(
     tmp_path: Path,
 ) -> None:
