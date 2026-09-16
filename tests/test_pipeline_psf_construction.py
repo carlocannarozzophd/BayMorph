@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 
 import json
+from astropy.io import fits
 
 from baymorph.pipeline import (
     centroid_from_flux,
@@ -19,22 +20,70 @@ from baymorph.pipeline import (
     stack_psf_cutouts,
     subtract_outer_background,
 )
+from baymorph.pipeline.psf_construction import (
+    EMPIRICAL_PSF_CENTROID_TOLERANCE_PIXELS,
+    EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION,
+    build_empirical_psf_provenance,
+    empirical_psf_centroid_tolerance_pixels,
+    validate_empirical_psf,
+)
+
+
+def _save_valid_empirical_psf_bundle(tmp_path):
+    """Create a complete empirical-PSF product with immutable provenance."""
+    image_path = tmp_path / "image.fits"
+    fits.writeto(
+        image_path,
+        np.arange(81, dtype=float).reshape(9, 9),
+    )
+
+    config = {
+        "object": {"name": "example_galaxy"},
+        "data": {"image_path": str(image_path)},
+        "outputs": {
+            "root": str(tmp_path / "outputs"),
+            "overwrite": True,
+        },
+    }
+    resolved = resolve_config(config)
+    psf = np.zeros((9, 9), dtype=float)
+    psf[4, 4] = 1.0
+
+    save_empirical_psf(resolved, psf)
+
+    candidates_path = pipeline_paths(resolved)["psf"]["candidates"]
+    candidates_path.write_text(
+        '[{"x": 4.0, "y": 4.0, "half_size": 4}]',
+        encoding="utf-8",
+    )
+
+    validation = validate_empirical_psf(
+        psf,
+        centroid_tolerance_pixels=(
+            empirical_psf_centroid_tolerance_pixels(resolved)
+        ),
+    )
+    save_empirical_psf_metadata(
+        resolved,
+        {
+            "schema_version": EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION,
+            "type": "empirical",
+            "validation": validation,
+            "provenance": build_empirical_psf_provenance(
+                resolved
+            ),
+        },
+    )
+
+    return resolved, psf, image_path
 
 
 
 def test_save_and_load_empirical_psf_roundtrip(tmp_path):
-    config = {
-        "object": {"name": "example_galaxy"},
-        "data": {"image_path": "data/image.fits"},
-        "outputs": {"root": str(tmp_path / "outputs"), "overwrite": True},
-    }
-
-    resolved = resolve_config(config)
-
-    psf = np.ones((9, 9))
-    psf /= psf.sum()
-
-    path = save_empirical_psf(resolved, psf)
+    resolved, psf, _ = _save_valid_empirical_psf_bundle(
+        tmp_path
+    )
+    path = pipeline_paths(resolved)["psf"]["psf_fits"]
 
     assert path == pipeline_paths(resolved)["psf"]["psf_fits"]
     assert path.exists()
@@ -58,6 +107,232 @@ def test_normalize_psf_returns_unit_sum():
 def test_normalize_psf_rejects_zero_sum():
     with pytest.raises(ValueError, match="positive and finite"):
         normalize_psf(np.zeros((3, 3)))
+
+
+def test_empirical_psf_centroid_tolerance_is_resolved_explicitly():
+    """The production centering gate must be present in resolved configs."""
+    config = {
+        "object": {"name": "example_galaxy"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": "outputs"},
+    }
+
+    resolved = resolve_config(config)
+
+    assert resolved["psf"]["empirical"]["construction"][
+        "centroid_tolerance_pixels"
+    ] == EMPIRICAL_PSF_CENTROID_TOLERANCE_PIXELS
+
+
+@pytest.mark.parametrize(
+    ("psf", "message"),
+    [
+        (np.ones(5), "2D array"),
+        (
+            np.array(
+                [
+                    [0.0, 0.0, 0.0],
+                    [0.0, np.nan, 0.0],
+                    [0.0, 0.0, 0.0],
+                ]
+            ),
+            "finite values",
+        ),
+        (
+            np.array(
+                [
+                    [0.0, -0.1, 0.0],
+                    [0.0, 1.1, 0.0],
+                    [0.0, 0.0, 0.0],
+                ]
+            ),
+            "non-negative values",
+        ),
+        (np.zeros((3, 3)), "positive finite flux"),
+        (
+            np.array(
+                [
+                    [0.0, 0.0, 0.0],
+                    [0.0, 2.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                ]
+            ),
+            "normalized to unit sum",
+        ),
+    ],
+)
+def test_validate_empirical_psf_rejects_invalid_raw_kernel(
+    psf,
+    message,
+):
+    """Inference must not silently sanitize an invalid stored PSF."""
+    with pytest.raises(ValueError, match=message):
+        validate_empirical_psf(
+            psf,
+            centroid_tolerance_pixels=0.25,
+        )
+
+
+def test_validate_empirical_psf_rejects_off_center_kernel():
+    """A normalized finite PSF must also satisfy the frozen centroid gate."""
+    psf = np.zeros((7, 7), dtype=float)
+    psf[3, 4] = 1.0
+
+    with pytest.raises(
+        ValueError,
+        match="flux centroid is not centered",
+    ):
+        validate_empirical_psf(
+            psf,
+            centroid_tolerance_pixels=0.25,
+        )
+
+
+def test_load_empirical_psf_rejects_stale_input_fits(tmp_path):
+    """PSF reuse must fail if its source observation changes byte-for-byte."""
+    resolved, _, image_path = _save_valid_empirical_psf_bundle(
+        tmp_path
+    )
+    fits.writeto(
+        image_path,
+        np.ones((9, 9), dtype=float),
+        overwrite=True,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="provenance does not match",
+    ):
+        load_empirical_psf(resolved)
+
+
+def test_load_empirical_psf_rejects_stale_candidate_catalog(tmp_path):
+    """The exact vetted candidate catalog must remain bound to the PSF."""
+    resolved, _, _ = _save_valid_empirical_psf_bundle(
+        tmp_path
+    )
+    candidates_path = pipeline_paths(resolved)["psf"]["candidates"]
+    candidates_path.write_text(
+        '[{"x": 5.0, "y": 4.0, "half_size": 4}]',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="provenance does not match",
+    ):
+        load_empirical_psf(resolved)
+
+
+def test_load_empirical_psf_rejects_stale_psf_fits(tmp_path):
+    """The metadata must bind the exact stored PSF FITS product."""
+    resolved, _, _ = _save_valid_empirical_psf_bundle(
+        tmp_path
+    )
+    psf_path = pipeline_paths(resolved)["psf"]["psf_fits"]
+
+    with fits.open(psf_path, mode="update") as hdul:
+        hdul[0].header["STALE"] = True
+
+    with pytest.raises(
+        ValueError,
+        match="provenance does not match",
+    ):
+        load_empirical_psf(resolved)
+
+
+def test_load_empirical_psf_rejects_changed_centroid_tolerance(tmp_path):
+    """A different centering policy must invalidate an existing PSF bundle."""
+    resolved, _, _ = _save_valid_empirical_psf_bundle(
+        tmp_path
+    )
+    resolved["psf"]["empirical"]["construction"][
+        "centroid_tolerance_pixels"
+    ] = 0.5
+
+    with pytest.raises(
+        ValueError,
+        match="validation metadata does not match",
+    ):
+        load_empirical_psf(resolved)
+
+
+def test_load_empirical_psf_requires_metadata(tmp_path):
+    """Inference must reject an empirical PSF without its sidecar."""
+    resolved, _, _ = _save_valid_empirical_psf_bundle(
+        tmp_path
+    )
+    metadata_path = pipeline_paths(resolved)["psf"]["metadata"]
+    metadata_path.unlink()
+
+    with pytest.raises(
+        FileNotFoundError,
+        match="provenance metadata is required",
+    ):
+        load_empirical_psf(resolved)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("schema_version", 0),
+        ("type", "gaussian"),
+    ],
+)
+def test_load_empirical_psf_rejects_wrong_metadata_contract(
+    tmp_path,
+    field,
+    value,
+):
+    """Inference must reject an unsupported metadata schema or type."""
+    resolved, _, _ = _save_valid_empirical_psf_bundle(
+        tmp_path
+    )
+    metadata_path = pipeline_paths(resolved)["psf"]["metadata"]
+    metadata = json.loads(
+        metadata_path.read_text(encoding="utf-8")
+    )
+    metadata[field] = value
+    metadata_path.write_text(
+        json.dumps(metadata),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="schema/type is unsupported or missing",
+    ):
+        load_empirical_psf(resolved)
+
+
+@pytest.mark.parametrize(
+    ("field", "message"),
+    [
+        ("validation", "validation metadata is missing"),
+        ("provenance", "provenance metadata is missing"),
+    ],
+)
+def test_load_empirical_psf_rejects_incomplete_metadata(
+    tmp_path,
+    field,
+    message,
+):
+    """Legacy sidecars must fail closed instead of reaching inference."""
+    resolved, _, _ = _save_valid_empirical_psf_bundle(
+        tmp_path
+    )
+    metadata_path = pipeline_paths(resolved)["psf"]["metadata"]
+    metadata = json.loads(
+        metadata_path.read_text(encoding="utf-8")
+    )
+    del metadata[field]
+    metadata_path.write_text(
+        json.dumps(metadata),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=message):
+        load_empirical_psf(resolved)
 
 
 def test_extract_centered_cutout_returns_expected_shape():
@@ -356,6 +631,17 @@ def test_psf_construction_rejects_low_snr_candidates(
         "save_empirical_psf",
         lambda *args, **kwargs: None,
     )
+    monkeypatch.setattr(
+        module,
+        "build_empirical_psf_provenance",
+        lambda *_: {
+            "schema_version": 1,
+            "input_fits": {"sha256": "input"},
+            "candidate_catalog": {"sha256": "candidates"},
+            "psf_fits": {"sha256": "psf"},
+            "empirical_config_sha256": "config",
+        },
+    )
 
     captured = {}
 
@@ -430,6 +716,13 @@ def test_psf_construction_rejects_low_snr_candidates(
     ][0]["reason"] == (
         "peak_snr_below_threshold"
     )
+    assert metadata["type"] == "empirical"
+    assert metadata["validation"][
+        "centroid_offset_pixels"
+    ] == pytest.approx(0.0)
+    assert metadata["provenance"][
+        "empirical_config_sha256"
+    ] == "config"
 
 
 def test_psf_construction_fails_when_all_candidates_fail_snr(

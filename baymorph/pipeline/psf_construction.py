@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +22,227 @@ from baymorph.simulation.psf import (
     EmpiricalPSF,
     GaussianPSF,
 )
+
+
+EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION = 1
+EMPIRICAL_PSF_CENTROID_TOLERANCE_PIXELS = 0.05
+EMPIRICAL_PSF_NORMALIZATION_ATOL = 1.0e-8
+
+
+def _file_sha256(path: str | Path) -> str:
+    """Return the SHA-256 digest of one immutable input file."""
+    digest = hashlib.sha256()
+
+    with Path(path).open("rb") as stream:
+        for chunk in iter(
+            lambda: stream.read(1024 * 1024),
+            b"",
+        ):
+            digest.update(chunk)
+
+    return digest.hexdigest()
+
+
+def _canonical_json_sha256(value: Any) -> str:
+    """Return a stable SHA-256 digest for JSON-compatible settings."""
+    payload = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+        default=str,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def empirical_psf_centroid_tolerance_pixels(
+    config: Mapping[str, Any],
+) -> float:
+    """Return the explicit empirical-PSF centroid tolerance in pixels."""
+    value = (
+        config.get("psf", {})
+        .get("empirical", {})
+        .get("construction", {})
+        .get(
+            "centroid_tolerance_pixels",
+            EMPIRICAL_PSF_CENTROID_TOLERANCE_PIXELS,
+        )
+    )
+
+    try:
+        tolerance = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "psf.empirical.construction.centroid_tolerance_pixels "
+            "must be finite and positive."
+        ) from exc
+
+    if not np.isfinite(tolerance) or tolerance <= 0.0:
+        raise ValueError(
+            "psf.empirical.construction.centroid_tolerance_pixels "
+            "must be finite and positive."
+        )
+
+    return tolerance
+
+
+def validate_empirical_psf(
+    psf: np.ndarray,
+    *,
+    centroid_tolerance_pixels: float,
+) -> dict[str, Any]:
+    """Validate a production empirical PSF without repairing its pixels.
+
+    The raw stored kernel must already be two-dimensional, finite,
+    non-negative, normalized to unit sum, and centered within the declared
+    flux-centroid tolerance. Invalid kernels fail closed rather than relying on
+    ``EmpiricalPSF`` to sanitize them at inference time.
+    """
+    data = np.asarray(psf, dtype=float)
+
+    if data.ndim != 2:
+        raise ValueError(
+            "Production empirical PSF must be a 2D array."
+        )
+
+    if data.size == 0 or 0 in data.shape:
+        raise ValueError(
+            "Production empirical PSF must not be empty."
+        )
+
+    if not np.all(np.isfinite(data)):
+        raise ValueError(
+            "Production empirical PSF must contain only finite values."
+        )
+
+    if np.any(data < 0.0):
+        raise ValueError(
+            "Production empirical PSF must contain only non-negative values."
+        )
+
+    total = float(np.sum(data))
+
+    if not np.isfinite(total) or total <= 0.0:
+        raise ValueError(
+            "Production empirical PSF must have positive finite flux."
+        )
+
+    if not np.isclose(
+        total,
+        1.0,
+        rtol=0.0,
+        atol=EMPIRICAL_PSF_NORMALIZATION_ATOL,
+    ):
+        raise ValueError(
+            "Production empirical PSF must be normalized to unit sum "
+            f"within {EMPIRICAL_PSF_NORMALIZATION_ATOL:g}; got {total:.17g}."
+        )
+
+    try:
+        tolerance = float(centroid_tolerance_pixels)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "Empirical PSF centroid tolerance must be finite and positive."
+        ) from exc
+
+    if not np.isfinite(tolerance) or tolerance <= 0.0:
+        raise ValueError(
+            "Empirical PSF centroid tolerance must be finite and positive."
+        )
+
+    yy, xx = np.indices(data.shape, dtype=float)
+    centroid_x = float(np.sum(data * xx) / total)
+    centroid_y = float(np.sum(data * yy) / total)
+    center_x = 0.5 * (data.shape[1] - 1)
+    center_y = 0.5 * (data.shape[0] - 1)
+    centroid_offset = float(
+        np.hypot(
+            centroid_x - center_x,
+            centroid_y - center_y,
+        )
+    )
+
+    if centroid_offset > tolerance:
+        raise ValueError(
+            "Production empirical PSF flux centroid is not centered: "
+            f"offset={centroid_offset:.6g} pixels exceeds the frozen "
+            f"tolerance={tolerance:.6g} pixels."
+        )
+
+    return {
+        "shape": [int(value) for value in data.shape],
+        "sum": total,
+        "minimum": float(np.min(data)),
+        "maximum": float(np.max(data)),
+        "centroid_x": centroid_x,
+        "centroid_y": centroid_y,
+        "center_x": center_x,
+        "center_y": center_y,
+        "centroid_offset_pixels": centroid_offset,
+        "centroid_tolerance_pixels": tolerance,
+        "normalization_atol": EMPIRICAL_PSF_NORMALIZATION_ATOL,
+    }
+
+
+def build_empirical_psf_provenance(
+    config: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Fingerprint the PSF and every file/config input used to build it."""
+    paths = pipeline_paths(dict(config))
+    image_path = Path(config["data"]["image_path"]).expanduser().resolve()
+    candidates_path = paths["psf"]["candidates"].resolve()
+    psf_path = paths["psf"]["psf_fits"].resolve()
+    empirical_config = (
+        config.get("psf", {})
+        .get("empirical", {})
+    )
+
+    return {
+        "schema_version": EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION,
+        "input_fits": {
+            "path": str(image_path),
+            "sha256": _file_sha256(image_path),
+        },
+        "candidate_catalog": {
+            "path": str(candidates_path),
+            "sha256": _file_sha256(candidates_path),
+        },
+        "psf_fits": {
+            "path": str(psf_path),
+            "sha256": _file_sha256(psf_path),
+        },
+        "empirical_config_sha256": _canonical_json_sha256(
+            empirical_config
+        ),
+    }
+
+
+def validate_empirical_psf_provenance(
+    config: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> None:
+    """Reject a PSF whose sidecar does not bind the current inputs."""
+    recorded = metadata.get("provenance")
+
+    if not isinstance(recorded, Mapping):
+        raise ValueError(
+            "Empirical PSF provenance metadata is missing. Rebuild the PSF."
+        )
+
+    current = build_empirical_psf_provenance(config)
+
+    if dict(recorded) != current:
+        mismatched = sorted(
+            key
+            for key in set(recorded) | set(current)
+            if recorded.get(key) != current.get(key)
+        )
+        raise ValueError(
+            "Empirical PSF provenance does not match the current immutable "
+            "inputs; rebuild the PSF. Mismatched fields: "
+            + ", ".join(mismatched)
+            + "."
+        )
 
 
 def save_empirical_psf(
@@ -45,7 +268,15 @@ def save_empirical_psf(
 
     overwrite = bool(config["outputs"].get("overwrite", False))
 
-    fits.writeto(path, psf, overwrite=overwrite)
+    data = np.asarray(psf, dtype=float)
+    validate_empirical_psf(
+        data,
+        centroid_tolerance_pixels=(
+            empirical_psf_centroid_tolerance_pixels(config)
+        ),
+    )
+
+    fits.writeto(path, data, overwrite=overwrite)
 
     return path
 
@@ -70,11 +301,61 @@ def load_empirical_psf(
     else:
         resolved = config
 
-    path = pipeline_paths(resolved)["psf"]["psf_fits"]
-
-    return EmpiricalPSF(
-        fits.getdata(path)
+    paths = pipeline_paths(resolved)["psf"]
+    path = paths["psf_fits"]
+    data = fits.getdata(path)
+    validation = validate_empirical_psf(
+        data,
+        centroid_tolerance_pixels=(
+            empirical_psf_centroid_tolerance_pixels(resolved)
+        ),
     )
+
+    metadata_path = paths["metadata"]
+
+    if not metadata_path.exists():
+        raise FileNotFoundError(
+            "Empirical PSF provenance metadata is required before fitting: "
+            f"{metadata_path}"
+        )
+
+    with metadata_path.open("r") as stream:
+        metadata = json.load(stream)
+
+    if not isinstance(metadata, Mapping):
+        raise ValueError(
+            "Empirical PSF metadata must be a JSON mapping."
+        )
+
+    if (
+        metadata.get("schema_version")
+        != EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION
+        or metadata.get("type") != "empirical"
+    ):
+        raise ValueError(
+            "Empirical PSF metadata schema/type is unsupported or missing. "
+            "Rebuild the PSF."
+        )
+
+    recorded_validation = metadata.get("validation")
+
+    if not isinstance(recorded_validation, Mapping):
+        raise ValueError(
+            "Empirical PSF validation metadata is missing. Rebuild the PSF."
+        )
+
+    if dict(recorded_validation) != validation:
+        raise ValueError(
+            "Empirical PSF validation metadata does not match the stored "
+            "kernel or frozen tolerance. Rebuild the PSF."
+        )
+
+    validate_empirical_psf_provenance(
+        resolved,
+        metadata,
+    )
+
+    return EmpiricalPSF(data)
 
 
 def estimate_psf_equivalent_gaussian_fwhm(
@@ -824,6 +1105,13 @@ def run_psf_construction_from_config(
         cutouts
     )
 
+    validation = validate_empirical_psf(
+        psf,
+        centroid_tolerance_pixels=(
+            empirical_psf_centroid_tolerance_pixels(resolved)
+        ),
+    )
+
     psf_core_fwhm = estimate_psf_core_fwhm(
         psf,
     )
@@ -845,9 +1133,17 @@ def run_psf_construction_from_config(
         psf,
     )
 
+    provenance = build_empirical_psf_provenance(
+        resolved
+    )
+
     save_empirical_psf_metadata(
         resolved,
         {
+            "schema_version": (
+                EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION
+            ),
+            "type": "empirical",
             "observation": observation_metadata_dict(
                 observation
             ),
@@ -866,6 +1162,8 @@ def run_psf_construction_from_config(
             "psf_equivalent_gaussian_fwhm_pix": (
                 psf_equivalent_gaussian_fwhm
             ),
+            "validation": validation,
+            "provenance": provenance,
             "used_candidates": used_candidates,
             "rejected_candidates": rejected_candidates,
             "warnings": _empirical_psf_warnings(
