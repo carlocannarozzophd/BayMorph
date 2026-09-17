@@ -93,6 +93,36 @@ def test_runner_run_generates_configured_simulation_first(
     ]
 
 
+def test_simulated_template_passes_image_preparation(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """The shipped simulated field must satisfy the preparation contracts."""
+    config_directory = tmp_path / "configs"
+    config_directory.mkdir()
+    config_file = config_directory / "simulated_galaxy.yaml"
+    config_file.write_text(
+        yaml.safe_dump(
+            _simulated_config(),
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+
+    runner = BayMorphRunner(
+        config_file,
+        verbose=False,
+    )
+    runner.simulate()
+    prepared = runner.prepare_image()
+
+    assert prepared.prepared_data.shape == tuple(
+        runner.config["simulation"]["shape"]
+    )
+
+
 def test_runner_anchors_standard_project_configuration(
     tmp_path,
     monkeypatch,

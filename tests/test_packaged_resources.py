@@ -106,7 +106,6 @@ def test_packaged_notebooks_match_repository_sources() -> None:
         if filename.is_file()
     }
 
-    assert packaged_notebooks
     assert packaged_notebooks == repository_notebooks
 
     for notebook_name in packaged_notebooks:

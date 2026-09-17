@@ -4,11 +4,11 @@ object:
 data:
   image_path: runs/simulated_galaxy/input/simulated_galaxy.fits
   target_position:
-    x: 40
-    y: 40
+    x: 60
+    y: 60
   cutout:
     mode: fixed
-    size: 81
+    size: 121
 
 outputs:
   root: runs
@@ -19,7 +19,8 @@ diagnostics:
     single_sersic: "Simulated single-Sérsic observation"
 
 simulation:
-  shape: [81, 81]
+  # The field must contain the sky plateau plus the preparation sky margin.
+  shape: [121, 121]
   seed: 42
 
   truth:
@@ -28,8 +29,8 @@ simulation:
     n: 2.0
     q: 0.75
     theta_deg: 25.0
-    x0: 40.0
-    y0: 40.0
+    x0: 60.0
+    y0: 60.0
 
   psf:
     type: gaussian

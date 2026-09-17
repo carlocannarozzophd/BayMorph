@@ -109,6 +109,32 @@ def _psf_to_image(
     return None
 
 
+def _load_display_psf(
+    config,
+):
+    """Return the saved empirical PSF for display, if the fit used one.
+
+    Analytic PSFs are rebuilt from the configuration by ``_psf_to_image``.
+    """
+    psf_type = config.get(
+        "psf",
+        {},
+    ).get(
+        "type",
+        "empirical",
+    )
+
+    if psf_type != "empirical":
+        return None
+
+    try:
+        return load_empirical_psf(
+            config,
+        )
+    except FileNotFoundError:
+        return None
+
+
 def _resolve_residual_config(
     config: str | Path | Mapping[str, Any],
 ) -> tuple[
@@ -302,12 +328,9 @@ def _run_single_observation_residual_maps(
         config,
     )["fits"]
 
-    try:
-        psf = load_empirical_psf(
-            config,
-        )
-    except FileNotFoundError:
-        psf = None
+    psf = _load_display_psf(
+        config,
+    )
 
     fits = _normalize_fit_results(
         fit_results
@@ -455,12 +478,9 @@ def _run_multi_observation_residual_maps(
                 observation_name
             ]
 
-            try:
-                psf = load_empirical_psf(
-                    observation_config
-                )
-            except FileNotFoundError:
-                psf = None
+            psf = _load_display_psf(
+                observation_config
+            )
 
             fig, _ = plot_pipeline_fit_maps(
                 original_cutout=image_products.cutout,

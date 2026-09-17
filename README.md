@@ -14,10 +14,6 @@
 <p align="center">
   <a href="#installation">Installation</a> ·
   <a href="#quick-start">Quick Start</a> ·
-  <a href="notebooks/01_Simulated_SingleBand.ipynb">Simulated Tutorial</a> ·
-  <a href="notebooks/02A_Observed_Assessment_and_Config.ipynb">Observed Assessment</a> ·
-  <a href="notebooks/02B_Observed_Fit.ipynb">Observed Fit</a> ·
-  <a href="notebooks/03_MultiObservation_JointFit.ipynb">Multi-Observation Tutorial</a> ·
   <a href="docs/API.md">API</a> ·
   <a href="docs/architecture/ARCHITECTURE.md">Architecture</a> ·
   <a href="ROADMAP.md">Roadmap</a>
@@ -212,9 +208,7 @@ include generated results such as run directories, fitted posteriors,
 benchmark tables, or research figures.
 
 Users supply their own FITS observations and choose where BayMorph writes
-analysis products. The public single- and multi-observation notebooks are
-generic templates and contain no target-specific coordinates, flux priors, or
-stored execution output.
+analysis products.
 
 ### Development installation
 
@@ -246,18 +240,12 @@ baymorph init my_analysis
 cd my_analysis
 ~~~
 
-The initialized workspace contains the canonical example configuration,
-the three generic tutorial notebooks, and empty directories for user data and
-run products. The notebooks are copied from the installed BayMorph package and
-contain no observational data or stored execution output. The workspace is
+The initialized workspace contains the canonical example configuration and
+empty directories for notebooks, user data, and run products. The workspace is
 only a convenience: BayMorph does not require a special project format and can
 also be used directly inside an existing working directory.
 
-The recommended first workflow is notebook-based:
-
-    notebooks/01_Simulated_SingleBand.ipynb
-
-The same configured analysis can be executed non-interactively:
+The simulated example analysis can be executed non-interactively:
 
 ~~~bash
 baymorph run configs/simulated_galaxy.yaml
@@ -399,27 +387,9 @@ provenance and fit summaries.
 
 ## Learn BayMorph
 
-BayMorph provides three canonical public notebooks.
-
-The recommended starting point is:
-
-    notebooks/01_Simulated_SingleBand.ipynb
-
-It demonstrates the complete simulated single-observation workflow from
-configuration through posterior inference and diagnostics.
-
-The observed single-observation workflow is:
-
-    notebooks/02A_Observed_Assessment_and_Config.ipynb
-    notebooks/02B_Observed_Fit.ipynb
-
-The joint multi-observation workflow is:
-
-    notebooks/03_MultiObservation_JointFit.ipynb
-
-All three notebooks use the public configuration and runner interfaces.
-Sampler selection remains explicit, while multiprocessing and
-backend-specific execution machinery remain package-owned.
+Tutorial notebooks are being rebuilt against the current public API and are
+not currently distributed. The canonical simulated example configuration is
+`configs/simulated_galaxy.yaml`.
 
 ## Documentation
 

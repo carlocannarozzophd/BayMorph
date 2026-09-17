@@ -31,10 +31,6 @@ and the project follows Semantic Versioning in spirit.
   persistence, and mandatory user model selection.
 * Backend-neutral validation runners, reference problems, repeatability
   analyses, and simulation-based calibration infrastructure.
-* Canonical simulated single-observation, observed single-observation, and
-  multi-observation public notebooks.
-* Packaged generic tutorial notebooks copied into new user workspaces by
-  `baymorph init`.
 * Packaging tests for runtime, development, and interactive dependencies.
 * Public-source boundary checks preventing observational data and generated
   research products from entering release artifacts.
@@ -57,9 +53,6 @@ and the project follows Semantic Versioning in spirit.
   documentation around the production contracts.
 * Refocused the roadmap on real multi-observation production fits and paper
   closure.
-* Generalized the observed single- and multi-observation notebooks for
-  user-supplied FITS data, explicit target seeds, and observation-specific
-  flux priors.
 * Adopted normalized Gaussian likelihoods as neutral tutorial defaults while
   requiring explicit validation for correlated-noise models.
 
@@ -72,6 +65,7 @@ and the project follows Semantic Versioning in spirit.
   benchmarks.
 * Target-specific public configuration and tracked generated benchmark tables,
   research summaries, and figures.
+* All tutorial notebooks, pending a rebuild against the current public API.
 
 ### Fixed
 
@@ -91,6 +85,12 @@ and the project follows Semantic Versioning in spirit.
   diagnostics, output persistence, and sampler provenance.
 * Corrected public notebook, API, terminology, and release documentation
   inconsistencies.
+* Enlarged the simulated-galaxy example field to 121 x 121 pixels so that it
+  contains the sky plateau plus the preparation sky margin; the shipped
+  81 x 81 example failed during image preparation.
+* Residual-map diagnostics no longer load empirical-PSF provenance for fits
+  that use an analytic Gaussian PSF, which made `run(diagnostics=True)` fail
+  after the fit; empirical-PSF validation is unchanged.
 
 ---
 
