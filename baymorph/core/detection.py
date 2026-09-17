@@ -144,6 +144,14 @@ def detect_sources_mask(
 ):
     """Detect sources and return a boolean source mask.
 
+    Warning
+    -------
+    This mask uses ``True`` = detected source pixel, the *opposite*
+    convention from likelihood exclusion masks (``True`` = excluded) used
+    throughout :mod:`baymorph.core.mask` and :mod:`baymorph.likelihood`. Do
+    not pass this mask directly to a likelihood; invert it first if it is
+    to be used for exclusion.
+
     Parameters
     ----------
     data : array-like
@@ -164,7 +172,8 @@ def detect_sources_mask(
     Returns
     -------
     ndarray of bool
-        Boolean mask identifying detected source pixels.
+        Boolean mask identifying detected source pixels (``True`` = source
+        pixel detected, not ``True`` = excluded).
     """
     result = detect_sources_segmentation(
         data,

@@ -8,8 +8,8 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from baymorph.models.convolved import ConvolvedModel
 from baymorph.models.point_source import PointSourceModel
+from baymorph.observation.convolved import ConvolvedModel
 from baymorph.observation.point_source import PSFPointSourceRenderer
 
 FloatArray = NDArray[np.float64]

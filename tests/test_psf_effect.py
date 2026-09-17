@@ -86,6 +86,15 @@ def test_psf_effect_composes_inside_observation_model() -> None:
     )
 
 
+def test_psf_effect_rejects_negative_sidelobes() -> None:
+    """A kernel with negative lobes must fail closed, not be renormalized."""
+    kernel = np.ones((5, 5), dtype=float)
+    kernel[0, 0] = -0.5
+
+    with pytest.raises(ValueError, match="non-negative values"):
+        PSFEffect(EmpiricalPSF(kernel))
+
+
 def test_psf_effect_rejects_object_without_kernel() -> None:
     """Invalid PSF objects must fail during construction."""
     with pytest.raises(

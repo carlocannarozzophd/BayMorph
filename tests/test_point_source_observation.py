@@ -90,9 +90,14 @@ def test_renderer_respects_extended_domain_origin() -> None:
 
 
 def test_renderer_supports_empirical_psf() -> None:
-    """Empirical PSFs must use the same observation-level renderer."""
-    kernel = np.zeros((7, 7), dtype=float)
-    kernel[3, 3] = 1.0
+    """Empirical PSFs must use the same observation-level renderer.
+
+    The kernel must be a physically valid, adequately sampled band-limited
+    PSF (not a single-occupied-pixel delta), otherwise cubic-spline
+    sub-pixel shifting produces ringing large enough to legitimately exceed
+    the declared ringing tolerance.
+    """
+    kernel = GaussianPSF(fwhm=2.5).kernel(size=7)
 
     source = PointSourceModel(
         flux=25.0,

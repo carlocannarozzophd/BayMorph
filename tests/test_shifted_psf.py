@@ -87,9 +87,14 @@ def test_shifted_psf_respects_global_origin() -> None:
 
 
 def test_shifted_psf_supports_empirical_kernel() -> None:
-    """Empirical PSFs must use the same shifted-rendering contract."""
-    kernel = np.zeros((7, 7), dtype=float)
-    kernel[3, 3] = 1.0
+    """Empirical PSFs must use the same shifted-rendering contract.
+
+    The kernel must be a physically valid, adequately sampled band-limited
+    PSF (not a single-occupied-pixel delta), otherwise cubic-spline
+    sub-pixel shifting produces ringing large enough to legitimately exceed
+    ``PSF_SHIFT_RINGING_TOLERANCE``.
+    """
+    kernel = GaussianPSF(fwhm=2.5).kernel(size=7)
 
     image = render_shifted_psf(
         psf=EmpiricalPSF(kernel),
@@ -106,6 +111,21 @@ def test_shifted_psf_supports_empirical_kernel() -> None:
         abs=1.0e-12,
     )
     assert np.all(image >= 0.0)
+
+
+def test_shifted_psf_rejects_excessive_ringing() -> None:
+    """A pathologically undersampled kernel must fail closed, not be repaired."""
+    kernel = np.zeros((7, 7), dtype=float)
+    kernel[3, 3] = 1.0
+
+    with pytest.raises(ValueError, match="ringing tolerance"):
+        render_shifted_psf(
+            psf=EmpiricalPSF(kernel),
+            flux=25.0,
+            x0=10.2,
+            y0=9.8,
+            shape=(21, 21),
+        )
 
 
 @pytest.mark.parametrize(

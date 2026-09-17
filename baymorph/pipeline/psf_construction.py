@@ -21,6 +21,7 @@ from baymorph.plotting.style import make_plot
 from baymorph.simulation.psf import (
     EmpiricalPSF,
     GaussianPSF,
+    validate_finite_nonnegative_kernel,
 )
 
 
@@ -98,26 +99,14 @@ def validate_empirical_psf(
     flux-centroid tolerance. Invalid kernels fail closed rather than relying on
     ``EmpiricalPSF`` to sanitize them at inference time.
     """
-    data = np.asarray(psf, dtype=float)
-
-    if data.ndim != 2:
-        raise ValueError(
-            "Production empirical PSF must be a 2D array."
-        )
+    data = validate_finite_nonnegative_kernel(
+        psf,
+        label="Production empirical PSF",
+    )
 
     if data.size == 0 or 0 in data.shape:
         raise ValueError(
             "Production empirical PSF must not be empty."
-        )
-
-    if not np.all(np.isfinite(data)):
-        raise ValueError(
-            "Production empirical PSF must contain only finite values."
-        )
-
-    if np.any(data < 0.0):
-        raise ValueError(
-            "Production empirical PSF must contain only non-negative values."
         )
 
     total = float(np.sum(data))

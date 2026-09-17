@@ -3,7 +3,6 @@
 from baymorph.models import builtin as _builtin  # noqa: F401
 from baymorph.models.bulge_disk import BulgeDiskModel
 from baymorph.models.composite import CompositeModel
-from baymorph.models.convolved import ConvolvedModel
 from baymorph.models.double_sersic import DoubleSersicModel
 from baymorph.models.exponential import ExponentialComponent
 from baymorph.models.labels import (
@@ -25,7 +24,6 @@ from baymorph.models.sersic_point_source import SersicPointSourceModel
 __all__ = [
     "BulgeDiskModel",
     "CompositeModel",
-    "ConvolvedModel",
     "DecomposableMorphology",
     "DoubleSersicModel",
     "ExponentialComponent",

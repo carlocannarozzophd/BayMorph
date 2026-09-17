@@ -1,5 +1,6 @@
 """Observation-model infrastructure for BayMorph."""
 
+from baymorph.observation.convolved import ConvolvedModel
 from baymorph.observation.effects import (
     PSFEffect,
     normalized_psf_kernel,
@@ -10,6 +11,7 @@ from baymorph.observation.point_source import PSFPointSourceRenderer
 from baymorph.observation.protocols import ObservationEffect
 
 __all__ = [
+    "ConvolvedModel",
     "ObservationEffect",
     "ObservationModel",
     "PSFEffect",

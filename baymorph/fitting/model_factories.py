@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from baymorph.models import (
     BulgeDiskModel,
-    ConvolvedModel,
     DoubleSersicModel,
     ExponentialComponent,
     PointSourceModel,
@@ -12,6 +11,7 @@ from baymorph.models import (
     SersicPointSourceModel,
 )
 from baymorph.observation.composite import ObservedCompositeModel
+from baymorph.observation.convolved import ConvolvedModel
 
 
 class SkyModelWrapper:

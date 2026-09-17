@@ -68,3 +68,29 @@ def test_empirical_psf_requires_positive_flux():
         ValueError,
     ):
         psf.kernel()
+
+
+def test_empirical_psf_rejects_non_finite_values():
+
+    import pytest
+
+    kernel = np.ones((5, 5))
+    kernel[2, 2] = np.nan
+
+    psf = EmpiricalPSF(kernel_array=kernel)
+
+    with pytest.raises(ValueError, match="finite values"):
+        psf.kernel()
+
+
+def test_empirical_psf_rejects_negative_values():
+
+    import pytest
+
+    kernel = np.ones((5, 5))
+    kernel[2, 2] = -0.1
+
+    psf = EmpiricalPSF(kernel_array=kernel)
+
+    with pytest.raises(ValueError, match="non-negative values"):
+        psf.kernel()

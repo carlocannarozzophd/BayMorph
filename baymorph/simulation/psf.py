@@ -3,7 +3,60 @@
 from dataclasses import dataclass
 
 import numpy as np
+from numpy.typing import ArrayLike
 from scipy.signal import fftconvolve
+
+
+def validate_finite_nonnegative_kernel(
+    kernel: ArrayLike,
+    *,
+    label: str,
+) -> np.ndarray:
+    """Validate PSF-kernel structural hygiene: 2D, finite, non-negative.
+
+    Does not check normalization or centering; callers apply those with
+    their own tolerance conventions. Rejects invalid kernels; never repairs
+    them.
+
+    Parameters
+    ----------
+    kernel : array_like
+        Candidate PSF kernel.
+    label : str
+        Human-readable kernel identity used in raised error messages.
+
+    Returns
+    -------
+    ndarray
+        The kernel as a float array, unchanged.
+
+    Raises
+    ------
+    ValueError
+        If the kernel is not 2D, contains non-finite values, or contains
+        negative values.
+    """
+    array = np.asarray(
+        kernel,
+        dtype=float,
+    )
+
+    if array.ndim != 2:
+        raise ValueError(
+            f"{label} kernel must be a 2D array."
+        )
+
+    if not np.all(np.isfinite(array)):
+        raise ValueError(
+            f"{label} kernel must contain only finite values."
+        )
+
+    if np.any(array < 0.0):
+        raise ValueError(
+            f"{label} kernel must contain only non-negative values."
+        )
+
+    return array
 
 
 @dataclass
@@ -108,32 +161,14 @@ class EmpiricalPSF:
         Raises
         ------
         ValueError
-            If the kernel is not two-dimensional or has non-positive total
-            flux.
+            If the kernel is not two-dimensional, contains non-finite or
+            negative values, or has non-positive total flux.
         """
         del size
 
-        kernel = np.asarray(
+        kernel = validate_finite_nonnegative_kernel(
             self.kernel_array,
-            dtype=float,
-        )
-
-        if kernel.ndim != 2:
-            raise ValueError(
-                "Empirical PSF kernel must be 2D."
-            )
-
-        kernel = np.nan_to_num(
-            kernel,
-            nan=0.0,
-            posinf=0.0,
-            neginf=0.0,
-        )
-
-        kernel = np.clip(
-            kernel,
-            a_min=0.0,
-            a_max=None,
+            label="Empirical PSF",
         )
 
         total = kernel.sum()
@@ -176,8 +211,9 @@ def convolve_with_psf(
     Raises
     ------
     ValueError
-        If the image or PSF kernel is not two-dimensional, contains non-finite
-        values, or if the kernel has non-positive total flux.
+        If the image or PSF kernel is not two-dimensional, contains
+        non-finite or negative values, or if the kernel has non-positive
+        total flux.
     """
     image_array = np.asarray(
         image,
@@ -199,20 +235,10 @@ def convolve_with_psf(
     else:
         kernel = psf.kernel()
 
-    kernel_array = np.asarray(
+    kernel_array = validate_finite_nonnegative_kernel(
         kernel,
-        dtype=float,
+        label="PSF",
     )
-
-    if kernel_array.ndim != 2:
-        raise ValueError(
-            "PSF kernel must be 2D."
-        )
-
-    if not np.all(np.isfinite(kernel_array)):
-        raise ValueError(
-            "PSF kernel must contain only finite values."
-        )
 
     kernel_sum = kernel_array.sum()
 

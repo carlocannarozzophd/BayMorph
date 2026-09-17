@@ -11,10 +11,10 @@ from baymorph.core import (
 )
 from baymorph.models import (
     CompositeModel,
-    ConvolvedModel,
     DoubleSersicModel,
     SersicModel,
 )
+from baymorph.observation import ConvolvedModel
 from baymorph.pipeline.advisor import (
     ObservationAdvisor,
     ObservationConfigProposal,
