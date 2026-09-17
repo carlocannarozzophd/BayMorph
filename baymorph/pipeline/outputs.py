@@ -90,6 +90,28 @@ def save_resolved_config(config: dict[str, Any]) -> Path:
     return path
 
 
+def save_fit_resolved_config(
+    config: dict[str, Any],
+    model_name: str,
+) -> Path:
+    """Save one resolved inference configuration inside its model directory."""
+    resolved = resolve_config(config)
+    paths = pipeline_paths(resolved)["fits"]
+
+    if model_name not in paths:
+        raise ValueError(
+            f"Model {model_name!r} is not present in fit.models."
+        )
+
+    path = paths[model_name]["config_resolved"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    with path.open("w") as stream:
+        yaml.safe_dump(resolved, stream, sort_keys=False)
+
+    return path
+
+
 def diagnostic_format(config: dict[str, Any]) -> str:
     """Return the configured diagnostic-plot file format.
 
@@ -146,6 +168,8 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
 
         fit_paths[model_name] = {
             "dir": fit_dir,
+            "config_resolved": fit_dir / "config_resolved.yaml",
+            "complete": fit_dir / "COMPLETE.json",
             "fit_results": fit_dir / "fit_results.json",
             "posterior": fit_dir / "posterior.npz",
             "corner": fit_dir / f"corner.{plot_format}",

@@ -1,5 +1,6 @@
 import json
 from copy import deepcopy
+from pathlib import Path
 
 from types import SimpleNamespace
 
@@ -29,6 +30,8 @@ from baymorph.pipeline.real_fit import (
     _compute_best_model,
     _compute_fit_statistics,
     _compute_bayesian_model_comparison,
+    _resolved_boundary_priors,
+    _single_model_fit_config,
     _run_sampler,
     load_real_fit_products,
     run_real_fit_from_config,
@@ -101,13 +104,10 @@ def test_run_real_fit_requires_image_preparation_products(
         "baymorph.pipeline.real_fit.validate_fit_priors",
         lambda config: None,
     )
+    output_writes = []
     monkeypatch.setattr(
         "baymorph.pipeline.real_fit.make_output_tree",
-        lambda config: None,
-    )
-    monkeypatch.setattr(
-        "baymorph.pipeline.real_fit.save_resolved_config",
-        lambda config: None,
+        lambda config: output_writes.append(config),
     )
 
     def raise_missing_products(config):
@@ -125,6 +125,8 @@ def test_run_real_fit_requires_image_preparation_products(
     ):
         run_real_fit_from_config({})
 
+    assert output_writes == []
+
 
 def test_run_real_fit_requires_psf_products(
     monkeypatch,
@@ -141,13 +143,10 @@ def test_run_real_fit_requires_psf_products(
         "baymorph.pipeline.real_fit.validate_fit_priors",
         lambda config: None,
     )
+    output_writes = []
     monkeypatch.setattr(
         "baymorph.pipeline.real_fit.make_output_tree",
-        lambda config: None,
-    )
-    monkeypatch.setattr(
-        "baymorph.pipeline.real_fit.save_resolved_config",
-        lambda config: None,
+        lambda config: output_writes.append(config),
     )
     monkeypatch.setattr(
         "baymorph.pipeline.real_fit.load_image_preparation_products",
@@ -168,6 +167,8 @@ def test_run_real_fit_requires_psf_products(
         match="PSF products are required before fitting",
     ):
         run_real_fit_from_config({})
+
+    assert output_writes == []
 
 
 def test_real_fit_products_preserve_posterior_round_trip(
@@ -310,8 +311,16 @@ class DeltaPSF:
 
 
 class DummyPosterior:
-    def __init__(self, logz):
+    def __init__(self, logz, logz_error):
         self.logz = float(logz)
+        self.logz_error = float(logz_error)
+        self.evidence = EvidenceEstimate(
+            logz=logz,
+            uncertainty=logz_error,
+            method="test-evidence",
+            uncertainty_kind="test-standard-error",
+        )
+        self.evidence_method = self.evidence.method
 
 
 def test_compute_best_model_uses_best_parameters():
@@ -428,6 +437,112 @@ def test_build_parameter_set_double_sersic():
     assert parameters.names == parameter_names
 
 
+def test_single_model_fit_config_resolves_nautilus_checkpoint_per_model(
+    tmp_path,
+):
+    """Each model must own an explicit Nautilus checkpoint path."""
+    priors = _prior_config_with_explicit_fluxes(
+        "single_sersic"
+    )
+    priors["double_sersic"] = (
+        _prior_config_with_explicit_fluxes(
+            "double_sersic"
+        )["double_sersic"]
+    )
+    resolved = resolve_config(
+        {
+            "object": {
+                "name": "example_galaxy",
+            },
+            "data": {
+                "image_path": "data/image.fits",
+            },
+            "outputs": {
+                "root": str(
+                    tmp_path
+                    / "outputs"
+                ),
+            },
+            "fit": {
+                "models": [
+                    "single_sersic",
+                    "double_sersic",
+                ],
+                "priors": priors,
+                "sampler": {
+                    "name": "nautilus",
+                    "init": {
+                        "filepath": "auto",
+                        "resume": True,
+                    },
+                },
+                "comparison": {
+                    "enabled": True,
+                    "metric": "bayes_factor",
+                },
+            },
+        }
+    )
+
+    single = _single_model_fit_config(
+        resolved,
+        "single_sersic",
+    )
+    double = _single_model_fit_config(
+        resolved,
+        "double_sersic",
+    )
+
+    assert resolved["fit"]["sampler"]["init"]["filepath"] == "auto"
+    assert single["fit"]["models"] == [
+        "single_sersic"
+    ]
+    assert double["fit"]["models"] == [
+        "double_sersic"
+    ]
+    assert single["fit"]["comparison"]["enabled"] is False
+    assert double["fit"]["comparison"]["enabled"] is False
+    assert Path(
+        single["fit"]["sampler"]["init"]["filepath"]
+    ).name == "nautilus_checkpoint.hdf5"
+    assert Path(
+        single["fit"]["sampler"]["init"]["filepath"]
+    ).parent.name == "single_sersic"
+    assert Path(
+        double["fit"]["sampler"]["init"]["filepath"]
+    ).parent.name == "double_sersic"
+
+
+def test_boundary_priors_are_resolved_for_every_sampled_parameter():
+    """Boundary diagnostics must use absolute and component-specific priors."""
+    priors = _prior_config_with_explicit_fluxes(
+        "double_sersic"
+    )
+    resolved = _resolved_boundary_priors(
+        model_name="double_sersic",
+        prior_cfg=priors,
+        background_cfg=DEFAULT_CONFIG["fit"]["background"],
+        references={
+            "target_x": 10.0,
+            "target_y": 20.0,
+        },
+    )
+
+    assert resolved["x0"] == {
+        "type": "uniform",
+        "lower": 2.0,
+        "upper": 18.0,
+    }
+    assert resolved["y0"] == {
+        "type": "uniform",
+        "lower": 12.0,
+        "upper": 28.0,
+    }
+    assert resolved["q_bulge"] == resolved["q_disk"]
+    assert resolved["theta_bulge"] == resolved["theta_disk"]
+    assert "background_level" in resolved
+
+
 def test_make_model_factory_single_sersic():
     factory = _make_model_factory(
         "single_sersic",
@@ -481,7 +596,7 @@ def test_make_model_factory_double_sersic():
 
 def test_compute_bayesian_model_comparison():
     single = RealFitProducts(
-        posterior=DummyPosterior(10.0),
+        posterior=DummyPosterior(10.0, 0.2),
         best_parameters={},
         best_model_image=np.zeros((2, 2)),
         residual=np.zeros((2, 2)),
@@ -492,7 +607,7 @@ def test_compute_bayesian_model_comparison():
     )
 
     double = RealFitProducts(
-        posterior=DummyPosterior(13.0),
+        posterior=DummyPosterior(13.0, 0.3),
         best_parameters={},
         best_model_image=np.zeros((2, 2)),
         residual=np.zeros((2, 2)),
@@ -512,6 +627,18 @@ def test_compute_bayesian_model_comparison():
     assert comparison["logz"]["single_sersic"] == pytest.approx(10.0)
     assert comparison["logz"]["double_sersic"] == pytest.approx(13.0)
     assert comparison["delta_logz"]["double_sersic_minus_single_sersic"] == pytest.approx(3.0)
+    assert comparison["delta_logz_error"][
+        "double_sersic_minus_single_sersic"
+    ] == pytest.approx(
+        np.hypot(
+            0.2,
+            0.3,
+        )
+    )
+    assert comparison["evidence_method"] == {
+        "single_sersic": "test-evidence",
+        "double_sersic": "test-evidence",
+    }
     assert comparison["bayes_factor"]["double_sersic_over_single_sersic"] == pytest.approx(
         np.exp(3.0)
     )
@@ -797,10 +924,25 @@ def _run_two_model_fit_for_comparison_test(
     *,
     comparison_enabled,
     comparison_metric="bayes_factor",
+    output_root=None,
+    complete_model=None,
 ):
+    output_root = (
+        Path("unused")
+        if output_root is None
+        else Path(
+            output_root
+        )
+    )
     resolved = {
         "data": {
             "image_path": "missing-image.fits",
+        },
+        "outputs": {
+            "root": str(
+                output_root
+            ),
+            "overwrite": False,
         },
         "fit": {
             "models": [
@@ -836,6 +978,20 @@ def _run_two_model_fit_for_comparison_test(
     )
     saved_comparisons = []
 
+    if complete_model is not None:
+        completion_path = (
+            output_root
+            / complete_model
+            / "COMPLETE.json"
+        )
+        completion_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        completion_path.write_text(
+            "{}\n"
+        )
+
     monkeypatch.setattr(
         "baymorph.pipeline.real_fit.resolve_config",
         lambda config: resolved,
@@ -856,8 +1012,26 @@ def _run_two_model_fit_for_comparison_test(
         lambda config: None,
     )
     monkeypatch.setattr(
-        "baymorph.pipeline.real_fit.save_resolved_config",
-        lambda config: None,
+        "baymorph.pipeline.real_fit.save_fit_resolved_config",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.pipeline_paths",
+        lambda config: {
+            "fits": {
+                model: {
+                    "dir": output_root
+                    / model,
+                    "complete": output_root
+                    / model
+                    / "COMPLETE.json",
+                }
+                for model in (
+                    "single_sersic",
+                    "double_sersic",
+                )
+            }
+        },
     )
     monkeypatch.setattr(
         "baymorph.pipeline.real_fit.load_image_preparation_products",
@@ -890,6 +1064,14 @@ def _run_two_model_fit_for_comparison_test(
         lambda *args, **kwargs: None,
     )
     monkeypatch.setattr(
+        "baymorph.pipeline.real_fit._resolved_boundary_priors",
+        lambda **kwargs: {},
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit._write_fit_completion_marker",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
         "baymorph.pipeline.real_fit.save_bayesian_model_comparison",
         lambda config, comparison: saved_comparisons.append(comparison),
     )
@@ -915,6 +1097,23 @@ def test_multiple_models_skip_comparison_when_disabled(
         "double_sersic",
     }
     assert saved_comparisons == []
+
+
+def test_completed_model_is_protected_when_overwrite_is_false(
+    tmp_path,
+    monkeypatch,
+):
+    """A completion marker must prevent accidental fit replacement."""
+    with pytest.raises(
+        FileExistsError,
+        match="complete fit already exists",
+    ):
+        _run_two_model_fit_for_comparison_test(
+            monkeypatch,
+            comparison_enabled=False,
+            output_root=tmp_path,
+            complete_model="single_sersic",
+        )
 
 
 def test_multiple_models_compute_comparison_when_enabled(

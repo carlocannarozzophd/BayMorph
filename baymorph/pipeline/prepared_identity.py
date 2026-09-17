@@ -375,11 +375,38 @@ def validate_prepared_input_identity(
     *,
     observation: Observation | None = None,
 ) -> None:
-    """Fail closed unless current inputs exactly match a saved identity."""
+    """Fail closed unless immutable preparation inputs still match.
+
+    The saved generator identity records which BayMorph sources produced the
+    preparation bundle.  It is provenance, not part of the scientific input
+    identity consumed by later inference code.  Fit-only source changes may
+    therefore use a self-consistent saved bundle without rewriting it.
+    """
     if not isinstance(saved_identity, Mapping):
         raise RuntimeError(
             "Saved image-preparation products have no immutable input "
             "identity. Re-run image preparation before inference."
+        )
+
+    saved_generator = saved_identity.get("generator")
+
+    if not isinstance(saved_generator, Mapping):
+        raise RuntimeError(
+            "Saved image-preparation products have no generator provenance. "
+            "Re-run image preparation in a new output namespace."
+        )
+
+    required_generator_fields = {
+        "package",
+        "package_version",
+        "python_source_count",
+        "python_source_manifest_sha256",
+    }
+
+    if not required_generator_fields.issubset(saved_generator):
+        raise RuntimeError(
+            "Saved image-preparation generator provenance is incomplete. "
+            "Re-run image preparation in a new output namespace."
         )
 
     current_identity = build_prepared_input_identity(
@@ -394,7 +421,6 @@ def validate_prepared_input_identity(
         key
         for key in (
             "schema_version",
-            "generator",
             "fits",
             "curated_mask",
             "preparation_config_sha256",
@@ -402,7 +428,10 @@ def validate_prepared_input_identity(
         if saved_identity.get(key) != current_identity.get(key)
     ]
 
-    detail = ", ".join(mismatches) or "identity payload"
+    if not mismatches:
+        return
+
+    detail = ", ".join(mismatches)
 
     raise RuntimeError(
         "Saved image-preparation products do not match the current immutable "

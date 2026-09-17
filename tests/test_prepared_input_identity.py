@@ -178,6 +178,41 @@ def test_fit_only_configuration_change_preserves_preparation_identity(
     assert validate_prepared_input_identity(identity, changed) is None
 
 
+def test_fit_only_source_change_preserves_producer_provenance(
+    tmp_path,
+    monkeypatch,
+):
+    """Inference changes must not invalidate immutable prepared products."""
+    image_path = tmp_path / "source.fits"
+    _write_science_fits(image_path)
+    config = _config(tmp_path, image_path)
+    identity = build_prepared_input_identity(config)
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.prepared_identity._package_generator_identity",
+        lambda: {
+            "package": "baymorph",
+            "package_version": "0.3.1",
+            "python_source_count": 999,
+            "python_source_manifest_sha256": "different-consumer-source",
+        },
+    )
+
+    assert validate_prepared_input_identity(identity, config) is None
+
+
+def test_validation_requires_saved_generator_provenance(tmp_path):
+    """A preparation bundle must retain its producer identity."""
+    image_path = tmp_path / "source.fits"
+    _write_science_fits(image_path)
+    config = _config(tmp_path, image_path)
+    identity = build_prepared_input_identity(config)
+    del identity["generator"]
+
+    with pytest.raises(RuntimeError, match="generator provenance"):
+        validate_prepared_input_identity(identity, config)
+
+
 def test_build_rejects_supplied_observation_without_source_path(tmp_path):
     """An in-memory Observation cannot attest which FITS bytes it represents."""
     image_path = tmp_path / "source.fits"

@@ -30,6 +30,7 @@ from baymorph.pipeline.outputs import (
     make_output_tree,
     object_output_dir,
     pipeline_paths,
+    save_fit_resolved_config,
     save_resolved_config,
 )
 from baymorph.pipeline.psf_candidates import (
@@ -143,6 +144,7 @@ __all__ = [
     "run_simulation_from_config",
     "save_empirical_psf",
     "save_empirical_psf_metadata",
+    "save_fit_resolved_config",
     "save_image_preparation_products",
     "save_psf_candidates",
     "save_real_fit_products",

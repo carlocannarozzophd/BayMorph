@@ -10,6 +10,7 @@ from baymorph.pipeline import (
     pipeline_paths,
     resolve_config,
     resolve_runtime_config,
+    save_fit_resolved_config,
     save_resolved_config,
 )
 
@@ -95,6 +96,53 @@ def test_save_resolved_config(tmp_path):
     assert loaded["object"]["name"] == "example_galaxy"
 
 
+def test_save_fit_resolved_config_is_model_local(tmp_path):
+    """Inference snapshots must not overwrite the preparation-root config."""
+    config = resolve_config(
+        {
+            "object": {
+                "name": "example_galaxy",
+            },
+            "data": {
+                "image_path": "data/image.fits",
+            },
+            "outputs": {
+                "root": str(
+                    tmp_path
+                    / "outputs"
+                ),
+            },
+            "fit": {
+                "models": [
+                    "single_sersic",
+                ],
+            },
+        }
+    )
+
+    path = save_fit_resolved_config(
+        config,
+        "single_sersic",
+    )
+    base = (
+        tmp_path
+        / "outputs"
+        / "example_galaxy"
+    )
+
+    assert path == (
+        base
+        / "fits"
+        / "single_sersic"
+        / "config_resolved.yaml"
+    )
+    assert path.is_file()
+    assert not (
+        base
+        / "config_resolved.yaml"
+    ).exists()
+
+
 def test_load_resolved_config(tmp_path):
     path = tmp_path / "config.yaml"
     path.write_text(
@@ -153,6 +201,12 @@ def test_pipeline_paths_are_canonical(tmp_path):
 
         assert model_name in paths["fits"]
         assert paths["fits"][model_name]["dir"] == fit_dir
+        assert paths["fits"][model_name]["config_resolved"] == (
+            fit_dir / "config_resolved.yaml"
+        )
+        assert paths["fits"][model_name]["complete"] == (
+            fit_dir / "COMPLETE.json"
+        )
         assert paths["fits"][model_name]["fit_results"] == fit_dir / "fit_results.json"
         assert paths["fits"][model_name]["posterior"] == fit_dir / "posterior.npz"
         assert paths["fits"][model_name]["corner"] == fit_dir / "corner.pdf"

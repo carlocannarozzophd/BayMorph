@@ -6,8 +6,10 @@ import dataclasses
 import hashlib
 import importlib.metadata
 import json
+import os
 import sys
 import warnings
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -48,7 +50,7 @@ from baymorph.pipeline.observation_metadata import observation_metadata_dict
 from baymorph.pipeline.outputs import (
     make_output_tree,
     pipeline_paths,
-    save_resolved_config,
+    save_fit_resolved_config,
 )
 from baymorph.pipeline.prior_config import (
     parse_prior_config,
@@ -72,9 +74,6 @@ def run_real_fit_from_config(
     validate_fit_priors(
         resolved
     )
-
-    make_output_tree(resolved)
-    save_resolved_config(resolved)
 
     try:
         image_products = load_image_preparation_products(
@@ -134,52 +133,84 @@ def run_real_fit_from_config(
             likelihood_state
         )
 
-    configured_checkpoint_path = sampler_cfg.get(
-        "init",
-        {},
-    ).get(
-        "checkpoint_path"
-    )
-    emcee_checkpoint_is_auto = (
-        sampler_name == "emcee"
-        and isinstance(
-            configured_checkpoint_path,
-            str,
-        )
-        and configured_checkpoint_path.strip().lower()
-        == "auto"
-    )
+    # Accepted preparation and PSF products are validated before fit output
+    # directories or inference configuration snapshots are written.
+    make_output_tree(resolved)
 
     all_products = {}
 
     for model_name in resolved["fit"]["models"]:
+        model_config = _single_model_fit_config(
+            resolved,
+            model_name,
+        )
+        model_paths = pipeline_paths(
+            model_config
+        )["fits"][model_name]
+        completion_path = model_paths[
+            "complete"
+        ]
+
+        if (
+            completion_path.exists()
+            and not bool(
+                model_config["outputs"].get(
+                    "overwrite",
+                    False,
+                )
+            )
+        ):
+            raise FileExistsError(
+                "A complete fit already exists for model "
+                f"{model_name!r}: {completion_path}. Use a new output "
+                "namespace, or set outputs.overwrite=true explicitly."
+            )
+
+        if completion_path.exists():
+            completion_path.unlink()
+
+        save_fit_resolved_config(
+            model_config,
+            model_name,
+        )
+
         products = _execute_single_model_fit(
             model_name=model_name,
             image_products=image_products,
             psf=psf,
-            prior_cfg=resolved["fit"]["priors"],
-            background_cfg=resolved["fit"].get(
+            prior_cfg=model_config["fit"]["priors"],
+            background_cfg=model_config["fit"].get(
                 "background",
                 DEFAULT_CONFIG["fit"]["background"],
             ),
             references=prior_references,
             likelihood_cfg=likelihood_cfg,
             likelihood_state=likelihood_state,
-            sampler_cfg=sampler_cfg,
-            checkpoint_directory=(
-                pipeline_paths(
-                    resolved
-                )["fits"][model_name]["dir"]
-                if emcee_checkpoint_is_auto
-                else None
-            ),
+            sampler_cfg=model_config["fit"]["sampler"],
+            checkpoint_directory=model_paths["dir"],
         )
 
         save_real_fit_products(
-            resolved,
+            model_config,
             model_name,
             products,
             observation=observation,
+            boundary_priors=_resolved_boundary_priors(
+                model_name=model_name,
+                prior_cfg=model_config["fit"]["priors"],
+                background_cfg=model_config["fit"].get(
+                    "background",
+                    DEFAULT_CONFIG["fit"]["background"],
+                ),
+                references=prior_references,
+            ),
+        )
+
+        _write_fit_completion_marker(
+            completion_path,
+            model_name=model_name,
+            config=model_config,
+            products=products,
         )
 
         all_products[model_name] = products
@@ -212,6 +243,255 @@ def run_real_fit_from_config(
         )
 
     return all_products
+
+
+def _single_model_fit_config(
+    config: dict[str, Any],
+    model_name: str,
+) -> dict[str, Any]:
+    """Return one model-specific execution configuration."""
+    runtime = deepcopy(config)
+    runtime["fit"]["models"] = [
+        model_name
+    ]
+    runtime["fit"]["comparison"] = {
+        "enabled": False,
+        "metric": "bayes_factor",
+    }
+
+    sampler = runtime["fit"]["sampler"]
+    sampler_name = str(
+        sampler.get(
+            "name",
+            "",
+        )
+    ).strip().lower()
+    init_config = dict(
+        sampler.get(
+            "init",
+            {},
+        )
+    )
+    sampler["init"] = init_config
+    fit_directory = pipeline_paths(
+        config
+    )["fits"][model_name]["dir"]
+
+    if (
+        sampler_name == "emcee"
+        and str(
+            init_config.get(
+                "checkpoint_path",
+                "",
+            )
+        ).strip().lower()
+        == "auto"
+    ):
+        init_config["checkpoint_path"] = str(
+            (
+                fit_directory
+                / "emcee_checkpoint.h5"
+            ).expanduser().resolve()
+        )
+
+    if (
+        sampler_name == "nautilus"
+        and str(
+            init_config.get(
+                "filepath",
+                "",
+            )
+        ).strip().lower()
+        == "auto"
+    ):
+        init_config["filepath"] = str(
+            (
+                fit_directory
+                / "nautilus_checkpoint.hdf5"
+            ).expanduser().resolve()
+        )
+
+    return runtime
+
+
+def _resolved_boundary_priors(
+    *,
+    model_name: str,
+    prior_cfg: dict[str, Any],
+    background_cfg: dict[str, Any],
+    references: dict[str, float],
+) -> dict[str, dict[str, Any]]:
+    """Resolve every sampled prior into absolute boundary coordinates."""
+    model_priors = prior_cfg[
+        model_name
+    ]
+    resolved_priors: dict[
+        str,
+        dict[str, Any],
+    ] = {}
+
+    for parameter_name in get_model(
+        model_name
+    ).parameter_names:
+        if parameter_name == "sky":
+            continue
+
+        prior = dict(
+            prior_config_for_parameter(
+                parameter_name,
+                model_priors,
+            )
+        )
+        reference_name = prior.pop(
+            "relative_to",
+            None,
+        )
+
+        if reference_name is not None:
+            reference = float(
+                references[
+                    str(
+                        reference_name
+                    )
+                ]
+            )
+            prior["lower"] = float(
+                prior["lower"]
+            ) + reference
+            prior["upper"] = float(
+                prior["upper"]
+            ) + reference
+
+        resolved_priors[
+            parameter_name
+        ] = prior
+
+    background_model = str(
+        background_cfg.get(
+            "model",
+            "constant",
+        )
+    ).strip().lower()
+    background_priors = background_cfg.get(
+        "priors",
+        {},
+    )
+    background_names = (
+        ("background_level",)
+        if background_model == "constant"
+        else (
+            "background_level",
+            "background_gradient_x",
+            "background_gradient_y",
+        )
+    )
+
+    for parameter_name in background_names:
+        resolved_priors[
+            parameter_name
+        ] = dict(
+            background_priors[
+                parameter_name
+            ]
+        )
+
+    return resolved_priors
+
+
+def _write_json_atomic(
+    path: Path,
+    payload: dict[str, Any],
+) -> None:
+    """Write one JSON result atomically."""
+    temporary = path.with_name(
+        f".{path.name}.{os.getpid()}.tmp"
+    )
+
+    try:
+        with temporary.open(
+            "w",
+            encoding="utf-8",
+        ) as stream:
+            json.dump(
+                payload,
+                stream,
+                allow_nan=False,
+                indent=2,
+                sort_keys=True,
+            )
+            stream.write(
+                "\n"
+            )
+            stream.flush()
+            os.fsync(
+                stream.fileno()
+            )
+
+        os.replace(
+            temporary,
+            path,
+        )
+    finally:
+        temporary.unlink(
+            missing_ok=True
+        )
+
+
+def _write_fit_completion_marker(
+    path: Path,
+    *,
+    model_name: str,
+    config: dict[str, Any],
+    products: RealFitProducts,
+) -> None:
+    """Mark a fully persisted model fit complete."""
+    canonical_config = json.dumps(
+        _checkpoint_signature_value(
+            config
+        ),
+        sort_keys=True,
+        separators=(
+            ",",
+            ":",
+        ),
+        ensure_ascii=True,
+        allow_nan=False,
+    )
+    posterior = products.posterior
+    evidence = (
+        None
+        if posterior is None
+        else posterior.evidence
+    )
+    payload = {
+        "schema_version": 1,
+        "model": model_name,
+        "config_sha256": hashlib.sha256(
+            canonical_config.encode(
+                "utf-8"
+            )
+        ).hexdigest(),
+        "logz": (
+            None
+            if posterior is None
+            else posterior.logz
+        ),
+        "logz_error": (
+            None
+            if posterior is None
+            else posterior.logz_error
+        ),
+        "evidence_method": (
+            None
+            if evidence is None
+            else evidence.method
+        ),
+    }
+
+    _write_json_atomic(
+        path,
+        payload,
+    )
 
 
 def _qualified_class_name(
@@ -834,6 +1114,174 @@ def _prepare_emcee_sampler_config(
     return runtime_config
 
 
+def _prepare_nautilus_sampler_config(
+    sampler_cfg,
+    *,
+    model_name,
+    problem,
+    likelihood_cfg,
+    data_fit,
+    noise_fit,
+    mask_fit,
+    correlation_kernel_fit,
+    checkpoint_directory,
+):
+    """Resolve and authenticate one model-specific Nautilus checkpoint."""
+    sampler_name = str(
+        sampler_cfg.get(
+            "name",
+            "",
+        )
+    ).strip().lower()
+
+    if sampler_name != "nautilus":
+        return sampler_cfg
+
+    runtime_config = deepcopy(
+        sampler_cfg
+    )
+    init_config = dict(
+        runtime_config.get(
+            "init",
+            {},
+        )
+    )
+    runtime_config["init"] = init_config
+    configured_path = init_config.get(
+        "filepath"
+    )
+
+    if configured_path is None:
+        return runtime_config
+
+    if (
+        isinstance(
+            configured_path,
+            str,
+        )
+        and configured_path.strip().lower()
+        == "auto"
+    ):
+        if checkpoint_directory is None:
+            raise ValueError(
+                "Nautilus filepath='auto' requires a pipeline-managed "
+                "model output directory."
+            )
+
+        configured_path = str(
+            (
+                Path(
+                    checkpoint_directory
+                )
+                / "nautilus_checkpoint.hdf5"
+            ).expanduser().resolve()
+        )
+        init_config["filepath"] = configured_path
+
+    checkpoint_path = Path(
+        configured_path
+    ).expanduser().resolve()
+    signature_path = checkpoint_path.with_suffix(
+        checkpoint_path.suffix
+        + ".target.json"
+    )
+    problem_signature = _real_fit_problem_signature(
+        model_name=model_name,
+        problem=problem,
+        likelihood_cfg=likelihood_cfg,
+        data_fit=data_fit,
+        noise_fit=noise_fit,
+        mask_fit=mask_fit,
+        correlation_kernel_fit=correlation_kernel_fit,
+    )
+    signature_payload = {
+        "schema": "baymorph_nautilus_checkpoint_target_v1",
+        "problem_signature": problem_signature,
+        "sampler": _checkpoint_signature_value(
+            runtime_config
+        ),
+    }
+    canonical = json.dumps(
+        signature_payload,
+        sort_keys=True,
+        separators=(
+            ",",
+            ":",
+        ),
+        ensure_ascii=True,
+        allow_nan=False,
+    )
+    expected = {
+        "schema_version": 1,
+        "signature": (
+            "sha256:"
+            + hashlib.sha256(
+                canonical.encode(
+                    "utf-8"
+                )
+            ).hexdigest()
+        ),
+        "target": signature_payload,
+    }
+
+    if checkpoint_path.exists():
+        if not bool(
+            init_config.get(
+                "resume",
+                True,
+            )
+        ):
+            raise FileExistsError(
+                "A Nautilus checkpoint already exists while resume=false: "
+                f"{checkpoint_path}"
+            )
+
+        if not signature_path.is_file():
+            raise RuntimeError(
+                "Nautilus checkpoint has no BayMorph target signature: "
+                f"{signature_path}"
+            )
+
+        with signature_path.open(
+            "r",
+            encoding="utf-8",
+        ) as stream:
+            recorded = json.load(
+                stream
+            )
+
+        if recorded != expected:
+            raise RuntimeError(
+                "Nautilus checkpoint target does not match the current "
+                f"scientific problem: {checkpoint_path}"
+            )
+    elif signature_path.exists():
+        with signature_path.open(
+            "r",
+            encoding="utf-8",
+        ) as stream:
+            recorded = json.load(
+                stream
+            )
+
+        if recorded != expected:
+            raise RuntimeError(
+                "Nautilus target signature does not match the current "
+                f"scientific problem: {signature_path}"
+            )
+    else:
+        checkpoint_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        _write_json_atomic(
+            signature_path,
+            expected,
+        )
+
+    return runtime_config
+
+
 def _execute_single_model_fit(
     *,
     model_name,
@@ -874,6 +1322,22 @@ def _execute_single_model_fit(
     runtime_sampler_cfg = (
         _prepare_emcee_sampler_config(
             sampler_cfg,
+            model_name=model_name,
+            problem=problem,
+            likelihood_cfg=likelihood_cfg,
+            data_fit=image_products.prepared_data,
+            noise_fit=likelihood_state.noise,
+            mask_fit=image_products.fitting_mask,
+            correlation_kernel_fit=(
+                likelihood_state.correlation_kernel
+            ),
+            checkpoint_directory=checkpoint_directory,
+        )
+    )
+
+    runtime_sampler_cfg = (
+        _prepare_nautilus_sampler_config(
+            runtime_sampler_cfg,
             model_name=model_name,
             problem=problem,
             likelihood_cfg=likelihood_cfg,
@@ -939,6 +1403,7 @@ def save_real_fit_products(
     products: RealFitProducts,
     *,
     observation: Observation | None = None,
+    boundary_priors: dict[str, dict[str, Any]] | None = None,
 ) -> None:
     """Save real-galaxy fit products to disk."""
     paths = pipeline_paths(
@@ -987,17 +1452,21 @@ def save_real_fit_products(
         )
 
         model_priors = (
-            config.get(
-                "fit",
-                {}
-            )
-            .get(
-                "priors",
-                {}
-            )
-            .get(
-                model_name,
-                {}
+            boundary_priors
+            if boundary_priors is not None
+            else (
+                config.get(
+                    "fit",
+                    {}
+                )
+                .get(
+                    "priors",
+                    {}
+                )
+                .get(
+                    model_name,
+                    {}
+                )
             )
         )
 
@@ -1005,6 +1474,9 @@ def save_real_fit_products(
             audit_posterior_prior_boundaries(
                 products.posterior.posterior,
                 model_priors,
+                parameter_aliases={
+                    "background_level": "background_level",
+                },
             )
         )
 
@@ -1096,6 +1568,28 @@ def save_real_fit_products(
                 or products.posterior.logz_error is None
             )
             else products.posterior.logz_error
+        ),
+        "evidence_method": (
+            None
+            if products.posterior is None
+            else getattr(
+                products.posterior,
+                "evidence_method",
+                None,
+            )
+        ),
+        "evidence_uncertainty_kind": (
+            None
+            if (
+                products.posterior is None
+                or getattr(
+                    products.posterior,
+                    "evidence",
+                    None,
+                )
+                is None
+            )
+            else products.posterior.evidence.uncertainty_kind
         ),
         "sampler": json_compatible_metadata(
             sampler_cfg
@@ -1863,6 +2357,51 @@ def _compute_bayesian_model_comparison(
             products,
         ) in products_by_model.items()
     }
+    logz_error = {
+        model_name: (
+            None
+            if getattr(
+                products.posterior,
+                "logz_error",
+                None,
+            )
+            is None
+            else float(
+                products.posterior.logz_error
+            )
+        )
+        for (
+            model_name,
+            products,
+        ) in products_by_model.items()
+    }
+    evidence_method = {}
+    uncertainty_kind = {}
+
+    for model_name, products in products_by_model.items():
+        evidence = getattr(
+            products.posterior,
+            "evidence",
+            None,
+        )
+        evidence_method[
+            model_name
+        ] = (
+            getattr(
+                products.posterior,
+                "evidence_method",
+                None,
+            )
+            if evidence is None
+            else evidence.method
+        )
+        uncertainty_kind[
+            model_name
+        ] = (
+            None
+            if evidence is None
+            else evidence.uncertainty_kind
+        )
 
     if (
         "single_sersic" not in logz
@@ -1870,7 +2409,11 @@ def _compute_bayesian_model_comparison(
     ):
         return {
             "logz": logz,
+            "logz_error": logz_error,
+            "evidence_method": evidence_method,
+            "uncertainty_kind": uncertainty_kind,
             "delta_logz": {},
+            "delta_logz_error": {},
             "log_bayes_factor": {},
             "bayes_factor": {},
         }
@@ -1887,6 +2430,25 @@ def _compute_bayesian_model_comparison(
     log_bayes_factor = float(
         delta_logz
     )
+    single_error = logz_error[
+        "single_sersic"
+    ]
+    double_error = logz_error[
+        "double_sersic"
+    ]
+    delta_logz_error = (
+        None
+        if (
+            single_error is None
+            or double_error is None
+        )
+        else float(
+            np.hypot(
+                single_error,
+                double_error,
+            )
+        )
+    )
 
     if log_bayes_factor < 700:
         bayes_factor = float(
@@ -1899,8 +2461,19 @@ def _compute_bayesian_model_comparison(
 
     return {
         "logz": logz,
+        "logz_error": logz_error,
+        "evidence_method": evidence_method,
+        "uncertainty_kind": uncertainty_kind,
         "delta_logz": {
             "double_sersic_minus_single_sersic": delta_logz,
+        },
+        "delta_logz_error": {
+            "double_sersic_minus_single_sersic": delta_logz_error,
+            "combination": (
+                "quadrature_assuming_independent_estimates"
+                if delta_logz_error is not None
+                else None
+            ),
         },
         "log_bayes_factor": {
             "double_sersic_over_single_sersic": log_bayes_factor,

@@ -300,3 +300,44 @@ def test_emcee_rejects_enabled_evidence_comparison():
         match="posterior-only.*evidence",
     ):
         resolve_config(config)
+
+
+def test_enabled_comparison_requires_exact_scientific_model_pair():
+    """Single-band comparison must not silently accept another model set."""
+    config = _base_config()
+    config["fit"] = {
+        "models": [
+            "single_sersic",
+        ],
+        "comparison": {
+            "enabled": True,
+            "metric": "bayes_factor",
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="requires exactly",
+    ):
+        resolve_config(config)
+
+
+def test_enabled_comparison_accepts_single_and_double_sersic():
+    """The frozen comparison pair must resolve successfully."""
+    config = _base_config()
+    config["fit"] = {
+        "models": [
+            "single_sersic",
+            "double_sersic",
+        ],
+        "comparison": {
+            "enabled": True,
+            "metric": "bayes_factor",
+        },
+    }
+
+    resolved = resolve_config(
+        config
+    )
+
+    assert resolved["fit"]["comparison"]["enabled"] is True

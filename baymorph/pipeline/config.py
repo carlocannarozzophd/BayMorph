@@ -764,6 +764,29 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
             "evidence is unavailable."
         )
 
+    if resolved["fit"]["comparison"]["enabled"] is True:
+        comparison_models = resolved["fit"]["models"]
+        expected_models = {
+            "single_sersic",
+            "double_sersic",
+        }
+
+        if (
+            len(
+                comparison_models
+            )
+            != 2
+            or set(
+                comparison_models
+            )
+            != expected_models
+        ):
+            raise ValueError(
+                "Enabled single-band model comparison requires exactly "
+                "fit.models=['single_sersic', 'double_sersic'] in either "
+                "order."
+            )
+
     resolved["object"] = dict(
         resolved["object"]
     )

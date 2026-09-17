@@ -9,6 +9,9 @@ from baymorph.pipeline.config import (
     resolve_config,
     validate_sampler_config,
 )
+from baymorph.pipeline.real_fit import (
+    _prepare_nautilus_sampler_config,
+)
 
 
 def _minimal_config() -> dict:
@@ -114,4 +117,118 @@ def test_nautilus_rejects_baymorph_mode() -> None:
                 "init": {},
                 "run": {},
             }
+        )
+
+
+def _prepare_checkpoint(
+    tmp_path,
+    monkeypatch,
+    *,
+    model_name="single_sersic",
+):
+    """Resolve one signed test checkpoint without building a real problem."""
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit._real_fit_problem_signature",
+        lambda **kwargs: f"signature:{kwargs['model_name']}",
+    )
+
+    return _prepare_nautilus_sampler_config(
+        {
+            "name": "nautilus",
+            "execution": {
+                "processes": 1,
+                "progress": False,
+            },
+            "init": {
+                "filepath": "auto",
+                "resume": True,
+                "seed": 42,
+            },
+            "run": {
+                "n_eff": 1000,
+            },
+        },
+        model_name=model_name,
+        problem=object(),
+        likelihood_cfg={
+            "type": "gaussian",
+            "include_normalization": True,
+        },
+        data_fit=None,
+        noise_fit=None,
+        mask_fit=None,
+        correlation_kernel_fit=None,
+        checkpoint_directory=(
+            tmp_path
+            / model_name
+        ),
+    )
+
+
+def test_nautilus_auto_checkpoint_is_model_specific(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """Automatic checkpoints and signatures must live per fitted model."""
+    single = _prepare_checkpoint(
+        tmp_path,
+        monkeypatch,
+        model_name="single_sersic",
+    )
+    double = _prepare_checkpoint(
+        tmp_path,
+        monkeypatch,
+        model_name="double_sersic",
+    )
+
+    single_path = single["init"]["filepath"]
+    double_path = double["init"]["filepath"]
+
+    assert single_path != double_path
+    assert single_path.endswith(
+        "single_sersic/nautilus_checkpoint.hdf5"
+    )
+    assert double_path.endswith(
+        "double_sersic/nautilus_checkpoint.hdf5"
+    )
+    assert (
+        tmp_path
+        / "single_sersic"
+        / "nautilus_checkpoint.hdf5.target.json"
+    ).is_file()
+
+
+def test_nautilus_resume_rejects_target_mismatch(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """An existing checkpoint must not resume against another target."""
+    resolved = _prepare_checkpoint(
+        tmp_path,
+        monkeypatch,
+    )
+    checkpoint = tmp_path / "single_sersic" / "nautilus_checkpoint.hdf5"
+    checkpoint.touch()
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit._real_fit_problem_signature",
+        lambda **kwargs: "changed-target",
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="does not match",
+    ):
+        _prepare_nautilus_sampler_config(
+            resolved,
+            model_name="single_sersic",
+            problem=object(),
+            likelihood_cfg={
+                "type": "gaussian",
+                "include_normalization": True,
+            },
+            data_fit=None,
+            noise_fit=None,
+            mask_fit=None,
+            correlation_kernel_fit=None,
+            checkpoint_directory=checkpoint.parent,
         )

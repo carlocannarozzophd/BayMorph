@@ -288,6 +288,7 @@ def test_fit_persistence_preserves_exact_noise_and_likelihood_metadata(
 
 
 def test_run_real_fit_passes_prepared_likelihood_state(
+    tmp_path,
     monkeypatch,
 ):
     """Real-fit execution must use one fixed prepared likelihood state."""
@@ -296,8 +297,18 @@ def test_run_real_fit_passes_prepared_likelihood_state(
     )
 
     resolved = {
+        "object": {
+            "name": "test",
+        },
         "data": {
             "image_path": "missing.fits",
+        },
+        "outputs": {
+            "root": str(
+                tmp_path
+                / "outputs"
+            ),
+            "overwrite": False,
         },
         "fit": {
             "models": [
@@ -382,8 +393,8 @@ def test_run_real_fit_passes_prepared_likelihood_state(
     )
 
     monkeypatch.setattr(
-        "baymorph.pipeline.real_fit.save_resolved_config",
-        lambda config: None,
+        "baymorph.pipeline.real_fit.save_fit_resolved_config",
+        lambda *args, **kwargs: None,
     )
 
     monkeypatch.setattr(
@@ -468,6 +479,18 @@ def test_run_real_fit_passes_prepared_likelihood_state(
     monkeypatch.setattr(
         "baymorph.pipeline.real_fit."
         "save_real_fit_products",
+        lambda *args, **kwargs: None,
+    )
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit."
+        "_resolved_boundary_priors",
+        lambda **kwargs: {},
+    )
+
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit."
+        "_write_fit_completion_marker",
         lambda *args, **kwargs: None,
     )
 

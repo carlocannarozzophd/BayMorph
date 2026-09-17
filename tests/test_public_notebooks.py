@@ -311,24 +311,29 @@ def test_observed_fit_notebook_is_runner_only() -> None:
 
     assert "BayMorphRunner" in source
     assert "configs/observed_galaxy.yaml" in source
-    assert "runner.run(diagnostics=True)" in source
+    assert "fit_results = runner.fit()" in source
+    assert "runner.diagnostics()" in source
+    assert "results_by_model" in source
     assert "fit.summary()" in source
     assert 'sampler_config = runner.config["fit"]["sampler"]' in source
     assert "yaml.safe_dump(" in source
     assert "sampler_config," in source
     assert "inference.evidence is None" in source
     assert "inference.effective_sample_size" in source
-    assert "checkpoint_mode: fresh" in source
-    assert "checkpoint_mode" in source
-    assert "runner.prepare_image()" in source
-    assert "runner.build_psf()" in source
-    assert "runner.fit()" in source
+    assert "filepath: auto" in source
+    assert "signed checkpoint" in source
+    assert "model_comparison" in source
+    assert "bayes_factor.json" in source
 
     assert "ObservationAdvisor" not in source
     assert "select_target(" not in source
     assert "calibrate_flux_prior(" not in source
     assert "propose_config(" not in source
     assert "make_config_from_fits" not in source
+    assert "runner.run(" not in source
+    assert "runner.prepare_image(" not in source
+    assert "runner.select_psf_candidates(" not in source
+    assert "runner.build_psf(" not in source
 
 
 def test_multi_observation_notebook_uses_public_joint_workflow() -> None:
