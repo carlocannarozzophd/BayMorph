@@ -59,6 +59,9 @@ jobs:
         run: |
           python -m venv /tmp/baymorph-wheel-env
           /tmp/baymorph-wheel-env/bin/python -m pip install --upgrade pip
+          # pocoMC requires torch; install the CPU build first so pip does not
+          # pull the multi-GB CUDA stack and exhaust the runner disk.
+          /tmp/baymorph-wheel-env/bin/python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           /tmp/baymorph-wheel-env/bin/python -m pip install dist/*.whl
           /tmp/baymorph-wheel-env/bin/python -c "import baymorph; print(baymorph.__version__)"
           /tmp/baymorph-wheel-env/bin/baymorph --version
