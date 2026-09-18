@@ -923,7 +923,7 @@ def test_advisor_flux_calibration_uses_canonical_prepared_products(
 
     monkeypatch.setattr(
         advisor_module,
-        "load_empirical_psf",
+        "_load_psf_from_config",
         lambda resolved: psf,
     )
 
@@ -980,6 +980,126 @@ def test_advisor_flux_calibration_uses_canonical_prepared_products(
     ]
 
     assert 9.99e99 not in scalar_numeric_arguments
+
+
+def test_advisor_flux_calibration_supports_gaussian_psf(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """A Gaussian-PSF configuration must not require an empirical PSF file."""
+    from types import SimpleNamespace
+
+    import numpy as np
+
+    import baymorph.pipeline.advisor as advisor_module
+    from baymorph.simulation.psf import GaussianPSF
+
+    fits_path = tmp_path / "galaxy.fits"
+
+    _write_source_fits(
+        fits_path
+    )
+
+    advisor = ObservationAdvisor(
+        fits_path,
+        target_position="center",
+    )
+
+    advisor._inspection = SimpleNamespace(
+        saturation=12345.0,
+        bunit="ADU/s",
+        target_flux_scale=9.99e99,
+    )
+
+    priors = {
+        "flux": {
+            "type": "log_uniform",
+            "lower": 1.0,
+            "upper": 1.0e6,
+        },
+        "re": {
+            "type": "uniform",
+            "lower": 1.0,
+            "upper": 20.0,
+        },
+    }
+
+    config = advisor.make_config(
+        model_name="single_sersic",
+        model_priors=priors,
+    )
+    config["psf"] = {
+        "type": "gaussian",
+        "gaussian": {
+            "fwhm": 3.0,
+        },
+    }
+
+    products = SimpleNamespace(
+        prepared_data=np.zeros(
+            (
+                9,
+                11,
+            ),
+            dtype=float,
+        ),
+        noise=np.full(
+            (
+                9,
+                11,
+            ),
+            2.0,
+            dtype=float,
+        ),
+        fitting_mask=np.zeros(
+            (
+                9,
+                11,
+            ),
+            dtype=bool,
+        ),
+        background=3.0,
+        target_x=5.0,
+        target_y=4.0,
+    )
+
+    expected = _make_test_flux_calibration()
+    captured = {}
+
+    monkeypatch.setattr(
+        advisor_module,
+        "load_image_preparation_products",
+        lambda resolved: products,
+    )
+
+    def fake_calibration(
+        **kwargs,
+    ):
+        captured.update(
+            kwargs
+        )
+        return expected
+
+    monkeypatch.setattr(
+        advisor_module,
+        "calibrate_single_sersic_flux_prior",
+        fake_calibration,
+    )
+
+    result = advisor.calibrate_flux_prior(
+        config,
+        n_draws=32,
+        bootstrap_samples=16,
+    )
+
+    assert result is expected
+    assert isinstance(
+        captured["psf"],
+        GaussianPSF,
+    )
+    assert captured["psf"].fwhm == pytest.approx(
+        3.0
+    )
 
 
 def test_advisor_configuration_accepts_calibrated_flux_prior(
@@ -1230,7 +1350,7 @@ def test_advisor_build_psf_runs_candidate_selection_before_construction(
 
     monkeypatch.setattr(
         advisor_module,
-        "load_empirical_psf",
+        "_load_psf_from_config",
         lambda resolved: object(),
     )
 
@@ -1328,7 +1448,7 @@ def test_advisor_creates_internal_flux_calibration_workspace(
 
     monkeypatch.setattr(
         advisor_module,
-        "load_empirical_psf",
+        "_load_psf_from_config",
         lambda resolved: object(),
     )
 

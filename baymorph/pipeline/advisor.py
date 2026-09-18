@@ -29,8 +29,10 @@ from baymorph.pipeline.psf_candidates import (
     run_psf_candidate_selection_from_config,
 )
 from baymorph.pipeline.psf_construction import (
-    load_empirical_psf,
     run_psf_construction_from_config,
+)
+from baymorph.pipeline.real_fit import (
+    _load_psf_from_config,
 )
 from baymorph.pipeline.preparation_steps import (
     estimate_target_geometry_from_image,
@@ -1101,9 +1103,11 @@ class ObservationAdvisor:
             If True, run the canonical image-preparation pipeline before
             calibration. Otherwise load existing preparation products.
         build_psf : bool, default=False
-            If True, run canonical PSF-candidate selection followed by
-            empirical-PSF construction before calibration. Otherwise load
-            the existing empirical PSF.
+            If True and the configuration declares an empirical PSF, run
+            canonical PSF-candidate selection followed by empirical-PSF
+            construction before calibration. Otherwise load the existing
+            empirical PSF. Ignored for a Gaussian PSF, which requires no
+            construction step.
         snr_threshold : float, default=5
             Quadrature model-S/N detectability threshold.
         required_detectable_fraction : float, default=0.95
@@ -1193,11 +1197,19 @@ class ObservationAdvisor:
         else:
             products = load_image_preparation_products(resolved)
 
-        if build_psf:
+        psf_type = resolved.get(
+            "psf",
+            {},
+        ).get(
+            "type",
+            "empirical",
+        )
+
+        if build_psf and psf_type == "empirical":
             run_psf_candidate_selection_from_config(resolved)
             run_psf_construction_from_config(resolved)
 
-        psf = load_empirical_psf(resolved)
+        psf = _load_psf_from_config(resolved)
 
         inspection = self._inspection or self.inspect()
 
