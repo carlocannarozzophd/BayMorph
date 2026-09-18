@@ -151,6 +151,68 @@ def test_resolved_config_omits_masking_strategy_controls() -> None:
     assert "masking" not in resolved
 
 
+def test_unknown_fit_key_is_rejected() -> None:
+    """A typo'd fit.* key must not be silently dropped alongside the default."""
+    config = _minimal_config()
+    config["fit"] = {
+        "modles": [
+            "single_sersic",
+        ],
+    }
+
+    with pytest.raises(
+        ValueError,
+        match=r"Unsupported configuration entries in section 'fit'.*modles",
+    ):
+        resolve_config(config)
+
+
+def test_every_declared_fit_key_is_accepted() -> None:
+    """Every documented fit.* key must resolve cleanly, individually."""
+    for key, value in (
+        (
+            "models",
+            [
+                "single_sersic",
+            ],
+        ),
+        (
+            "likelihood",
+            {
+                "type": "gaussian",
+            },
+        ),
+        (
+            "sampler",
+            {
+                "name": "nautilus",
+            },
+        ),
+        (
+            "comparison",
+            {
+                "enabled": False,
+            },
+        ),
+        (
+            "background",
+            {
+                "model": "constant",
+            },
+        ),
+        (
+            "priors",
+            {},
+        ),
+    ):
+        config = _minimal_config()
+        config["fit"] = {
+            key: value,
+        }
+
+        resolve_config(config)
+
+
 def test_empirical_psf_auto_size_is_rejected() -> None:
     """Unused empirical PSF sizing controls must not be accepted."""
     config = _minimal_config()

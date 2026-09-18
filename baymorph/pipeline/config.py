@@ -516,6 +516,26 @@ def validate_config(config: dict[str, Any]) -> None:
         {},
     )
 
+    allowed_fit_keys = {
+        "models",
+        "likelihood",
+        "sampler",
+        "comparison",
+        "background",
+        "priors",
+    }
+
+    unknown_fit_keys = sorted(
+        set(fit_config) - allowed_fit_keys
+    )
+
+    if unknown_fit_keys:
+        raise ValueError(
+            "Unsupported configuration entries in section 'fit': "
+            f"{unknown_fit_keys}. Available entries: "
+            f"{sorted(allowed_fit_keys)}."
+        )
+
     background_config = fit_config.get(
         "background",
         {},
