@@ -21,7 +21,10 @@ from baymorph.pipeline.config import (
     load_config,
     resolve_config,
 )
-from baymorph.pipeline.prior_config import parse_prior_config
+from baymorph.pipeline.prior_config import (
+    _require_exact_keys,
+    parse_prior_config,
+)
 
 SINGLE_SERSIC_PARAMETER_NAMES = (
     "flux",
@@ -770,35 +773,6 @@ def _parse_parameter_specification(
         "'shared', 'independent', 'hierarchical', or "
         "'wavelength'."
     )
-
-
-def _require_exact_keys(
-    config: Mapping[str, Any],
-    expected: set[str],
-    *,
-    context: str,
-) -> None:
-    """Require an exact configuration-key set."""
-    supplied = set(
-        config
-    )
-
-    if supplied != expected:
-        missing = sorted(
-            expected.difference(
-                supplied
-            )
-        )
-        extra = sorted(
-            supplied.difference(
-                expected
-            )
-        )
-
-        raise ValueError(
-            f"{context} configuration keys are invalid. "
-            f"Missing: {missing}. Extra: {extra}."
-        )
 
 
 __all__ = [

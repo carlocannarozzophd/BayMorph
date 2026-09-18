@@ -19,35 +19,6 @@ from baymorph.pipeline.psf_construction import run_psf_construction_from_config
 from baymorph.pipeline.real_fit import run_real_fit_from_config
 
 
-def _coerce_config(
-    config: str | Path | dict[str, Any],
-) -> dict[str, Any]:
-    """Convert a configuration input to a resolved configuration dictionary.
-
-    Parameters
-    ----------
-    config : dict, str, or pathlib.Path
-        Configuration dictionary or path to a YAML configuration file.
-
-    Returns
-    -------
-    dict
-        Resolved configuration dictionary.
-
-    Raises
-    ------
-    TypeError
-        If ``config`` is neither a mapping nor a filesystem path.
-    """
-    if isinstance(config, (str, Path)):
-        return load_resolved_config(config)
-
-    if isinstance(config, dict):
-        return config
-
-    raise TypeError("config must be a path or a dictionary.")
-
-
 def initialize_pipeline_run(
     config: str | Path | dict[str, Any],
 ):

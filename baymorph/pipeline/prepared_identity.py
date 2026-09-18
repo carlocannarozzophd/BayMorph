@@ -21,11 +21,11 @@ from baymorph.pipeline.config import (
 PREPARED_INPUT_IDENTITY_VERSION = 2
 
 
-def _sha256_file(path: Path) -> str:
+def _sha256_file(path: str | Path) -> str:
     """Return the SHA-256 digest of one file."""
     digest = hashlib.sha256()
 
-    with path.open("rb") as stream:
+    with Path(path).open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
 

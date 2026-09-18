@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 
@@ -137,20 +136,6 @@ def calibration_from_inference_result(
     return CalibrationCase(
         case_id=str(case_id),
         parameters=parameters,
-    )
-
-
-def load_calibration_case(
-    *,
-    case_id: str,
-    result_path: str | Path,
-    truth: Mapping[str, float],
-) -> CalibrationCase:
-    """Load one inference result and compute calibration diagnostics."""
-    return calibration_from_inference_result(
-        case_id=case_id,
-        result=InferenceResult.load(result_path),
-        truth=truth,
     )
 
 

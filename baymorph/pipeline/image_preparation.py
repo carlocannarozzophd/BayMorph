@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,6 +35,9 @@ from baymorph.core.sky import (
     RadialProfile,
     SkyRegion,
     build_sky_region,
+)
+from baymorph.pipeline.checkpoint_signing import (
+    write_json_atomic as _write_json_atomic,
 )
 from baymorph.pipeline.config import (
     load_resolved_config,
@@ -510,26 +512,6 @@ def _sha256_file(path: Path) -> str:
     ):
         raise RuntimeError(f"Artifact changed while it was hashed: {path}")
     return digest.hexdigest()
-
-
-def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
-    """Write one JSON document atomically in its destination directory."""
-    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    try:
-        with temporary.open("w", encoding="utf-8") as stream:
-            json.dump(
-                payload,
-                stream,
-                allow_nan=False,
-                indent=2,
-                sort_keys=True,
-            )
-            stream.write("\n")
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-    finally:
-        temporary.unlink(missing_ok=True)
 
 
 def _artifact_manifest(

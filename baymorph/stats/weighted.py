@@ -3,33 +3,6 @@
 import numpy as np
 
 
-def dynesty_weights(
-    logwt: np.ndarray,
-    logz: np.ndarray,
-) -> np.ndarray:
-    """Convert Dynesty log-weights to normalized posterior weights.
-
-    Parameters
-    ----------
-    logwt : ndarray
-        Logarithmic sample weights returned by Dynesty.
-    logz : ndarray
-        Cumulative logarithmic Bayesian evidence.
-
-    Returns
-    -------
-    ndarray
-        Normalized posterior weights.
-    """
-    weights = np.exp(
-        logwt - logz[-1]
-    )
-
-    weights /= np.sum(weights)
-
-    return weights
-
-
 def weighted_quantile(
     values: np.ndarray,
     quantile: float,

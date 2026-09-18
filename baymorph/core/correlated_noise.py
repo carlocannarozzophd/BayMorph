@@ -7,6 +7,8 @@ from typing import Any
 
 import numpy as np
 
+from baymorph.stats.robust import robust_sigma
+
 
 @dataclass(frozen=True)
 class CorrelatedGaussianNoiseCalibration:
@@ -285,28 +287,7 @@ def _mad_sigma(
     values: np.ndarray,
 ) -> float:
     """Return a Gaussian-equivalent MAD scale."""
-    finite = np.asarray(
-        values,
-        dtype=float,
-    )
-
-    finite = finite[
-        np.isfinite(finite)
-    ]
-
-    if finite.size == 0:
-        return np.nan
-
-    median = np.median(finite)
-
-    return float(
-        1.4826
-        * np.median(
-            np.abs(
-                finite - median
-            )
-        )
-    )
+    return robust_sigma(values)
 
 
 def _fit_planar_residual(

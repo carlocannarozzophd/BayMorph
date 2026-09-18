@@ -5,7 +5,6 @@ from baymorph.plotting.corner import (
     erf_sigma_to_percentiles,
 )
 from baymorph.plotting.images import (
-    plot_fit_summary,
     plot_log_data_model_residual,
     plot_log_image,
     show_log_image,
@@ -38,7 +37,6 @@ __all__ = [
     "plot_1d_posterior",
     "plot_2d_samples",
     "plot_data_model_residual",
-    "plot_fit_summary",
     "plot_log_data_model_residual",
     "plot_log_image",
     "plot_mock_fit_report",

@@ -11,6 +11,7 @@ from scipy.ndimage import (
     label,
 )
 
+from baymorph.stats.robust import robust_sigma
 
 FloatArray = NDArray[np.float64]
 
@@ -193,23 +194,9 @@ def _resolve_noise(
 ) -> float:
     """Return a supplied or robustly estimated noise scale."""
     if noise_sigma is None:
-        median = float(
-            np.median(
-                border
-            )
-        )
+        value = robust_sigma(border)
 
-        value = float(
-            1.482602218505602
-            * np.median(
-                np.abs(
-                    border
-                    - median
-                )
-            )
-        )
-
-        if value <= 0.0:
+        if not np.isfinite(value) or value <= 0.0:
             value = float(
                 np.std(
                     border

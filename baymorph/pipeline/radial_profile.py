@@ -22,6 +22,9 @@ from baymorph.pipeline.config import (
     load_resolved_config,
     resolve_config,
 )
+from baymorph.pipeline.corner import (
+    _posterior_samples,
+)
 from baymorph.pipeline.image_preparation import (
     load_image_preparation_products,
 )
@@ -36,56 +39,29 @@ from baymorph.pipeline.outputs import (
 )
 from baymorph.pipeline.psf_construction import (
     estimate_psf_core_fwhm,
-    load_empirical_psf,
 )
 from baymorph.pipeline.real_fit import (
     _diagnostic_title,
+    _load_psf_from_config as _load_fit_psf_from_config,
     _make_model_factory,
     _object_label,
 )
 from baymorph.plotting.radial import (
     plot_radial_profile_diagnostics,
 )
-from baymorph.simulation.psf import GaussianPSF
 
 
 def _load_psf_from_config(config):
-    """Load the configured PSF for radial-profile diagnostics."""
-    psf_cfg = config.get(
-        "psf",
-        {},
-    )
+    """Load the configured PSF for radial-profile diagnostics.
 
-    psf_type = psf_cfg.get(
-        "type",
-        "empirical",
-    )
-
-    if psf_type == "gaussian":
-        gaussian_cfg = psf_cfg.get(
-            "gaussian",
-            {},
-        )
-
-        return GaussianPSF(
-            fwhm=float(
-                gaussian_cfg[
-                    "fwhm"
-                ]
-            )
-        )
-
-    if psf_type == "empirical":
-        try:
-            return load_empirical_psf(
-                config,
-            )
-        except FileNotFoundError:
-            return None
-
-    raise ValueError(
-        f"Unsupported PSF type: {psf_type}"
-    )
+    Unlike the fit-time PSF loader, a missing empirical PSF file degrades
+    to no PSF rather than raising, since this workflow only displays an
+    already-completed fit.
+    """
+    try:
+        return _load_fit_psf_from_config(config)
+    except FileNotFoundError:
+        return None
 
 
 
@@ -176,43 +152,6 @@ def _default_radial_dr(
         1.0,
         0.5 * fwhm,
     )
-
-def _posterior_samples(posterior):
-    """Return equal-weight posterior samples when available."""
-    nested_posterior = getattr(
-        posterior,
-        "posterior",
-        None,
-    )
-
-    if (
-        nested_posterior is not None
-        and hasattr(
-            nested_posterior,
-            "equal_weight_samples",
-        )
-    ):
-        return nested_posterior.equal_weight_samples
-
-    if hasattr(
-        posterior,
-        "equal_weight_samples",
-    ):
-        return posterior.equal_weight_samples
-
-    if hasattr(
-        posterior,
-        "posterior_samples",
-    ):
-        return posterior.posterior_samples
-
-    if hasattr(
-        posterior,
-        "samples",
-    ):
-        return posterior.samples
-
-    return posterior
 
 
 def _make_sample_model_factory(

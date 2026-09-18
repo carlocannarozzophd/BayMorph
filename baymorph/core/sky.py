@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from baymorph.stats.robust import robust_sigma
+
 
 @dataclass(slots=True)
 class RadialProfile:
@@ -337,8 +339,9 @@ def detect_profile_plateau(
     outer_values = values[outer_indices]
 
     outer_median = float(np.median(outer_values))
-    noise_sigma = float(
-        np.median(np.abs(outer_values - outer_median)) * 1.4826
+    noise_sigma = robust_sigma(
+        outer_values,
+        center=outer_median,
     )
 
     if not np.isfinite(noise_sigma):

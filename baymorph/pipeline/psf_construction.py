@@ -16,6 +16,7 @@ from baymorph.core.observation import Observation
 from baymorph.pipeline.config import load_resolved_config
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
 from baymorph.pipeline.outputs import make_output_tree, pipeline_paths
+from baymorph.pipeline.prepared_identity import _sha256_file as _file_sha256
 from baymorph.pipeline.psf_candidates import load_psf_candidates
 from baymorph.plotting.style import make_plot
 from baymorph.simulation.psf import (
@@ -23,25 +24,12 @@ from baymorph.simulation.psf import (
     GaussianPSF,
     validate_finite_nonnegative_kernel,
 )
+from baymorph.stats.robust import robust_sigma
 
 
 EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION = 1
 EMPIRICAL_PSF_CENTROID_TOLERANCE_PIXELS = 0.05
 EMPIRICAL_PSF_NORMALIZATION_ATOL = 1.0e-8
-
-
-def _file_sha256(path: str | Path) -> str:
-    """Return the SHA-256 digest of one immutable input file."""
-    digest = hashlib.sha256()
-
-    with Path(path).open("rb") as stream:
-        for chunk in iter(
-            lambda: stream.read(1024 * 1024),
-            b"",
-        ):
-            digest.update(chunk)
-
-    return digest.hexdigest()
 
 
 def _canonical_json_sha256(value: Any) -> str:
@@ -1328,16 +1316,10 @@ def estimate_cutout_peak_snr(
         )
     )
 
-    mad = float(
-        np.median(
-            np.abs(
-                finite_border
-                - background
-            )
-        )
+    local_sigma = robust_sigma(
+        finite_border,
+        center=background,
     )
-
-    local_sigma = 1.4826 * mad
 
     if (
         not np.isfinite(local_sigma)

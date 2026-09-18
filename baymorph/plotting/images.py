@@ -447,48 +447,6 @@ def plot_log_data_model_residual(
     return fig, axes
 
 
-def plot_fit_summary(
-    data,
-    model,
-    noise=None,
-    title: str = "",
-    cmap: str = BAYMORPH_IMAGE_CMAP,
-    show: bool = False,
-):
-    """Plot a standard BayMorph fit summary.
-
-    Parameters
-    ----------
-    data : array-like
-        Observed image.
-    model : array-like
-        Model image.
-    noise : array-like, optional
-        Noise map used to compute normalized residuals.
-    title : str, default=""
-        Optional figure title.
-    cmap : str, default=BAYMORPH_IMAGE_CMAP
-        Matplotlib colormap used for data and model panels.
-    show : bool, default=False
-        If True, call :func:`matplotlib.pyplot.show`.
-
-    Returns
-    -------
-    fig : matplotlib.figure.Figure
-        Output figure.
-    axes : ndarray
-        Array of Matplotlib axes.
-    """
-    return plot_log_data_model_residual(
-        data=data,
-        model=model,
-        noise=noise,
-        title=title,
-        cmap=cmap,
-        show=show,
-    )
-
-
 def _apply_baymorph_axes_style(ax):
     """Apply BayMorph image-axis styling."""
     for spine in ax.spines.values():

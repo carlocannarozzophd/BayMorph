@@ -11,7 +11,6 @@ from baymorph.validation.calibration import (
     CalibrationCase,
     ParameterCalibration,
     calibration_from_inference_result,
-    load_calibration_case,
     summarize_calibration,
 )
 from baymorph.validation.benchmark import (
@@ -85,7 +84,6 @@ __all__ = [
     "weighted_posterior_rank",
     "weighted_credible_interval",
     "summarize_calibration",
-    "load_calibration_case",
     "calibration_from_inference_result",
     "ParameterCalibration",
     "CalibrationCase",
