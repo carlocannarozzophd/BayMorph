@@ -139,6 +139,38 @@ def test_runner_select_psf_candidates_returns_and_stores_products(
     assert runner.psf_candidates is expected_products
 
 
+def test_runner_select_psf_candidates_rejects_non_empirical_psf():
+    """Candidate selection must fail closed for an analytic PSF."""
+    runner = BayMorphRunner(
+        make_runner_config(
+            psf_type="gaussian",
+        ),
+        verbose=False,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="requires psf.type='empirical'",
+    ):
+        runner.select_psf_candidates()
+
+
+def test_runner_build_psf_rejects_non_empirical_psf():
+    """PSF construction must fail closed for an analytic PSF."""
+    runner = BayMorphRunner(
+        make_runner_config(
+            psf_type="gaussian",
+        ),
+        verbose=False,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="requires psf.type='empirical'",
+    ):
+        runner.build_psf()
+
+
 def test_runner_build_psf_returns_and_stores_products(
     monkeypatch,
 ):
@@ -990,6 +1022,106 @@ def test_runner_multi_observation_run_skips_gaussian_psf(
     assert selected == [
         "galaxy_g",
     ]
+    assert built == [
+        "galaxy_g",
+    ]
+
+
+def test_runner_multi_observation_select_psf_candidates_skips_gaussian_psf(
+    monkeypatch,
+):
+    """A direct call must skip analytic-PSF observations, not just run()."""
+    observation_configs = {
+        "g": {
+            "object": {
+                "name": "galaxy_g",
+            },
+            "psf": {
+                "type": "empirical",
+            },
+        },
+        "r": {
+            "object": {
+                "name": "galaxy_r",
+            },
+            "psf": {
+                "type": "gaussian",
+            },
+        },
+    }
+
+    selected = []
+
+    monkeypatch.setattr(
+        "baymorph.runner.resolve_multi_observation_observation_configs",
+        lambda config, base_dir=None: observation_configs,
+    )
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_psf_candidate_selection",
+        lambda config: selected.append(
+            config["object"]["name"]
+        )
+        or object(),
+    )
+
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    runner.select_psf_candidates()
+
+    assert selected == [
+        "galaxy_g",
+    ]
+
+
+def test_runner_multi_observation_build_psf_skips_gaussian_psf(
+    monkeypatch,
+):
+    """A direct call must skip analytic-PSF observations, not just run()."""
+    observation_configs = {
+        "g": {
+            "object": {
+                "name": "galaxy_g",
+            },
+            "psf": {
+                "type": "empirical",
+            },
+        },
+        "r": {
+            "object": {
+                "name": "galaxy_r",
+            },
+            "psf": {
+                "type": "gaussian",
+            },
+        },
+    }
+
+    built = []
+
+    monkeypatch.setattr(
+        "baymorph.runner.resolve_multi_observation_observation_configs",
+        lambda config, base_dir=None: observation_configs,
+    )
+
+    monkeypatch.setattr(
+        "baymorph.runner.run_psf_construction",
+        lambda config: built.append(
+            config["object"]["name"]
+        )
+        or object(),
+    )
+
+    runner = BayMorphRunner(
+        _multi_observation_runner_config(),
+        verbose=False,
+    )
+
+    runner.build_psf()
+
     assert built == [
         "galaxy_g",
     ]

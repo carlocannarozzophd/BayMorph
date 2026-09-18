@@ -259,10 +259,15 @@ baymorph config data/galaxy.fits \
   --target-x 500 \
   --target-y 500 \
   --model single_sersic \
+  --uniform-prior flux 100 1000000 \
   --output configs/galaxy.yaml
 
 baymorph run configs/galaxy.yaml
 ~~~
+
+`--uniform-prior` declares an explicit scientific prior for one model
+parameter and is required for every parameter with no default prior, such as
+`flux`. Repeat the flag for additional parameters.
 
 `--target-center` may be used instead of explicit pixel coordinates when the
 detector centre is intentionally chosen as the target-identification seed.
@@ -291,14 +296,28 @@ from baymorph import BayMorphRunner
 
 runner = BayMorphRunner("configs/simulated_galaxy.yaml")
 
+runner.simulate()
 runner.prepare_image()
-runner.build_psf()
 result = runner.fit()
 runner.diagnostics()
 ~~~
 
-For configurations using an empirical PSF, candidate selection precedes PSF
-construction. The high-level `run()` workflow handles this automatically.
+`runner.simulate()` generates the synthetic observation and is required only
+for configurations containing a `simulation` section, as
+`configs/simulated_galaxy.yaml` does. It must run before `prepare_image()`.
+
+For an observed image with an empirical PSF (`psf.type: empirical`), candidate
+selection and PSF construction precede fitting:
+
+~~~python
+runner.select_psf_candidates()
+runner.build_psf()
+~~~
+
+`select_psf_candidates()` and `build_psf()` apply only to an empirical PSF and
+raise an explicit error otherwise; an analytic PSF such as `gaussian` needs no
+construction step. The high-level `run()` workflow handles both conditions
+automatically.
 
 Resolved configurations and scientific products are written to a structured
 run directory to preserve reproducibility.

@@ -119,6 +119,39 @@ def _locate_config_path(
     ).resolve()
 
 
+def _observation_psf_type(
+    config: Mapping[str, Any],
+) -> str:
+    """Return the declared PSF type of one observation configuration."""
+    return str(
+        config.get(
+            "psf",
+            {},
+        ).get(
+            "type",
+            "empirical",
+        )
+    ).strip().lower()
+
+
+def _require_empirical_psf(
+    config: Mapping[str, Any],
+    *,
+    action: str,
+) -> None:
+    """Raise a clear error when PSF construction is requested for a non-empirical PSF."""
+    psf_type = _observation_psf_type(
+        config
+    )
+
+    if psf_type != "empirical":
+        raise ValueError(
+            f"{action} requires psf.type='empirical'; this configuration "
+            f"declares psf.type={psf_type!r}. Analytic PSFs (for example "
+            "'gaussian') need no construction step."
+        )
+
+
 class BayMorphRunner:
     """Coordinate the high-level BayMorph analysis workflows.
 
@@ -465,12 +498,22 @@ class BayMorphRunner:
                 )
             )
 
+            empirical_configs = {
+                name: observation_config
+                for name, observation_config
+                in observation_configs.items()
+                if _observation_psf_type(
+                    observation_config
+                )
+                == "empirical"
+            }
+
             self.psf_candidate_products = {
                 name: run_psf_candidate_selection(
                     observation_config
                 )
                 for name, observation_config
-                in observation_configs.items()
+                in empirical_configs.items()
             }
 
             self._status(
@@ -478,6 +521,11 @@ class BayMorphRunner:
             )
 
             return self.psf_candidate_products
+
+        _require_empirical_psf(
+            self.config,
+            action="PSF candidate selection",
+        )
 
         self.psf_candidate_products = (
             run_psf_candidate_selection(
@@ -517,12 +565,22 @@ class BayMorphRunner:
                 )
             )
 
+            empirical_configs = {
+                name: observation_config
+                for name, observation_config
+                in observation_configs.items()
+                if _observation_psf_type(
+                    observation_config
+                )
+                == "empirical"
+            }
+
             self.psf_products = {
                 name: run_psf_construction(
                     observation_config
                 )
                 for name, observation_config
-                in observation_configs.items()
+                in empirical_configs.items()
             }
 
             self._status(
@@ -530,6 +588,11 @@ class BayMorphRunner:
             )
 
             return self.psf_products
+
+        _require_empirical_psf(
+            self.config,
+            action="PSF construction",
+        )
 
         self.psf_products = run_psf_construction(
             self.config,
@@ -860,15 +923,9 @@ class BayMorphRunner:
                 name: observation_config
                 for name, observation_config
                 in observation_configs.items()
-                if str(
-                    observation_config.get(
-                        "psf",
-                        {},
-                    ).get(
-                        "type",
-                        "empirical",
-                    )
-                ).strip().lower()
+                if _observation_psf_type(
+                    observation_config
+                )
                 == "empirical"
             }
 
@@ -896,17 +953,7 @@ class BayMorphRunner:
 
             return result
 
-        psf_type = str(
-            self.config.get(
-                "psf",
-                {},
-            ).get(
-                "type",
-                "empirical",
-            )
-        ).strip().lower()
-
-        if psf_type == "empirical":
+        if _observation_psf_type(self.config) == "empirical":
             self.select_psf_candidates()
             self.build_psf()
 
