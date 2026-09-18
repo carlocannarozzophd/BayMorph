@@ -92,7 +92,11 @@ fit:
         lower: -3.0
         upper: 3.0
         relative_to: target_y
-      sky:
+
+  background:
+    model: constant
+    priors:
+      background_level:
         type: uniform
         lower: -10.0
         upper: 10.0

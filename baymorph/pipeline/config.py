@@ -115,7 +115,6 @@ DEFAULT_CONFIG = {
         "models": ["double_sersic"],
         "likelihood": {
             "type": "gaussian",
-            "include_normalization": True,
         },
         "sampler": {
             "name": "nautilus",
@@ -178,11 +177,6 @@ DEFAULT_CONFIG = {
                     "upper": 8.0,
                     "relative_to": "target_y",
                 },
-                "sky": {
-                    "type": "uniform",
-                    "lower": -50.0,
-                    "upper": 50.0,
-                },
             },
             "double_sersic": {
                 "re_bulge": {
@@ -227,11 +221,6 @@ DEFAULT_CONFIG = {
                     "upper": 8.0,
                     "relative_to": "target_y",
                 },
-                "sky": {
-                    "type": "uniform",
-                    "lower": -50.0,
-                    "upper": 50.0,
-                },
             },
             "sersic_point_source": {
                 "re": {
@@ -265,11 +254,6 @@ DEFAULT_CONFIG = {
                     "lower": -8.0,
                     "upper": 8.0,
                     "relative_to": "target_y",
-                },
-                "sky": {
-                    "type": "uniform",
-                    "lower": -50.0,
-                    "upper": 50.0,
                 },
             },
             "bulge_disk": {
@@ -319,11 +303,6 @@ DEFAULT_CONFIG = {
                     "lower": -8.0,
                     "upper": 8.0,
                     "relative_to": "target_y",
-                },
-                "sky": {
-                    "type": "uniform",
-                    "lower": -50.0,
-                    "upper": 50.0,
                 },
             },
         },
@@ -638,6 +617,14 @@ def validate_fit_priors(
         model_priors = configured_priors[
             model_name
         ]
+
+        if "sky" in model_priors:
+            raise ValueError(
+                f"fit.priors.{model_name}.sky is not a supported prior "
+                "location: the background level is owned by "
+                "fit.background.priors.background_level, not by a "
+                "per-model morphology prior. Move this prior there."
+            )
 
         model_definition = get_model(
             model_name

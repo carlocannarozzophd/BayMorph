@@ -94,10 +94,10 @@ def validate_empirical_psf(
 ) -> dict[str, Any]:
     """Validate a production empirical PSF without repairing its pixels.
 
-    The raw stored kernel must already be two-dimensional, finite,
-    non-negative, normalized to unit sum, and centered within the declared
-    flux-centroid tolerance. Invalid kernels fail closed rather than relying on
-    ``EmpiricalPSF`` to sanitize them at inference time.
+    The raw stored kernel must already be two-dimensional, odd-sized in both
+    axes, finite, non-negative, normalized to unit sum, and centered within
+    the declared flux-centroid tolerance. Invalid kernels fail closed rather
+    than relying on ``EmpiricalPSF`` to sanitize them at inference time.
     """
     data = validate_finite_nonnegative_kernel(
         psf,
@@ -107,6 +107,14 @@ def validate_empirical_psf(
     if data.size == 0 or 0 in data.shape:
         raise ValueError(
             "Production empirical PSF must not be empty."
+        )
+
+    if data.shape[0] % 2 == 0 or data.shape[1] % 2 == 0:
+        raise ValueError(
+            "Production empirical PSF must have an odd-sized kernel in "
+            "both axes: an even-sized kernel has no unambiguous integer "
+            f"center pixel and shifts the convolved model by up to 0.5 "
+            f"pixels; got shape={tuple(int(value) for value in data.shape)}."
         )
 
     total = float(np.sum(data))

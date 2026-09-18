@@ -16,6 +16,7 @@ from baymorph.pipeline import (
 
 from baymorph.core.image import ImageData
 from baymorph.core.observation import Observation
+from baymorph.likelihood import make_likelihood
 
 def test_resolve_minimal_config():
     config = {
@@ -810,3 +811,103 @@ def test_resolve_runtime_config_resolves_psf_candidate_auto_sizes(
         candidate["min_half_size"],
         candidate["max_half_size"],
     ) == expected
+
+
+def test_resolve_config_default_likelihood_omits_normalization_default():
+    """The generic merge must not inject a Gaussian-only option."""
+    config = {
+        "object": {"name": "example_galaxy"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": "outputs"},
+    }
+
+    resolved = resolve_config(config)
+
+    assert resolved["fit"]["likelihood"] == {"type": "gaussian"}
+
+
+@pytest.mark.parametrize(
+    "likelihood_type",
+    ["cash", "poisson_gaussian"],
+)
+def test_resolve_config_does_not_force_normalization_on_other_likelihoods(
+    likelihood_type,
+):
+    """A declared non-Gaussian type must not inherit the Gaussian default."""
+    config = {
+        "object": {"name": "example_galaxy"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": "outputs"},
+        "fit": {"likelihood": {"type": likelihood_type}},
+    }
+
+    resolved = resolve_config(config)
+
+    assert "include_normalization" not in resolved["fit"]["likelihood"]
+
+
+def test_resolve_config_gaussian_likelihood_builds_from_make_likelihood():
+    """The default Gaussian type must still normalize by default downstream."""
+    config = {
+        "object": {"name": "example_galaxy"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": "outputs"},
+    }
+
+    resolved = resolve_config(config)
+
+    likelihood = make_likelihood(
+        resolved["fit"]["likelihood"],
+        data=np.zeros((3, 3)),
+        noise=1.0,
+    )
+
+    assert likelihood.include_normalization is True
+
+
+@pytest.mark.parametrize(
+    "likelihood_type",
+    ["cash", "poisson_gaussian"],
+)
+def test_resolve_config_non_gaussian_likelihood_builds_from_make_likelihood(
+    likelihood_type,
+):
+    """A resolved non-Gaussian config must construct without rejection."""
+    config = {
+        "object": {"name": "example_galaxy"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": "outputs"},
+        "fit": {"likelihood": {"type": likelihood_type}},
+    }
+
+    resolved = resolve_config(config)
+
+    likelihood = make_likelihood(
+        resolved["fit"]["likelihood"],
+        data=np.ones((3, 3)),
+        noise=1.0,
+    )
+
+    assert likelihood is not None
+
+
+def test_resolve_config_correlated_gaussian_likelihood_defaults_unnormalized():
+    """The resolved config must preserve the correlated-Gaussian default."""
+    config = {
+        "object": {"name": "example_galaxy"},
+        "data": {"image_path": "data/image.fits"},
+        "outputs": {"root": "outputs"},
+        "fit": {"likelihood": {"type": "correlated_gaussian"}},
+    }
+
+    resolved = resolve_config(config)
+
+    likelihood = make_likelihood(
+        resolved["fit"]["likelihood"],
+        data=np.zeros((3, 3)),
+        noise=1.0,
+        correlation_kernel=np.ones((1, 1)),
+        correlation_logdet=0.0,
+    )
+
+    assert likelihood.include_normalization is False

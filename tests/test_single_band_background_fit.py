@@ -15,6 +15,7 @@ from baymorph.observation.background import (
 from baymorph.pipeline.config import (
     DEFAULT_CONFIG,
     resolve_config,
+    validate_fit_priors,
 )
 from baymorph.pipeline.real_fit import (
     _build_parameter_set,
@@ -148,6 +149,29 @@ def test_constant_background_parameter_contract_replaces_legacy_sky():
     assert "background_gradient_y" not in parameter_names
 
     assert parameters.all_names == parameter_names
+
+
+def test_validate_fit_priors_rejects_legacy_sky_location():
+    """A declared fit.priors.<model>.sky must fail closed, not be ignored."""
+    priors = _single_sersic_priors()
+    priors["single_sersic"]["sky"] = {
+        "type": "uniform",
+        "lower": -10.0,
+        "upper": 10.0,
+    }
+
+    config = {
+        "fit": {
+            "models": ["single_sersic"],
+            "priors": priors,
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="fit.background.priors.background_level",
+    ):
+        validate_fit_priors(config)
 
 
 def test_plane_background_parameter_contract_adds_two_gradients():

@@ -243,6 +243,16 @@ def _default_prior_entry(
     if isinstance(direct, Mapping):
         return direct
 
+    if detector_name == "sky":
+        background_default = DEFAULT_CONFIG["fit"]["background"][
+            "priors"
+        ].get(
+            "background_level"
+        )
+
+        if isinstance(background_default, Mapping):
+            return background_default
+
     _, axis_ratios, position_angles = _geometry_parameter_sets(
         geometry
     )

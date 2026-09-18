@@ -128,6 +128,8 @@ def test_empirical_psf_centroid_tolerance_is_resolved_explicitly():
     ("psf", "message"),
     [
         (np.ones(5), "2D array"),
+        (np.ones((4, 4)), "odd-sized kernel"),
+        (np.ones((5, 4)), "odd-sized kernel"),
         (
             np.array(
                 [

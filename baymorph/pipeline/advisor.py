@@ -1445,7 +1445,12 @@ class ObservationAdvisor:
         print("PRIOR PLAN")
         print()
 
-        reference_priors = DEFAULT_CONFIG["fit"]["priors"]["single_sersic"]
+        reference_priors = dict(
+            DEFAULT_CONFIG["fit"]["priors"]["single_sersic"]
+        )
+        reference_priors["sky"] = DEFAULT_CONFIG["fit"]["background"][
+            "priors"
+        ]["background_level"]
 
         for parameter in (
             "flux",
