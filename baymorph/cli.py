@@ -239,7 +239,7 @@ def _command_config(
         ),
         sampler=args.sampler,
         outputs_root=args.outputs_root,
-        overwrite=not args.no_overwrite,
+        overwrite=args.overwrite,
         cutout_mode=args.cutout_mode,
         fixed_size=args.cutout_size,
         psf_type=args.psf,
@@ -460,9 +460,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     config_parser.add_argument(
-        "--no-overwrite",
+        "--overwrite",
         action="store_true",
-        help="Disable overwriting of existing BayMorph run products.",
+        help="Allow overwriting of existing BayMorph run products.",
     )
 
     config_parser.set_defaults(

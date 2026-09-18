@@ -334,6 +334,78 @@ def test_multi_observation_config_maker_writes_complete_workspace(
     assert runner.is_multi_observation is True
 
 
+def test_multi_observation_config_maker_defaults_to_no_overwrite(
+    tmp_path: Path,
+) -> None:
+    """Per-observation configs must not silently allow overwriting products."""
+    first_fits = (
+        tmp_path
+        / "image_a.fits"
+    )
+    second_fits = (
+        tmp_path
+        / "image_b.fits"
+    )
+
+    _write_fits(
+        first_fits
+    )
+    _write_fits(
+        second_fits
+    )
+
+    observation_names = (
+        "a",
+        "b",
+    )
+
+    output_dir = (
+        tmp_path
+        / "configs"
+    )
+
+    make_multi_observation_config(
+        {
+            observation_names[
+                0
+            ]: first_fits,
+            observation_names[
+                1
+            ]: second_fits,
+        },
+        target_positions={
+            name: "center"
+            for name in observation_names
+        },
+        parameters=_sky_parameters(
+            observation_names
+        ),
+        output_dir=output_dir,
+        outputs_root=(
+            tmp_path
+            / "runs"
+        ),
+    )
+
+    for name in observation_names:
+        with (
+            output_dir
+            / f"{name}.yaml"
+        ).open(
+            "r",
+            encoding="utf-8",
+        ) as stream:
+            observation_config = yaml.safe_load(
+                stream
+            )
+
+        assert observation_config[
+            "outputs"
+        ][
+            "overwrite"
+        ] is False
+
+
 def test_multi_observation_config_requires_exact_target_mapping(
     tmp_path: Path,
 ) -> None:

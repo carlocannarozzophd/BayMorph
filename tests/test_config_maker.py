@@ -245,6 +245,63 @@ def test_config_maker_builds_minimal_runnable_config(
     assert loaded == config
 
 
+def test_config_maker_defaults_to_no_overwrite(
+    tmp_path,
+):
+    """Generated configs must not silently allow overwriting run products."""
+    fits_path = (
+        tmp_path
+        / "galaxy_A.fits"
+    )
+
+    _write_test_fits(
+        fits_path
+    )
+
+    config = make_config_from_fits(
+        fits_path,
+        target_position=(
+            15.0,
+            10.0,
+        ),
+    )
+
+    assert config[
+        "outputs"
+    ][
+        "overwrite"
+    ] is False
+
+
+def test_config_maker_overwrite_is_explicit_opt_in(
+    tmp_path,
+):
+    """Overwrite must remain available as an explicit opt-in."""
+    fits_path = (
+        tmp_path
+        / "galaxy_A.fits"
+    )
+
+    _write_test_fits(
+        fits_path
+    )
+
+    config = make_config_from_fits(
+        fits_path,
+        target_position=(
+            15.0,
+            10.0,
+        ),
+        overwrite=True,
+    )
+
+    assert config[
+        "outputs"
+    ][
+        "overwrite"
+    ] is True
+
+
 def test_config_maker_empirical_psf_resolves_numeric_candidate_limits(
     tmp_path,
 ):

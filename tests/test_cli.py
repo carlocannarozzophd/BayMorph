@@ -160,6 +160,46 @@ def test_config_command_writes_yaml_with_explicit_center(
 
     assert config["data"]["image_path"] == str(fits_path)
 
+    assert config["outputs"]["overwrite"] is False
+
+
+def test_config_command_overwrite_is_explicit_opt_in(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The config command must not allow overwriting without --overwrite."""
+    fits_path = tmp_path / "galaxy.fits"
+    output_path = tmp_path / "galaxy.yaml"
+
+    _write_fits(fits_path)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "baymorph",
+            "config",
+            str(fits_path),
+            "--target-center",
+            "--uniform-prior",
+            "flux",
+            "1",
+            "1000",
+            "--output",
+            str(output_path),
+            "--overwrite",
+        ],
+    )
+
+    assert main() == 0
+
+    with output_path.open(
+        "r",
+        encoding="utf-8",
+    ) as stream:
+        config = yaml.safe_load(stream)
+
+    assert config["outputs"]["overwrite"] is True
+
 
 def test_config_command_accepts_explicit_pixel_seed(
     tmp_path: Path,

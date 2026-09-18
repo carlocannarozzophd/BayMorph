@@ -407,7 +407,7 @@ def make_config_from_fits(
     likelihood: Mapping[str, Any] | None = None,
     sampler: str | Mapping[str, Any] | None = "nautilus",
     outputs_root: str | Path = "runs",
-    overwrite: bool = True,
+    overwrite: bool = False,
     cutout_mode: str = "auto",
     fixed_size: int | None = None,
     psf_type: str = "empirical",
@@ -434,7 +434,7 @@ def make_config_from_fits(
         standard single-observation inference region.
     outputs_root : str or pathlib.Path, default="runs"
         BayMorph output root.
-    overwrite : bool, default=True
+    overwrite : bool, default=False
         Whether BayMorph products may overwrite existing run products.
     cutout_mode : {"auto", "fixed"}, default="auto"
         Image-cutout strategy.
@@ -901,7 +901,7 @@ def make_multi_observation_config(
     sampler: str | Mapping[str, Any] | None = "nautilus",
     likelihood: Mapping[str, Any] | None = None,
     outputs_root: str | Path = "runs",
-    overwrite: bool = True,
+    overwrite: bool = False,
     observation_options: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Generate observation YAML files and one joint BayMorph configuration.
@@ -935,7 +935,7 @@ def make_multi_observation_config(
         Gaussian image likelihood.
     outputs_root : str or pathlib.Path, default="runs"
         Shared output root for observation preparation and joint products.
-    overwrite : bool, default=True
+    overwrite : bool, default=False
         Default overwrite policy for individual observation products.
     observation_options : mapping, optional
         Per-observation overrides accepted by ``make_config_from_fits``:
