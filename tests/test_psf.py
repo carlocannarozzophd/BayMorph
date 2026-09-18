@@ -16,6 +16,12 @@ def test_psf_kernel_normalization():
     assert kernel.sum() == pytest.approx(1.0)
 
 
+def test_gaussian_psf_does_not_include_pixel_response():
+    psf = GaussianPSF(fwhm=2.5)
+
+    assert psf.includes_pixel_response is False
+
+
 def test_convolution_preserves_flux_away_from_boundaries():
     galaxy = SyntheticSersic(
         flux=1000.0,

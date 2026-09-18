@@ -79,6 +79,17 @@ class GaussianPSF:
             )
 
     @property
+    def includes_pixel_response(self) -> bool:
+        """Return whether this kernel already includes the pixel response.
+
+        ``GaussianPSF`` is a point-sampled analytic profile: the detector
+        pixel response is not baked into the kernel, so the intrinsic model
+        must still be integrated over each pixel footprint before
+        convolution.
+        """
+        return False
+
+    @property
     def sigma(self) -> float:
         """Return the Gaussian standard deviation in pixels."""
         return self.fwhm / 2.354820045
@@ -140,6 +151,19 @@ class EmpiricalPSF:
     """
 
     kernel_array: np.ndarray
+
+    @property
+    def includes_pixel_response(self) -> bool:
+        """Return whether this kernel already includes the pixel response.
+
+        ``EmpiricalPSF`` kernels are built from real detector-pixel star
+        cutouts with no deconvolution: by construction they already equal
+        ``optical_PSF ⊛ pixel_response``. The intrinsic model must therefore
+        be point-sampled at pixel centers rather than pixel-footprint
+        integrated before convolution, or the pixel response would be
+        applied twice.
+        """
+        return True
 
     def kernel(
         self,

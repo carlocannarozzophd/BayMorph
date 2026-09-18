@@ -446,3 +446,70 @@ def test_sersic_fixed_renderer_remains_available_for_validation():
         )
         > 1.0e-3
     )
+
+
+def test_sersic_point_renderer_samples_pixel_centers():
+    """`renderer="point"` must sample the continuous profile, not integrate it."""
+    model = SersicModel(
+        flux=1000.0,
+        re=3.2,
+        n=1.5,
+        q=0.8,
+        theta=0.3,
+        x0=10.37,
+        y0=9.82,
+    )
+
+    shape = (20, 20)
+
+    point = model.render(
+        shape=shape,
+        renderer="point",
+    )
+
+    pixel_y, pixel_x = np.mgrid[0:20, 0:20]
+
+    radius = model._elliptical_radius(
+        x=pixel_x.astype(float),
+        y=pixel_y.astype(float),
+    )
+    expected = model.surface_brightness(radius)
+
+    np.testing.assert_allclose(
+        point,
+        expected,
+        rtol=0.0,
+        atol=0.0,
+    )
+
+
+def test_sersic_point_renderer_differs_from_pixel_integration_for_peaked_profile():
+    """Point sampling must disagree with pixel-footprint integration for a cuspy core."""
+    model = SersicModel(
+        flux=1.0,
+        re=0.5,
+        n=10.0,
+        q=0.2,
+        theta=0.67,
+        x0=20.49,
+        y0=19.51,
+    )
+
+    hybrid = model.render(
+        shape=(41, 41),
+    )
+
+    point = model.render(
+        shape=(41, 41),
+        renderer="point",
+    )
+
+    assert hybrid.shape == point.shape
+    assert np.all(np.isfinite(point))
+
+    assert (
+        np.linalg.norm(
+            hybrid - point
+        )
+        > 1.0e-3
+    )

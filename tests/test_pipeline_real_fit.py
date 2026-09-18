@@ -304,6 +304,8 @@ class DummyModel:
 
 
 class DeltaPSF:
+    includes_pixel_response = False
+
     def kernel(self):
         psf = np.zeros((9, 9))
         psf[4, 4] = 1.0

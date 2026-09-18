@@ -12,6 +12,8 @@ from baymorph.fitting import (
 class DeltaPSF:
     """Identity PSF kernel used in model-factory tests."""
 
+    includes_pixel_response = False
+
     def kernel(self):
         """Return a normalized delta-function kernel."""
         kernel = np.zeros(

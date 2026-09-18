@@ -49,6 +49,28 @@ class ConvolvedModel:
         """Return the configured analytic-kernel size."""
         return self.psf_effect.kernel_size
 
+    def _model_render_kwargs(self) -> dict[str, Any]:
+        """Return extra ``render()`` kwargs enforcing the PSF pixel-response contract.
+
+        A PSF object must declare ``includes_pixel_response`` (see
+        ``GaussianPSF``/``EmpiricalPSF`` in ``baymorph.simulation.psf``).
+        When it already includes the detector pixel response, the intrinsic
+        model must be point-sampled at pixel centers (``renderer="point"``)
+        rather than pixel-footprint integrated, or convolution would apply
+        the pixel response twice.
+        """
+        if not hasattr(self.psf, "includes_pixel_response"):
+            raise TypeError(
+                "PSF objects used with ConvolvedModel must declare "
+                "`includes_pixel_response` to state whether their kernel "
+                "already includes the detector pixel response."
+            )
+
+        if self.psf.includes_pixel_response:
+            return {"renderer": "point"}
+
+        return {}
+
     def _extended_domain(
         self,
         shape: tuple[int, int],
@@ -109,15 +131,25 @@ class ConvolvedModel:
             pad_x,
         ) = self._extended_domain(shape)
 
+        render_kwargs = self._model_render_kwargs()
+
         try:
             intrinsic = self.model.render(
                 shape=extended_shape,
                 origin=extended_origin,
+                **render_kwargs,
             )
         except TypeError as exc:
             raise TypeError(
                 "PSF-convolved models must support "
-                "render(shape=..., origin=...)."
+                "render(shape=..., origin=...)"
+                + (
+                    ", and a `renderer=\"point\"` keyword argument when "
+                    "used with a PSF whose kernel already includes the "
+                    "detector pixel response."
+                    if render_kwargs
+                    else "."
+                )
             ) from exc
 
         convolved = self.psf_effect.apply(
@@ -143,10 +175,13 @@ class ConvolvedModel:
             pad_x,
         ) = self._extended_domain(shape)
 
+        render_kwargs = self._model_render_kwargs()
+
         try:
             components = self.model.render_components(
                 shape=extended_shape,
                 origin=extended_origin,
+                **render_kwargs,
             )
         except AttributeError as exc:
             raise TypeError(
@@ -156,7 +191,14 @@ class ConvolvedModel:
         except TypeError as exc:
             raise TypeError(
                 "PSF-convolved component models must support "
-                "render_components(shape=..., origin=...)."
+                "render_components(shape=..., origin=...)"
+                + (
+                    ", and a `renderer=\"point\"` keyword argument when "
+                    "used with a PSF whose kernel already includes the "
+                    "detector pixel response."
+                    if render_kwargs
+                    else "."
+                )
             ) from exc
 
         return {

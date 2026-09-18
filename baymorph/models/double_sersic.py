@@ -18,16 +18,19 @@ class DoubleSersicModel:
         shape: tuple[int, int],
         *,
         origin: tuple[float, float] = (0.0, 0.0),
+        **kwargs,
     ) -> dict[str, np.ndarray]:
         """Render the bulge and disk components."""
         return {
             "bulge": self.bulge.render(
                 shape=shape,
                 origin=origin,
+                **kwargs,
             ),
             "disk": self.disk.render(
                 shape=shape,
                 origin=origin,
+                **kwargs,
             ),
         }
 
@@ -36,11 +39,13 @@ class DoubleSersicModel:
         shape: tuple[int, int],
         *,
         origin: tuple[float, float] = (0.0, 0.0),
+        **kwargs,
     ) -> np.ndarray:
         """Render the complete double-Sérsic model."""
         components = self.render_components(
             shape=shape,
             origin=origin,
+            **kwargs,
         )
 
         return (

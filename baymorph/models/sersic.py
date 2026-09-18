@@ -351,6 +351,27 @@ class SersicModel:
 
         return image
 
+    def _point_sample(
+        self,
+        pixel_x: ArrayLike,
+        pixel_y: ArrayLike,
+    ) -> FloatArray:
+        """Evaluate the continuous profile at pixel centers.
+
+        This is not a pixel-footprint integral: it is the surface brightness
+        sampled exactly at each pixel center. It is the correct rendering
+        mode when the PSF kernel already includes the detector pixel
+        response (see ``renderer="point"`` on :meth:`render`), since
+        integrating over the pixel footprint before convolving with such a
+        kernel would apply the pixel response twice.
+        """
+        radius = self._elliptical_radius(
+            x=np.asarray(pixel_x, dtype=float),
+            y=np.asarray(pixel_y, dtype=float),
+        )
+
+        return self.surface_brightness(radius)
+
     def render_components(
         self,
         shape: tuple[int, int],
@@ -386,13 +407,21 @@ class SersicModel:
         max_depth: int = 6,
         origin: tuple[float, float] = (0.0, 0.0),
     ) -> FloatArray:
-        """Integrate the continuous model over detector pixels.
+        """Render the continuous model on the requested pixel grid.
 
-        ``hybrid`` is the production default. It combines moderate-order
-        Gauss-Legendre quadrature over the smooth outer image with automatic
-        semi-analytic integration of the numerically difficult Sérsic core.
+        ``hybrid`` is the production default for PSFs that do not already
+        include the detector pixel response (for example ``GaussianPSF``).
+        It combines moderate-order Gauss-Legendre quadrature over the smooth
+        outer image with automatic semi-analytic integration of the
+        numerically difficult Sérsic core.
 
         ``fixed`` and ``adaptive`` remain available for numerical validation.
+
+        ``point`` evaluates the continuous profile at pixel centers instead
+        of integrating over each pixel footprint. It is the correct mode
+        when the PSF kernel already includes the detector pixel response
+        (for example ``EmpiricalPSF``), so that convolution does not apply
+        the pixel response twice.
         """
         self._validate_shape(shape)
         self._validate_integration_order(
@@ -403,9 +432,10 @@ class SersicModel:
             "hybrid",
             "fixed",
             "adaptive",
+            "point",
         }:
             raise ValueError(
-                "renderer must be 'hybrid', 'fixed', or 'adaptive'."
+                "renderer must be 'hybrid', 'fixed', 'adaptive', or 'point'."
             )
 
         if renderer == "hybrid":
@@ -447,6 +477,12 @@ class SersicModel:
                 pixel_x=pixel_x,
                 pixel_y=pixel_y,
                 integration_order=integration_order,
+            )
+
+        if renderer == "point":
+            return self._point_sample(
+                pixel_x=pixel_x,
+                pixel_y=pixel_y,
             )
 
         return self._integrate_pixel_adaptive(

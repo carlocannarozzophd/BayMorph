@@ -13,6 +13,8 @@ from baymorph.analysis.prior_predictive import (
 class _UnitPSF:
     """Minimal unit PSF satisfying the BayMorph PSF protocol."""
 
+    includes_pixel_response = False
+
     def kernel(
         self,
         *_args,

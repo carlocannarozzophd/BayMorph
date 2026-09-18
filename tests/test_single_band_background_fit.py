@@ -54,6 +54,8 @@ def _prior_references() -> dict[str, float]:
 class DeltaPSF:
     """Identity PSF used for background-integration tests."""
 
+    includes_pixel_response = False
+
     def kernel(self):
         """Return a normalized delta-function kernel."""
         kernel = np.zeros(

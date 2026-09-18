@@ -94,3 +94,10 @@ def test_empirical_psf_rejects_negative_values():
 
     with pytest.raises(ValueError, match="non-negative values"):
         psf.kernel()
+
+
+def test_empirical_psf_includes_pixel_response():
+
+    psf = EmpiricalPSF(kernel_array=np.ones((11, 11)))
+
+    assert psf.includes_pixel_response is True

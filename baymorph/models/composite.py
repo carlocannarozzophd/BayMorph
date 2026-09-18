@@ -91,6 +91,7 @@ class CompositeModel:
         shape: tuple[int, int],
         *,
         origin: tuple[float, float] = (0.0, 0.0),
+        **kwargs,
     ) -> dict[str, FloatArray]:
         """Render every named intrinsic component."""
         return {
@@ -98,6 +99,7 @@ class CompositeModel:
                 component.render(
                     shape=shape,
                     origin=origin,
+                    **kwargs,
                 ),
                 dtype=float,
             )
@@ -109,6 +111,7 @@ class CompositeModel:
         shape: tuple[int, int],
         *,
         origin: tuple[float, float] = (0.0, 0.0),
+        **kwargs,
     ) -> FloatArray:
         """Render the total intrinsic composite model."""
         image = np.zeros(shape, dtype=float)
@@ -116,6 +119,7 @@ class CompositeModel:
         for component_image in self.render_components(
             shape=shape,
             origin=origin,
+            **kwargs,
         ).values():
             image += component_image
 

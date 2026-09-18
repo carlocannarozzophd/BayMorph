@@ -181,6 +181,45 @@ def test_bulge_disk_rejects_non_exponential_disk() -> None:
         )
 
 
+def test_bulge_disk_threads_renderer_kwarg_to_components() -> None:
+    """Extra render() keywords must reach both the bulge and the disc."""
+    bulge = make_bulge()
+    disk = make_disk()
+
+    model = BulgeDiskModel(
+        bulge=bulge,
+        disk=disk,
+    )
+
+    point_sampled = model.render(
+        shape=(41, 43),
+        renderer="point",
+    )
+
+    reference = bulge.render(
+        shape=(41, 43),
+        renderer="point",
+    ) + disk.render(
+        shape=(41, 43),
+        renderer="point",
+    )
+
+    np.testing.assert_allclose(
+        point_sampled,
+        reference,
+        rtol=0.0,
+        atol=0.0,
+    )
+
+    assert (
+        np.linalg.norm(
+            point_sampled
+            - model.render(shape=(41, 43))
+        )
+        > 1.0e-6
+    )
+
+
 def test_bulge_disk_rejects_exponential_bulge() -> None:
     """Bulge and disc roles must not be silently interchangeable."""
     with pytest.raises(

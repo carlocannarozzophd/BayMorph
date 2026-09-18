@@ -74,11 +74,13 @@ class BulgeDiskModel:
         shape: tuple[int, int],
         *,
         origin: tuple[float, float] = (0.0, 0.0),
+        **kwargs,
     ) -> dict[str, FloatArray]:
         """Render the named bulge and disc contributions."""
         return self._composite().render_components(
             shape=shape,
             origin=origin,
+            **kwargs,
         )
 
     def render(
@@ -86,11 +88,13 @@ class BulgeDiskModel:
         shape: tuple[int, int],
         *,
         origin: tuple[float, float] = (0.0, 0.0),
+        **kwargs,
     ) -> FloatArray:
         """Render the total intrinsic bulge-disc image."""
         return self._composite().render(
             shape=shape,
             origin=origin,
+            **kwargs,
         )
 
     @property
