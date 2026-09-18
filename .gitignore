@@ -87,3 +87,11 @@ venv/
 
 /BayMorph_latest*.zip
 /baymorph_documentation_audit.txt
+
+# ------------------------------------------------------------------
+# Local operating notes and project history
+#
+# Kept on disk for the owner and local tooling, never published.
+# ------------------------------------------------------------------
+
+/HISTORY.md
