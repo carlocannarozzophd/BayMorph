@@ -206,6 +206,10 @@ def multi_observation_paths(
             model_name
         ] = {
             "dir": fit_dir,
+            "complete": (
+                fit_dir
+                / "COMPLETE.json"
+            ),
             "posterior": (
                 fit_dir
                 / "posterior.npz"

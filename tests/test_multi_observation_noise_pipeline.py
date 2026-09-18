@@ -257,7 +257,8 @@ def test_noise_diagnostic_precedes_sampler(
         *,
         fit_config,
         model_name,
-        problem,
+        context,
+        checkpoint_directory=None,
     ):
         events.append(
             "sampler"

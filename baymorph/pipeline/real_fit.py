@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import dataclasses
 import hashlib
-import importlib.metadata
 import json
-import os
-import sys
 import warnings
 from copy import deepcopy
 from pathlib import Path
@@ -33,6 +29,18 @@ from baymorph.models import get_model
 from baymorph.observation.background import (
     BackgroundAppliedModel,
     make_background_effect,
+)
+from baymorph.pipeline.checkpoint_signing import (
+    baymorph_source_signature as _baymorph_source_signature,
+    checkpoint_array_signature as _checkpoint_array_signature,
+    checkpoint_runtime_versions as _checkpoint_runtime_versions,
+    checkpoint_signature_value as _checkpoint_signature_value,
+    prior_checkpoint_signature as _prior_checkpoint_signature,
+    qualified_class_name as _qualified_class_name,
+    resolve_embedded_signed_checkpoint,
+    resolve_json_signed_checkpoint,
+    runtime_psf_checkpoint_signature as _runtime_psf_checkpoint_signature,
+    write_json_atomic as _write_json_atomic,
 )
 from baymorph.pipeline.config import (
     DEFAULT_CONFIG,
@@ -398,45 +406,6 @@ def _resolved_boundary_priors(
     return resolved_priors
 
 
-def _write_json_atomic(
-    path: Path,
-    payload: dict[str, Any],
-) -> None:
-    """Write one JSON result atomically."""
-    temporary = path.with_name(
-        f".{path.name}.{os.getpid()}.tmp"
-    )
-
-    try:
-        with temporary.open(
-            "w",
-            encoding="utf-8",
-        ) as stream:
-            json.dump(
-                payload,
-                stream,
-                allow_nan=False,
-                indent=2,
-                sort_keys=True,
-            )
-            stream.write(
-                "\n"
-            )
-            stream.flush()
-            os.fsync(
-                stream.fileno()
-            )
-
-        os.replace(
-            temporary,
-            path,
-        )
-    finally:
-        temporary.unlink(
-            missing_ok=True
-        )
-
-
 def _write_fit_completion_marker(
     path: Path,
     *,
@@ -492,411 +461,6 @@ def _write_fit_completion_marker(
         path,
         payload,
     )
-
-
-def _qualified_class_name(
-    value,
-) -> str:
-    """Return a stable module-qualified class name."""
-    value_type = type(
-        value
-    )
-
-    return (
-        f"{value_type.__module__}."
-        f"{value_type.__qualname__}"
-    )
-
-
-def _checkpoint_array_signature(
-    value,
-) -> dict[str, Any]:
-    """Return a canonical signature for one numerical array."""
-    array = np.ascontiguousarray(
-        np.asarray(
-            value
-        )
-    )
-
-    if array.dtype.hasobject:
-        raise TypeError(
-            "Checkpoint signatures do not support object arrays."
-        )
-
-    return {
-        "dtype": array.dtype.str,
-        "shape": list(
-            array.shape
-        ),
-        "sha256": hashlib.sha256(
-            array.tobytes(
-                order="C"
-            )
-        ).hexdigest(),
-    }
-
-
-def _checkpoint_signature_value(
-    value,
-):
-    """Convert one value into strict canonical signature metadata."""
-    if value is None:
-        return None
-
-    if isinstance(
-        value,
-        np.ndarray,
-    ):
-        return {
-            "__array__": _checkpoint_array_signature(
-                value
-            )
-        }
-
-    if isinstance(
-        value,
-        np.generic,
-    ):
-        return _checkpoint_signature_value(
-            value.item()
-        )
-
-    if isinstance(
-        value,
-        Path,
-    ):
-        return {
-            "__path__": str(
-                value
-            )
-        }
-
-    if isinstance(
-        value,
-        bool,
-    ):
-        return value
-
-    if isinstance(
-        value,
-        int,
-    ):
-        return value
-
-    if isinstance(
-        value,
-        float,
-    ):
-        if not np.isfinite(
-            value
-        ):
-            raise ValueError(
-                "Checkpoint signature scalars must be finite."
-            )
-
-        return value
-
-    if isinstance(
-        value,
-        str,
-    ):
-        return value
-
-    if isinstance(
-        value,
-        bytes,
-    ):
-        return {
-            "__bytes_sha256__": hashlib.sha256(
-                value
-            ).hexdigest()
-        }
-
-    if isinstance(
-        value,
-        dict,
-    ):
-        if not all(
-            isinstance(
-                key,
-                str,
-            )
-            for key in value
-        ):
-            raise TypeError(
-                "Checkpoint signature mappings require string keys."
-            )
-
-        return {
-            key: _checkpoint_signature_value(
-                value[
-                    key
-                ]
-            )
-            for key in sorted(
-                value
-            )
-        }
-
-    if isinstance(
-        value,
-        (list, tuple),
-    ):
-        return [
-            _checkpoint_signature_value(
-                item
-            )
-            for item in value
-        ]
-
-    raise TypeError(
-        "Unsupported checkpoint-signature value "
-        f"{_qualified_class_name(value)!r}."
-    )
-
-
-def _prior_checkpoint_signature(
-    prior,
-) -> dict[str, Any]:
-    """Return the complete canonical state of one active prior."""
-    if dataclasses.is_dataclass(
-        prior
-    ):
-        state = {
-            field.name: getattr(
-                prior,
-                field.name,
-            )
-            for field in dataclasses.fields(
-                prior
-            )
-        }
-    else:
-        try:
-            state = dict(
-                vars(
-                    prior
-                )
-            )
-        except TypeError as exc:
-            raise TypeError(
-                "Checkpointing requires priors with canonical "
-                "dataclass fields or instance state."
-            ) from exc
-
-    return {
-        "class": _qualified_class_name(
-            prior
-        ),
-        "state": _checkpoint_signature_value(
-            state
-        ),
-    }
-
-
-def _runtime_psf_checkpoint_signature(
-    psf,
-) -> dict[str, Any] | None:
-    """Return the effective numerical state of the runtime PSF."""
-    if psf is None:
-        return None
-
-    if isinstance(
-        psf,
-        np.ndarray,
-    ):
-        return {
-            "class": _qualified_class_name(
-                psf
-            ),
-            "array": _checkpoint_array_signature(
-                psf
-            ),
-        }
-
-    try:
-        candidate_array = np.asarray(
-            psf
-        )
-    except (
-        TypeError,
-        ValueError,
-    ):
-        candidate_array = None
-
-    if (
-        candidate_array is not None
-        and candidate_array.ndim > 0
-        and not candidate_array.dtype.hasobject
-    ):
-        return {
-            "class": _qualified_class_name(
-                psf
-            ),
-            "array": _checkpoint_array_signature(
-                candidate_array
-            ),
-        }
-
-    if dataclasses.is_dataclass(
-        psf
-    ):
-        state = {
-            field.name: getattr(
-                psf,
-                field.name,
-            )
-            for field in dataclasses.fields(
-                psf
-            )
-        }
-    else:
-        try:
-            state = dict(
-                vars(
-                    psf
-                )
-            )
-        except TypeError:
-            state = None
-
-        if state is None:
-            slots = getattr(
-                type(
-                    psf
-                ),
-                "__slots__",
-                (),
-            )
-
-            if isinstance(
-                slots,
-                str,
-            ):
-                slots = (
-                    slots,
-                )
-
-            state = {
-                name: getattr(
-                    psf,
-                    name,
-                )
-                for name in slots
-                if not name.startswith(
-                    "__"
-                )
-                and hasattr(
-                    psf,
-                    name,
-                )
-            }
-
-    return {
-        "class": _qualified_class_name(
-            psf
-        ),
-        "state": _checkpoint_signature_value(
-            state
-        ),
-    }
-
-
-def _baymorph_source_signature() -> dict[str, Any]:
-    """Hash the installed BayMorph Python source tree."""
-    package_root = Path(
-        __file__
-    ).resolve().parents[
-        1
-    ]
-
-    source_paths = sorted(
-        package_root.rglob(
-            "*.py"
-        ),
-        key=lambda path: path.relative_to(
-            package_root
-        ).as_posix(),
-    )
-
-    if not source_paths:
-        raise RuntimeError(
-            "No BayMorph Python sources were found for "
-            "checkpoint fingerprinting."
-        )
-
-    digest = hashlib.sha256()
-
-    for source_path in source_paths:
-        relative = source_path.relative_to(
-            package_root
-        ).as_posix().encode(
-            "utf-8"
-        )
-        contents = source_path.read_bytes()
-
-        digest.update(
-            len(
-                relative
-            ).to_bytes(
-                8,
-                "big",
-            )
-        )
-        digest.update(
-            relative
-        )
-        digest.update(
-            len(
-                contents
-            ).to_bytes(
-                8,
-                "big",
-            )
-        )
-        digest.update(
-            contents
-        )
-
-    return {
-        "algorithm": "sha256",
-        "file_count": len(
-            source_paths
-        ),
-        "digest": digest.hexdigest(),
-    }
-
-
-def _checkpoint_runtime_versions() -> dict[str, Any]:
-    """Return conservative numerical-runtime version metadata."""
-    versions: dict[str, Any] = {
-        "python": (
-            f"{sys.version_info.major}."
-            f"{sys.version_info.minor}."
-            f"{sys.version_info.micro}"
-        ),
-    }
-
-    for distribution in (
-        "baymorph",
-        "numpy",
-        "scipy",
-        "astropy",
-        "photutils",
-        "scikit-image",
-    ):
-        try:
-            versions[
-                distribution
-            ] = importlib.metadata.version(
-                distribution
-            )
-        except importlib.metadata.PackageNotFoundError:
-            versions[
-                distribution
-            ] = None
-
-    return versions
 
 
 def _real_fit_problem_signature(
@@ -1089,27 +653,11 @@ def _prepare_emcee_sampler_config(
         correlation_kernel_fit=correlation_kernel_fit,
     )
 
-    declared_signature = init_config.get(
-        "checkpoint_signature"
+    resolve_embedded_signed_checkpoint(
+        init_config,
+        problem_signature=generated_signature,
+        label="emcee",
     )
-
-    if declared_signature is not None:
-        if (
-            not isinstance(
-                declared_signature,
-                str,
-            )
-            or declared_signature.strip()
-            != generated_signature
-        ):
-            raise ValueError(
-                "The declared emcee checkpoint_signature does "
-                "not match the current scientific problem."
-            )
-
-    init_config[
-        "checkpoint_signature"
-    ] = generated_signature
 
     return runtime_config
 
@@ -1181,10 +729,6 @@ def _prepare_nautilus_sampler_config(
     checkpoint_path = Path(
         configured_path
     ).expanduser().resolve()
-    signature_path = checkpoint_path.with_suffix(
-        checkpoint_path.suffix
-        + ".target.json"
-    )
     problem_signature = _real_fit_problem_signature(
         model_name=model_name,
         problem=problem,
@@ -1194,90 +738,124 @@ def _prepare_nautilus_sampler_config(
         mask_fit=mask_fit,
         correlation_kernel_fit=correlation_kernel_fit,
     )
-    signature_payload = {
-        "schema": "baymorph_nautilus_checkpoint_target_v1",
-        "problem_signature": problem_signature,
-        "sampler": _checkpoint_signature_value(
-            runtime_config
-        ),
-    }
-    canonical = json.dumps(
-        signature_payload,
-        sort_keys=True,
-        separators=(
-            ",",
-            ":",
-        ),
-        ensure_ascii=True,
-        allow_nan=False,
-    )
-    expected = {
-        "schema_version": 1,
-        "signature": (
-            "sha256:"
-            + hashlib.sha256(
-                canonical.encode(
-                    "utf-8"
-                )
-            ).hexdigest()
-        ),
-        "target": signature_payload,
-    }
 
-    if checkpoint_path.exists():
-        if not bool(
+    resolve_json_signed_checkpoint(
+        checkpoint_path=checkpoint_path,
+        schema="baymorph_nautilus_checkpoint_target_v1",
+        problem_signature=problem_signature,
+        runtime_sampler_config=runtime_config,
+        label="Nautilus checkpoint",
+        require_resume_flag=True,
+        resume_requested=bool(
             init_config.get(
                 "resume",
                 True,
             )
-        ):
-            raise FileExistsError(
-                "A Nautilus checkpoint already exists while resume=false: "
-                f"{checkpoint_path}"
-            )
+        ),
+    )
 
-        if not signature_path.is_file():
-            raise RuntimeError(
-                "Nautilus checkpoint has no BayMorph target signature: "
-                f"{signature_path}"
-            )
+    return runtime_config
 
-        with signature_path.open(
-            "r",
-            encoding="utf-8",
-        ) as stream:
-            recorded = json.load(
-                stream
-            )
 
-        if recorded != expected:
-            raise RuntimeError(
-                "Nautilus checkpoint target does not match the current "
-                f"scientific problem: {checkpoint_path}"
-            )
-    elif signature_path.exists():
-        with signature_path.open(
-            "r",
-            encoding="utf-8",
-        ) as stream:
-            recorded = json.load(
-                stream
-            )
+def _prepare_pocomc_sampler_config(
+    sampler_cfg,
+    *,
+    model_name,
+    problem,
+    likelihood_cfg,
+    data_fit,
+    noise_fit,
+    mask_fit,
+    correlation_kernel_fit,
+    checkpoint_directory,
+):
+    """Resolve and authenticate one model-specific pocoMC resume target.
 
-        if recorded != expected:
-            raise RuntimeError(
-                "Nautilus target signature does not match the current "
-                f"scientific problem: {signature_path}"
-            )
-    else:
-        checkpoint_path.parent.mkdir(
-            parents=True,
-            exist_ok=True,
+    pocoMC's native ``run(resume_state_path=...)`` option loads an
+    arbitrary state file with no BayMorph-side awareness of what scientific
+    problem produced it. Whenever it is set, this requires and validates a
+    sibling ``.target.json`` signature exactly like a Nautilus checkpoint,
+    so BayMorph never resumes an incompatible pocoMC state.
+    """
+    sampler_name = str(
+        sampler_cfg.get(
+            "name",
+            "",
         )
-        _write_json_atomic(
-            signature_path,
-            expected,
+    ).strip().lower()
+
+    if sampler_name != "pocomc":
+        return sampler_cfg
+
+    runtime_config = deepcopy(
+        sampler_cfg
+    )
+    run_config = dict(
+        runtime_config.get(
+            "run",
+            {},
         )
+    )
+    runtime_config["run"] = run_config
+    configured_path = run_config.get(
+        "resume_state_path"
+    )
+
+    if configured_path is None:
+        return runtime_config
+
+    if checkpoint_directory is not None and (
+        isinstance(
+            configured_path,
+            str,
+        )
+        and configured_path.strip().lower()
+        == "auto"
+    ):
+        configured_path = str(
+            (
+                Path(
+                    checkpoint_directory
+                )
+                / "pocomc_state.h5"
+            ).expanduser().resolve()
+        )
+        run_config["resume_state_path"] = configured_path
+    elif (
+        isinstance(
+            configured_path,
+            str,
+        )
+        and configured_path.strip().lower()
+        == "auto"
+    ):
+        raise ValueError(
+            "pocoMC resume_state_path='auto' requires a pipeline-managed "
+            "model output directory."
+        )
+
+    checkpoint_path = Path(
+        configured_path
+    ).expanduser().resolve()
+    problem_signature = _real_fit_problem_signature(
+        model_name=model_name,
+        problem=problem,
+        likelihood_cfg=likelihood_cfg,
+        data_fit=data_fit,
+        noise_fit=noise_fit,
+        mask_fit=mask_fit,
+        correlation_kernel_fit=correlation_kernel_fit,
+    )
+
+    resolve_json_signed_checkpoint(
+        checkpoint_path=checkpoint_path,
+        schema="baymorph_pocomc_checkpoint_target_v1",
+        problem_signature=problem_signature,
+        runtime_sampler_config=runtime_config,
+        label="pocoMC resume state",
+        require_resume_flag=False,
+        resume_requested=True,
+    )
 
     return runtime_config
 
@@ -1337,6 +915,22 @@ def _execute_single_model_fit(
 
     runtime_sampler_cfg = (
         _prepare_nautilus_sampler_config(
+            runtime_sampler_cfg,
+            model_name=model_name,
+            problem=problem,
+            likelihood_cfg=likelihood_cfg,
+            data_fit=image_products.prepared_data,
+            noise_fit=likelihood_state.noise,
+            mask_fit=image_products.fitting_mask,
+            correlation_kernel_fit=(
+                likelihood_state.correlation_kernel
+            ),
+            checkpoint_directory=checkpoint_directory,
+        )
+    )
+
+    runtime_sampler_cfg = (
+        _prepare_pocomc_sampler_config(
             runtime_sampler_cfg,
             model_name=model_name,
             problem=problem,

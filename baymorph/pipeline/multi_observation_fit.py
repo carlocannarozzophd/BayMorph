@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -32,6 +35,18 @@ from baymorph.observation.geometry import (
 from baymorph.observation.model_parameter_transforms import (
     SkyModelParameterTransform,
 )
+from baymorph.pipeline.checkpoint_signing import (
+    baymorph_source_signature as _baymorph_source_signature,
+    checkpoint_array_signature as _checkpoint_array_signature,
+    checkpoint_runtime_versions as _checkpoint_runtime_versions,
+    checkpoint_signature_value as _checkpoint_signature_value,
+    prior_checkpoint_signature as _prior_checkpoint_signature,
+    qualified_class_name as _qualified_class_name,
+    resolve_embedded_signed_checkpoint,
+    resolve_json_signed_checkpoint,
+    runtime_psf_checkpoint_signature as _runtime_psf_checkpoint_signature,
+    write_json_atomic as _write_json_atomic,
+)
 from baymorph.pipeline.image_preparation import (
     load_image_preparation_products,
 )
@@ -43,6 +58,10 @@ from baymorph.pipeline.likelihood_state import (
 from baymorph.pipeline.multi_observation_noise import (
     estimate_cross_observation_noise_diagnostics,
     print_cross_observation_noise_diagnostics,
+)
+from baymorph.pipeline.multi_observation_outputs import (
+    make_multi_observation_output_tree,
+    multi_observation_paths,
 )
 from baymorph.pipeline.multi_observation_persistence import (
     save_multi_observation_fit_products,
@@ -73,6 +92,7 @@ class _MultiObservationBuildContext:
     psfs: dict[str, Any]
     likelihoods: dict[str, ImageLikelihood]
     likelihood_states: dict[str, RealFitLikelihoodState]
+    likelihood_configs: dict[str, dict[str, Any]]
 
 
 def build_multi_observation_problem_from_config(
@@ -104,6 +124,20 @@ def build_multi_observation_problem_from_config(
         raw_config,
         base_dir=base_dir,
     )
+
+
+def _multi_observation_checkpoint_directory(
+    raw_config: Mapping[str, Any],
+    *,
+    model_name: str,
+) -> Path | None:
+    """Return the pipeline-managed checkpoint directory, if outputs are configured."""
+    if "outputs" not in raw_config:
+        return None
+
+    return multi_observation_paths(
+        raw_config
+    )["fits"][model_name]["dir"]
 
 
 def run_multi_observation_inference_from_config(
@@ -142,7 +176,11 @@ def run_multi_observation_inference_from_config(
     result = _run_multi_observation_inference(
         fit_config=fit_config,
         model_name=model_name,
-        problem=context.problem,
+        context=context,
+        checkpoint_directory=_multi_observation_checkpoint_directory(
+            raw_config,
+            model_name=model_name,
+        ),
     )
 
     result.diagnostics[
@@ -184,10 +222,60 @@ def run_multi_observation_fit_from_config(
         )
     )
 
+    outputs_configured = (
+        "outputs" in raw_config
+    )
+    fit_paths = (
+        multi_observation_paths(
+            raw_config
+        )["fits"][model_name]
+        if outputs_configured
+        else None
+    )
+    completion_path = (
+        None
+        if fit_paths is None
+        else fit_paths["complete"]
+    )
+
+    if completion_path is not None:
+        outputs_cfg = raw_config.get(
+            "outputs",
+            {},
+        )
+
+        if (
+            completion_path.exists()
+            and not bool(
+                outputs_cfg.get(
+                    "overwrite",
+                    False,
+                )
+            )
+        ):
+            raise FileExistsError(
+                "A complete multi-observation fit already exists for "
+                f"model {model_name!r}: {completion_path}. Use a new "
+                "output namespace, or set outputs.overwrite=true "
+                "explicitly."
+            )
+
+        if completion_path.exists():
+            completion_path.unlink()
+
+        make_multi_observation_output_tree(
+            raw_config
+        )
+
     inference_result = _run_multi_observation_inference(
         fit_config=fit_config,
         model_name=model_name,
-        problem=context.problem,
+        context=context,
+        checkpoint_directory=(
+            None
+            if fit_paths is None
+            else fit_paths["dir"]
+        ),
     )
 
     inference_result.diagnostics[
@@ -200,13 +288,67 @@ def run_multi_observation_fit_from_config(
         model_name=model_name,
     )
 
-    if "outputs" in raw_config:
+    if outputs_configured:
         save_multi_observation_fit_products(
             raw_config,
             products,
         )
 
+        _write_multi_observation_completion_marker(
+            completion_path,
+            model_name=model_name,
+            config=raw_config,
+            products=products,
+        )
+
     return products
+
+
+def _write_multi_observation_completion_marker(
+    path: Path,
+    *,
+    model_name: str,
+    config: Mapping[str, Any],
+    products: MultiObservationFitProducts,
+) -> None:
+    """Mark a fully persisted joint multi-observation fit complete."""
+    canonical_config = json.dumps(
+        _checkpoint_signature_value(
+            dict(
+                config
+            )
+        ),
+        sort_keys=True,
+        separators=(
+            ",",
+            ":",
+        ),
+        ensure_ascii=True,
+        allow_nan=False,
+    )
+    evidence = products.posterior.evidence
+
+    payload = {
+        "schema_version": 1,
+        "model": model_name,
+        "config_sha256": hashlib.sha256(
+            canonical_config.encode(
+                "utf-8"
+            )
+        ).hexdigest(),
+        "logz": products.logz,
+        "logz_error": products.logz_error,
+        "evidence_method": (
+            None
+            if evidence is None
+            else evidence.method
+        ),
+    }
+
+    _write_json_atomic(
+        path,
+        payload,
+    )
 
 
 def _estimate_pre_fit_noise_diagnostics(
@@ -260,11 +402,382 @@ def _require_evidence_safe_likelihoods(
         )
 
 
+def _multi_observation_problem_signature(
+    *,
+    model_name: str,
+    context: _MultiObservationBuildContext,
+) -> str:
+    """Return a strict signature of one joint multi-observation target.
+
+    Covers the shared global parameter state, the model factory used across
+    observations, and each observation's own PSF, likelihood, data, noise,
+    mask, and correlation kernel. One joint problem has one deterministic
+    global parameter state; this signature is the multi-observation
+    counterpart of ``_real_fit_problem_signature``.
+    """
+    parameter_state = []
+
+    for parameter in (
+        context.problem.parameter_layout.parameter_set.all_parameters
+    ):
+        parameter_state.append(
+            {
+                "name": parameter.name,
+                "sampled": not parameter.is_fixed,
+                "prior": _prior_checkpoint_signature(
+                    parameter.prior
+                ),
+            }
+        )
+
+    representation_factory = (
+        context.problem.representation_factory
+    )
+
+    model_state = {
+        "factory_class": _qualified_class_name(
+            representation_factory.factory
+        ),
+        "requested_name": str(
+            model_name
+        ),
+        "parameter_transforms": _runtime_psf_checkpoint_signature(
+            representation_factory.parameter_transforms
+        ),
+    }
+
+    observation_state = {}
+
+    for observation_name in sorted(
+        context.image_products
+    ):
+        products = context.image_products[
+            observation_name
+        ]
+        likelihood_state = context.likelihood_states[
+            observation_name
+        ]
+
+        observation_state[
+            observation_name
+        ] = {
+            "psf": _runtime_psf_checkpoint_signature(
+                context.psfs[
+                    observation_name
+                ]
+            ),
+            "likelihood": {
+                "class": _qualified_class_name(
+                    context.likelihoods[
+                        observation_name
+                    ]
+                ),
+                "configuration": _checkpoint_signature_value(
+                    dict(
+                        context.likelihood_configs[
+                            observation_name
+                        ]
+                    )
+                ),
+                "data": _checkpoint_array_signature(
+                    products.prepared_data
+                ),
+                "noise": _checkpoint_array_signature(
+                    likelihood_state.noise
+                ),
+                "mask": _checkpoint_array_signature(
+                    products.fitting_mask
+                ),
+                "correlation_kernel": (
+                    None
+                    if likelihood_state.correlation_kernel is None
+                    else _checkpoint_array_signature(
+                        likelihood_state.correlation_kernel
+                    )
+                ),
+            },
+        }
+
+    payload = {
+        "schema": "baymorph_multi_observation_problem_v1",
+        "problem_class": _qualified_class_name(
+            context.problem
+        ),
+        "model": model_state,
+        "parameters": parameter_state,
+        "observations": observation_state,
+        "baymorph_source": _baymorph_source_signature(),
+        "runtime_versions": _checkpoint_runtime_versions(),
+    }
+
+    canonical = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    )
+
+    return (
+        "sha256:"
+        + hashlib.sha256(
+            canonical.encode(
+                "utf-8"
+            )
+        ).hexdigest()
+    )
+
+
+def _prepare_multi_observation_emcee_sampler_config(
+    sampler_cfg,
+    *,
+    model_name: str,
+    context: _MultiObservationBuildContext,
+    checkpoint_directory: Path | None,
+):
+    """Resolve automatic emcee checkpointing for one joint multi-obs fit."""
+    sampler_name = str(
+        sampler_cfg.get(
+            "name",
+            "",
+        )
+    ).strip().lower()
+
+    if sampler_name != "emcee":
+        return sampler_cfg
+
+    runtime_config = dict(
+        sampler_cfg
+    )
+    init_config = dict(
+        runtime_config.get(
+            "init",
+            {},
+        )
+    )
+    runtime_config["init"] = init_config
+
+    configured_path = init_config.get(
+        "checkpoint_path"
+    )
+
+    if configured_path is None:
+        return runtime_config
+
+    if (
+        isinstance(
+            configured_path,
+            str,
+        )
+        and configured_path.strip().lower() == "auto"
+    ):
+        if checkpoint_directory is None:
+            raise ValueError(
+                "emcee checkpoint_path='auto' requires a "
+                "pipeline-managed model output directory."
+            )
+
+        init_config["checkpoint_path"] = str(
+            (
+                Path(
+                    checkpoint_directory
+                )
+                / "emcee_checkpoint.h5"
+            ).expanduser().resolve()
+        )
+
+    init_config.setdefault(
+        "checkpoint_mode",
+        "fresh",
+    )
+
+    generated_signature = _multi_observation_problem_signature(
+        model_name=model_name,
+        context=context,
+    )
+
+    resolve_embedded_signed_checkpoint(
+        init_config,
+        problem_signature=generated_signature,
+        label="emcee",
+    )
+
+    return runtime_config
+
+
+def _prepare_multi_observation_nautilus_sampler_config(
+    sampler_cfg,
+    *,
+    model_name: str,
+    context: _MultiObservationBuildContext,
+    checkpoint_directory: Path | None,
+):
+    """Resolve and authenticate one model-specific joint Nautilus checkpoint."""
+    sampler_name = str(
+        sampler_cfg.get(
+            "name",
+            "",
+        )
+    ).strip().lower()
+
+    if sampler_name != "nautilus":
+        return sampler_cfg
+
+    runtime_config = deepcopy(
+        sampler_cfg
+    )
+    init_config = dict(
+        runtime_config.get(
+            "init",
+            {},
+        )
+    )
+    runtime_config["init"] = init_config
+    configured_path = init_config.get(
+        "filepath"
+    )
+
+    if configured_path is None:
+        return runtime_config
+
+    if (
+        isinstance(
+            configured_path,
+            str,
+        )
+        and configured_path.strip().lower()
+        == "auto"
+    ):
+        if checkpoint_directory is None:
+            raise ValueError(
+                "Nautilus filepath='auto' requires a pipeline-managed "
+                "model output directory."
+            )
+
+        configured_path = str(
+            (
+                Path(
+                    checkpoint_directory
+                )
+                / "nautilus_checkpoint.hdf5"
+            ).expanduser().resolve()
+        )
+        init_config["filepath"] = configured_path
+
+    checkpoint_path = Path(
+        configured_path
+    ).expanduser().resolve()
+    problem_signature = _multi_observation_problem_signature(
+        model_name=model_name,
+        context=context,
+    )
+
+    resolve_json_signed_checkpoint(
+        checkpoint_path=checkpoint_path,
+        schema="baymorph_multi_observation_nautilus_checkpoint_target_v1",
+        problem_signature=problem_signature,
+        runtime_sampler_config=runtime_config,
+        label="Nautilus checkpoint",
+        require_resume_flag=True,
+        resume_requested=bool(
+            init_config.get(
+                "resume",
+                True,
+            )
+        ),
+    )
+
+    return runtime_config
+
+
+def _prepare_multi_observation_pocomc_sampler_config(
+    sampler_cfg,
+    *,
+    model_name: str,
+    context: _MultiObservationBuildContext,
+    checkpoint_directory: Path | None,
+):
+    """Resolve and authenticate one model-specific joint pocoMC resume target."""
+    sampler_name = str(
+        sampler_cfg.get(
+            "name",
+            "",
+        )
+    ).strip().lower()
+
+    if sampler_name != "pocomc":
+        return sampler_cfg
+
+    runtime_config = deepcopy(
+        sampler_cfg
+    )
+    run_config = dict(
+        runtime_config.get(
+            "run",
+            {},
+        )
+    )
+    runtime_config["run"] = run_config
+    configured_path = run_config.get(
+        "resume_state_path"
+    )
+
+    if configured_path is None:
+        return runtime_config
+
+    is_auto = (
+        isinstance(
+            configured_path,
+            str,
+        )
+        and configured_path.strip().lower()
+        == "auto"
+    )
+
+    if is_auto:
+        if checkpoint_directory is None:
+            raise ValueError(
+                "pocoMC resume_state_path='auto' requires a "
+                "pipeline-managed model output directory."
+            )
+
+        configured_path = str(
+            (
+                Path(
+                    checkpoint_directory
+                )
+                / "pocomc_state.h5"
+            ).expanduser().resolve()
+        )
+        run_config["resume_state_path"] = configured_path
+
+    checkpoint_path = Path(
+        configured_path
+    ).expanduser().resolve()
+    problem_signature = _multi_observation_problem_signature(
+        model_name=model_name,
+        context=context,
+    )
+
+    resolve_json_signed_checkpoint(
+        checkpoint_path=checkpoint_path,
+        schema="baymorph_multi_observation_pocomc_checkpoint_target_v1",
+        problem_signature=problem_signature,
+        runtime_sampler_config=runtime_config,
+        label="pocoMC resume state",
+        require_resume_flag=False,
+        resume_requested=True,
+    )
+
+    return runtime_config
+
+
 def _run_multi_observation_inference(
     *,
     fit_config: Mapping[str, Any],
     model_name: str,
-    problem: MultiObservationInferenceProblem,
+    context: _MultiObservationBuildContext,
+    checkpoint_directory: Path | None = None,
 ) -> InferenceResult:
     """Execute the configured inference backend for one joint problem."""
     sampler_config = fit_config.get(
@@ -280,9 +793,34 @@ def _run_multi_observation_inference(
             "'sampler' mapping."
         )
 
+    runtime_sampler_config = (
+        _prepare_multi_observation_emcee_sampler_config(
+            sampler_config,
+            model_name=model_name,
+            context=context,
+            checkpoint_directory=checkpoint_directory,
+        )
+    )
+    runtime_sampler_config = (
+        _prepare_multi_observation_nautilus_sampler_config(
+            runtime_sampler_config,
+            model_name=model_name,
+            context=context,
+            checkpoint_directory=checkpoint_directory,
+        )
+    )
+    runtime_sampler_config = (
+        _prepare_multi_observation_pocomc_sampler_config(
+            runtime_sampler_config,
+            model_name=model_name,
+            context=context,
+            checkpoint_directory=checkpoint_directory,
+        )
+    )
+
     backend = make_sampler(
-        sampler_config,
-        problem=problem,
+        runtime_sampler_config,
+        problem=context.problem,
     )
 
     return backend.fit(
@@ -356,6 +894,7 @@ def _build_multi_observation_context(
 
     likelihoods = {}
     likelihood_states = {}
+    likelihood_configs = {}
 
     for observation_name, products in image_products.items():
         observation_config = observation_configs[
@@ -401,6 +940,9 @@ def _build_multi_observation_context(
         likelihood_states[
             observation_name
         ] = likelihood_state
+        likelihood_configs[
+            observation_name
+        ] = likelihood_config
 
         likelihoods[observation_name] = make_likelihood(
             likelihood_config,
@@ -452,6 +994,7 @@ def _build_multi_observation_context(
         psfs=psfs,
         likelihoods=likelihoods,
         likelihood_states=likelihood_states,
+        likelihood_configs=likelihood_configs,
     )
 
 
