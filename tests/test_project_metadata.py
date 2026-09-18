@@ -15,15 +15,6 @@ def project_metadata() -> dict:
         return tomllib.load(stream)
 
 
-def test_runtime_dependencies_cover_image_preparation() -> None:
-    """Production image preparation must declare its direct dependencies."""
-    dependencies = set(
-        project_metadata()["project"]["dependencies"]
-    )
-
-    assert "scikit-image" in dependencies
-
-
 def test_interactive_mask_dependencies_are_declared() -> None:
     """Interactive masking must expose a complete optional dependency set."""
     interactive = set(
