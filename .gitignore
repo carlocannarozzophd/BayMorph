@@ -45,6 +45,10 @@ venv/
 /data/
 /runs/
 
+# Run products are never distributed. A campaign launched from inside a
+# subdirectory writes its run tree there, so the pattern is not anchored.
+runs/
+
 /output/
 /outputs/
 

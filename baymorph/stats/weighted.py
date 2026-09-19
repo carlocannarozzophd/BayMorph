@@ -176,16 +176,51 @@ def mahalanobis_distance_squared(
         normalized @ samples
     ) - reference
 
+    # Rank deficiency is detected explicitly rather than by relying on the
+    # linear solver to fail. LAPACK implementations disagree: an exactly
+    # singular matrix raises under some and returns finite nonsense under
+    # others, which would silently produce a distance that is not the declared
+    # quantity. The covariance is symmetric positive semi-definite, so its
+    # eigenvalues give a deterministic, platform-independent criterion.
+    eigenvalues = np.linalg.eigvalsh(
+        covariance
+    )
+    largest = float(
+        eigenvalues[-1]
+    )
+
+    if not np.isfinite(largest) or largest <= 0.0:
+        raise ValueError(
+            "Posterior covariance is not positive definite, so a Mahalanobis "
+            "distance is undefined."
+        )
+
+    tolerance = (
+        covariance.shape[0]
+        * float(
+            np.finfo(float).eps
+        )
+        * largest
+    )
+
+    if float(eigenvalues[0]) <= tolerance:
+        raise ValueError(
+            "Posterior covariance is singular, so a Mahalanobis distance is "
+            "undefined. This usually means a parameter is fixed or perfectly "
+            "degenerate with another."
+        )
+
     try:
         solved = np.linalg.solve(
             covariance,
             delta,
         )
     except np.linalg.LinAlgError as exc:
+        # The rank check above is the portable guard; this keeps the declared
+        # exception type consistent for any residual numerical failure.
         raise ValueError(
-            "Posterior covariance is singular, so a Mahalanobis distance is "
-            "undefined. This usually means a parameter is fixed or perfectly "
-            "degenerate with another."
+            "Posterior covariance could not be inverted, so a Mahalanobis "
+            "distance is undefined."
         ) from exc
 
     if not np.all(np.isfinite(solved)):

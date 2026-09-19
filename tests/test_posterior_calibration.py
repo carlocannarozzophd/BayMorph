@@ -239,7 +239,14 @@ def test_p_value_is_consistent_with_the_chi_squared_distribution() -> None:
 
 
 def test_singular_covariance_is_rejected() -> None:
-    """A degenerate parameter must raise instead of being pseudo-inverted."""
+    """A degenerate parameter must raise instead of being pseudo-inverted.
+
+    Rank deficiency is detected from the covariance eigenvalues rather than by
+    relying on the linear solver to fail. LAPACK implementations disagree: an
+    exactly singular matrix raises under macOS Accelerate but returns finite
+    nonsense under OpenBLAS, which would silently yield a distance that is not
+    the declared quantity.
+    """
     rng = np.random.default_rng(
         3
     )
@@ -271,6 +278,67 @@ def test_singular_covariance_is_rejected() -> None:
                 ]
             ),
         )
+
+
+def test_fixed_parameter_is_rejected() -> None:
+    """A parameter with no posterior variance makes the metric undefined."""
+    rng = np.random.default_rng(
+        13
+    )
+
+    samples = np.column_stack(
+        [
+            rng.normal(
+                size=2000
+            ),
+            np.full(
+                2000,
+                3.0,
+            ),
+        ]
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="singular",
+    ):
+        mahalanobis_distance_squared(
+            samples,
+            np.full(
+                samples.shape[0],
+                1.0 / samples.shape[0],
+            ),
+            np.array(
+                [
+                    0.0,
+                    3.0,
+                ]
+            ),
+        )
+
+
+def test_strong_but_legitimate_correlation_still_computes() -> None:
+    """The rank check must not reject a merely strong degeneracy.
+
+    Sersic parameters routinely correlate above 0.9, so a criterion that
+    rejected those would be useless in practice.
+    """
+    result = _gaussian_result(
+        correlation=0.99,
+        n_samples=40000,
+    )
+
+    outcome = result.mahalanobis_distance(
+        {
+            "a": 1.0,
+            "b": 1.0,
+        }
+    )
+
+    assert outcome["distance_squared"] == pytest.approx(
+        2.0 / (1.0 + 0.99),
+        rel=0.10,
+    )
 
 
 def test_negative_weights_are_rejected() -> None:
