@@ -63,12 +63,217 @@ class BackgroundResult:
         self.background_level = value
 
 
+def _fit_plane(
+    coordinates: np.ndarray,
+    values: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Least-squares fit a plane and return its coefficients and design matrix.
+
+    Parameters
+    ----------
+    coordinates : ndarray
+        Array of shape ``(n_pixels, 2)`` holding centred ``x`` and ``y``.
+    values : ndarray
+        Pixel values.
+
+    Returns
+    -------
+    coefficients : ndarray
+        Constant term followed by the ``x`` and ``y`` gradients.
+    design : ndarray
+        Design matrix used for the fit.
+    """
+    design = np.column_stack(
+        [
+            np.ones(
+                values.size
+            ),
+            coordinates[:, 0],
+            coordinates[:, 1],
+        ]
+    )
+
+    coefficients, *_ = np.linalg.lstsq(
+        design,
+        values,
+        rcond=None,
+    )
+
+    return coefficients, design
+
+
+def _gradient_diagnostic(
+    coefficients: np.ndarray,
+    design: np.ndarray,
+    sigma: float,
+) -> dict[str, float]:
+    """Describe a fitted sky plane and how significant its gradient is.
+
+    The diagnostic reports; it never selects a background model. Choosing
+    between a constant and a plane remains an explicit user decision.
+    """
+    try:
+        covariance = np.linalg.inv(
+            design.T @ design
+        ) * sigma**2
+        errors = np.sqrt(
+            np.diag(covariance)
+        )
+    except np.linalg.LinAlgError:
+        errors = np.full(
+            coefficients.size,
+            np.nan,
+        )
+
+    def significance(
+        index: int,
+    ) -> float:
+        if not np.isfinite(errors[index]) or errors[index] <= 0.0:
+            return float("nan")
+
+        return float(
+            abs(
+                coefficients[index]
+            )
+            / errors[index]
+        )
+
+    return {
+        "gradient_x": float(
+            coefficients[1]
+        ),
+        "gradient_y": float(
+            coefficients[2]
+        ),
+        "gradient_x_error": float(
+            errors[1]
+        ),
+        "gradient_y_error": float(
+            errors[2]
+        ),
+        "gradient_x_significance": significance(
+            1
+        ),
+        "gradient_y_significance": significance(
+            2
+        ),
+    }
+
+
+def _detrended_background(
+    image: np.ndarray,
+    mask: np.ndarray | None,
+    sigma_clip: float,
+    maxiters: int,
+    noise_method: str,
+) -> BackgroundResult:
+    """Estimate a constant level and a gradient-insensitive noise scale."""
+    if image.ndim != 2:
+        raise ValueError(
+            "detrend requires a two-dimensional image, because fitting a "
+            "plane needs pixel coordinates."
+        )
+
+    rows, columns = np.indices(
+        image.shape,
+        dtype=float,
+    )
+    # Centred coordinates keep the constant term interpretable as the value at
+    # the field centre and keep the design matrix well conditioned.
+    columns -= (image.shape[1] - 1) / 2.0
+    rows -= (image.shape[0] - 1) / 2.0
+
+    valid = np.isfinite(image)
+
+    if mask is not None:
+        valid &= ~np.asarray(
+            mask,
+            dtype=bool,
+        )
+
+    values = image[valid]
+    coordinates = np.column_stack(
+        [
+            columns[valid],
+            rows[valid],
+        ]
+    )
+
+    if values.size < 4:
+        raise ValueError(
+            "Input data contains too few finite values to fit a plane."
+        )
+
+    threshold = np.inf
+    coefficients, design = _fit_plane(
+        coordinates,
+        values,
+    )
+
+    for _ in range(maxiters):
+        residuals = values - design @ coefficients
+        scatter = float(
+            np.std(residuals)
+        )
+
+        if scatter == 0.0:
+            break
+
+        keep = np.abs(residuals) < sigma_clip * scatter
+
+        if keep.sum() == values.size:
+            break
+
+        if keep.sum() < 4:
+            break
+
+        threshold = float(
+            sigma_clip * scatter
+        )
+        values = values[keep]
+        coordinates = coordinates[keep]
+        coefficients, design = _fit_plane(
+            coordinates,
+            values,
+        )
+
+    residuals = values - design @ coefficients
+
+    if noise_method == "corrected_std":
+        # Residuals are centred on the plane by construction, so the clipping
+        # interval that must be inverted is symmetric about zero.
+        sigma = truncated_gaussian_sigma(
+            residuals,
+            threshold,
+            center=0.0,
+        )
+    else:
+        sigma = estimate_noise(
+            residuals,
+            method=noise_method,
+        )
+
+    return BackgroundResult(
+        background_level=float(
+            np.median(values)
+        ),
+        sigma=sigma,
+        mode="constant",
+        parameters=_gradient_diagnostic(
+            coefficients,
+            design,
+            sigma,
+        ),
+    )
+
+
 def estimate_background_constant(
     data: np.ndarray,
     mask: np.ndarray | None = None,
     sigma_clip: float = 3.0,
     maxiters: int = 5,
     noise_method: str = "std",
+    detrend: bool = False,
 ) -> BackgroundResult:
     """Estimate a constant background and noise level using sigma clipping.
 
@@ -84,16 +289,22 @@ def estimate_background_constant(
         Scale estimator applied to the surviving pixels. ``"corrected_std"``
         additionally inverts the truncation induced by the clipping, which
         removes the resulting low bias and is more efficient than ``"mad"``.
+    detrend : bool, default=False
+        If True, measure the noise scale from residuals about a fitted plane
+        instead of about a constant, and report the fitted gradient in
+        ``parameters``. Requires a two-dimensional image.
 
     Returns
     -------
     BackgroundResult
-        Estimated scalar background level and RMS noise.
+        Estimated scalar background level and RMS noise. With ``detrend``, the
+        gradient and its significance are reported in ``parameters``.
 
     Raises
     ------
     ValueError
-        If the input image contains no finite values.
+        If the input image contains no finite values, or if ``detrend`` is
+        requested for input that is not two-dimensional.
 
     Notes
     -----
@@ -103,8 +314,30 @@ def estimate_background_constant(
     normalization, ``"corrected_std"`` is preferable: clipping still removes
     outliers, and the truncation correction restores both unbiasedness and
     efficiency. The correction assumes the surviving core is Gaussian.
+
+    Without ``detrend``, any unmodelled sky structure is counted as noise: an
+    unmodelled linear ramp of plus or minus one count on a scale of two
+    inflates the estimate by about four percent. With ``detrend``, the scale
+    measures noise alone, and an unmodelled gradient instead surfaces as an
+    elevated reduced chi-squared during fitting. That is deliberate: the
+    deficiency becomes visible rather than being absorbed into the noise term.
+    The remedy is to model it, through ``fit.background.model`` set to
+    ``plane``.
+
+    The returned ``background_level`` is the median of the surviving values in
+    both cases. Detrending changes how the scale is measured, not what is
+    subtracted.
     """
     image = np.asarray(data, dtype=float)
+
+    if detrend:
+        return _detrended_background(
+            image,
+            mask,
+            sigma_clip,
+            maxiters,
+            noise_method,
+        )
 
     if mask is not None:
         values = image[~mask]

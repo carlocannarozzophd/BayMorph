@@ -168,11 +168,29 @@ displaces absolute `logZ` by order 100.
 
 Clipping is retained: the correction restores efficiency, not robustness.
 
+The scale is measured from residuals about a **plane** fitted to the sky
+region, not about a constant, so an unmodelled sky gradient is no longer
+counted as noise. See AD-041. Preparation still subtracts a constant:
+the plane only measures the scale.
+
+A consequence worth knowing before it surprises you: because the gradient is
+no longer absorbed into the noise, an unmodelled gradient now surfaces as an
+**elevated reduced chi-squared** instead of being hidden. That is deliberate.
+The remedy is `fit.background.model: plane`, which adds
+`background_gradient_x` and `background_gradient_y` as fitted parameters.
+
+Preparation reports the fitted gradient, its standard error and its
+significance per axis, in the preparation metadata and in the runtime report
+under `image_preparation.background.sky_gradient`. It is a diagnostic: a
+gradient significant at several sigma indicates that a plane background is
+warranted, and the choice remains the user's. BayMorph ranks; it does not
+select.
+
 Three limitations remain, all explicit:
 
 - the correction assumes the surviving core is Gaussian;
-- a genuine sky gradient inflates the estimate, because the background model
-  is constant. This affects any scale estimator equally;
+- only a linear gradient is removed, so higher-order sky structure is still
+  counted as noise;
 - the prepared noise field excludes source Poisson variance and any external
   variance map.
 

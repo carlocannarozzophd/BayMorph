@@ -210,6 +210,10 @@ def build_image_preparation_runtime(
             },
             "background": {
                 "level": float(products.background),
+                # Diagnostic only. A gradient significant at several sigma
+                # indicates that fit.background.model should be "plane"; the
+                # choice stays with the user.
+                "sky_gradient": deepcopy(products.sky_gradient),
             },
             "noise": noise_summary,
             "target": {

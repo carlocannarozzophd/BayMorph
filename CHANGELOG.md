@@ -74,6 +74,19 @@ and the project follows Semantic Versioning in spirit.
 
 ### Fixed
 
+* The prepared noise scale is now measured from residuals about a plane fitted
+  to the sky region instead of about a constant, so an unmodelled sky gradient
+  is no longer counted as noise: a ramp of plus or minus one count on a scale
+  of two inflated the estimate by 4.1 percent, and three counts by 33.8
+  percent. Preparation still subtracts a constant. An unmodelled gradient now
+  surfaces as an elevated reduced chi-squared rather than being absorbed; the
+  remedy is `fit.background.model: plane`. See AD-041.
+* Preparation reports the fitted sky gradient, its standard error and its
+  significance per axis, in the preparation metadata and the runtime report.
+  It is a diagnostic and never selects a background model.
+* `pipeline_paths` exposes `fit_summary` and `fit_summary_text` in place of a
+  `fit_results` key that named a file nothing ever wrote; the fit summaries are
+  now written through those keys instead of being composed inline.
 * The prepared noise field of the canonical single-observation workflow is now
   a truncation-corrected Gaussian scale instead of a scaled median absolute
   deviation. The previous estimator was not materially biased but was

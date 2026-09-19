@@ -148,6 +148,47 @@ def test_clipping_keeps_the_estimator_robust_to_bright_pixels(
     assert abs(bias) < 0.010
 
 
+def test_production_preparation_uses_the_detrended_scale() -> None:
+    """The canonical preparation must measure noise, not sky structure.
+
+    This pins the production wiring: without ``detrend`` the same field yields
+    a visibly inflated scale, so the assertion cannot pass by accident.
+    """
+    rng = np.random.default_rng(
+        107
+    )
+    side = 108
+
+    image = rng.normal(
+        20.0,
+        TRUE_SIGMA,
+        (
+            side,
+            side,
+        ),
+    )
+    image = image + np.linspace(
+        -2.0,
+        2.0,
+        side,
+    )[None, :]
+
+    inflated = estimate_background_constant(
+        image,
+        noise_method="corrected_std",
+    ).sigma
+    detrended = estimate_background_constant(
+        image,
+        noise_method="corrected_std",
+        detrend=True,
+    ).sigma
+
+    assert inflated / TRUE_SIGMA > 1.10
+    assert abs(
+        detrended / TRUE_SIGMA - 1.0
+    ) < 0.02
+
+
 def test_unknown_noise_method_is_rejected() -> None:
     """An unrecognised estimator must fail closed."""
     rng = np.random.default_rng(

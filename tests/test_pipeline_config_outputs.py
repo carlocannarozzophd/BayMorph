@@ -208,7 +208,11 @@ def test_pipeline_paths_are_canonical(tmp_path):
         assert paths["fits"][model_name]["complete"] == (
             fit_dir / "COMPLETE.json"
         )
-        assert paths["fits"][model_name]["fit_results"] == fit_dir / "fit_results.json"
+        assert paths["fits"][model_name]["fit_summary"] == fit_dir / "fit_summary.json"
+        assert (
+            paths["fits"][model_name]["fit_summary_text"]
+            == fit_dir / "fit_summary.txt"
+        )
         assert paths["fits"][model_name]["posterior"] == fit_dir / "posterior.npz"
         assert paths["fits"][model_name]["corner"] == fit_dir / "corner.pdf"
         assert paths["fits"][model_name]["residual"] == fit_dir / "data_model_residual.pdf"

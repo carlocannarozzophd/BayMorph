@@ -949,6 +949,13 @@ class PreparedObservation:
     preliminary_segmentation : ndarray, optional
         Segmentation map measured on the preliminary adaptive cutout. It is
         None when ``cutout_mode`` is ``"fixed"``.
+    sky_gradient : dict of str to float, optional
+        Plane fitted to the sky region while measuring the noise scale, with
+        the gradient per axis, its standard error, and its significance. It is
+        a diagnostic only: it never selects a background model. A gradient
+        significant at several sigma indicates that
+        ``fit.background.model: plane`` is warranted, which remains an
+        explicit user decision.
     """
 
     cutout: np.ndarray
@@ -977,6 +984,8 @@ class PreparedObservation:
 
     preliminary_cutout: np.ndarray | None = None
     preliminary_segmentation: np.ndarray | None = None
+
+    sky_gradient: dict[str, float] | None = None
 
 
 def make_target_cutout(
@@ -1185,6 +1194,7 @@ def prepare_real_image_from_config(
         cutout,
         mask=~sky_region.mask,
         noise_method="corrected_std",
+        detrend=True,
     )
 
     prepared_data = subtract_background(
@@ -1212,6 +1222,14 @@ def prepare_real_image_from_config(
         contaminant_mask=contaminant_mask,
         segmentation=segmentation.data,
         background=float(background_result.background_level),
+        sky_gradient=(
+            None
+            if background_result.parameters is None
+            else {
+                key: float(value)
+                for key, value in background_result.parameters.items()
+            }
+        ),
         target_x=target_x,
         target_y=target_y,
         target_label=int(target_label),
@@ -1486,6 +1504,7 @@ def save_image_preparation_products(
             if products.plateau is not None
             else None
         ),
+        "sky_gradient": products.sky_gradient,
     }
 
     validate_prepared_input_identity(
@@ -1714,6 +1733,7 @@ def load_image_preparation_products(
         sky_region=sky_region,
         preliminary_cutout=preliminary_cutout,
         preliminary_segmentation=preliminary_segmentation,
+        sky_gradient=metadata.get("sky_gradient"),
     )
     _validate_products_for_persistence(products)
     _validate_products_against_current_sources(

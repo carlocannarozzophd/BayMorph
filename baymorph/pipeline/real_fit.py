@@ -1205,7 +1205,7 @@ def save_real_fit_products(
     }
 
     with open(
-        paths["dir"] / "fit_summary.json",
+        paths["fit_summary"],
         "w",
     ) as f:
         json.dump(
@@ -1215,7 +1215,7 @@ def save_real_fit_products(
         )
 
     save_fit_summary_text(
-        paths["dir"] / "fit_summary.txt",
+        paths["fit_summary_text"],
         model_title=_diagnostic_title(
             config,
             model_name,
