@@ -1184,7 +1184,7 @@ def prepare_real_image_from_config(
     background_result = estimate_background_constant(
         cutout,
         mask=~sky_region.mask,
-        noise_method="mad",
+        noise_method="corrected_std",
     )
 
     prepared_data = subtract_background(

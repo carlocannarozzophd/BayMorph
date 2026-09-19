@@ -9,7 +9,16 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOK_DIRECTORY = PROJECT_ROOT / "notebooks"
 
-EXPECTED_NOTEBOOKS: set[str] = set()
+EXPECTED_NOTEBOOKS: set[str] = {
+    "01_Simulated_SingleBand.ipynb",
+}
+
+# Research campaigns under validation/ are not tutorials and are not packaged.
+# They keep the hygiene contract but may use internal APIs and plot directly,
+# so they are listed separately rather than relaxing the public-notebook rules.
+EXPECTED_VALIDATION_NOTEBOOKS: set[str] = {
+    "repeated_noise_recovery/repeated_noise_recovery.ipynb",
+}
 
 
 def _load_notebook(
@@ -63,8 +72,60 @@ def test_only_public_and_packaged_notebooks_exist() -> None:
     expected_packaged = {
         Path("baymorph/resources/notebooks") / name for name in EXPECTED_NOTEBOOKS
     }
+    expected_validation = {
+        Path("validation") / name for name in EXPECTED_VALIDATION_NOTEBOOKS
+    }
 
-    assert notebooks == (expected_public | expected_packaged)
+    assert notebooks == (
+        expected_public | expected_packaged | expected_validation
+    )
+
+
+def test_validation_notebooks_are_not_packaged() -> None:
+    """Research campaigns must stay out of the distributed package."""
+    packaged = PROJECT_ROOT / "baymorph" / "resources" / "notebooks"
+
+    for name in EXPECTED_VALIDATION_NOTEBOOKS:
+        assert not (packaged / Path(name).name).is_file()
+
+
+def test_validation_notebooks_are_clean_and_code_cells_compile() -> None:
+    """Validation notebooks must be committed unexecuted and be valid."""
+    for name in EXPECTED_VALIDATION_NOTEBOOKS:
+        path = PROJECT_ROOT / "validation" / name
+
+        assert path.is_file()
+
+        notebook = _load_notebook(
+            path
+        )
+
+        assert notebook["nbformat"] == 4
+
+        for index, cell in enumerate(
+            notebook["cells"]
+        ):
+            if cell["cell_type"] != "code":
+                continue
+
+            assert cell.get(
+                "execution_count"
+            ) is None
+            assert cell.get(
+                "outputs",
+                [],
+            ) == []
+
+            compile(
+                "".join(
+                    cell.get(
+                        "source",
+                        [],
+                    )
+                ),
+                f"{path}:cell-{index}",
+                "exec",
+            )
 
 
 def test_public_notebooks_avoid_parent_relative_paths() -> None:

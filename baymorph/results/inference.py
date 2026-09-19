@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -168,6 +169,16 @@ class InferenceResult:
         return self.posterior.weights
 
     @property
+    def equal_weight_samples(self) -> np.ndarray:
+        """Return deterministic equal-weight posterior samples.
+
+        Equal-weight samples are a derived product intended for visualization.
+        The weighted samples remain the statistical source of truth for every
+        summary, credible interval, and evidence quantity.
+        """
+        return self.posterior.equal_weight_samples
+
+    @property
     def parameter_names(self) -> list[str]:
         """Return parameter names in sampling order."""
         return self.posterior.parameter_names
@@ -217,6 +228,107 @@ class InferenceResult:
         return self.posterior.summary(
             parameter_name
         )
+
+    def mahalanobis_distance(
+        self,
+        reference: Mapping[str, float],
+    ) -> dict[str, Any]:
+        """Measure how far a reference parameter vector lies from the posterior.
+
+        Parameters
+        ----------
+        reference : mapping of str to float
+            Reference values by parameter name, typically a simulation truth.
+            Names absent from the posterior are ignored, and posterior
+            parameters absent from the mapping are excluded from the metric.
+
+        Returns
+        -------
+        dict
+            ``parameters`` used, in sampling order, together with
+            ``distance_squared``, ``distance``, ``dof``, and ``p_value``.
+
+        Raises
+        ------
+        ValueError
+            If no parameter name is shared with the posterior, if a reference
+            value is not finite, or if the posterior covariance is singular.
+
+        Notes
+        -----
+        The metric is computed from the **weighted** samples, which are the
+        statistical source of truth, not from derived equal-weight samples.
+
+        Correlated parameters must be assessed jointly. Reading marginal
+        one-parameter offsets of a correlated posterior double-counts a single
+        shared displacement and overstates the tension.
+
+        ``p_value`` is the chi-squared survival probability at ``dof`` degrees
+        of freedom. It assumes an approximately Gaussian posterior. The
+        distance itself remains defined for a non-Gaussian posterior, but its
+        ``p_value`` is then not trustworthy.
+
+        A single realization does not test calibration. One draw yielding a
+        small ``p_value`` is expected at the stated rate, so distinguishing an
+        unlucky realization from a genuine bias requires repeated experiments
+        with independent noise.
+        """
+        from scipy import stats as scipy_stats
+
+        from baymorph.stats.weighted import (
+            mahalanobis_distance_squared,
+        )
+
+        names = [
+            name
+            for name in self.parameter_names
+            if name in reference
+        ]
+
+        if not names:
+            raise ValueError(
+                "reference shares no parameter name with the posterior."
+            )
+
+        indices = [
+            self.parameter_names.index(
+                name
+            )
+            for name in names
+        ]
+
+        distance_squared = mahalanobis_distance_squared(
+            self.samples[:, indices],
+            self.weights,
+            np.asarray(
+                [
+                    float(
+                        reference[name]
+                    )
+                    for name in names
+                ],
+                dtype=float,
+            ),
+        )
+
+        dof = len(names)
+
+        return {
+            "parameters": names,
+            "distance_squared": distance_squared,
+            "distance": float(
+                np.sqrt(
+                    distance_squared
+                )
+            ),
+            "dof": dof,
+            "p_value": float(
+                scipy_stats.chi2.sf(
+                    distance_squared,
+                    dof,
+                )
+            ),
+        }
 
     @property
     def best_index(self) -> int:

@@ -3,6 +3,8 @@
 import numpy as np
 from astropy.stats import sigma_clip
 
+from baymorph.stats.robust import robust_sigma
+
 
 def make_constant_noise_map(
     shape,
@@ -45,9 +47,27 @@ def estimate_noise_map(
 ) -> np.ndarray:
     """Estimate a constant noise map from an image.
 
-    The noise level is estimated from finite, optionally masked pixels using
-    iterative sigma clipping. The resulting scalar estimate is returned as a
-    constant-valued noise map with the same shape as the input image.
+    The noise level is a Gaussian-equivalent robust scale: finite, optionally
+    masked pixels are iteratively sigma-clipped, and the scale is then the
+    scaled median absolute deviation of the surviving pixels. The resulting
+    scalar estimate is returned as a constant-valued noise map with the same
+    shape as the input image.
+
+    Notes
+    -----
+    Clipping is retained deliberately. A scaled MAD alone is less biased on
+    clean Gaussian pixels, but it overestimates the scale when unmasked source
+    pixels remain, whereas the clipped MAD stays stable in both regimes.
+
+    Clipping truncates the Gaussian tails, so the surviving sample is slightly
+    narrower than the parent distribution. The estimator therefore keeps a
+    residual low bias of roughly 0.4% at the default ``clip_sigma``. This is a
+    known and bounded limitation of the prepared noise field, not an invisible
+    implementation detail; removing it would require an explicit truncation
+    correction.
+
+    The prepared noise field also excludes source Poisson variance and any
+    external variance map.
 
     Parameters
     ----------
@@ -75,7 +95,7 @@ def estimate_noise_map(
     values = data[valid]
 
     if values.size == 0:
-        sigma = np.nanstd(data)
+        sigma = robust_sigma(data)
     else:
         clipped = sigma_clip(
             values,
@@ -83,9 +103,11 @@ def estimate_noise_map(
             maxiters=maxiters,
             masked=True,
         )
-        sigma = np.nanstd(clipped.compressed())
+        sigma = robust_sigma(
+            clipped.compressed()
+        )
 
     if not np.isfinite(sigma) or sigma <= 0:
-        sigma = np.nanstd(data)
+        sigma = robust_sigma(data)
 
     return np.full_like(data, sigma, dtype=float)

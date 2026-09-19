@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -13,10 +14,16 @@ from baymorph.pipeline.config import (
     load_resolved_config,
     resolve_config,
 )
+from baymorph.pipeline.image_preparation import (
+    load_image_preparation_products,
+)
 from baymorph.pipeline.multi_observation_outputs import (
     multi_observation_paths,
 )
-from baymorph.pipeline.outputs import pipeline_paths
+from baymorph.pipeline.outputs import (
+    pipeline_paths,
+    simulation_truth_path,
+)
 from baymorph.pipeline.real_fit import (
     _fit_diagnostic_title,
 )
@@ -59,6 +66,114 @@ def _posterior_samples(posterior):
         return posterior.samples
 
     return posterior
+
+def _simulation_truth_vector(
+    config: Mapping[str, Any],
+    parameter_names,
+) -> list[float | None] | None:
+    """Return simulation truth aligned to the sampled parameter order.
+
+    The persisted ``truth.json`` already stores values in fitted parameter
+    names and units, so no unit conversion happens here. Two quantities are
+    deliberately not mapped onto sampled parameters:
+
+    ``sky``
+        The simulated sky plateau is removed during image preparation. The
+        sampled ``background_level`` is the residual background of the
+        prepared image, not the simulated sky, so marking it with the sky
+        truth would be scientifically wrong.
+
+    absent names
+        Any sampled parameter without a truth entry stays ``None`` and is
+        left unmarked.
+
+    Truth ``x0``/``y0`` are full-image coordinates while sampled positions are
+    cutout coordinates, so the prepared cutout origin is subtracted.
+
+    Returns
+    -------
+    list or None
+        Truth values ordered as ``parameter_names``, or None when the run has
+        no persisted simulation truth or none of its values are usable.
+    """
+    truth_path = simulation_truth_path(
+        config
+    )
+
+    if not truth_path.is_file():
+        return None
+
+    with truth_path.open() as stream:
+        payload = json.load(
+            stream
+        )
+
+    truth = payload.get(
+        "truth",
+        {},
+    )
+
+    if not isinstance(
+        truth,
+        Mapping,
+    ):
+        raise TypeError(
+            f"Simulation truth in {truth_path} must be a mapping."
+        )
+
+    truth = {
+        key: value
+        for key, value in truth.items()
+        if key != "sky"
+    }
+
+    image_products = load_image_preparation_products(
+        config
+    )
+    cutout_bounds = image_products.cutout_bounds
+
+    if cutout_bounds is None:
+        raise ValueError(
+            "Prepared products are missing cutout_bounds, so simulation "
+            "truth cannot be transformed into fitting coordinates."
+        )
+
+    origin = {
+        "x0": float(
+            cutout_bounds["xmin"]
+        ),
+        "y0": float(
+            cutout_bounds["ymin"]
+        ),
+    }
+
+    values: list[float | None] = []
+
+    for name in parameter_names:
+        if name not in truth:
+            values.append(
+                None
+            )
+            continue
+
+        values.append(
+            float(
+                truth[name]
+            )
+            - origin.get(
+                name,
+                0.0,
+            )
+        )
+
+    if all(
+        value is None
+        for value in values
+    ):
+        return None
+
+    return values
+
 
 def _resolve_corner_config(
     config: str | Path | Mapping[str, Any],
@@ -171,6 +286,19 @@ def run_corner_diagnostics(
             resolved_config,
             model_name,
         )
+
+        if not is_multi_observation:
+            # Multi-observation runs have one cutout origin per observation
+            # and no single simulated truth, so they stay unmarked.
+            truths = _simulation_truth_vector(
+                resolved_config,
+                fit.posterior.parameter_names,
+            )
+
+            if truths is not None:
+                corner_kwargs[
+                    "truths"
+                ] = truths
 
         fig, _, _ = corner_plot(
             **corner_kwargs

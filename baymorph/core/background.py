@@ -6,6 +6,8 @@ import numpy as np
 from astropy.stats import mad_std
 from photutils.background import Background2D, MedianBackground
 
+from baymorph.stats.robust import truncated_gaussian_sigma
+
 
 @dataclass(slots=True)
 class BackgroundResult:
@@ -78,6 +80,10 @@ def estimate_background_constant(
         Sigma-clipping threshold applied during the iterative estimation.
     maxiters : int, default=5
         Maximum number of sigma-clipping iterations.
+    noise_method : {"std", "mad", "corrected_std"}, default="std"
+        Scale estimator applied to the surviving pixels. ``"corrected_std"``
+        additionally inverts the truncation induced by the clipping, which
+        removes the resulting low bias and is more efficient than ``"mad"``.
 
     Returns
     -------
@@ -88,6 +94,15 @@ def estimate_background_constant(
     ------
     ValueError
         If the input image contains no finite values.
+
+    Notes
+    -----
+    ``"mad"`` is highly robust but has roughly 37% efficiency, so its estimate
+    carries about 1.5 times the random scatter of a standard deviation at the
+    same sample size. Where that scatter propagates into a likelihood
+    normalization, ``"corrected_std"`` is preferable: clipping still removes
+    outliers, and the truncation correction restores both unbiasedness and
+    efficiency. The correction assumes the surviving core is Gaussian.
     """
     image = np.asarray(data, dtype=float)
 
@@ -101,6 +116,12 @@ def estimate_background_constant(
     if values.size == 0:
         raise ValueError("Input data contains no finite values.")
 
+    # Track the interval that actually truncated the sample. It stays infinite
+    # when no pixel was ever rejected, so an unclipped sample needs no
+    # truncation correction.
+    threshold = np.inf
+    center = float(np.median(values))
+
     for _ in range(maxiters):
         median = np.median(values)
         std = np.std(values)
@@ -113,14 +134,25 @@ def estimate_background_constant(
         if keep.sum() == values.size:
             break
 
+        threshold = float(sigma_clip * std)
+        center = float(median)
         values = values[keep]
+
+    if noise_method == "corrected_std":
+        sigma = truncated_gaussian_sigma(
+            values,
+            threshold,
+            center=center,
+        )
+    else:
+        sigma = estimate_noise(
+            values,
+            method=noise_method,
+        )
 
     return BackgroundResult(
         background_level=float(np.median(values)),
-        sigma=estimate_noise(
-        values,
-        method=noise_method,
-    ),
+        sigma=sigma,
         mode="constant",
     )
 

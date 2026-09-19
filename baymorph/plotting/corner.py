@@ -234,6 +234,9 @@ def corner_plot(
     alpha_lines=1.0,
     cmap_min=0.20,
     cmap_max=0.90,
+    truths=None,
+    truth_color="darkorange",
+    truth_linewidth=3.0,
 ):
     """Create a publication-style corner plot.
 
@@ -291,12 +294,31 @@ def corner_plot(
         Lower colormap sampling value.
     cmap_max : float, default=0.90
         Upper colormap sampling value.
+    truths : sequence, optional
+        Known parameter values marked on the plot, ordered as
+        ``parameter_labels``. Entries that are None or NaN are skipped, which
+        allows marking only the parameters whose true value is known. Truth
+        markers are meaningful only for simulated data.
+    truth_color : color-like, default="darkorange"
+        Color of the truth marker lines.
+    truth_linewidth : float, default=3.0
+        Line width of the truth marker lines.
 
     Notes
     -----
     Smoothing affects only the displayed density estimates. Posterior
     summaries, median markers, credible-interval boundaries, and Bayesian
     evidence remain defined by the unsmoothed posterior samples.
+
+    Truth markers are a visualization overlay drawn on top of the posterior.
+    They do not enter any posterior summary, credible interval, median marker,
+    or Bayesian evidence value, and they do not alter the displayed density.
+
+    Axis limits are set by the posterior samples and are not expanded to
+    include truth values. A truth value lying outside the plotted range is
+    therefore clipped and not visible, which is the case where the posterior
+    fails to recover it. Compare truth against the reported credible interval
+    numerically rather than relying on the plot alone.
 
     Returns
     -------
@@ -379,6 +401,24 @@ def corner_plot(
             "`parameter_labels` length must match "
             "the number of parameters."
         )
+
+    if truths is None:
+        truth_values = [None] * n_params
+    else:
+        truth_values = list(truths)
+
+        if len(truth_values) != n_params:
+            raise ValueError(
+                "`truths` length must match "
+                "the number of parameters."
+            )
+
+        truth_values = [
+            None
+            if value is None or not np.isfinite(float(value))
+            else float(value)
+            for value in truth_values
+        ]
 
     parameter_names = [
         str(label)
@@ -511,6 +551,22 @@ def corner_plot(
                             edgecolor="white",
                             zorder=5,
                         )
+
+                if truth_values[j] is not None:
+                    axis.axvline(
+                        truth_values[j],
+                        color=truth_color,
+                        lw=truth_linewidth,
+                        zorder=6,
+                    )
+
+                if truth_values[i] is not None:
+                    axis.axhline(
+                        truth_values[i],
+                        color=truth_color,
+                        lw=truth_linewidth,
+                        zorder=6,
+                    )
 
                 if j == 0:
                     axis.set_ylabel(
@@ -697,6 +753,14 @@ def corner_plot(
                             title,
                             fontsize=25,
                         )
+
+                if truth_values[j] is not None:
+                    axis.axvline(
+                        truth_values[j],
+                        color=truth_color,
+                        lw=truth_linewidth,
+                        zorder=6,
+                    )
 
                 axis.set_ylim(bottom=0)
                 axis.set_xlim(

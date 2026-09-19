@@ -240,10 +240,11 @@ baymorph init my_analysis
 cd my_analysis
 ~~~
 
-The initialized workspace contains the canonical example configuration and
-empty directories for notebooks, user data, and run products. The workspace is
-only a convenience: BayMorph does not require a special project format and can
-also be used directly inside an existing working directory.
+The initialized workspace contains the canonical example configuration, the
+packaged tutorial notebooks, and empty directories for user data and run
+products. The workspace is only a convenience: BayMorph does not require a
+special project format and can also be used directly inside an existing
+working directory.
 
 The simulated example analysis can be executed non-interactively:
 

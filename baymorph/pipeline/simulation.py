@@ -13,6 +13,7 @@ from baymorph.pipeline.config import (
 from baymorph.pipeline.outputs import (
     make_output_tree,
     save_resolved_config,
+    simulation_truth_path,
 )
 from baymorph.pipeline.psf_construction import (
     save_simulated_psf_products,
@@ -259,32 +260,13 @@ def save_simulation_products(
         overwrite=overwrite,
     )
 
-    object_name = str(
-        config["object"]["name"]
+    truth_path = simulation_truth_path(
+        config
     )
 
-    output_root = Path(
-        config["outputs"]["root"]
-    )
-
-    object_dir = (
-        output_root
-        / object_name
-    )
-
-    truth_dir = (
-        object_dir
-        / "truth"
-    )
-
-    truth_dir.mkdir(
+    truth_path.parent.mkdir(
         parents=True,
         exist_ok=True,
-    )
-
-    truth_path = (
-        truth_dir
-        / "truth.json"
     )
 
     truth_payload = _simulation_truth_payload(

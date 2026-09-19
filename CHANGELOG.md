@@ -11,6 +11,11 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* Rebuilt the simulated single-band tutorial notebook against the current public API as a linear, non-interactive Nautilus workflow that reads the packaged simulated-galaxy configuration and compares the posterior with the known simulation truth.
+* Optional `truths`, `truth_color`, and `truth_linewidth` markers in `corner_plot`, applied automatically by single-observation corner diagnostics when a run has a persisted simulation truth. Truth positions are transformed into cutout coordinates, and the simulated sky is never mapped onto the residual background parameter.
+* `InferenceResult.equal_weight_samples` for visualization, alongside the weighted samples that remain the statistical source of truth.
+* `InferenceResult.mahalanobis_distance()` and the supporting `weighted_covariance` and `mahalanobis_distance_squared` statistics, assessing how far a reference parameter vector lies from a posterior while accounting for parameter correlations.
+* Repeated-noise recovery validation campaign under `validation/repeated_noise_recovery/`, measuring posterior calibration across independent noise realizations.
 * Discovered project-root-relative configurations from nested working directories and resolved their paths against the project root.
 * Runner-driven all-in-one simulated-galaxy workflow and streamlined parameter-recovery tutorial.
 * Added prior-volume coverage review for observationally calibrated flux priors and weighted post-fit diagnostics for posterior contact with declared prior boundaries.
@@ -69,6 +74,19 @@ and the project follows Semantic Versioning in spirit.
 
 ### Fixed
 
+* The prepared noise field of the canonical single-observation workflow is now
+  a truncation-corrected Gaussian scale instead of a scaled median absolute
+  deviation. The previous estimator was not materially biased but was
+  inefficient, carrying about 1.1 percent run-to-run scatter against 0.7
+  percent now; that scatter enters the likelihood normalization and so sets
+  every credible-interval width and displaces absolute evidence. Re-deriving
+  the canonical example from its persisted sky region moves the scale from
+  1.9628 to 2.0107 against a true 2.0, and the implied reduced chi-squared
+  from 1.0470 to 0.9977. See AD-040.
+* `estimate_noise_map`, which serves the observation advisor and
+  empirical-PSF candidate selection rather than the likelihood, now uses a
+  scaled median absolute deviation of the clipped sample instead of its plain
+  standard deviation, improving its bias from −1.54 to −0.26 percent.
 * Resolved per-observation likelihood overrides with explicit precedence over
   joint defaults.
 * Ensured correlated-noise calibration is constructed before joint inference
