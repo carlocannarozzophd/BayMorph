@@ -28,6 +28,8 @@ from baymorph.core.noise import (
 from baymorph.core import (
     build_fitting_mask,
     load_external_mask,
+    negative_outlier_mask,
+    union,
 )
 from baymorph.core.observation import Observation
 from baymorph.core.sky import (
@@ -462,10 +464,16 @@ def _validate_products_against_current_sources(
             "target label."
         )
 
-    expected_fitting_mask = build_fitting_mask(
+    composition_mask = build_fitting_mask(
         expected_contaminants,
         external_mask=current_mask_crop,
         mode=mode,
+    )
+    expected_fitting_mask, _ = _apply_negative_outlier_mask(
+        composition_mask,
+        prepared_data=products.prepared_data,
+        noise=products.noise,
+        threshold_sigma=_negative_threshold_sigma(config),
     )
     fitting_mask = np.asarray(products.fitting_mask, dtype=bool)
     if not np.array_equal(fitting_mask, expected_fitting_mask):
@@ -477,7 +485,7 @@ def _validate_products_against_current_sources(
     raw_target_segment = segmentation == int(products.target_label)
     expected_target_segment = _build_geometry_target_segment(
         raw_target_segment,
-        expected_fitting_mask,
+        composition_mask,
         contaminant_mask=expected_contaminants,
         fitting_mask_mode=mode,
     )
@@ -720,6 +728,65 @@ class _TargetDetection:
     target_label: int
     target_segment: np.ndarray
     contaminant_mask: np.ndarray
+
+
+def _negative_threshold_sigma(
+    config: Mapping[str, Any],
+) -> float | None:
+    """Return the configured negative-artifact threshold, or None."""
+    threshold = (
+        config.get("preparation", {})
+        .get("masking", {})
+        .get("negative_threshold_sigma")
+    )
+
+    return None if threshold is None else float(threshold)
+
+
+def _apply_negative_outlier_mask(
+    fitting_mask: np.ndarray,
+    *,
+    prepared_data: np.ndarray,
+    noise: np.ndarray,
+    threshold_sigma: float | None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Exclude impossibly negative pixels from one fitting mask.
+
+    The automatic mask is built from positive source detections, so no
+    setting of the detection threshold can exclude a negative detector
+    artifact such as a saturation trail. This criterion is applied in every
+    fitting-mask mode: ``exact`` declares which curated source mask is
+    authoritative, not that physically impossible pixels may enter the
+    likelihood.
+
+    Returns
+    -------
+    tuple of ndarray
+        The fitting mask including the negative outliers, and the negative
+        outlier mask itself.
+    """
+    if threshold_sigma is None:
+        return (
+            fitting_mask,
+            np.zeros(
+                fitting_mask.shape,
+                dtype=bool,
+            ),
+        )
+
+    negative_outliers = negative_outlier_mask(
+        prepared_data,
+        noise,
+        threshold_sigma=threshold_sigma,
+    )
+
+    return (
+        union(
+            fitting_mask,
+            negative_outliers,
+        ),
+        negative_outliers,
+    )
 
 
 def _detect_target_in_image(
@@ -1212,6 +1279,18 @@ def prepare_real_image_from_config(
         noise=noise,
     )
 
+    # Applied to the final likelihood support, after the sky region, the
+    # background level and the noise scale have been estimated. Those
+    # estimators are robust and clipped, so the few pixels excluded here do
+    # not materially change them, and deferring keeps the target support and
+    # the sky region exactly reconstructible from persisted products.
+    fitting_mask, _negative_outliers = _apply_negative_outlier_mask(
+        fitting_mask,
+        prepared_data=prepared_data,
+        noise=noise,
+        threshold_sigma=_negative_threshold_sigma(resolved),
+    )
+
     products = PreparedObservation(
         cutout=cutout,
         prepared_data=prepared_data,
@@ -1470,8 +1549,25 @@ def save_image_preparation_products(
     if products.original_image is not None:
         np.save(paths["dir"] / "original_image.npy", products.original_image)
 
+    negative_threshold = _negative_threshold_sigma(config)
+    _, persisted_negative_outliers = _apply_negative_outlier_mask(
+        np.zeros(
+            np.asarray(products.fitting_mask).shape,
+            dtype=bool,
+        ),
+        prepared_data=products.prepared_data,
+        noise=products.noise,
+        threshold_sigma=negative_threshold,
+    )
+
     metadata = {
         "input_identity": input_identity,
+        "negative_outliers": {
+            "threshold_sigma": negative_threshold,
+            "excluded_pixels": int(
+                np.count_nonzero(persisted_negative_outliers)
+            ),
+        },
         "observation": (
             observation_metadata_dict(observation) if observation is not None else None
         ),

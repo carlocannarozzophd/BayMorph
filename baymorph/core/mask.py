@@ -360,6 +360,94 @@ def build_fitting_mask(
     )
 
 
+def negative_outlier_mask(
+    data,
+    noise,
+    *,
+    threshold_sigma: float,
+) -> np.ndarray:
+    """Flag pixels that are impossibly negative for background-subtracted data.
+
+    Source detection thresholds positive excursions, so a one-sided criterion
+    cannot exclude a negative detector artifact such as a saturation trail.
+    After background subtraction no physical surface brightness is negative,
+    so a pixel far below zero is an artifact by construction.
+
+    The criterion is deliberately not symmetric. A large positive pixel may be
+    a bright source; a large negative one cannot be.
+
+    It reads the data alone and never a fitted model, so it can be declared
+    before any inference. Excluding pixels by their residual under a model
+    would instead make the mask data-adaptive, and evidence obtained after
+    such a selection would be conditional on the selection procedure.
+
+    Parameters
+    ----------
+    data : array-like
+        Background-subtracted science image.
+    noise : array-like
+        Marginal noise scale, either a scalar or a map matching ``data``.
+    threshold_sigma : float
+        Number of noise scales below zero at which a pixel is excluded.
+        Must be finite and positive.
+
+    Returns
+    -------
+    ndarray of bool
+        Exclusion mask following the ``True = excluded`` convention.
+    """
+    values = np.asarray(
+        data,
+        dtype=float,
+    )
+
+    if values.ndim != 2:
+        raise ValueError(
+            "'data' must be a two-dimensional array."
+        )
+
+    if not np.all(np.isfinite(values)):
+        raise ValueError(
+            "'data' contains non-finite pixel values."
+        )
+
+    scale = np.asarray(
+        noise,
+        dtype=float,
+    )
+
+    if scale.ndim not in (0, 2):
+        raise ValueError(
+            "'noise' must be a scalar or a two-dimensional array."
+        )
+
+    if scale.ndim == 2 and scale.shape != values.shape:
+        raise ValueError(
+            "'noise' must have the same shape as 'data'."
+        )
+
+    if not np.all(np.isfinite(scale)):
+        raise ValueError(
+            "'noise' contains non-finite values."
+        )
+
+    if np.any(scale <= 0.0):
+        raise ValueError(
+            "'noise' must be strictly positive."
+        )
+
+    threshold = float(
+        threshold_sigma
+    )
+
+    if not np.isfinite(threshold) or threshold <= 0.0:
+        raise ValueError(
+            "'threshold_sigma' must be finite and positive."
+        )
+
+    return values < -threshold * scale
+
+
 def connected_source_mask(
     image,
     x,

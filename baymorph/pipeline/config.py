@@ -79,6 +79,9 @@ DEFAULT_CONFIG = {
             "filter_size": 3,
         },
         "noise": {},
+        "masking": {
+            "negative_threshold_sigma": 5.0,
+        },
         "detection": {
             "n_sigma": 3.0,
             "n_levels": 32,
@@ -443,8 +446,8 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ValueError(
             "Unsupported top-level configuration section 'masking'. "
             "The current single-band workflow constructs its automatic "
-            "fitting mask during image preparation and does not expose "
-            "masking strategy toggles."
+            "fitting mask during image preparation. The only masking control "
+            "it exposes is 'preparation.masking'."
         )
 
     psf_construction_config = (
@@ -584,7 +587,8 @@ def validate_config(config: dict[str, Any]) -> None:
             "Unsupported fixed configuration entries: "
             f"{unsupported_preparation_entries}. "
             "The single-band production workflow currently uses empirical "
-            "background estimation and MAD-based noise estimation."
+            "background estimation, and measures the noise scale from "
+            "residuals about a plane fitted to the sky region (AD-041)."
         )
 
     detection_config = preparation_config.get(
@@ -598,6 +602,48 @@ def validate_config(config: dict[str, Any]) -> None:
             "'preparation.detection.npixels'. "
             "Use 'preparation.detection.n_pixels' instead."
         )
+
+    masking_config = preparation_config.get(
+        "masking",
+        {},
+    )
+
+    unsupported_masking_entries = sorted(
+        set(masking_config) - {"negative_threshold_sigma"}
+    )
+
+    if unsupported_masking_entries:
+        raise ValueError(
+            "Unsupported configuration entries in preparation.masking: "
+            f"{unsupported_masking_entries}. "
+            "Available entries: ['negative_threshold_sigma']."
+        )
+
+    negative_threshold = masking_config.get(
+        "negative_threshold_sigma",
+    )
+
+    if negative_threshold is not None:
+        if isinstance(
+            negative_threshold,
+            bool,
+        ) or not isinstance(
+            negative_threshold,
+            Real,
+        ):
+            raise ValueError(
+                "Config preparation.masking.negative_threshold_sigma must be "
+                "a number of noise scales, or null to disable the criterion."
+            )
+
+        if (
+            not math.isfinite(float(negative_threshold))
+            or float(negative_threshold) <= 0.0
+        ):
+            raise ValueError(
+                "Config preparation.masking.negative_threshold_sigma must be "
+                "finite and positive."
+            )
 
 
 def validate_fit_priors(
