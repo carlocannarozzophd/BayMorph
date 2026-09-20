@@ -11,6 +11,8 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* Explicit `background` and `psf_max_peak` declarations in `make_config_from_fits`, forwarded by `ObservationAdvisor.propose_config`. The residual-background declaration must name its model and give a typed prior for exactly the parameters that model samples; the PSF-candidate peak ceiling is a caller decision in science-image units and is never derived from a FITS saturation keyword. Proposals warn when either is left to an image-unit-agnostic default.
+* `ObservationAdvisor.propose_config` records every sampled prior in the proposed configuration, including the BayMorph reference defaults of the starting model and of the residual background, and names the defaulted parameters in a warning, so a written YAML no longer depends on defaults that a later version could change.
 * Rebuilt the simulated single-band tutorial notebook against the current public API as a linear, non-interactive Nautilus workflow that reads the packaged simulated-galaxy configuration and compares the posterior with the known simulation truth.
 * Optional `truths`, `truth_color`, and `truth_linewidth` markers in `corner_plot`, applied automatically by single-observation corner diagnostics when a run has a persisted simulation truth. Truth positions are transformed into cutout coordinates, and the simulated sky is never mapped onto the residual background parameter.
 * `InferenceResult.equal_weight_samples` for visualization, alongside the weighted samples that remain the statistical source of truth.
@@ -42,6 +44,7 @@ and the project follows Semantic Versioning in spirit.
 
 ### Changed
 
+* `ObservationConfigProposal.write` refuses to replace an existing configuration unless `overwrite=True` is passed, and the Advisor summary reports `BUNIT` and the saturation keyword as header metadata that is not unit-checked while labelling its background and noise scales as whole-image diagnostics.
 * Aligned single-image colorbars with their image panels and standardized pixel-axis and colorbar styling.
 * Replaced legacy multiband terminology and runtime objects with the general
   multi-observation architecture.

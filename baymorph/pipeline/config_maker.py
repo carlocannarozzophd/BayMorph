@@ -7,6 +7,7 @@ import os
 import re
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
+from numbers import Real
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,7 @@ from baymorph.pipeline.multi_observation_config import (
     build_multi_observation_parameter_layout,
     resolve_multi_observation_observation_configs,
 )
+from baymorph.pipeline.real_fit import _background_parameter_names
 
 
 TargetPosition = str | Mapping[str, float] | Sequence[float]
@@ -213,20 +215,156 @@ def _cutout_config(
 
 
 
-def _empirical_psf_config() -> dict[str, Any]:
+def _empirical_psf_config(
+    *,
+    max_peak: float | None = None,
+) -> dict[str, Any]:
     """Build empirical-PSF configuration without unit assumptions.
 
     FITS saturation keywords are intentionally not converted into a
     maximum-peak threshold. Production configurations must explicitly set
-    that threshold after resolving its units against the science image.
+    that threshold after resolving its units against the science image;
+    ``max_peak`` carries that explicit declaration when the caller makes it.
     """
+    candidate_selection: dict[str, Any] = {
+        "auto": True,
+    }
+
+    if max_peak is not None:
+        candidate_selection["max_peak"] = max_peak
+
     return {
         "type": "empirical",
         "empirical": {
-            "candidate_selection": {
-                "auto": True,
-            },
+            "candidate_selection": candidate_selection,
         },
+    }
+
+
+def _normalize_psf_max_peak(
+    max_peak: Any,
+) -> float | None:
+    """Normalize an explicit PSF-candidate peak ceiling.
+
+    Finiteness and positivity are enforced by configuration resolution; this
+    helper only rejects non-numeric values and converts NumPy scalars into a
+    YAML-serializable float.
+    """
+    if max_peak is None:
+        return None
+
+    if isinstance(
+        max_peak,
+        bool,
+    ) or not isinstance(
+        max_peak,
+        Real,
+    ):
+        raise TypeError(
+            "psf_max_peak must be a real number in science-image units."
+        )
+
+    return float(
+        max_peak
+    )
+
+
+def _normalize_background_config(
+    background: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Normalize an explicit residual-background declaration.
+
+    The declaration names the background model and supplies a typed prior for
+    every parameter that model samples, so no default prior silently
+    completes it. Background priors are in science-image units.
+    """
+    if background is None:
+        return None
+
+    if not isinstance(
+        background,
+        Mapping,
+    ):
+        raise TypeError(
+            "background must be a mapping or None."
+        )
+
+    unknown_keys = sorted(
+        set(background) - {"model", "priors"}
+    )
+
+    if unknown_keys:
+        raise ValueError(
+            f"Unsupported background entries: {unknown_keys}. "
+            "Available entries: ['model', 'priors']."
+        )
+
+    if "model" not in background or "priors" not in background:
+        raise ValueError(
+            "background must declare both 'model' and 'priors'."
+        )
+
+    model = str(
+        background["model"]
+    ).strip().lower()
+
+    parameter_names = _background_parameter_names(
+        {
+            "model": model,
+        }
+    )
+
+    priors = background["priors"]
+
+    if not isinstance(
+        priors,
+        Mapping,
+    ):
+        raise TypeError(
+            "background['priors'] must be a mapping."
+        )
+
+    if "sky" in priors:
+        raise ValueError(
+            "background['priors']['sky'] is not a supported prior name: "
+            "the residual background level is 'background_level'."
+        )
+
+    declared = set(priors)
+    expected = set(parameter_names)
+
+    if declared != expected:
+        raise ValueError(
+            f"Background model {model!r} requires priors for exactly "
+            f"{sorted(expected)}; received {sorted(declared)}."
+        )
+
+    normalized_priors: dict[str, dict[str, Any]] = {}
+
+    for name in parameter_names:
+        prior_config = priors[name]
+
+        if not isinstance(
+            prior_config,
+            Mapping,
+        ):
+            raise TypeError(
+                f"Background prior for {name!r} must be a mapping."
+            )
+
+        prior_mapping = dict(
+            prior_config
+        )
+
+        parse_prior_config(
+            prior_mapping
+        )
+
+        normalized_priors[name] = prior_mapping
+
+    return {
+        "model": model,
+        "priors": normalized_priors,
     }
 
 
@@ -405,6 +543,7 @@ def make_config_from_fits(
     model_name: str = "single_sersic",
     model_priors: Mapping[str, Any] | None = None,
     likelihood: Mapping[str, Any] | None = None,
+    background: Mapping[str, Any] | None = None,
     sampler: str | Mapping[str, Any] | None = "nautilus",
     outputs_root: str | Path = "runs",
     overwrite: bool = False,
@@ -412,6 +551,7 @@ def make_config_from_fits(
     fixed_size: int | None = None,
     psf_type: str = "empirical",
     gaussian_fwhm_pixels: float | None = None,
+    psf_max_peak: float | None = None,
     _require_complete_priors: bool = True,
 ) -> dict[str, Any]:
     """Create a runnable BayMorph configuration from one FITS image.
@@ -430,8 +570,13 @@ def make_config_from_fits(
     likelihood : mapping, optional
         Explicit likelihood configuration. If omitted, BayMorph uses the
         standard single-observation likelihood configuration.
-        Explicit inference-region configuration. If omitted, BayMorph uses the
-        standard single-observation inference region.
+    background : mapping, optional
+        Explicit residual-background declaration with keys ``model``
+        (``"constant"`` or ``"plane"``) and ``priors``, a typed prior for
+        exactly the parameters that model samples. Written under
+        ``fit.background``. Priors are in science-image units. If omitted,
+        BayMorph uses its default constant-background prior, whose bounds
+        are not scaled to the image units.
     outputs_root : str or pathlib.Path, default="runs"
         BayMorph output root.
     overwrite : bool, default=False
@@ -447,6 +592,13 @@ def make_config_from_fits(
         and this value is omitted, BayMorph uses FITS FWHM metadata only when
         its unit is explicitly declared as pixels, or as arcseconds with a
         valid celestial pixel scale.
+    psf_max_peak : float, optional
+        Explicit upper limit on the peak pixel of empirical-PSF candidate
+        stars, in science-image units. It is the caller's decision after
+        resolving the detector saturation level against the image units;
+        FITS saturation keywords are never converted automatically. Valid
+        only with ``psf_type="empirical"``. If omitted, BayMorph uses its
+        default ceiling, which is not unit-checked against the image.
 
     Returns
     -------
@@ -506,10 +658,22 @@ def make_config_from_fits(
         psf_type
     ).strip().lower()
 
+    normalized_max_peak = _normalize_psf_max_peak(
+        psf_max_peak
+    )
+
     if normalized_psf_type == "empirical":
-        psf = _empirical_psf_config()
+        psf = _empirical_psf_config(
+            max_peak=normalized_max_peak,
+        )
 
     elif normalized_psf_type == "gaussian":
+        if normalized_max_peak is not None:
+            raise ValueError(
+                "psf_max_peak applies only to psf_type='empirical': a "
+                "Gaussian PSF selects no candidate stars."
+            )
+
         psf = _gaussian_psf_config(
             observation,
             pixel_scale=pixel_scale,
@@ -558,6 +722,13 @@ def make_config_from_fits(
         fit_config["likelihood"] = deepcopy(
             dict(likelihood)
         )
+
+    normalized_background = _normalize_background_config(
+        background
+    )
+
+    if normalized_background is not None:
+        fit_config["background"] = normalized_background
 
     if sampler_config is not None:
         fit_config["sampler"] = sampler_config

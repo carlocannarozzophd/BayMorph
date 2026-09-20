@@ -400,10 +400,19 @@ The public scientific controls include:
 - `sampler`, accepting either a simple sampler name such as `"pocomc"` or
   `"dynesty"`, or an advanced sampler configuration mapping;
 - cutout and PSF strategy;
+- `background`, an explicit residual-background declaration naming the model
+  (`constant` or `plane`) and a typed prior for exactly the parameters that
+  model samples, in science-image units;
+- `psf_max_peak`, an explicit ceiling on the peak pixel of empirical-PSF
+  candidate stars, in science-image units;
 - output location.
 
 The Config Maker may use deterministic FITS metadata where appropriate, but it
-does not infer morphology priors from image intensities.
+does not infer morphology priors from image intensities. It never converts a
+FITS saturation keyword into `psf_max_peak`, because the keyword's units are
+not guaranteed to match the image. When `background` or `psf_max_peak` is
+omitted, the resolved configuration falls back on BayMorph defaults that are
+not scaled to the image units.
 
 ### `make_multi_observation_config`
 
@@ -436,7 +445,22 @@ it returns an `ObservationConfigProposal` recording the proposed
 configuration, the starting model, the flux-prior source, whether the flux
 prior requires human review, and any warnings. The proposal must be reviewed
 and explicitly accepted with `write(accept=True)` before anything is written
-to disk.
+to disk. Writing the same proposal again changes nothing, so a notebook can
+be re-executed, but `write` refuses to replace a file whose content differs
+unless `overwrite=True` is also passed; replacing a configuration does not
+update products already created from it.
+
+The proposal records every prior the fit will sample: the complete prior set
+of the starting model and the priors of the parameters sampled by the
+residual-background model. Priors that were not declared are BayMorph
+reference defaults; the proposal writes them explicitly and names them in a
+warning, so the YAML does not depend on defaults that a later version could
+change. It also warns when no residual-background prior or no empirical-PSF
+candidate peak ceiling was declared, without choosing either value. The Advisor
+summary reports the FITS `BUNIT` and saturation keyword as header metadata
+that is not unit-checked, and labels its background and noise scales as
+whole-image diagnostics: the noise scale used by the likelihood is measured
+on the prepared cutout.
 
 ## Model screening advisor
 

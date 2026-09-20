@@ -1574,3 +1574,39 @@ def test_header_fwhm_formatter_preserves_unit_uncertainty() -> None:
         )
         == "3.75 pixels"
     )
+
+
+def test_advisor_summary_reports_units_and_saturation_as_header_metadata(
+    tmp_path,
+) -> None:
+    """Unit-dependent header metadata must be shown without being trusted."""
+    fits_path = tmp_path / "galaxy.fits"
+
+    _write_source_fits(
+        fits_path
+    )
+
+    summary = ObservationAdvisor(
+        fits_path,
+        target_position="center",
+    ).summary()
+
+    assert "Image units (BUNIT): counts" in summary
+    assert "Saturation keyword: unavailable" in summary
+    assert "Noise sigma (whole-image diagnostic)" in summary
+
+    fits.setval(
+        fits_path,
+        "SATLEVEL",
+        value=30000.0,
+    )
+
+    summary = ObservationAdvisor(
+        fits_path,
+        target_position="center",
+    ).summary()
+
+    assert (
+        "Saturation keyword: 30000 (header units, not unit-checked)"
+        in summary
+    )

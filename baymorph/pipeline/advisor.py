@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,7 @@ from baymorph.pipeline.psf_construction import (
     run_psf_construction_from_config,
 )
 from baymorph.pipeline.real_fit import (
+    _background_parameter_names,
     _load_psf_from_config,
 )
 from baymorph.pipeline.preparation_steps import (
@@ -448,8 +450,30 @@ class ObservationConfigProposal:
         self,
         *,
         accept: bool = False,
+        overwrite: bool = False,
     ) -> Path:
-        """Write the proposed YAML after explicit user acceptance."""
+        """Write the proposed YAML after explicit user acceptance.
+
+        Parameters
+        ----------
+        accept : bool, default=False
+            Must be True to confirm that the proposal has been reviewed.
+        overwrite : bool, default=False
+            Whether an existing file at the destination may be replaced.
+            Replacing a configuration does not update products already
+            created from the previous one.
+
+        Returns
+        -------
+        pathlib.Path
+            Resolved path of the written YAML.
+
+        Notes
+        -----
+        Writing the same proposal again is accepted and changes nothing, so a
+        notebook can be re-executed. A destination whose content differs is
+        never replaced without ``overwrite=True``.
+        """
         if accept is not True:
             raise ValueError("Writing a configuration proposal requires accept=True.")
 
@@ -463,20 +487,36 @@ class ObservationConfigProposal:
         import yaml
 
         destination = self.output_path.expanduser()
+
+        serialized = yaml.safe_dump(
+            self.config,
+            sort_keys=False,
+        )
+
+        if destination.exists() and overwrite is not True:
+            if (
+                destination.read_text(
+                    encoding="utf-8",
+                )
+                == serialized
+            ):
+                return destination.resolve()
+
+            raise FileExistsError(
+                f"Configuration already exists and differs: {destination}. "
+                "Choose a new output path, or pass overwrite=True only if "
+                "replacing it is intended; products already created from it "
+                "are not updated."
+            )
         destination.parent.mkdir(
             parents=True,
             exist_ok=True,
         )
 
-        with destination.open(
-            "w",
+        destination.write_text(
+            serialized,
             encoding="utf-8",
-        ) as stream:
-            yaml.safe_dump(
-                self.config,
-                stream,
-                sort_keys=False,
-            )
+        )
 
         return destination.resolve()
 
@@ -976,8 +1016,26 @@ class ObservationAdvisor:
                     inspection.seeing_fwhm_unit,
                 )
             ),
-            f"Background: {inspection.background:.6g}",
-            f"Noise sigma: {inspection.noise_sigma:.6g}",
+            f"Image units (BUNIT): {inspection.bunit or 'unavailable'}",
+            (
+                "Saturation keyword: "
+                + (
+                    "unavailable"
+                    if inspection.saturation is None
+                    else (
+                        f"{inspection.saturation:.6g} "
+                        "(header units, not unit-checked)"
+                    )
+                )
+            ),
+            (
+                "Background (whole-image diagnostic): "
+                f"{inspection.background:.6g}"
+            ),
+            (
+                "Noise sigma (whole-image diagnostic): "
+                f"{inspection.noise_sigma:.6g}"
+            ),
         ]
 
         if inspection.target_x is not None:
@@ -1392,6 +1450,60 @@ class ObservationAdvisor:
             model_priors=priors,
             **config_options,
         )
+
+        if "background" not in config["fit"]:
+            warnings.append(
+                "No residual-background prior was declared. The proposal "
+                "records BayMorph's default constant-background prior, whose "
+                "bounds are in science-image units but are not scaled to this "
+                "image. Declare background=... to make that assumption "
+                "explicit."
+            )
+
+        psf_config = config["psf"]
+
+        if psf_config["type"] == "empirical" and (
+            "max_peak" not in psf_config["empirical"]["candidate_selection"]
+        ):
+            warnings.append(
+                "No empirical-PSF candidate peak ceiling was declared. "
+                "BayMorph will use its default max_peak, which is not checked "
+                "against the detector saturation level or the image units. "
+                "Declare psf_max_peak=... in science-image units."
+            )
+
+        # Record every prior the fit will sample, so the written YAML does not
+        # depend on BayMorph defaults that a later version could change.
+        resolved = resolve_config(config)
+        model_priors_resolved = deepcopy(
+            resolved["fit"]["priors"][model_name]
+        )
+        default_prior_names = [
+            name for name in model_priors_resolved if name not in priors
+        ]
+
+        if default_prior_names:
+            warnings.append(
+                "Priors for "
+                + ", ".join(default_prior_names)
+                + " are BayMorph reference defaults, recorded explicitly in "
+                "the proposal. Review them, or override them with "
+                "model_priors=... ."
+            )
+
+        config["fit"]["priors"] = {
+            model_name: model_priors_resolved,
+        }
+
+        background_resolved = resolved["fit"]["background"]
+        background_model = str(background_resolved["model"]).strip().lower()
+        config["fit"]["background"] = {
+            "model": background_model,
+            "priors": {
+                name: deepcopy(background_resolved["priors"][name])
+                for name in _background_parameter_names(background_resolved)
+            },
+        }
 
         destination = Path(output_path).expanduser()
         project_root = getattr(

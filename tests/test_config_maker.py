@@ -743,3 +743,215 @@ def test_config_maker_gaussian_override_has_priority(tmp_path):
     )
 
     assert config["psf"]["gaussian"]["fwhm"] == pytest.approx(2.75)
+
+
+_CONSTANT_BACKGROUND = {
+    "model": "constant",
+    "priors": {
+        "background_level": {
+            "type": "uniform",
+            "lower": -5.0,
+            "upper": 5.0,
+        },
+    },
+}
+
+
+def test_config_maker_writes_declared_background(tmp_path):
+    """A declared background must reach fit.background unchanged."""
+    fits_path = tmp_path / "galaxy.fits"
+    _write_test_fits(fits_path)
+
+    config = make_config_from_fits(
+        fits_path,
+        target_position="center",
+        background=_CONSTANT_BACKGROUND,
+    )
+
+    assert config["fit"]["background"] == _CONSTANT_BACKGROUND
+
+    resolved = resolve_config(config)
+
+    assert resolved["fit"]["background"]["model"] == "constant"
+    assert resolved["fit"]["background"]["priors"]["background_level"] == (
+        _CONSTANT_BACKGROUND["priors"]["background_level"]
+    )
+
+
+def test_config_maker_accepts_complete_plane_background(tmp_path):
+    """A plane background declares its level and both gradients."""
+    fits_path = tmp_path / "galaxy.fits"
+    _write_test_fits(fits_path)
+
+    gradient = {
+        "type": "uniform",
+        "lower": -0.01,
+        "upper": 0.01,
+    }
+    background = {
+        "model": "Plane",
+        "priors": {
+            "background_level": _CONSTANT_BACKGROUND["priors"][
+                "background_level"
+            ],
+            "background_gradient_x": gradient,
+            "background_gradient_y": gradient,
+        },
+    }
+
+    config = make_config_from_fits(
+        fits_path,
+        target_position="center",
+        background=background,
+    )
+
+    assert config["fit"]["background"]["model"] == "plane"
+    assert set(config["fit"]["background"]["priors"]) == {
+        "background_level",
+        "background_gradient_x",
+        "background_gradient_y",
+    }
+
+
+@pytest.mark.parametrize(
+    ("background", "error", "match"),
+    [
+        (
+            [("model", "constant")],
+            TypeError,
+            "background must be a mapping",
+        ),
+        (
+            {"model": "constant"},
+            ValueError,
+            "both 'model' and 'priors'",
+        ),
+        (
+            {**_CONSTANT_BACKGROUND, "region": "all"},
+            ValueError,
+            "Unsupported background entries",
+        ),
+        (
+            {"model": "polynomial", "priors": {}},
+            ValueError,
+            "Unsupported background model",
+        ),
+        (
+            {
+                "model": "constant",
+                "priors": {
+                    "sky": {"type": "uniform", "lower": -1.0, "upper": 1.0},
+                },
+            },
+            ValueError,
+            "'background_level'",
+        ),
+        (
+            {
+                "model": "plane",
+                "priors": _CONSTANT_BACKGROUND["priors"],
+            },
+            ValueError,
+            "requires priors for exactly",
+        ),
+        (
+            {
+                "model": "constant",
+                "priors": {
+                    "background_level": {
+                        "type": "uniform",
+                        "lower": 5.0,
+                        "upper": -5.0,
+                    },
+                },
+            },
+            ValueError,
+            None,
+        ),
+    ],
+)
+def test_config_maker_rejects_incomplete_or_invalid_background(
+    tmp_path,
+    background,
+    error,
+    match,
+):
+    """Background declarations must be complete, typed, and non-legacy."""
+    fits_path = tmp_path / "galaxy.fits"
+    _write_test_fits(fits_path)
+
+    with pytest.raises(error, match=match):
+        make_config_from_fits(
+            fits_path,
+            target_position="center",
+            background=background,
+        )
+
+
+def test_config_maker_writes_declared_psf_max_peak(tmp_path):
+    """A declared PSF peak ceiling must replace the default and serialize."""
+    fits_path = tmp_path / "galaxy.fits"
+    _write_test_fits(fits_path)
+    output_path = tmp_path / "configs" / "galaxy.yaml"
+
+    config = make_config_from_fits(
+        fits_path,
+        target_position="center",
+        psf_max_peak=np.float64(20000.0),
+        output_path=output_path,
+    )
+
+    candidate = config["psf"]["empirical"]["candidate_selection"]
+
+    assert candidate["max_peak"] == pytest.approx(20000.0)
+    assert type(candidate["max_peak"]) is float
+
+    written = yaml.safe_load(output_path.read_text(encoding="utf-8"))
+
+    assert written["psf"]["empirical"]["candidate_selection"]["max_peak"] == (
+        pytest.approx(20000.0)
+    )
+    assert resolve_config(config)["psf"]["empirical"]["candidate_selection"][
+        "max_peak"
+    ] == pytest.approx(20000.0)
+
+
+def test_config_maker_rejects_psf_max_peak_for_gaussian_psf(tmp_path):
+    """A Gaussian PSF selects no candidates, so a peak ceiling is an error."""
+    fits_path = tmp_path / "galaxy.fits"
+    _write_test_fits(fits_path)
+
+    with pytest.raises(ValueError, match="only to psf_type='empirical'"):
+        make_config_from_fits(
+            fits_path,
+            target_position="center",
+            psf_type="gaussian",
+            psf_max_peak=20000.0,
+        )
+
+
+@pytest.mark.parametrize(
+    ("max_peak", "error", "match"),
+    [
+        (True, TypeError, "real number"),
+        ("20000", TypeError, "real number"),
+        (0.0, ValueError, "finite positive"),
+        (float("inf"), ValueError, "finite positive"),
+    ],
+)
+def test_config_maker_rejects_invalid_psf_max_peak(
+    tmp_path,
+    max_peak,
+    error,
+    match,
+):
+    """Only finite positive numbers are valid PSF peak ceilings."""
+    fits_path = tmp_path / "galaxy.fits"
+    _write_test_fits(fits_path)
+
+    with pytest.raises(error, match=match):
+        make_config_from_fits(
+            fits_path,
+            target_position="center",
+            psf_max_peak=max_peak,
+        )

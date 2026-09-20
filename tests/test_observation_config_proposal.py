@@ -366,3 +366,239 @@ def test_project_advisor_anchors_notebook_paths(
     )
     assert proposal.config["outputs"]["root"] == "runs"
     assert written_config["outputs"]["root"] == "runs"
+
+
+def test_proposal_write_refuses_to_replace_existing_configuration(
+    tmp_path: Path,
+) -> None:
+    """A reviewed configuration must not be replaced silently."""
+    fits_path = write_observation(tmp_path)
+    output_path = tmp_path / "configs" / "observed.yaml"
+
+    advisor = ObservationAdvisor(
+        fits_path,
+        target_position=(
+            20.0,
+            20.0,
+        ),
+    )
+
+    def propose(upper: float) -> ObservationConfigProposal:
+        return advisor.propose_config(
+            output_path=output_path,
+            flux_prior={
+                "type": "log_uniform",
+                "lower": 100.0,
+                "upper": upper,
+            },
+            outputs_root=(tmp_path / "runs"),
+            psf_type="gaussian",
+            gaussian_fwhm_pixels=2.0,
+        )
+
+    propose(100000.0).write(accept=True)
+    original = output_path.read_text(encoding="utf-8")
+
+    replacement = propose(200000.0)
+
+    assert propose(100000.0).write(accept=True) == output_path.resolve()
+    assert output_path.read_text(encoding="utf-8") == original
+
+    with pytest.raises(
+        FileExistsError,
+        match="already exists and differs",
+    ):
+        replacement.write(accept=True)
+
+    assert output_path.read_text(encoding="utf-8") == original
+
+    replacement.write(
+        accept=True,
+        overwrite=True,
+    )
+
+    config = yaml.safe_load(output_path.read_text(encoding="utf-8"))
+
+    assert config["fit"]["priors"]["single_sersic"]["flux"]["upper"] == 200000.0
+
+
+def test_proposal_warns_about_undeclared_unit_dependent_choices(
+    tmp_path: Path,
+) -> None:
+    """Default background priors and PSF ceilings must be flagged, not hidden."""
+    fits_path = write_observation(tmp_path)
+
+    advisor = ObservationAdvisor(
+        fits_path,
+        target_position=(
+            20.0,
+            20.0,
+        ),
+    )
+
+    flux_prior = {
+        "type": "log_uniform",
+        "lower": 100.0,
+        "upper": 100000.0,
+    }
+
+    undeclared = advisor.propose_config(
+        output_path=(tmp_path / "undeclared.yaml"),
+        flux_prior=flux_prior,
+        outputs_root=(tmp_path / "runs"),
+    )
+
+    warnings = "\n".join(undeclared.warnings)
+
+    assert "No residual-background prior was declared" in warnings
+    assert "No empirical-PSF candidate peak ceiling was declared" in warnings
+    assert undeclared.config["fit"]["background"]["model"] == "constant"
+    assert set(undeclared.config["fit"]["background"]["priors"]) == {
+        "background_level",
+    }
+
+    declared = advisor.propose_config(
+        output_path=(tmp_path / "declared.yaml"),
+        flux_prior=flux_prior,
+        outputs_root=(tmp_path / "runs"),
+        background={
+            "model": "constant",
+            "priors": {
+                "background_level": {
+                    "type": "uniform",
+                    "lower": -5.0,
+                    "upper": 5.0,
+                },
+            },
+        },
+        psf_max_peak=20000.0,
+    )
+
+    warnings = "\n".join(declared.warnings)
+
+    assert "residual-background" not in warnings
+    assert "peak ceiling" not in warnings
+    assert declared.config["fit"]["background"]["model"] == "constant"
+    assert (
+        declared.config["psf"]["empirical"]["candidate_selection"]["max_peak"]
+        == 20000.0
+    )
+
+
+def test_gaussian_psf_proposal_does_not_request_a_peak_ceiling(
+    tmp_path: Path,
+) -> None:
+    """The PSF-ceiling warning applies only to empirical PSFs."""
+    fits_path = write_observation(tmp_path)
+
+    advisor = ObservationAdvisor(
+        fits_path,
+        target_position=(
+            20.0,
+            20.0,
+        ),
+    )
+
+    proposal = advisor.propose_config(
+        output_path=(tmp_path / "gaussian.yaml"),
+        flux_prior={
+            "type": "log_uniform",
+            "lower": 100.0,
+            "upper": 100000.0,
+        },
+        outputs_root=(tmp_path / "runs"),
+        psf_type="gaussian",
+        gaussian_fwhm_pixels=2.0,
+    )
+
+    assert not any("peak ceiling" in warning for warning in proposal.warnings)
+
+
+def test_proposal_records_every_sampled_prior(
+    tmp_path: Path,
+) -> None:
+    """The written YAML must not depend on BayMorph prior defaults."""
+    fits_path = write_observation(tmp_path)
+    output_path = tmp_path / "configs" / "observed.yaml"
+
+    advisor = ObservationAdvisor(
+        fits_path,
+        target_position=(
+            20.0,
+            20.0,
+        ),
+    )
+
+    re_prior = {
+        "type": "uniform",
+        "lower": 2.0,
+        "upper": 30.0,
+    }
+    background = {
+        "model": "plane",
+        "priors": {
+            "background_level": {
+                "type": "uniform",
+                "lower": -5.0,
+                "upper": 5.0,
+            },
+            "background_gradient_x": {
+                "type": "uniform",
+                "lower": -0.01,
+                "upper": 0.01,
+            },
+            "background_gradient_y": {
+                "type": "uniform",
+                "lower": -0.01,
+                "upper": 0.01,
+            },
+        },
+    }
+
+    proposal = advisor.propose_config(
+        output_path=output_path,
+        flux_prior={
+            "type": "log_uniform",
+            "lower": 100.0,
+            "upper": 100000.0,
+        },
+        model_priors={
+            "re": re_prior,
+        },
+        background=background,
+        outputs_root=(tmp_path / "runs"),
+        psf_type="gaussian",
+        gaussian_fwhm_pixels=2.0,
+    )
+
+    priors = proposal.config["fit"]["priors"]
+
+    assert set(priors) == {"single_sersic"}
+    assert set(priors["single_sersic"]) == {
+        "flux",
+        "re",
+        "n",
+        "q",
+        "theta",
+        "x0",
+        "y0",
+    }
+    assert priors["single_sersic"]["re"] == re_prior
+    assert proposal.config["fit"]["background"] == background
+
+    defaults_warning = next(
+        warning
+        for warning in proposal.warnings
+        if "reference defaults" in warning
+    )
+
+    assert "n, q, theta, x0, y0" in defaults_warning
+    assert "re," not in defaults_warning
+    assert "flux" not in defaults_warning
+
+    written = yaml.safe_load(
+        proposal.write(accept=True).read_text(encoding="utf-8")
+    )
+
+    assert written["fit"]["priors"] == priors
+    assert written["fit"]["background"] == background
