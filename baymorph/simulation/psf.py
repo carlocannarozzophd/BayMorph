@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import ArrayLike
-from scipy.signal import fftconvolve
+from scipy.fft import irfftn, next_fast_len, rfftn
 
 
 def validate_finite_nonnegative_kernel(
@@ -205,6 +205,150 @@ class EmpiricalPSF:
         return kernel / total
 
 
+_CONVOLUTION_CACHE_ATTRIBUTE = "_baymorph_convolution_cache"
+
+_CONVOLUTION_CACHE_ENTRIES = 4
+
+
+class _PaddedKernelTransform:
+    """Linear FFT convolution with the kernel transform computed once.
+
+    The padded transform shape, the transform of the zero-padded kernel and
+    the crop indices depend only on the kernel values and the image shape.
+    Both are fixed for the duration of a fit, so recomputing them for every
+    likelihood evaluation transforms a constant array millions of times.
+
+    This performs exactly the operations ``scipy.signal.fftconvolve`` performs
+    for ``mode="same"``: the same ``next_fast_len`` shape, the same real
+    transforms, the same centred crop, in the same order. The results agree
+    bit for bit.
+    """
+
+    def __init__(
+        self,
+        kernel: np.ndarray,
+        image_shape: tuple[int, int],
+    ) -> None:
+        self.image_shape = (
+            int(image_shape[0]),
+            int(image_shape[1]),
+        )
+        self.kernel_shape = (
+            int(kernel.shape[0]),
+            int(kernel.shape[1]),
+        )
+
+        self.fft_shape = tuple(
+            next_fast_len(
+                image + kernel_length - 1,
+                real=True,
+            )
+            for image, kernel_length in zip(
+                self.image_shape,
+                self.kernel_shape,
+            )
+        )
+
+        buffer = np.zeros(
+            self.fft_shape,
+            dtype=float,
+        )
+        buffer[
+            : self.kernel_shape[0],
+            : self.kernel_shape[1],
+        ] = kernel
+
+        self.kernel_transform = rfftn(
+            buffer,
+            self.fft_shape,
+        )
+
+        # The centred window of the linear convolution lies entirely inside
+        # the valid region, so it can be taken from the padded inverse
+        # transform without trimming first.
+        self.crop = tuple(
+            slice(
+                (kernel_length - 1) // 2,
+                (kernel_length - 1) // 2 + image,
+            )
+            for image, kernel_length in zip(
+                self.image_shape,
+                self.kernel_shape,
+            )
+        )
+
+    def __call__(
+        self,
+        image: np.ndarray,
+    ) -> np.ndarray:
+        """Convolve one image with the cached kernel transform."""
+        spectrum = rfftn(
+            image,
+            self.fft_shape,
+        )
+        spectrum *= self.kernel_transform
+
+        return irfftn(
+            spectrum,
+            self.fft_shape,
+        )[self.crop]
+
+
+def _padded_kernel_transform(
+    psf,
+    kernel: np.ndarray,
+    image_shape: tuple[int, int],
+) -> _PaddedKernelTransform:
+    """Return the cached padded transform for one PSF, kernel and shape.
+
+    The cache lives on the PSF object because every other object in the
+    render chain is rebuilt for each likelihood evaluation. A PSF object that
+    does not accept attribute assignment receives an uncached transform; that
+    cannot change any result, because the cached and uncached paths perform
+    the same operations in the same order.
+    """
+    key = (
+        tuple(image_shape),
+        kernel.shape,
+        kernel.tobytes(),
+    )
+
+    cache = getattr(
+        psf,
+        _CONVOLUTION_CACHE_ATTRIBUTE,
+        None,
+    )
+
+    if cache is None:
+        cache = {}
+
+        try:
+            setattr(
+                psf,
+                _CONVOLUTION_CACHE_ATTRIBUTE,
+                cache,
+            )
+        except (AttributeError, TypeError):
+            return _PaddedKernelTransform(
+                kernel,
+                image_shape,
+            )
+
+    transform = cache.get(key)
+
+    if transform is None:
+        if len(cache) >= _CONVOLUTION_CACHE_ENTRIES:
+            cache.clear()
+
+        transform = _PaddedKernelTransform(
+            kernel,
+            image_shape,
+        )
+        cache[key] = transform
+
+    return transform
+
+
 def convolve_with_psf(
     image: np.ndarray,
     psf,
@@ -273,11 +417,12 @@ def convolve_with_psf(
 
     normalized_kernel = kernel_array / kernel_sum
 
-    return np.asarray(
-        fftconvolve(
-            image_array,
-            normalized_kernel,
-            mode="same",
-        ),
-        dtype=float,
+    transform = _padded_kernel_transform(
+        psf,
+        normalized_kernel,
+        image_array.shape,
+    )
+
+    return transform(
+        image_array
     )

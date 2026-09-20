@@ -322,9 +322,11 @@ class PSFEffect:
         self,
         image: ArrayLike,
     ) -> FloatArray:
-        """Convolve the finite input image with the configured PSF."""
-        self.normalized_kernel()
+        """Convolve the finite input image with the configured PSF.
 
+        The kernel was validated when this effect was constructed and cannot
+        have changed since, so it is not revalidated here.
+        """
         return np.asarray(
             convolve_with_psf(
                 np.asarray(
