@@ -407,9 +407,19 @@ provenance and fit summaries.
 
 ## Learn BayMorph
 
-Tutorial notebooks are being rebuilt against the current public API and are
-not currently distributed. The canonical simulated example configuration is
-`configs/simulated_galaxy.yaml`.
+Tutorial notebooks are packaged with BayMorph and copied into a new project
+by `baymorph init`:
+
+| Notebook | Purpose |
+| --- | --- |
+| `01_Simulated_SingleBand.ipynb` | Simulated single-band workflow, compared against the known simulation truth |
+| `02A_Observed_Assessment_and_Config.ipynb` | Inspect an observed image, select a target, and write a reviewed configuration |
+| `02B_Observed_Fit.ipynb` | Run preparation, PSF construction, fitting, and diagnostics from that configuration |
+
+The canonical simulated example configuration is
+`configs/simulated_galaxy.yaml`. The multi-observation tutorial notebook is
+still being rebuilt against the current public API and is not yet
+distributed.
 
 ## Documentation
 

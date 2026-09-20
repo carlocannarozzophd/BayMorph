@@ -9,8 +9,13 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 NOTEBOOK_DIRECTORY = PROJECT_ROOT / "notebooks"
 
+ASSESSMENT_NOTEBOOK = "02A_Observed_Assessment_and_Config.ipynb"
+OBSERVED_FIT_NOTEBOOK = "02B_Observed_Fit.ipynb"
+
 EXPECTED_NOTEBOOKS: set[str] = {
     "01_Simulated_SingleBand.ipynb",
+    ASSESSMENT_NOTEBOOK,
+    OBSERVED_FIT_NOTEBOOK,
 }
 
 # Research campaigns under validation/ are not tutorials and are not packaged.
@@ -210,3 +215,53 @@ def test_public_notebooks_are_clean_and_code_cells_compile() -> None:
                 f"{path}:cell-{index}",
                 "exec",
             )
+
+
+def test_public_notebooks_never_prompt_for_input() -> None:
+    """Tutorials must run linearly without blocking on ``input()``."""
+    for name in EXPECTED_NOTEBOOKS:
+        source = _notebook_source(NOTEBOOK_DIRECTORY / name)
+
+        assert "input(" not in source
+
+
+def test_assessment_notebook_only_writes_a_reviewed_configuration() -> None:
+    """02A inspects and configures; it never prepares, builds a PSF, or fits."""
+    source = _notebook_source(NOTEBOOK_DIRECTORY / ASSESSMENT_NOTEBOOK)
+
+    assert "ObservationAdvisor.from_project(" in source
+    assert "advisor.select_target(" in source
+    assert "advisor.propose_config(" in source
+    assert "proposal.write(accept=True)" in source
+
+    for forbidden in (
+        "BayMorphRunner",
+        "calibrate_flux_prior",
+        "overwrite=True",
+    ):
+        assert forbidden not in source
+
+
+def test_observed_fit_notebook_runs_the_pipeline_from_the_written_yaml() -> None:
+    """02B consumes the 02A YAML and never rebuilds the configuration."""
+    assessment = _notebook_source(NOTEBOOK_DIRECTORY / ASSESSMENT_NOTEBOOK)
+    source = _notebook_source(NOTEBOOK_DIRECTORY / OBSERVED_FIT_NOTEBOOK)
+
+    for stage in (
+        "runner.prepare_image()",
+        "runner.select_psf_candidates()",
+        "runner.build_psf()",
+        "runner.fit()",
+        "runner.diagnostics()",
+    ):
+        assert stage in source
+
+    for forbidden in (
+        "ObservationAdvisor",
+        "propose_config",
+        "make_config_from_fits",
+    ):
+        assert forbidden not in source
+
+    assert 'analysis_name = "TARGET_r"' in assessment
+    assert 'config_path = "configs/TARGET_r.yaml"' in source

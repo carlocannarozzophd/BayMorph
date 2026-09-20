@@ -93,6 +93,8 @@ def test_init_command_creates_project_tree(
 
     assert {filename.name for filename in (project / "notebooks").glob("*.ipynb")} == {
         "01_Simulated_SingleBand.ipynb",
+        "02A_Observed_Assessment_and_Config.ipynb",
+        "02B_Observed_Fit.ipynb",
     }
 
 
