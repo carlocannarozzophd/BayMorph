@@ -16,6 +16,52 @@ from baymorph.results import (
 )
 
 
+_NAUTILUS_WORKER_PROBLEM: InferenceProblem | None = None
+
+
+def _evaluate_loglikelihood(
+    problem: InferenceProblem,
+    theta,
+) -> float:
+    """Evaluate one physical parameter vector against one problem."""
+    return float(
+        problem.log_likelihood(
+            np.asarray(
+                theta,
+                dtype=float,
+            )
+        )
+    )
+
+
+def _initialize_nautilus_worker(
+    problem: InferenceProblem,
+) -> None:
+    """Install one inference problem in a persistent worker process."""
+    global _NAUTILUS_WORKER_PROBLEM
+
+    _NAUTILUS_WORKER_PROBLEM = problem
+
+
+def _worker_loglikelihood(theta) -> float:
+    """Evaluate one physical parameter vector inside a Nautilus worker.
+
+    Nautilus is handed this module-level function rather than a bound method
+    so that ``Pool.map`` serializes a module reference instead of the whole
+    inference problem once per task chunk. The problem itself travels once
+    per worker, through the pool initializer.
+    """
+    if _NAUTILUS_WORKER_PROBLEM is None:
+        raise RuntimeError(
+            "The Nautilus worker inference problem was not initialized."
+        )
+
+    return _evaluate_loglikelihood(
+        _NAUTILUS_WORKER_PROBLEM,
+        theta,
+    )
+
+
 class NautilusIncompleteRunError(RuntimeError):
     """Report a Nautilus run that has not reached its requested target."""
 
@@ -96,13 +142,9 @@ class NautilusFitter:
         theta,
     ) -> float:
         """Evaluate the backend-neutral inference problem."""
-        return float(
-            self.problem.log_likelihood(
-                np.asarray(
-                    theta,
-                    dtype=float,
-                )
-            )
+        return _evaluate_loglikelihood(
+            self.problem,
+            theta,
         )
 
     def run(
@@ -212,16 +254,21 @@ class NautilusFitter:
             ] = execution.progress
 
         with sampler_pool(
-            processes
+            processes,
+            initializer=_initialize_nautilus_worker,
+            initargs=(self.problem,),
         ) as pool:
-            if pool is not None:
+            if pool is None:
+                loglikelihood = self.loglikelihood
+            else:
                 runtime_init_config[
                     "pool"
                 ] = pool
+                loglikelihood = _worker_loglikelihood
 
             sampler = Sampler(
                 self.prior_transform,
-                self.loglikelihood,
+                loglikelihood,
                 n_dim=self.ndim,
                 pass_dict=False,
                 vectorized=False,
