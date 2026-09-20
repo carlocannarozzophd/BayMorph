@@ -44,6 +44,20 @@ reporting.
 Users should normally interact with BayMorph through stable high-level
 interfaces rather than internal pipeline or fitting classes.
 
+### Repeating a stage
+
+`prepare_image()`, `select_psf_candidates()`, `build_psf()` and `fit()` can be
+run again. A stage that finds a completed product for the configured output
+namespace loads it, and reports the reuse, instead of rebuilding it (AD-042).
+An interrupted workflow therefore continues by rerunning it from the start.
+
+Reuse is the fail-closed path, not a shortcut: persisted preparation products
+are accepted only when their immutable inputs still match the configuration,
+and an empirical PSF only when its kernel and provenance validate. Products
+that no longer match are rejected, and none are ever rewritten in place.
+Setting `outputs.overwrite` selects rebuilding; a different scientific
+declaration belongs in a new output namespace.
+
 ## Scientific data
 
 The public scientific data interfaces are:

@@ -45,6 +45,7 @@ and the project follows Semantic Versioning in spirit.
 
 ### Changed
 
+* `BayMorphRunner.prepare_image`, `select_psf_candidates` and `build_psf` reuse an accepted product when one exists for the configured output namespace, instead of failing on its immutability, and report the reuse (AD-042). Loading remains fail-closed: products whose immutable inputs or provenance no longer match are rejected. `outputs.overwrite` still selects rebuilding, and the PSF candidate catalogue is now protected by that policy like the PSF itself.
 * `ObservationConfigProposal.write` refuses to replace an existing configuration unless `overwrite=True` is passed, and the Advisor summary reports `BUNIT` and the saturation keyword as header metadata that is not unit-checked while labelling its background and noise scales as whole-image diagnostics.
 * Aligned single-image colorbars with their image panels and standardized pixel-axis and colorbar styling.
 * Replaced legacy multiband terminology and runtime objects with the general

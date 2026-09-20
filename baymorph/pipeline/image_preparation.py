@@ -1538,6 +1538,39 @@ def save_image_preparation_products(
     )
 
 
+def image_preparation_is_complete(
+    config: str | Path | dict[str, Any],
+) -> bool:
+    """Return whether a completed image preparation exists on disk.
+
+    Parameters
+    ----------
+    config : dict, str, or pathlib.Path
+        Resolved configuration dictionary or path to a YAML configuration
+        file.
+
+    Returns
+    -------
+    bool
+        True when the completion marker is present.
+
+    Notes
+    -----
+    The marker is written last, after every required product has been
+    validated, so its presence identifies a finished preparation. It does not
+    assert that those products match the current inputs: that identity is
+    validated, fail-closed, by :func:`load_image_preparation_products`.
+    """
+    if isinstance(config, (str, Path)):
+        resolved = load_resolved_config(config)
+    else:
+        resolved = config
+
+    directory = pipeline_paths(resolved)["image_preparation"]["dir"]
+
+    return (directory / _PREPARATION_COMPLETE_NAME).is_file()
+
+
 def load_image_preparation_products(
     config: str | Path | dict[str, Any],
 ) -> PreparedObservation:

@@ -18,11 +18,23 @@ from baymorph.pipeline.config import (
     load_resolved_config,
     resolve_config,
 )
+from baymorph.pipeline.image_preparation import (
+    image_preparation_is_complete,
+    load_image_preparation_products,
+)
 from baymorph.pipeline.multi_observation_config import (
     resolve_multi_observation_observation_configs,
 )
 from baymorph.pipeline.multi_observation_fit import (
     run_multi_observation_fit_from_config,
+)
+from baymorph.pipeline.psf_candidates import (
+    load_psf_candidates,
+    psf_candidates_exist,
+)
+from baymorph.pipeline.psf_construction import (
+    empirical_psf_exists,
+    load_empirical_psf,
 )
 from baymorph.pipeline.noise_calibration import (
     build_correlated_noise_calibration,
@@ -438,8 +450,93 @@ class BayMorphRunner:
 
         return self.simulation_observation
 
+    @staticmethod
+    def _reuses_products(
+        config: Mapping[str, Any],
+    ) -> bool:
+        """Return whether accepted products may be reused for this config.
+
+        A configuration without a resolved ``outputs`` section cannot address
+        persisted products, so its stages always rebuild.
+        """
+        outputs = config.get(
+            "outputs"
+        )
+
+        if not isinstance(
+            outputs,
+            Mapping,
+        ):
+            return False
+
+        return not bool(
+            outputs.get(
+                "overwrite",
+                False,
+            )
+        )
+
+    def _stage_status(
+        self,
+        message: str,
+        *,
+        reused: bool,
+        observation_name: str | None = None,
+    ) -> None:
+        """Report a completed stage, naming reuse of accepted products."""
+        suffix = (
+            ""
+            if observation_name is None
+            else f" for observation '{observation_name}'"
+        )
+
+        if reused:
+            self._status(
+                f"Accepted {message} reused" + suffix
+            )
+        else:
+            self._status(
+                message[0].upper()
+                + message[1:]
+                + " completed"
+                + suffix
+            )
+
+    def _prepare_one_observation(
+        self,
+        config: Mapping[str, Any],
+    ) -> tuple[Any, bool]:
+        """Prepare one observation, reusing accepted products when present.
+
+        Reuse never bypasses validation: the loader accepts persisted products
+        only when their immutable inputs still match this configuration, and
+        fails closed otherwise.
+        """
+        if self._reuses_products(
+            config
+        ) and image_preparation_is_complete(
+            config
+        ):
+            return (
+                load_image_preparation_products(
+                    config
+                ),
+                True,
+            )
+
+        return (
+            run_image_preparation(
+                config
+            ),
+            False,
+        )
+
     def prepare_image(self) -> Any:
         """Run image preparation for the configured observations.
+
+        A completed preparation whose identity still matches its inputs is
+        loaded instead of rebuilt, so this stage can be repeated safely.
+        Setting ``outputs.overwrite`` rebuilds it.
 
         Returns
         -------
@@ -455,34 +552,76 @@ class BayMorphRunner:
                 )
             )
 
-            self.image_preparation_products = {
-                name: run_image_preparation(
+            products = {}
+
+            for name, observation_config in (
+                observation_configs.items()
+            ):
+                (
+                    products[name],
+                    reused,
+                ) = self._prepare_one_observation(
                     observation_config
                 )
-                for name, observation_config
-                in observation_configs.items()
-            }
 
-            self._status(
-                "Multi-observation image preparation completed"
-            )
+                self._stage_status(
+                    "image preparation",
+                    reused=reused,
+                    observation_name=name,
+                )
+
+            self.image_preparation_products = products
 
             return self.image_preparation_products
 
-        self.image_preparation_products = (
-            run_image_preparation(
-                self.config,
-            )
+        (
+            self.image_preparation_products,
+            reused,
+        ) = self._prepare_one_observation(
+            self.config
         )
 
-        self._status(
-            "Image preparation completed"
+        self._stage_status(
+            "image preparation",
+            reused=reused,
         )
 
         return self.image_preparation_products
 
+    def _select_one_psf_candidate_set(
+        self,
+        config: Mapping[str, Any],
+    ) -> tuple[Any, bool]:
+        """Select candidates, reusing an accepted candidate set when present.
+
+        Candidates are the provenance of an accepted PSF, so they are reused
+        rather than rewritten.
+        """
+        if self._reuses_products(
+            config
+        ) and psf_candidates_exist(
+            config
+        ):
+            return (
+                load_psf_candidates(
+                    config
+                ),
+                True,
+            )
+
+        return (
+            run_psf_candidate_selection(
+                config
+            ),
+            False,
+        )
+
     def select_psf_candidates(self) -> Any:
         """Run empirical-PSF candidate selection.
+
+        An accepted candidate set is loaded instead of reselected, so this
+        stage can be repeated safely. Setting ``outputs.overwrite`` rebuilds
+        it.
 
         Returns
         -------
@@ -508,17 +647,25 @@ class BayMorphRunner:
                 == "empirical"
             }
 
-            self.psf_candidate_products = {
-                name: run_psf_candidate_selection(
+            candidates = {}
+
+            for name, observation_config in (
+                empirical_configs.items()
+            ):
+                (
+                    candidates[name],
+                    reused,
+                ) = self._select_one_psf_candidate_set(
                     observation_config
                 )
-                for name, observation_config
-                in empirical_configs.items()
-            }
 
-            self._status(
-                "Multi-observation PSF candidates selected"
-            )
+                self._stage_status(
+                    "PSF candidate selection",
+                    reused=reused,
+                    observation_name=name,
+                )
+
+            self.psf_candidate_products = candidates
 
             return self.psf_candidate_products
 
@@ -527,10 +674,11 @@ class BayMorphRunner:
             action="PSF candidate selection",
         )
 
-        self.psf_candidate_products = (
-            run_psf_candidate_selection(
-                self.config,
-            )
+        (
+            self.psf_candidate_products,
+            reused,
+        ) = self._select_one_psf_candidate_set(
+            self.config
         )
 
         try:
@@ -538,18 +686,55 @@ class BayMorphRunner:
                 self.psf_candidate_products
             )
         except TypeError:
-            self._status(
-                "PSF candidates selected"
+            self._stage_status(
+                "PSF candidate selection",
+                reused=reused,
             )
         else:
+            selection = (
+                "reused" if reused else "selected"
+            )
+
             self._status(
-                f"{n_candidates} PSF candidates selected"
+                f"{n_candidates} PSF candidates {selection}"
             )
 
         return self.psf_candidate_products
 
+    def _build_one_psf(
+        self,
+        config: Mapping[str, Any],
+    ) -> tuple[Any, bool]:
+        """Build one PSF, reusing an accepted kernel when present.
+
+        The loader validates the persisted kernel and its provenance before
+        returning it, and fails closed otherwise. Both paths return the PSF
+        image itself.
+        """
+        if self._reuses_products(
+            config
+        ) and empirical_psf_exists(
+            config
+        ):
+            return (
+                load_empirical_psf(
+                    config
+                ).kernel_array,
+                True,
+            )
+
+        return (
+            run_psf_construction(
+                config
+            ),
+            False,
+        )
+
     def build_psf(self) -> Any:
         """Build empirical PSFs for the configured observations.
+
+        An accepted PSF is loaded instead of rebuilt, so this stage can be
+        repeated safely. Setting ``outputs.overwrite`` rebuilds it.
 
         Returns
         -------
@@ -575,17 +760,25 @@ class BayMorphRunner:
                 == "empirical"
             }
 
-            self.psf_products = {
-                name: run_psf_construction(
+            psfs = {}
+
+            for name, observation_config in (
+                empirical_configs.items()
+            ):
+                (
+                    psfs[name],
+                    reused,
+                ) = self._build_one_psf(
                     observation_config
                 )
-                for name, observation_config
-                in empirical_configs.items()
-            }
 
-            self._status(
-                "Multi-observation empirical PSFs constructed"
-            )
+                self._stage_status(
+                    "empirical PSF",
+                    reused=reused,
+                    observation_name=name,
+                )
+
+            self.psf_products = psfs
 
             return self.psf_products
 
@@ -594,12 +787,16 @@ class BayMorphRunner:
             action="PSF construction",
         )
 
-        self.psf_products = run_psf_construction(
-            self.config,
+        (
+            self.psf_products,
+            reused,
+        ) = self._build_one_psf(
+            self.config
         )
 
-        self._status(
-            "Empirical PSF constructed"
+        self._stage_status(
+            "empirical PSF",
+            reused=reused,
         )
 
         return self.psf_products
@@ -912,39 +1109,8 @@ class BayMorphRunner:
         self.prepare_image()
 
         if self.is_multi_observation:
-            observation_configs = (
-                resolve_multi_observation_observation_configs(
-                    self.config,
-                    base_dir=self.config_base_dir,
-                )
-            )
-
-            empirical_configs = {
-                name: observation_config
-                for name, observation_config
-                in observation_configs.items()
-                if _observation_psf_type(
-                    observation_config
-                )
-                == "empirical"
-            }
-
-            if empirical_configs:
-                self.psf_candidate_products = {
-                    name: run_psf_candidate_selection(
-                        observation_config
-                    )
-                    for name, observation_config
-                    in empirical_configs.items()
-                }
-
-                self.psf_products = {
-                    name: run_psf_construction(
-                        observation_config
-                    )
-                    for name, observation_config
-                    in empirical_configs.items()
-                }
+            self.select_psf_candidates()
+            self.build_psf()
 
             result = self.fit()
 

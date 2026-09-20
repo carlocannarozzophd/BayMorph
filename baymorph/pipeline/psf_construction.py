@@ -253,6 +253,13 @@ def save_empirical_psf(
 
     overwrite = bool(config["outputs"].get("overwrite", False))
 
+    if path.exists() and not overwrite:
+        raise FileExistsError(
+            "Empirical PSF output already exists and overwrite is disabled: "
+            f"{path}. An accepted PSF is immutable; load it instead of "
+            "rebuilding it, or write to a new output namespace."
+        )
+
     data = np.asarray(psf, dtype=float)
     validate_empirical_psf(
         data,
@@ -264,6 +271,30 @@ def save_empirical_psf(
     fits.writeto(path, data, overwrite=overwrite)
 
     return path
+
+
+def empirical_psf_exists(
+    config: str | Path | dict[str, Any],
+) -> bool:
+    """Return whether a saved empirical PSF image exists on disk.
+
+    Parameters
+    ----------
+    config : dict, str, or pathlib.Path
+        Resolved configuration dictionary or path to a YAML configuration file.
+
+    Returns
+    -------
+    bool
+        True when the PSF image is present. Its provenance is validated,
+        fail-closed, by :func:`load_empirical_psf`.
+    """
+    if isinstance(config, (str, Path)):
+        resolved = load_resolved_config(config)
+    else:
+        resolved = config
+
+    return pipeline_paths(resolved)["psf"]["psf_fits"].is_file()
 
 
 def load_empirical_psf(

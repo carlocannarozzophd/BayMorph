@@ -84,10 +84,39 @@ def save_psf_candidates(
     make_output_tree(config)
     path = pipeline_paths(config)["psf"]["candidates"]
 
+    if path.exists() and not bool(config["outputs"].get("overwrite", False)):
+        raise FileExistsError(
+            "PSF candidate output already exists and overwrite is disabled: "
+            f"{path}"
+        )
+
     with path.open("w") as f:
         json.dump([asdict(candidate) for candidate in candidates], f, indent=2)
 
     return path
+
+
+def psf_candidates_exist(
+    config: str | Path | dict[str, Any],
+) -> bool:
+    """Return whether saved PSF candidates exist on disk.
+
+    Parameters
+    ----------
+    config : dict, str, or pathlib.Path
+        Resolved configuration dictionary or path to a YAML configuration file.
+
+    Returns
+    -------
+    bool
+        True when the candidate file is present.
+    """
+    if isinstance(config, (str, Path)):
+        resolved = load_resolved_config(config)
+    else:
+        resolved = config
+
+    return pipeline_paths(resolved)["psf"]["candidates"].is_file()
 
 
 def load_psf_candidates(
