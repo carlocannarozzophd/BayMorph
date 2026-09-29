@@ -63,10 +63,6 @@ def test_radial_profile_uses_full_rendered_background():
 
     background = _residual_background_image(
         PlaneBackgroundModel(),
-        {
-            "background_level": 999.0,
-            "sky": 999.0,
-        },
         shape,
     )
 
@@ -85,45 +81,6 @@ def test_radial_profile_uses_full_rendered_background():
     )
 
 
-def test_radial_profile_preserves_legacy_scalar_background():
-    """Legacy models must retain scalar-background diagnostics."""
-    background = _residual_background_image(
-        LegacyModel(),
-        {
-            "sky": 3.5,
-        },
-        (
-            4,
-            6,
-        ),
-    )
-
-    np.testing.assert_allclose(
-        background,
-        3.5,
-    )
-
-
-def test_background_level_precedes_legacy_sky_fallback():
-    """The new background name must take precedence when both are present."""
-    background = _residual_background_image(
-        LegacyModel(),
-        {
-            "background_level": 1.25,
-            "sky": 99.0,
-        },
-        (
-            3,
-            3,
-        ),
-    )
-
-    np.testing.assert_allclose(
-        background,
-        1.25,
-    )
-
-
 def test_radial_profile_rejects_wrong_background_shape():
     """Background and fitted-image grids must agree exactly."""
     with pytest.raises(
@@ -132,10 +89,24 @@ def test_radial_profile_rejects_wrong_background_shape():
     ):
         _residual_background_image(
             InvalidBackgroundModel(),
-            {},
             (
                 5,
                 5,
+            ),
+        )
+
+
+def test_radial_profile_rejects_models_without_background_rendering():
+    """A model that cannot render its background is not diagnosable."""
+    with pytest.raises(
+        TypeError,
+        match="render_background",
+    ):
+        _residual_background_image(
+            LegacyModel(),
+            (
+                4,
+                6,
             ),
         )
 

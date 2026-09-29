@@ -425,57 +425,45 @@ def _total_component_image(
 
 def _residual_background_image(
     model,
-    parameters: Mapping[str, Any],
     image_shape: tuple[int, int],
 ) -> np.ndarray:
     """Render the fitted residual background on one observation grid.
 
-    Observation-level background models expose ``render_background()``.
-    The scalar fallback preserves the current MultiObservation contract
-    until that workflow is migrated away from the legacy ``sky`` parameter.
+    Every production observed model applies its residual background as an
+    observation effect and exposes ``render_background()`` (AD-031). A model
+    without it cannot be diagnosed here, so the function fails closed.
     """
-    if hasattr(
+    if not hasattr(
         model,
         "render_background",
     ):
-        background = np.asarray(
-            model.render_background(
-                image_shape
-            ),
-            dtype=float,
+        raise TypeError(
+            "Radial diagnostics require an observed model exposing "
+            "render_background()."
         )
 
-        if background.shape != image_shape:
-            raise ValueError(
-                "Rendered background shape does not match the fitted image."
-            )
-
-        if not np.all(
-            np.isfinite(
-                background
-            )
-        ):
-            raise ValueError(
-                "Rendered background contains non-finite values."
-            )
-
-        return background
-
-    level = float(
-        parameters.get(
-            "background_level",
-            parameters.get(
-                "sky",
-                0.0,
-            ),
-        )
-    )
-
-    return np.full(
-        image_shape,
-        level,
+    background = np.asarray(
+        model.render_background(
+            image_shape
+        ),
         dtype=float,
     )
+
+    if background.shape != image_shape:
+        raise ValueError(
+            "Rendered background shape does not match the fitted image."
+        )
+
+    if not np.all(
+        np.isfinite(
+            background
+        )
+    ):
+        raise ValueError(
+            "Rendered background contains non-finite values."
+        )
+
+    return background
 
 
 def _run_single_observation_radial_profiles(
@@ -559,7 +547,6 @@ def _run_single_observation_radial_profiles(
 
         residual_background = _residual_background_image(
             best_model,
-            fit.best_parameters,
             image_products.prepared_data.shape,
         )
 
@@ -860,7 +847,6 @@ def _run_multi_observation_radial_profiles(
 
             residual_background = _residual_background_image(
                 best_model,
-                observation_fit.parameters,
                 image_products.prepared_data.shape,
             )
 

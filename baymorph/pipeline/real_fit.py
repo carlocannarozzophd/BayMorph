@@ -1976,37 +1976,4 @@ _object_label = object_label
 _fit_diagnostic_title = fit_diagnostic_title
 
 
-def _run_sampler(
-    data_fit,
-    noise_fit,
-    mask_fit,
-    parameters,
-    model_factory,
-    likelihood_cfg,
-    sampler_cfg,
-    *,
-    correlation_kernel_fit=None,
-    progress_label: str | None = None,
-):
-    """Build an inference problem and run one configured backend."""
-    problem = _build_image_inference_problem(
-        model_factory=model_factory,
-        parameters=parameters,
-        likelihood_cfg=likelihood_cfg,
-        data_fit=data_fit,
-        noise_fit=noise_fit,
-        mask_fit=mask_fit,
-        correlation_kernel_fit=correlation_kernel_fit,
-    )
-
-    backend = make_sampler(
-        sampler_cfg,
-        problem=problem,
-    )
-
-    return backend.fit(
-        progress_label=progress_label,
-    )
-
-
 _diagnostic_title = diagnostic_title

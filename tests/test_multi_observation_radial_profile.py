@@ -48,6 +48,16 @@ class _Representation:
             ),
         }
 
+    def render_background(
+        self,
+        shape,
+    ):
+        """Mirror the production contract: an explicit residual background."""
+        return np.zeros(
+            shape,
+            dtype=float,
+        )
+
 
 class _RepresentationFactory:
     """Observation-aware representation test double."""
@@ -201,7 +211,7 @@ def test_multi_observation_radial_profiles_use_detector_geometries(
                 "y0": 11.0,
                 "q": 0.45,
                 "theta": 0.30,
-                "sky": 1.0,
+                "background_level": 1.0,
             },
         ),
         "repeat_02": SimpleNamespace(
@@ -210,7 +220,7 @@ def test_multi_observation_radial_profiles_use_detector_geometries(
                 "y0": 14.0,
                 "q": 0.72,
                 "theta": -0.55,
-                "sky": 2.0,
+                "background_level": 2.0,
             },
         ),
     }

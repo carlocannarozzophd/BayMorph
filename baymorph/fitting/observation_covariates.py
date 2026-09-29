@@ -141,60 +141,6 @@ def wavelength_covariate(
     }
 
 
-def wavelength_correlation_matrix(
-    observations: Mapping[str, Mapping[str, object]],
-    *,
-    correlation: float,
-    length_scale: float,
-) -> tuple[tuple[str, ...], np.ndarray]:
-    """Build a wavelength-dependent observation correlation matrix.
-
-    Parameters
-    ----------
-    observations : mapping
-        Observation configuration entries containing explicit wavelength
-        covariates.
-    correlation : float
-        Smooth correlation amplitude in [0, 1].
-    length_scale : float
-        Positive correlation length in centered log-wavelength coordinates.
-
-    Returns
-    -------
-    names : tuple of str
-        Observation names in matrix order.
-    matrix : numpy.ndarray
-        Wavelength-dependent correlation matrix.
-    """
-    from baymorph.fitting.hierarchical import (
-        squared_exponential_correlation_matrix,
-    )
-
-    coordinates = wavelength_covariate(
-        observations
-    )
-
-    names = tuple(
-        coordinates
-    )
-
-    values = np.asarray(
-        [
-            coordinates[name]
-            for name in names
-        ],
-        dtype=float,
-    )
-
-    matrix = squared_exponential_correlation_matrix(
-        values,
-        correlation=correlation,
-        length_scale=length_scale,
-    )
-
-    return names, matrix
-
-
 def wavelength_reference_correlation_matrix(
     observations: Mapping[str, Mapping[str, object]],
     *,

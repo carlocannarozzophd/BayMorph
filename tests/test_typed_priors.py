@@ -66,12 +66,6 @@ def test_fixed_parameter_does_not_contribute_sampled_dimension():
     assert transformed == pytest.approx(
         np.array([1.5])
     )
-    assert parameters.complete_values(
-        transformed
-    ) == {
-        "flux": pytest.approx(1.5),
-        "x0": pytest.approx(15.5),
-    }
 
 
 def test_normal_prior_maps_median_to_mean():

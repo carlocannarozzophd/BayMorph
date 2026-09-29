@@ -187,39 +187,3 @@ class RealFitProducts:
             self.profile_model,
             ax=ax,
         )
-
-    def report(
-        self,
-        observation: Any,
-        **kwargs,
-    ):
-        """Plot a high-level mock-fit report.
-
-        Parameters
-        ----------
-        observation : object
-            Observation object passed to
-            :func:`baymorph.plotting.plot_mock_fit_report`.
-        **kwargs
-            Additional keyword arguments passed to
-            :func:`baymorph.plotting.plot_mock_fit_report`.
-
-        Returns
-        -------
-        tuple
-            Figure and axes returned by
-            :func:`baymorph.plotting.plot_mock_fit_report`.
-        """
-        from baymorph.plotting import (
-            plot_mock_fit_report,
-        )
-
-        return plot_mock_fit_report(
-            observation=observation,
-            fit=self,
-            noise_map=self.noise,
-            statistics=self.statistics,
-            corner_plotter=lambda ax: self.corner(ax=ax),
-            radial_profile_plotter=lambda ax: self.radial_profile(ax=ax),
-            **kwargs,
-        )

@@ -234,37 +234,3 @@ class ParameterSet:
             ],
             dtype=float,
         )
-
-    def complete_values(
-        self,
-        sampled_values,
-    ) -> dict[str, float]:
-        """Reconstruct all model parameters from one sampled vector."""
-        values = np.asarray(
-            sampled_values,
-            dtype=float,
-        )
-
-        if values.shape != (self.ndim,):
-            raise ValueError(
-                "Sampled vector must contain one value per sampled "
-                "parameter."
-            )
-
-        sampled = {
-            parameter.name: float(value)
-            for parameter, value in zip(
-                self.parameters,
-                values,
-                strict=True,
-            )
-        }
-
-        return {
-            parameter.name: (
-                parameter.fixed_value
-                if parameter.is_fixed
-                else sampled[parameter.name]
-            )
-            for parameter in self.all_parameters
-        }

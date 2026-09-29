@@ -6,10 +6,6 @@ from baymorph.fitting.dynesty import (
 from baymorph.fitting.emcee import (
     EmceeFitter,
 )
-from baymorph.fitting.grid import (
-    GridSearchResult,
-    grid_search_1d,
-)
 from baymorph.fitting.model_factories import (
     ObservedModelFactory,
     make_bulge_disk_psf_model,
@@ -40,7 +36,6 @@ __all__ = [
     "DynestyFitter",
     "EmceeFitter",
     "FixedPrior",
-    "GridSearchResult",
     "LogUniformPrior",
     "NormalPrior",
     "ObservedModelFactory",
@@ -49,7 +44,6 @@ __all__ = [
     "PocoMCFitter",
     "Prior",
     "UniformPrior",
-    "grid_search_1d",
     "make_bulge_disk_psf_model",
     "make_double_sersic_psf_model",
     "make_sampler",

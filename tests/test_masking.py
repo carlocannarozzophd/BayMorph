@@ -1,11 +1,10 @@
+"""Tests for the source mask produced by segmentation detection."""
 
 from baymorph import SyntheticSersic
-from baymorph.core import detect_sources_mask
+from baymorph.core import detect_sources_segmentation
 
 
-
-def test_detect_sources_mask():
-
+def test_detection_mask_covers_the_source():
     galaxy = SyntheticSersic(
         flux=1000,
         re=8,
@@ -20,9 +19,9 @@ def test_detect_sources_mask():
         shape=(100, 100)
     )
 
-    mask = detect_sources_mask(
+    mask = detect_sources_segmentation(
         image,
-    )
+    ).mask
 
     assert mask.shape == image.shape
 

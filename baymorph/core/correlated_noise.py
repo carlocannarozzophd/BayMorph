@@ -283,13 +283,6 @@ def calibrate_correlated_gaussian_noise(
     )
 
 
-def _mad_sigma(
-    values: np.ndarray,
-) -> float:
-    """Return a Gaussian-equivalent MAD scale."""
-    return robust_sigma(values)
-
-
 def _fit_planar_residual(
     data: np.ndarray,
     mask: np.ndarray,
@@ -407,7 +400,7 @@ def _fit_marginal_sigma_field(
                 local_mask,
             )
 
-            sigma = _mad_sigma(
+            sigma = robust_sigma(
                 residual[local_mask]
             )
 
@@ -633,7 +626,7 @@ def _estimate_correlation_kernel(
                 ),
             )
 
-            sigma = _mad_sigma(
+            sigma = robust_sigma(
                 residual
             )
 

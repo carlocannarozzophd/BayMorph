@@ -85,6 +85,7 @@ and the project follows Semantic Versioning in spirit.
 
 ### Removed
 
+* Dead or superseded code identified by the 2026-09-29 audit: the `SkyEllipseParameterTransform` module, the mock fit report (`plot_mock_fit_report` and `RealFitProducts.report`), the one-dimensional grid search, the interactive `ObservationAdvisor.configure` flow with its prompt and audit printers, the separate lower- and upper-bound flux calibrators superseded by `calibrate_single_sersic_flux_prior`, the legacy inference-archive loader, the unused `_run_sampler` helper, `ParameterSet.complete_values`, `MultiObservationParameterSpec.observation_specific`, `wavelength_correlation_matrix`, `detect_sources_mask`, and the scalar-sky fallback of the radial diagnostics, which now require an observed model exposing `render_background()`.
 * The `sky` model-level parameter, `SkyModelWrapper`, the prior-boundary alias mapping `background_level` to `sky`, and the `sky` prior requirement of the prior-predictive flux calibration, which demanded a prior that the configuration contract forbids and therefore always failed.
 * The `data.external_mask_path` and `data.cutout_size` configuration shims, the `profile_noise` argument of the radial-profile plot, and the readable legacy (`format_version`-less) inference archives, which now fail closed with a message asking for a rerun.
 * Experimental native nested-sampler runtime and its production integration.

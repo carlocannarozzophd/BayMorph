@@ -76,18 +76,6 @@ class MultiObservationParameterSpec:
         )
 
     @classmethod
-    def observation_specific(
-        cls,
-        name: str,
-        parameters: Mapping[str, Parameter],
-    ) -> MultiObservationParameterSpec:
-        """Create an observation-specific parameter specification."""
-        return cls.independent(
-            name=name,
-            parameters=parameters,
-        )
-
-    @classmethod
     def hierarchical(
         cls,
         name: str,

@@ -16,9 +16,6 @@ from baymorph.plotting.posterior import (
 from baymorph.plotting.radial import (
     plot_radial_profile_diagnostics,
 )
-from baymorph.plotting.report import (
-    plot_mock_fit_report,
-)
 from baymorph.plotting.residual import (
     plot_data_model_residual,
 )
@@ -39,7 +36,6 @@ __all__ = [
     "plot_data_model_residual",
     "plot_log_data_model_residual",
     "plot_log_image",
-    "plot_mock_fit_report",
     "plot_radial_profile_diagnostics",
     "set_plot_style",
     "show_log_image",
