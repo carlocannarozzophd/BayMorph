@@ -83,7 +83,7 @@ def _parameter_config() -> dict:
                 "upper": 20.0,
             },
         },
-        "sky": {
+        "background_level": {
             "coupling": "independent",
             "priors": {
                 "g": {
@@ -207,7 +207,7 @@ def test_build_layout_preserves_order_and_typed_priors():
         "theta",
         "x0",
         "y0",
-        "sky__r",
+        "background_level__r",
     ]
 
     assert (
@@ -216,7 +216,7 @@ def test_build_layout_preserves_order_and_typed_priors():
             "n": pytest.approx(
                 2.5
             ),
-            "sky__g": pytest.approx(
+            "background_level__g": pytest.approx(
                 0.0
             ),
         }
@@ -246,12 +246,12 @@ def test_build_layout_requires_every_model_parameter():
         config["fit"]
         ["multi_observation"]
         ["parameters"]
-        ["sky"]
+        ["background_level"]
     )
 
     with pytest.raises(
         ValueError,
-        match=r"Missing: \['sky'\]",
+        match=r"Missing: \['background_level'\]",
     ):
         build_multi_observation_parameter_layout(
             config
@@ -409,7 +409,7 @@ def test_effective_radius_can_be_observation_specific():
             "theta": 0.2,
             "x0": 15.0,
             "y0": 15.0,
-            "sky__r": 1.0,
+            "background_level__r": 1.0,
         }
     )
 
@@ -494,7 +494,7 @@ def test_sky_parameter_frame_builds_distinct_scientific_state():
         "position_angle",
         "ra",
         "dec",
-        "sky__r",
+        "background_level__r",
     ]
 
     assert "re" not in layout.parameter_set.all_names
@@ -536,6 +536,109 @@ def test_multi_observation_parameter_frame_rejects_unknown_frame():
         )
 
 
+def _independent_background() -> dict:
+    return {
+        "coupling": "independent",
+        "priors": {
+            observation: {
+                "type": "uniform",
+                "lower": -5.0,
+                "upper": 5.0,
+            }
+            for observation in (
+                "g",
+                "r",
+            )
+        },
+    }
+
+
+def test_background_parameters_must_be_observation_specific():
+    config = _multi_observation_config()
+
+    config["fit"]["multi_observation"]["parameters"][
+        "background_level"
+    ] = {
+        "coupling": "shared",
+        "prior": {
+            "type": "uniform",
+            "lower": -5.0,
+            "upper": 5.0,
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="independent",
+    ):
+        build_multi_observation_parameter_layout(
+            config
+        )
+
+
+def test_legacy_sky_parameter_is_rejected_with_migration_hint():
+    config = _multi_observation_config()
+
+    parameters = config["fit"]["multi_observation"]["parameters"]
+    parameters["sky"] = parameters.pop(
+        "background_level"
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="legacy 'sky' parameter",
+    ):
+        build_multi_observation_parameter_layout(
+            config
+        )
+
+
+def test_plane_background_extends_the_joint_parameter_contract():
+    config = _multi_observation_config()
+
+    config["fit"]["background"] = {
+        "model": "plane",
+    }
+
+    parameters = config["fit"]["multi_observation"]["parameters"]
+
+    for name in (
+        "background_gradient_x",
+        "background_gradient_y",
+    ):
+        parameters[name] = _independent_background()
+
+    layout = build_multi_observation_parameter_layout(
+        config
+    )
+
+    assert layout.parameter_set.all_names[-6:] == [
+        "background_level__g",
+        "background_level__r",
+        "background_gradient_x__g",
+        "background_gradient_x__r",
+        "background_gradient_y__g",
+        "background_gradient_y__r",
+    ]
+
+
+def test_joint_background_section_declares_only_the_model_family():
+    config = _multi_observation_config()
+
+    config["fit"]["background"] = {
+        "model": "constant",
+        "priors": {},
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="accepts only 'model'",
+    ):
+        build_multi_observation_parameter_layout(
+            config
+        )
+
+
 def test_detector_frame_uses_registered_model_parameter_contract():
     from baymorph.models import get_model
 
@@ -564,6 +667,9 @@ def test_detector_frame_uses_registered_model_parameter_contract():
         }
         for name in model_parameters
     }
+    config["fit"]["multi_observation"]["parameters"][
+        "background_level"
+    ] = _independent_background()
 
     layout = build_multi_observation_parameter_layout(
         config
@@ -571,6 +677,10 @@ def test_detector_frame_uses_registered_model_parameter_contract():
 
     assert layout.parameter_set.all_names == (
         model_parameters
+        + [
+            "background_level__g",
+            "background_level__r",
+        ]
     )
 
 
@@ -605,6 +715,9 @@ def test_sky_frame_uses_registered_model_geometry_contract():
         }
         for name in names
     }
+    config["fit"]["multi_observation"]["parameters"][
+        "background_level"
+    ] = _independent_background()
 
     layout = build_multi_observation_parameter_layout(
         config
@@ -612,7 +725,10 @@ def test_sky_frame_uses_registered_model_geometry_contract():
 
     assert layout.parameter_set.all_names == list(
         names
-    )
+    ) + [
+        "background_level__g",
+        "background_level__r",
+    ]
 
 
 def test_effective_radius_can_use_physical_prior_hierarchically():
@@ -659,7 +775,7 @@ def test_effective_radius_can_use_physical_prior_hierarchically():
             "theta": 0.2,
             "x0": 15.0,
             "y0": 15.0,
-            "sky__r": 1.0,
+            "background_level__r": 1.0,
         }
     )
 
@@ -770,7 +886,7 @@ def test_radius_and_axis_ratio_preserve_physical_priors_hierarchically():
             "theta": 0.2,
             "x0": 15.0,
             "y0": 15.0,
-            "sky__r": 1.0,
+            "background_level__r": 1.0,
         }
     )
 
@@ -869,7 +985,7 @@ def test_re_n_q_can_be_hierarchical_with_shared_axial_angle():
             "theta": 0.3,
             "x0": 15.0,
             "y0": 15.0,
-            "sky__r": 1.0,
+            "background_level__r": 1.0,
         }
     )
 
@@ -1019,7 +1135,7 @@ def test_wavelength_coupling_builds_from_observation_covariates():
             "theta": 0.0,
             "x0": 15.0,
             "y0": 15.0,
-            "sky__r": 0.0,
+            "background_level__r": 0.0,
         }
     )
 

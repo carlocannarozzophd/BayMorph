@@ -69,11 +69,6 @@ def _priors():
             "upper": 1.0,
             "relative_to": "target_y",
         },
-        "sky": {
-            "type": "uniform",
-            "lower": -1.0,
-            "upper": 1.0,
-        },
     }
 
 
@@ -551,7 +546,7 @@ def test_joint_flux_prior_calibration_renders_one_ensemble(
 
     calls = 0
 
-    original = module.make_single_sersic_psf_sky_model
+    original = module.make_single_sersic_psf_model
 
     def counted_factory(
         **kwargs,
@@ -566,7 +561,7 @@ def test_joint_flux_prior_calibration_renders_one_ensemble(
 
     monkeypatch.setattr(
         module,
-        "make_single_sersic_psf_sky_model",
+        "make_single_sersic_psf_model",
         counted_factory,
     )
 

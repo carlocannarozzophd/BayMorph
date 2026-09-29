@@ -56,6 +56,18 @@ runs/
 /docs/research/figures/
 
 # ------------------------------------------------------------------
+# Real-object configurations
+#
+# Configurations naming a real target stay local: the public repository is
+# object-neutral (see tests/test_public_source_boundary.py).
+# ------------------------------------------------------------------
+
+/configs/PGC*
+/configs/NGC*
+/configs/UGC*
+/configs/IC*
+
+# ------------------------------------------------------------------
 # Sampler checkpoints
 # ------------------------------------------------------------------
 

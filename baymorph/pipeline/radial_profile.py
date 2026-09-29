@@ -17,13 +17,11 @@ from baymorph.analysis import (
 from baymorph.analysis.radial_profiles import (
     radial_profile_statistics_from_image,
 )
-from baymorph.pipeline.config import (
-    load_config,
-    load_resolved_config,
-    resolve_config,
-)
-from baymorph.pipeline.corner import (
-    _posterior_samples,
+from baymorph.pipeline.diagnostics_common import (
+    diagnostic_title as _diagnostic_title,
+    object_label as _object_label,
+    posterior_samples as _posterior_samples,
+    resolve_diagnostic_config,
 )
 from baymorph.pipeline.image_preparation import (
     load_image_preparation_products,
@@ -41,10 +39,8 @@ from baymorph.pipeline.psf_construction import (
     estimate_psf_core_fwhm,
 )
 from baymorph.pipeline.real_fit import (
-    _diagnostic_title,
     _load_psf_from_config as _load_fit_psf_from_config,
     _make_model_factory,
-    _object_label,
 )
 from baymorph.plotting.radial import (
     plot_radial_profile_diagnostics,
@@ -62,7 +58,6 @@ def _load_psf_from_config(config):
         return _load_fit_psf_from_config(config)
     except FileNotFoundError:
         return None
-
 
 
 def _psf_fwhm_pixels(
@@ -205,8 +200,7 @@ def _make_multi_observation_sample_model_factory(
 
 def _compute_posterior_profiles(
     fit,
-    model_name,
-    psf,
+    model_factory,
     image_shape,
     radii,
     *,
@@ -216,17 +210,18 @@ def _compute_posterior_profiles(
     position_angle,
     mask,
 ):
-    """Compute single-observation posterior profiles on fixed annuli."""
+    """Compute single-observation posterior profiles on fixed annuli.
+
+    The caller supplies the observed model factory it already built from the
+    configuration. Rebuilding one here would silently fall back to the
+    default residual-background model, and a posterior sampled with a plane
+    background would then be rejected by a constant-background constructor.
+    """
     if fit.posterior is None:
         return None
 
     parameter_names = list(
         fit.posterior.parameter_names
-    )
-
-    model_factory = _make_model_factory(
-        model_name,
-        psf,
     )
 
     sample_model_factory = _make_sample_model_factory(
@@ -249,67 +244,7 @@ def _compute_posterior_profiles(
     )
 
 
-def _resolve_radial_config(
-    config: str | Path | Mapping[str, Any],
-) -> tuple[
-    dict[str, Any],
-    bool,
-    Path,
-]:
-    """Resolve configuration and identify single or multi-observation mode."""
-    if isinstance(
-        config,
-        (str, Path),
-    ):
-        path = Path(
-            config
-        )
-
-        raw_config = load_config(
-            path
-        )
-
-        if "observations" in raw_config:
-            return (
-                raw_config,
-                True,
-                path.parent,
-            )
-
-        return (
-            load_resolved_config(
-                path
-            ),
-            False,
-            path.parent,
-        )
-
-    if isinstance(
-        config,
-        Mapping,
-    ):
-        raw_config = dict(
-            config
-        )
-
-        if "observations" in raw_config:
-            return (
-                raw_config,
-                True,
-                Path.cwd(),
-            )
-
-        return (
-            resolve_config(
-                raw_config
-            ),
-            False,
-            Path.cwd(),
-        )
-
-    raise TypeError(
-        "config must be a path or a mapping."
-    )
+_resolve_radial_config = resolve_diagnostic_config
 
 
 def _radial_configuration(
@@ -689,8 +624,7 @@ def _run_single_observation_radial_profiles(
         ):
             profile_bands = _compute_posterior_profiles(
                 fit=fit,
-                model_name=model_name,
-                psf=psf,
+                model_factory=model_factory,
                 image_shape=image_products.prepared_data.shape,
                 radii=radii,
                 center_x=center_x,

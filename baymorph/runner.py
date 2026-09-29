@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Literal
 
+from baymorph.likelihood.factory import normalize_likelihood_type
 from baymorph.pipeline import (
     run_image_preparation,
     run_psf_candidate_selection,
@@ -821,13 +822,7 @@ class BayMorphRunner:
                 "fit.likelihood must be a string or mapping."
             )
 
-        normalized_type = str(likelihood_type).strip().lower()
-        if normalized_type not in {
-            "correlated_gaussian",
-            "correlated-gaussian",
-            "gaussian_correlated",
-            "gaussian-correlated",
-        }:
+        if normalize_likelihood_type(likelihood_type) != "correlated_gaussian":
             return
         if not isinstance(likelihood_config, Mapping):
             raise TypeError(

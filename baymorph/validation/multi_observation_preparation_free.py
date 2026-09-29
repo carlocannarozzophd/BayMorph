@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 from astropy.wcs import WCS
 
-from baymorph.fitting import make_sampler, make_single_sersic_psf_sky_model
+from baymorph.fitting import ObservedModelFactory, make_sampler
 from baymorph.fitting.multi_observation_problem import MultiObservationInferenceProblem
 from baymorph.fitting.representations import RepresentationFactory
 from baymorph.likelihood import GaussianImageLikelihood
@@ -163,7 +163,10 @@ def build_preparation_free_multi_observation_case(
         )
 
     representation_factory = RepresentationFactory(
-        factory=make_single_sersic_psf_sky_model,
+        factory=ObservedModelFactory(
+            truth.model_name,
+            background_model="constant",
+        ),
         fixed_kwargs=fixed_kwargs,
         parameter_transforms=transforms,
     )
@@ -189,8 +192,8 @@ def build_preparation_free_multi_observation_case(
         noise_map = np.full(shape, sigma, dtype=float)
         rng = np.random.default_rng(noise_seeds[observation_name])
 
-        # This direct control models residual sky, not the raw detector
-        # background removed by the end-to-end preparation workflow.
+        # This direct control models the residual background, not the raw
+        # detector background removed by the end-to-end preparation workflow.
         observed = noiseless + rng.normal(
             loc=0.0,
             scale=sigma,

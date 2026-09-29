@@ -9,7 +9,11 @@ from collections.abc import Sequence
 import numpy as np
 
 from baymorph.validation.reference import ReferenceValidationCase
-from baymorph.validation.run import ValidationRun
+from baymorph.validation.run import (
+    ValidationRun,
+    posterior_mean,
+    required_logz,
+)
 
 from baymorph.validation.metrics import bias, coverage_fraction, scatter
 from baymorph.validation.recovery import RecoveryResult
@@ -288,32 +292,10 @@ def validate_result(
     )
 
 
-
-def _required_logz(
-    run: ValidationRun,
-) -> float:
-    """Return validation-run evidence, requiring it to exist."""
-    logz = run.result.logz
-
-    if logz is None:
-        raise ValueError(
-            "Validation requires Bayesian evidence for this case."
-        )
-
-    return float(
-        logz
-    )
+_required_logz = required_logz
 
 
-def _posterior_mean(
-    run: ValidationRun,
-) -> np.ndarray:
-    """Return the weighted posterior mean of one validation run."""
-    return np.average(
-        run.result.samples,
-        axis=0,
-        weights=run.result.weights,
-    )
+_posterior_mean = posterior_mean
 
 
 def _posterior_covariance(

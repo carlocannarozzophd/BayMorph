@@ -46,7 +46,7 @@ def test_single_sersic_transform_is_geometry_driven():
             "position_angle": 0.2,
             "flux": 500.0,
             "n": 2.5,
-            "sky": 1.0,
+            "background_level": 1.0,
         }
     )
 
@@ -91,7 +91,7 @@ def test_bulge_disk_transform_handles_two_ellipses():
             "flux_bulge": 300.0,
             "n_bulge": 3.0,
             "flux_disk": 700.0,
-            "sky": 0.5,
+            "background_level": 0.5,
         }
     )
 
@@ -122,7 +122,7 @@ def test_bulge_disk_transform_handles_two_ellipses():
     assert result["flux_disk"] == pytest.approx(
         700.0
     )
-    assert result["sky"] == pytest.approx(
+    assert result["background_level"] == pytest.approx(
         0.5
     )
 
@@ -152,7 +152,7 @@ def test_sersic_point_source_uses_shared_transformed_centre():
             "flux_sersic": 700.0,
             "n": 2.0,
             "flux_point_source": 100.0,
-            "sky": 0.0,
+            "background_level": 0.0,
         }
     )
 
@@ -192,7 +192,7 @@ def test_double_sersic_transform_handles_two_ellipses():
             "n_bulge": 3.5,
             "flux_disk": 700.0,
             "n_disk": 1.2,
-            "sky": 0.5,
+            "background_level": 0.5,
         }
     )
 

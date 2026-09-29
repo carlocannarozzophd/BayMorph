@@ -499,7 +499,7 @@ class InferenceResult:
         cls,
         path: str | Path,
     ) -> InferenceResult:
-        """Load a canonical or legacy BayMorph inference result."""
+        """Load a canonical BayMorph inference-result archive."""
         input_path = Path(path)
 
         with np.load(
@@ -510,14 +510,17 @@ class InferenceResult:
                 archive.files
             )
 
-            if "format_version" in files:
-                return cls._load_v2(
-                    archive
+            if "format_version" not in files:
+                raise ValueError(
+                    f"{input_path} is not a BayMorph inference-result "
+                    "archive: it has no 'format_version' entry. Legacy "
+                    "posterior archives are no longer readable; rerun the "
+                    "fit to produce the canonical format."
                 )
 
-        return cls._load_legacy(
-            input_path
-        )
+            return cls._load_v2(
+                archive
+            )
 
     @classmethod
     def _load_v2(

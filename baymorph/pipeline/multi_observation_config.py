@@ -17,6 +17,7 @@ from baymorph.fitting.observation_covariates import (
 from baymorph.fitting.parameters import Parameter
 from baymorph.models import get_model
 from baymorph.models.geometry import sky_parameter_names
+from baymorph.observation.background import background_parameter_names
 from baymorph.pipeline.config import (
     load_config,
     resolve_config,
@@ -24,17 +25,6 @@ from baymorph.pipeline.config import (
 from baymorph.pipeline.prior_config import (
     _require_exact_keys,
     parse_prior_config,
-)
-
-SINGLE_SERSIC_PARAMETER_NAMES = (
-    "flux",
-    "re",
-    "n",
-    "q",
-    "theta",
-    "x0",
-    "y0",
-    "sky",
 )
 
 
@@ -104,9 +94,9 @@ def resolve_multi_observation_observation_configs(
             global_likelihood,
             "Multi-observation fit.likelihood",
         )
-    _constant_background(
-        fit_config,
-        "Multi-observation fit",
+
+    background_model = multi_observation_background_model(
+        config
     )
 
     resolved: dict[
@@ -235,11 +225,13 @@ def resolve_multi_observation_observation_configs(
                 "fit"
             ] = observation_fit
 
-        item = resolve_config(raw_observation_config)
-        _constant_background(
-            item["fit"],
-            f"Observation '{observation}' fit",
+        _require_consistent_child_background(
+            observation_fit,
+            observation=observation,
+            background_model=background_model,
         )
+
+        item = resolve_config(raw_observation_config)
         _joint_likelihood(
             item["fit"]["likelihood"],
             f"Observation '{observation}' resolved fit.likelihood",
@@ -262,25 +254,121 @@ def _joint_likelihood(value, context):
         )
 
 
-def _constant_background(fit, context):
-    background = fit.get("background")
-    if background is None:
-        if "background" in fit:
-            raise TypeError(
-                f"{context}.background must be a mapping."
-            )
-        return
-    if not isinstance(background, Mapping):
+def multi_observation_background_model(
+    config: Mapping[str, Any],
+) -> str:
+    """Return the residual-background family of one joint configuration.
+
+    The joint ``fit.background`` section declares only the background
+    model family shared by every observation. The per-observation
+    background priors are declared, like every other sampled parameter,
+    under ``fit.multi_observation.parameters`` with independent coupling
+    (AD-031, AD-044).
+    """
+    fit_config = config.get(
+        "fit",
+        {},
+    )
+
+    if not isinstance(
+        fit_config,
+        Mapping,
+    ):
         raise TypeError(
-            f"{context}.background must be a mapping."
+            "Multi-observation fit configuration must be a mapping."
         )
-    model = str(
-        background.get("model", "constant")
-    ).strip().lower()
-    if model != "constant":
+
+    background = fit_config.get(
+        "background"
+    )
+
+    if background is None:
+        if "background" in fit_config:
+            raise TypeError(
+                "Multi-observation fit.background must be a mapping."
+            )
+
+        return "constant"
+
+    if not isinstance(
+        background,
+        Mapping,
+    ):
+        raise TypeError(
+            "Multi-observation fit.background must be a mapping."
+        )
+
+    unsupported = sorted(
+        set(
+            background
+        ).difference(
+            {
+                "model",
+            }
+        )
+    )
+
+    if unsupported:
         raise ValueError(
-            f"{context}.background.model must be 'constant' "
-            "for joint inference."
+            "Multi-observation fit.background accepts only 'model'. "
+            "Per-observation background priors belong under "
+            "fit.multi_observation.parameters with independent coupling. "
+            f"Unsupported entries: {unsupported}."
+        )
+
+    model = str(
+        background.get(
+            "model",
+            "constant",
+        )
+    ).strip().lower()
+
+    background_parameter_names(
+        model
+    )
+
+    return model
+
+
+def _require_consistent_child_background(
+    observation_fit: Mapping[str, Any],
+    *,
+    observation: str,
+    background_model: str,
+) -> None:
+    """Reject a child configuration declaring a different background family."""
+    background = observation_fit.get(
+        "background"
+    )
+
+    if background is None:
+        return
+
+    if not isinstance(
+        background,
+        Mapping,
+    ):
+        raise TypeError(
+            f"Observation '{observation}' fit.background must be a mapping."
+        )
+
+    child_model = background.get(
+        "model"
+    )
+
+    if child_model is None:
+        return
+
+    child_model = str(
+        child_model
+    ).strip().lower()
+
+    if child_model != background_model:
+        raise ValueError(
+            f"Observation '{observation}' declares fit.background.model "
+            f"{child_model!r} but the joint configuration uses "
+            f"{background_model!r}. One joint problem has one background "
+            "family; declare it in the joint fit.background section."
         )
 
 
@@ -423,13 +511,26 @@ def build_multi_observation_parameter_layout(
     )
 
     if parameter_frame == "sky":
-        parameter_names = sky_parameter_names(
+        morphology_names = sky_parameter_names(
             model_name
         )
     else:
-        parameter_names = tuple(
+        morphology_names = tuple(
             model_definition.parameter_names
         )
+
+    background_names = background_parameter_names(
+        multi_observation_background_model(
+            config
+        )
+    )
+
+    parameter_names = (
+        tuple(
+            morphology_names
+        )
+        + background_names
+    )
 
     supplied = set(
         parameters
@@ -450,22 +551,46 @@ def build_multi_observation_parameter_layout(
             )
         )
 
+        hint = ""
+
+        if "sky" in supplied:
+            hint = (
+                " The legacy 'sky' parameter is no longer supported: "
+                "declare the residual background as 'background_level' "
+                "with independent coupling (AD-044)."
+            )
+
         raise ValueError(
             "Multi-observation model parameters must be "
             "defined exactly. "
             f"Missing: {missing}. Extra: {extra}."
+            + hint
         )
 
-    specifications = [
-        _parse_parameter_specification(
+    specifications = []
+
+    for name in parameter_names:
+        specification = _parse_parameter_specification(
             name=name,
             config=parameters[
                 name
             ],
             observations=observations,
         )
-        for name in parameter_names
-    ]
+
+        if (
+            name in background_names
+            and specification.coupling != "independent"
+        ):
+            raise ValueError(
+                f"Residual-background parameter '{name}' must use "
+                "'independent' coupling: each observation retains its own "
+                "residual background (AD-044)."
+            )
+
+        specifications.append(
+            specification
+        )
 
     uses_wavelength_coupling = any(
         specification.coupling == "wavelength"
@@ -776,8 +901,8 @@ def _parse_parameter_specification(
 
 
 __all__ = [
-    "SINGLE_SERSIC_PARAMETER_NAMES",
     "build_multi_observation_parameter_layout",
+    "multi_observation_background_model",
     "multi_observation_parameter_frame",
     "parse_prior_config",
     "resolve_multi_observation_config",

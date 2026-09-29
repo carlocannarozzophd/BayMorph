@@ -7,13 +7,11 @@ from typing import Any
 
 import numpy as np
 
-from baymorph.models import (
-    parameter_names,
-    registered_models,
-)
+from baymorph.models import registered_models
 from baymorph.pipeline.prior_config import parse_prior_config
 from baymorph.validation.model_screening_simulation import (
     ModelScreeningSimulationCase,
+    screening_parameter_names,
     simulate_model_screening_case,
 )
 
@@ -80,7 +78,7 @@ def _validate_model_priors(
 
     for model_name in registered_models():
         expected_parameters = set(
-            parameter_names(
+            screening_parameter_names(
                 model_name
             )
         )
@@ -223,7 +221,7 @@ def generate_model_screening_cases(
                     rng=rng,
                     references=references,
                 )
-                for parameter_name in parameter_names(
+                for parameter_name in screening_parameter_names(
                     model_name
                 )
             }
@@ -281,7 +279,7 @@ CONTROLLED_POPULATION_PRIOR_NAMES = (
     "point_source_fraction",
     "centroid_x_offset_pixels",
     "centroid_y_offset_pixels",
-    "sky",
+    "background_level",
     "psf_fwhm_pixels",
     "noise_sigma",
 )
@@ -505,7 +503,7 @@ def controlled_parameters_from_latents(
     position_angle = _wrap_position_angle(
         values["position_angle_radians"]
     )
-    sky = values["sky"]
+    background_level = values["background_level"]
 
     if model_name == "single_sersic":
         return {
@@ -516,7 +514,7 @@ def controlled_parameters_from_latents(
             "theta": position_angle,
             "x0": x0,
             "y0": y0,
-            "sky": sky,
+            "background_level": background_level,
         }
 
     if model_name == "sersic_point_source":
@@ -537,7 +535,7 @@ def controlled_parameters_from_latents(
             * point_fraction,
             "x0": x0,
             "y0": y0,
-            "sky": sky,
+            "background_level": background_level,
         }
 
     inner_fraction = values[
@@ -568,7 +566,7 @@ def controlled_parameters_from_latents(
         "theta_disk": position_angle,
         "x0": x0,
         "y0": y0,
-        "sky": sky,
+        "background_level": background_level,
     }
 
     if model_name == "double_sersic":
@@ -590,7 +588,7 @@ def generate_controlled_model_screening_cases(
     """Generate a balanced, nuisance-controlled screening population.
 
     Every class draws the same latent total-flux, outer-size, centroid,
-    sky, PSF, and noise distributions. Composite-model fluxes are derived
+    background, PSF, and noise distributions. Composite-model fluxes are derived
     from a total flux and a component fraction, preventing total brightness
     from acting as an unintended class label.
 

@@ -250,7 +250,7 @@ def test_resolve_config_applies_nested_defaults():
     assert resolved["preparation"]["detection"]["n_sigma"] == 3.0
     assert resolved["preparation"]["detection"]["n_levels"] == 32
     assert resolved["psf"]["type"] == "empirical"
-    assert resolved["fit"]["models"] == ["double_sersic"]
+    assert resolved["fit"]["models"] == ["single_sersic"]
     assert resolved["fit"]["sampler"]["name"] == "nautilus"
     assert resolved["diagnostics"]["radial_profile"] is True
 

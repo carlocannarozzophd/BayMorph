@@ -6,9 +6,7 @@ import numpy as np
 import pytest
 from astropy.wcs import WCS
 
-from baymorph.fitting.model_factories import (
-    make_single_sersic_psf_sky_model,
-)
+from baymorph.fitting.model_factories import ObservedModelFactory
 from baymorph.fitting.multi_observation import (
     MultiObservationParameterLayout,
     MultiObservationParameterSpec,
@@ -151,15 +149,15 @@ def _layout() -> MultiObservationParameterLayout:
                 )
             ),
             MultiObservationParameterSpec.independent(
-                "sky",
+                "background_level",
                 {
                     "g": Parameter(
-                        "sky",
+                        "background_level",
                         lower=-5.0,
                         upper=5.0,
                     ),
                     "r": Parameter(
-                        "sky",
+                        "background_level",
                         lower=-5.0,
                         upper=5.0,
                     ),
@@ -183,7 +181,10 @@ def _factory(
     )
 
     return RepresentationFactory(
-        factory=make_single_sersic_psf_sky_model,
+        factory=ObservedModelFactory(
+            "single_sersic",
+            background_model="constant",
+        ),
         fixed_kwargs={
             "g": {
                 "psf": psf,
@@ -217,8 +218,8 @@ def _truth_vector(
         "position_angle": 0.35,
         "ra": 150.0,
         "dec": 30.0,
-        "sky__g": 0.0,
-        "sky__r": 0.0,
+        "background_level__g": 0.0,
+        "background_level__r": 0.0,
     }
 
     return np.asarray(

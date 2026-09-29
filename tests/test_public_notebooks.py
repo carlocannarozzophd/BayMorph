@@ -263,5 +263,5 @@ def test_observed_fit_notebook_runs_the_pipeline_from_the_written_yaml() -> None
     ):
         assert forbidden not in source
 
-    assert 'analysis_name = "TARGET_r"' in assessment
-    assert 'config_path = "configs/TARGET_r.yaml"' in source
+    assert 'analysis_name = "galaxy_r"' in assessment
+    assert 'config_path = "configs/galaxy_r.yaml"' in source

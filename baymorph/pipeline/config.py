@@ -115,7 +115,7 @@ DEFAULT_CONFIG = {
         },
     },
     "fit": {
-        "models": ["double_sersic"],
+        "models": ["single_sersic"],
         "likelihood": {
             "type": "gaussian",
         },
@@ -427,10 +427,7 @@ def validate_config(config: dict[str, Any]) -> None:
 
     if (
         mask_mode in {"exact", "replace"}
-        and not (
-            config["data"].get("mask_path")
-            or config["data"].get("external_mask_path")
-        )
+        and not config["data"].get("mask_path")
     ):
         raise ValueError(
             "Config data.mask_path is required when data.mask_mode is "
@@ -863,17 +860,6 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
             resolved["outputs"]["root"]
         )
     )
-
-    data_cfg = resolved["data"]
-
-    if (
-        "cutout" not in data_cfg
-        and data_cfg.get("cutout_size") is not None
-    ):
-        data_cfg["cutout"] = {
-            "mode": "fixed",
-            "size": data_cfg["cutout_size"],
-        }
 
     return resolved
 

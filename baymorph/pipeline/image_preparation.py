@@ -155,20 +155,14 @@ def _resolve_fitting_mask_mode(data_cfg: dict[str, Any]) -> str:
 def _configured_external_mask_path(
     data_cfg: Mapping[str, Any],
 ) -> str | Path | None:
-    """Resolve one unambiguous curated-mask configuration path."""
-    mask_path = data_cfg.get("mask_path")
-    legacy_path = data_cfg.get("external_mask_path")
+    """Return the configured curated-mask path, if any."""
+    if "external_mask_path" in data_cfg:
+        raise ValueError(
+            "Config data.external_mask_path is no longer supported. "
+            "Declare the curated mask under data.mask_path."
+        )
 
-    if mask_path is not None and legacy_path is not None:
-        canonical_mask = Path(mask_path).expanduser().resolve(strict=False)
-        canonical_legacy = Path(legacy_path).expanduser().resolve(strict=False)
-        if canonical_mask != canonical_legacy:
-            raise ValueError(
-                "Config data.mask_path and data.external_mask_path identify "
-                "different files. Configure only one curated mask."
-            )
-
-    return mask_path if mask_path is not None else legacy_path
+    return data_cfg.get("mask_path")
 
 
 def _validate_prepared_arrays(

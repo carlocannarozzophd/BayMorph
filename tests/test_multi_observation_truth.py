@@ -22,8 +22,8 @@ def make_truth() -> MultiObservationGroundTruth:
             "position_angle": 0.35,
             "ra": 150.0,
             "dec": 30.0,
-            "sky__g": 0.0,
-            "sky__r": 0.0,
+            "background_level__g": 0.0,
+            "background_level__r": 0.0,
         },
         observations={
             "g": ObservationTruth(

@@ -16,6 +16,10 @@ from baymorph.models.geometry import (
     get_model_geometry,
     sky_parameter_names,
 )
+from baymorph.observation.background import (
+    BACKGROUND_PARAMETER_NAMES,
+    background_parameter_names,
+)
 from baymorph.pipeline.config import DEFAULT_CONFIG
 from baymorph.pipeline.prior_config import parse_prior_config
 
@@ -243,11 +247,11 @@ def _default_prior_entry(
     if isinstance(direct, Mapping):
         return direct
 
-    if detector_name == "sky":
+    if detector_name in BACKGROUND_PARAMETER_NAMES["plane"]:
         background_default = DEFAULT_CONFIG["fit"]["background"][
             "priors"
         ].get(
-            "background_level"
+            detector_name
         )
 
         if isinstance(background_default, Mapping):
@@ -585,6 +589,7 @@ def make_multi_parameters(
     prior_bounds: Mapping[str, Any] | None = None,
     shared: Sequence[str],
     parameter_frame: str = "sky",
+    background_model: str = "constant",
 ) -> dict[str, Any]:
     """Build a model-agnostic multi-observation parameter specification.
 
@@ -607,6 +612,10 @@ def make_multi_parameters(
         parameter is independent.
     parameter_frame : {"sky", "detector"}, default="sky"
         Parameter frame used by the joint inference.
+    background_model : {"constant", "plane"}, default="constant"
+        Residual-background family fitted independently in every
+        observation. Its parameters follow the morphology contract and
+        always use ``independent`` coupling (AD-044).
 
     Returns
     -------
@@ -675,6 +684,13 @@ def make_multi_parameters(
             "parameter_frame must be 'sky' or 'detector'."
         )
 
+    background_model = str(
+        background_model
+    ).strip().lower()
+    background_names = background_parameter_names(
+        background_model
+    )
+
     parameter_names = (
         sky_parameter_names(
             model
@@ -683,12 +699,24 @@ def make_multi_parameters(
         else tuple(
             definition.parameter_names
         )
-    )
+    ) + background_names
 
     shared_set = {
         str(name)
         for name in shared
     }
+
+    shared_background = sorted(
+        shared_set.intersection(
+            background_names
+        )
+    )
+
+    if shared_background:
+        raise ValueError(
+            "Residual-background parameters are observation-specific and "
+            f"cannot be shared: {shared_background}."
+        )
 
     unsupported_shared = sorted(
         shared_set.difference(
@@ -748,6 +776,13 @@ def make_multi_parameters(
         )
         for detector_name in definition.parameter_names
     }
+
+    detector_to_frame.update(
+        {
+            name: name
+            for name in background_names
+        }
+    )
 
     frame_to_detector = {
         frame_name: detector_name

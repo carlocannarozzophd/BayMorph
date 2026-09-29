@@ -26,7 +26,7 @@ from baymorph.pipeline.multi_observation_config import (
     build_multi_observation_parameter_layout,
     resolve_multi_observation_observation_configs,
 )
-from baymorph.pipeline.real_fit import _background_parameter_names
+from baymorph.observation.background import background_parameter_names
 
 
 TargetPosition = str | Mapping[str, float] | Sequence[float]
@@ -308,10 +308,8 @@ def _normalize_background_config(
         background["model"]
     ).strip().lower()
 
-    parameter_names = _background_parameter_names(
-        {
-            "model": model,
-        }
+    parameter_names = background_parameter_names(
+        model
     )
 
     priors = background["priors"]
@@ -1069,6 +1067,7 @@ def make_multi_observation_config(
     analysis_name: str = "joint_analysis",
     model_name: str = "single_sersic",
     parameter_frame: str = "sky",
+    background_model: str = "constant",
     sampler: str | Mapping[str, Any] | None = "nautilus",
     likelihood: Mapping[str, Any] | None = None,
     outputs_root: str | Path = "runs",
@@ -1098,6 +1097,10 @@ def make_multi_observation_config(
     parameter_frame : {"sky", "detector"}, default="sky"
         Inferential parameter frame. Sky coordinates are preferred for
         heterogeneous native-grid observations of the same object.
+    background_model : {"constant", "plane"}, default="constant"
+        Residual-background family fitted independently in every
+        observation. ``parameters`` must declare its parameters with
+        independent coupling (AD-044).
     sampler : mapping, optional
         Explicit inference-backend configuration. If omitted, the standard
         resolved BayMorph sampler configuration is reused.
@@ -1363,6 +1366,11 @@ def make_multi_observation_config(
                 )
             ],
             "likelihood": likelihood_config,
+            "background": {
+                "model": str(
+                    background_model
+                ).strip().lower(),
+            },
             "sampler": sampler_config,
             "multi_observation": {
                 "parameter_frame": parameter_frame,

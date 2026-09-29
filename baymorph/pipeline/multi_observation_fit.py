@@ -15,6 +15,7 @@ import yaml
 
 from baymorph.core.observation import Observation
 from baymorph.fitting import make_sampler
+from baymorph.fitting.model_factories import ObservedModelFactory
 from baymorph.fitting.multi_observation_problem import (
     MultiObservationInferenceProblem,
 )
@@ -67,13 +68,13 @@ from baymorph.pipeline.multi_observation_persistence import (
     save_multi_observation_fit_products,
 )
 from baymorph.pipeline.multi_observation_config import (
+    multi_observation_background_model,
     multi_observation_parameter_frame,
     resolve_multi_observation_config,
 )
 from baymorph.pipeline.real_fit import (
     _compute_fit_statistics,
     _load_psf_from_config,
-    _resolve_model_factory,
 )
 from baymorph.results import (
     InferenceResult,
@@ -437,6 +438,11 @@ def _multi_observation_problem_signature(
     model_state = {
         "factory_class": _qualified_class_name(
             representation_factory.factory
+        ),
+        "background_model": getattr(
+            representation_factory.factory,
+            "background_model",
+            None,
         ),
         "requested_name": str(
             model_name
@@ -967,8 +973,11 @@ def _build_multi_observation_context(
         )
 
     representation_factory = RepresentationFactory(
-        factory=_resolve_model_factory(
-            model_name
+        factory=ObservedModelFactory(
+            model_name,
+            background_model=multi_observation_background_model(
+                raw_config
+            ),
         ),
         fixed_kwargs={
             observation_name: {

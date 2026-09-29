@@ -437,7 +437,10 @@ Observation identifiers are opaque user-defined labels. BayMorph does not
 infer filters, instruments, epochs, or parameter coupling from their names.
 
 The same `model_name` and `sampler` contract used by the single-observation
-Config Maker applies to the joint workflow.
+Config Maker applies to the joint workflow. The `background_model` argument
+declares the residual-background family, `constant` or `plane`, recorded in
+the joint `fit.background` section; the per-observation background priors are
+part of `parameters` and must use independent coupling.
 
 ### `make_multi_parameters`
 
@@ -446,6 +449,8 @@ morphology model across multiple observations.
 
 Parameter structure is obtained from the model registry. Shared,
 observation-specific, and fixed parameters remain explicit modelling choices.
+The residual-background parameters selected by `background_model` are
+appended to the morphology contract and are always observation-specific.
 
 Explicit prior bounds are required where they cannot be defined safely from
 the scientific model and deterministic observation metadata. Data-scaled

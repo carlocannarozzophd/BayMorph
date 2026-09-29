@@ -52,7 +52,12 @@ def test_run_real_fit_accepts_dict_config_and_requires_preparation(
     config.setdefault(
         "fit",
         {},
-    ).setdefault(
+    )[
+        "models"
+    ] = [
+        "double_sersic",
+    ]
+    config["fit"].setdefault(
         "priors",
         {},
     )[

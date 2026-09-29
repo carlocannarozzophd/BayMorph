@@ -49,11 +49,6 @@ def _typed_defaults() -> dict:
             "upper": 6.0,
             "relative_to": "target_y",
         },
-        "sky": {
-            "type": "uniform",
-            "lower": -10.0,
-            "upper": 10.0,
-        },
     }
 
 

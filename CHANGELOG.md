@@ -47,6 +47,17 @@ and the project follows Semantic Versioning in spirit.
 
 ### Changed
 
+* Joint multi-observation inference uses the residual-background abstraction of AD-031 instead of the legacy model-level `sky` parameter (AD-044). The joint `fit.background` section declares the background family, `constant` or `plane`; its parameters, `background_level` and the plane gradients, are declared under `fit.multi_observation.parameters` with independent coupling, and a configuration still naming `sky` is rejected with a migration hint. `make_multi_parameters` and `make_multi_observation_config` accept `background_model`. Existing joint checkpoints and configurations that used `sky` are incompatible.
+* One production model factory, `ObservedModelFactory`, serves both single-observation and joint fits: it composes the registered morphology with the observation PSF and applies the declared residual background as an observation effect. The joint path injects each observation's PSF at call time. The `make_*_psf_sky_model` factories became `make_*_psf_model` and no longer take a `sky` argument; the `SkyModelWrapper` and the `sky` entry of every registered model contract are gone, together with the wasted full-image addition of a zero sky in every single-observation likelihood evaluation.
+* `DEFAULT_CONFIG` proposes `single_sersic`, the production baseline, instead of `double_sersic`.
+* The simulation configuration accepts only the nested `simulation.noise` and `simulation.psf` sections; the flat `sky`, `poisson_noise`, `read_noise_sigma` and `psf_fwhm` keys are no longer read.
+* `ValidationWorkspace` writes configurations the pipeline accepts: the sampler is declared through the `init`, `run` and `execution` envelope, and the preparation section no longer carries the rejected `method` and `npixels` keys. The written configuration is now resolved in the tests.
+* The likelihood alias table exists once, as `baymorph.likelihood.normalize_likelihood_type`, and the corner, residual-map and radial diagnostics share their configuration resolver, posterior accessor and title helpers through `baymorph.pipeline.diagnostics_common`.
+* Validation benchmark, report and repeatability modules share the posterior-mean, evidence and likelihood-call accessors of `baymorph.validation.run`, and both validation workspaces share one case-identifier validator.
+* `estimate_noise_map` fails closed when no finite unmasked pixel exists or the scale is not finite, and source detection no longer swallows a `SourceCatalog` failure into a missing catalogue.
+* `pipeline_paths` no longer declares the never-written `input` directory, PSF candidate and diagnostic plots, or model-comparison summary text.
+* `RealFitProducts.corner` labels the axes from the sampled parameter names, so the residual-background parameters are labelled correctly and a plane background no longer raises.
+* Real-object configurations under `configs/` are ignored by Git; the object-neutrality guard also recognises identifiers carrying a band or version suffix and rejects local absolute paths in tracked text; the observed-galaxy tutorials use the neutral `galaxy_r` placeholder for the FITS image, the analysis name and the written configuration.
 * PSF convolution precomputes the padded kernel transform, the transform shape and the crop indices once per PSF and image shape, instead of transforming a constant 25 x 25 kernel on every likelihood evaluation, and `PSFEffect.apply` no longer revalidates a kernel its constructor already validated. The cached path performs the same operations in the same order as `scipy.signal.fftconvolve` and is bit-identical to it, not merely equal within a tolerance. On the r-band production problem this takes convolution from 17.6 ms to 11.1 ms, a complete likelihood evaluation from 51.5 ms to 46.4 ms, and halves the convolution's peak allocation from 35.7 MB to 17.8 MB. `scipy.signal.oaconvolve` was measured on the same problem and rejected: it is 12 per cent slower.
 * The Nautilus backend hands the sampler a module-level likelihood function and installs the inference problem in each worker through the pool initializer, as the emcee backend already did. Nautilus receives an `mp.Pool` object rather than an integer, so its own worker-caching path is never taken and `Pool.map` re-serializes the mapped callable once per task chunk; with a bound method that dragged the entire `ImageInferenceProblem`, measured at 29.34 MB per chunk, or roughly 9.8 MB per likelihood evaluation, for the whole run. What now travels per chunk is 64 bytes. Serial execution is unchanged and still uses the bound method. Dynesty and pocoMC have the same defect and are not addressed here.
 * Image-preparation products created before AD-043 no longer match their inputs, because `preparation.masking` is part of the preparation configuration identity. They are rejected fail-closed with a message directing the user to a new output namespace. This is intended: their likelihood support admits pixels the current preparation excludes, so evidence computed on them is not comparable with evidence computed now. No existing artifact is mutated.
@@ -74,6 +85,8 @@ and the project follows Semantic Versioning in spirit.
 
 ### Removed
 
+* The `sky` model-level parameter, `SkyModelWrapper`, the prior-boundary alias mapping `background_level` to `sky`, and the `sky` prior requirement of the prior-predictive flux calibration, which demanded a prior that the configuration contract forbids and therefore always failed.
+* The `data.external_mask_path` and `data.cutout_size` configuration shims, the `profile_noise` argument of the radial-profile plot, and the readable legacy (`format_version`-less) inference archives, which now fail closed with a message asking for a rerun.
 * Experimental native nested-sampler runtime and its production integration.
 * Superseded geometry-specific sampler infrastructure.
 * Legacy multiband compatibility modules and obsolete configuration paths.
@@ -85,6 +98,8 @@ and the project follows Semantic Versioning in spirit.
 
 ### Fixed
 
+* `ObservationAdvisor.calibrate_flux_prior` and the single-Sérsic prior-predictive diagnostics no longer demand a `sky` prior, so the calibration runs on every valid configuration.
+* The multi-observation validation workspace, SBC reference contract and preparation-free recovery campaign declare the residual background as `background_level`, matching the production contract.
 * The prepared noise scale is now measured from residuals about a plane fitted
   to the sky region instead of about a constant, so an unmodelled sky gradient
   is no longer counted as noise: a ramp of plus or minus one count on a scale

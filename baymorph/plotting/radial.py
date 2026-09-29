@@ -126,7 +126,6 @@ def plot_radial_profile_diagnostics(
     radius,
     profile_data,
     profile_model,
-    profile_noise=None,
     posterior_profiles=None,
     component_profiles=None,
     *,
@@ -147,8 +146,6 @@ def plot_radial_profile_diagnostics(
         Median observed intensity in each annulus.
     profile_model : array-like
         Maximum-likelihood model radial profile.
-    profile_noise : array-like, optional
-        Retained for backwards compatibility.
     posterior_profiles : PosteriorProfileResult, optional
         Posterior radial-profile summaries.
     component_profiles : dict, optional
@@ -179,7 +176,6 @@ def plot_radial_profile_diagnostics(
     It should not generally be interpreted as the sampling uncertainty of the
     median estimator.
     """
-    del profile_noise
 
     label_size = 35
     tick_size = 35

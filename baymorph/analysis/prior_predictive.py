@@ -19,7 +19,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from baymorph.fitting.model_factories import (
-    make_single_sersic_psf_sky_model,
+    make_single_sersic_psf_model,
 )
 from baymorph.pipeline.prior_config import parse_prior_config
 
@@ -35,7 +35,6 @@ _SINGLE_SERSIC_PARAMETERS = (
     "theta",
     "x0",
     "y0",
-    "sky",
 )
 
 
@@ -52,7 +51,6 @@ class PriorPredictiveReport:
     re_to_half_frame: FloatArray
     peak_snr: FloatArray
     quadrature_snr: FloatArray
-    sky_to_noise: FloatArray
 
     render_valid: BoolArray
 
@@ -118,10 +116,6 @@ class PriorPredictiveReport:
             _quantile_line(
                 "Quadrature S/N",
                 self.quadrature_snr,
-            ),
-            _quantile_line(
-                "Sky / noise",
-                self.sky_to_noise,
             ),
             "",
             (
@@ -288,9 +282,6 @@ def evaluate_single_sersic_prior_predictive(
     quadrature_snr = _nan_array(
         n_draws
     )
-    sky_to_noise = _nan_array(
-        n_draws
-    )
 
     render_valid = np.zeros(
         n_draws,
@@ -301,14 +292,6 @@ def evaluate_single_sersic_prior_predictive(
         0.5
         * min(
             shape
-        )
-    )
-
-    representative_noise = float(
-        np.median(
-            noise[
-                usable
-            ]
         )
     )
 
@@ -333,17 +316,8 @@ def evaluate_single_sersic_prior_predictive(
             / half_frame
         )
 
-        sky_to_noise[
-            index
-        ] = (
-            parameters[
-                "sky"
-            ]
-            / representative_noise
-        )
-
         try:
-            model = make_single_sersic_psf_sky_model(
+            model = make_single_sersic_psf_model(
                 **parameters,
                 psf=psf,
             )
@@ -450,7 +424,6 @@ def evaluate_single_sersic_prior_predictive(
         re_to_half_frame=re_to_half_frame,
         peak_snr=peak_snr,
         quadrature_snr=quadrature_snr,
-        sky_to_noise=sky_to_noise,
         render_valid=render_valid,
     )
 
@@ -459,7 +432,7 @@ def _render_source_components(
     model: Any,
     shape: tuple[int, int],
 ) -> FloatArray:
-    """Render and combine source components without additive sky."""
+    """Render and combine source components without additive background."""
     components = model.render_components(
         shape
     )

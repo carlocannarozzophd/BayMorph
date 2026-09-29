@@ -280,6 +280,48 @@ class BackgroundAppliedModel:
         )
 
 
+BACKGROUND_PARAMETER_NAMES = {
+    "constant": (
+        "background_level",
+    ),
+    "plane": (
+        "background_level",
+        "background_gradient_x",
+        "background_gradient_y",
+    ),
+}
+
+
+def background_parameter_names(
+    model: str,
+) -> tuple[str, ...]:
+    """Return the ordered sampled parameters of one background family.
+
+    Parameters
+    ----------
+    model : {"constant", "plane"}
+        Background-model family.
+
+    Returns
+    -------
+    tuple of str
+        Parameter names in the deterministic order used by inference.
+    """
+    key = str(
+        model
+    ).strip().lower()
+
+    try:
+        return BACKGROUND_PARAMETER_NAMES[
+            key
+        ]
+    except KeyError as exc:
+        raise ValueError(
+            f"Unsupported background model {model!r}. "
+            "Available models: 'constant', 'plane'."
+        ) from exc
+
+
 def make_background_effect(
     model: str,
     *,

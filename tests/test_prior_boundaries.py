@@ -129,8 +129,8 @@ def test_interior_posterior_is_clear() -> None:
     ]
 
 
-def test_background_level_uses_sky_prior_alias() -> None:
-    """Persisted background names must resolve the configured sky prior."""
+def test_background_level_prior_is_resolved_by_its_own_name() -> None:
+    """The residual background is audited against fit.background.priors."""
     posterior = PosteriorSamples(
         samples=np.asarray(
             [
@@ -156,7 +156,7 @@ def test_background_level_uses_sky_prior_alias() -> None:
     diagnostics = audit_posterior_prior_boundaries(
         posterior,
         {
-            "sky": {
+            "background_level": {
                 "type": "uniform",
                 "lower": -50.0,
                 "upper": 50.0,
@@ -170,7 +170,7 @@ def test_background_level_uses_sky_prior_alias() -> None:
         "background_level"
     ]
 
-    assert background["prior_name"] == "sky"
+    assert background["prior_name"] == "background_level"
     assert background["boundary_contact"]
 
 

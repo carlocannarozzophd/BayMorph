@@ -74,16 +74,16 @@ def test_layout_routes_fixed_parameters_without_sampling_them():
                 )
             ),
             MultiObservationParameterSpec.independent(
-                "sky",
+                "background_level",
                 {
                     "g": Parameter(
-                        "sky",
+                        "background_level",
                         prior=FixedPrior(
                             value=1.0,
                         ),
                     ),
                     "r": Parameter(
-                        "sky",
+                        "background_level",
                         prior=UniformPrior(
                             lower=-2.0,
                             upper=2.0,
@@ -96,23 +96,23 @@ def test_layout_routes_fixed_parameters_without_sampling_them():
 
     assert layout.ndim == 1
     assert layout.parameter_set.names == [
-        "sky__r"
+        "background_level__r"
     ]
 
     routed = layout.route(
         {
-            "sky__r": 0.5,
+            "background_level__r": 0.5,
         }
     )
 
     assert routed == {
         "g": {
             "x0": pytest.approx(15.5),
-            "sky": pytest.approx(1.0),
+            "background_level": pytest.approx(1.0),
         },
         "r": {
             "x0": pytest.approx(15.5),
-            "sky": pytest.approx(0.5),
+            "background_level": pytest.approx(0.5),
         },
     }
 

@@ -65,7 +65,6 @@ def make_output_tree(config: dict[str, Any]) -> Path:
 
     subdirs = [
         base,
-        base / "input",
         base / "image_preparation",
         base / "psf",
         base / "fits",
@@ -175,10 +174,6 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
 
     plot_format = diagnostic_format(config)
 
-    input_image = base / "input" / Path(
-        config["data"]["image_path"]
-    ).name
-
     fit_paths = {}
 
     for model_name in config["fit"]["models"]:
@@ -200,10 +195,6 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
         "base": base,
         "config_resolved": base / "config_resolved.yaml",
         "runtime_report": base / "runtime_report.yaml",
-        "input": {
-            "dir": base / "input",
-            "image": input_image,
-        },
         "truth": {
             "dir": base / "truth",
             "truth_json": simulation_truth_path(config),
@@ -220,8 +211,6 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
             "psf_fits": base / "psf" / "psf.fits",
             "metadata": base / "psf" / "psf_metadata.json",
             "candidates": base / "psf" / "psf_candidates.json",
-            "candidates_plot": base / "psf" / f"psf_candidates.{plot_format}",
-            "diagnostics_plot": base / "psf" / f"psf_diagnostics.{plot_format}",
         },
         "fits": {
             "dir": base / "fits",
@@ -230,6 +219,5 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
         "model_comparison": {
             "dir": base / "model_comparison",
             "bayes_factor": base / "model_comparison" / "bayes_factor.json",
-            "summary": base / "model_comparison" / "summary.txt",
         },
     }

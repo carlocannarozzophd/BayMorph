@@ -74,7 +74,7 @@ def _config(
                 20.0
             ),
         },
-        "sky": {
+        "background_level": {
             "coupling": "independent",
             "priors": {
                 "g": _prior(

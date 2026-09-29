@@ -255,7 +255,7 @@ def test_emcee_result_preserves_mcmc_ess_without_evidence(
     )
 
 
-def test_inference_result_loads_legacy_posterior_archive(
+def test_inference_result_rejects_legacy_posterior_archive(
     tmp_path,
 ):
     path = tmp_path / "legacy.npz"
@@ -305,31 +305,13 @@ def test_inference_result_loads_legacy_posterior_archive(
         ),
     )
 
-    loaded = InferenceResult.load(
-        path
-    )
-
-    assert loaded.weights == pytest.approx(
-        np.asarray(
-            [
-                0.4,
-                0.6,
-            ]
+    with pytest.raises(
+        ValueError,
+        match="format_version",
+    ):
+        InferenceResult.load(
+            path
         )
-    )
-    assert loaded.logz == pytest.approx(
-        0.0
-    )
-    assert loaded.logz_error == pytest.approx(
-        0.3
-    )
-    assert (
-        loaded.evidence_method
-        == "legacy_baymorph"
-    )
-    assert loaded.provenance[
-        "source_format"
-    ] == "posterior_result_v1"
 
 
 def test_inference_result_serializes_runtime_sampler_objects(

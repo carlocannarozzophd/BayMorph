@@ -6,7 +6,7 @@ from typing import Any
 import numpy as np
 from matplotlib.axes import Axes
 
-from baymorph.models import parameter_labels as model_parameter_labels
+from baymorph.models.labels import latex_parameter_label
 from baymorph.plotting import corner_plot
 from baymorph.results.inference import InferenceResult
 
@@ -47,8 +47,6 @@ class RealFitProducts:
         Observed radial profile.
     profile_model : ndarray, optional
         Model radial profile.
-    profile_noise : ndarray, optional
-        Radial noise profile.
     """
 
     posterior: InferenceResult | None
@@ -68,7 +66,6 @@ class RealFitProducts:
     radius: np.ndarray | None = None
     profile_data: np.ndarray | None = None
     profile_model: np.ndarray | None = None
-    profile_noise: np.ndarray | None = None
 
     @property
     def statistics(self) -> dict[str, float]:
@@ -129,8 +126,9 @@ class RealFitProducts:
         Parameters
         ----------
         parameter_labels : list of str, optional
-            Labels used for the corner-plot axes. If None, labels are inferred
-            from ``model_name``.
+            Labels used for the corner-plot axes. If None, labels are derived
+            from the sampled parameter names, including the residual
+            background parameters.
         **kwargs
             Additional keyword arguments passed to
             :func:`baymorph.plotting.corner_plot`.
@@ -141,13 +139,23 @@ class RealFitProducts:
             Figure, axes grid, and parameter array returned by
             :func:`baymorph.plotting.corner_plot`.
         """
-        if parameter_labels is None:
-            parameter_labels = model_parameter_labels(
-                self.model_name,
+        if self.posterior is None:
+            raise ValueError(
+                "Corner diagnostics require a posterior result."
             )
 
+        posterior = self.posterior.posterior
+
+        if parameter_labels is None:
+            parameter_labels = [
+                latex_parameter_label(
+                    name
+                )
+                for name in posterior.parameter_names
+            ]
+
         return corner_plot(
-            self.posterior.posterior.equal_weight_samples.T,
+            posterior.equal_weight_samples.T,
             parameter_labels=parameter_labels,
             **kwargs,
         )
@@ -177,7 +185,6 @@ class RealFitProducts:
             self.radius,
             self.profile_data,
             self.profile_model,
-            self.profile_noise,
             ax=ax,
         )
 

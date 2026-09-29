@@ -154,3 +154,19 @@ def test_estimate_noise_map_excludes_masked_pixels():
     )
 
     assert abs(estimate / sigma - 1.0) < 0.02
+
+
+def test_estimate_noise_map_fails_closed_without_usable_pixels():
+    """A fully masked image has no pixels from which to estimate a scale."""
+    data = np.ones((8, 8))
+
+    with pytest.raises(ValueError, match="finite unmasked pixel"):
+        estimate_noise_map(
+            data,
+            mask=np.ones(data.shape, dtype=bool),
+        )
+
+    with pytest.raises(ValueError, match="finite unmasked pixel"):
+        estimate_noise_map(
+            np.full(data.shape, np.nan),
+        )

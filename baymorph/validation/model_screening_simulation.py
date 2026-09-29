@@ -9,12 +9,7 @@ from types import MappingProxyType
 import numpy as np
 from numpy.typing import NDArray
 
-from baymorph.fitting.model_factories import (
-    make_bulge_disk_psf_sky_model,
-    make_double_sersic_psf_sky_model,
-    make_sersic_point_source_psf_sky_model,
-    make_single_sersic_psf_sky_model,
-)
+from baymorph.fitting.model_factories import ObservedModelFactory
 from baymorph.models import (
     parameter_names,
     registered_models,
@@ -25,12 +20,25 @@ from baymorph.simulation.psf import GaussianPSF
 FloatArray = NDArray[np.float64]
 
 
-_MODEL_FACTORIES = {
-    "single_sersic": make_single_sersic_psf_sky_model,
-    "double_sersic": make_double_sersic_psf_sky_model,
-    "sersic_point_source": make_sersic_point_source_psf_sky_model,
-    "bulge_disk": make_bulge_disk_psf_sky_model,
-}
+def screening_parameter_names(
+    model_name: str,
+) -> tuple[str, ...]:
+    """Return the simulated parameter contract of one screening model.
+
+    Every screening observation carries one constant residual background,
+    ``background_level``, in addition to the registered morphology
+    parameters (AD-031).
+    """
+    return (
+        tuple(
+            parameter_names(
+                model_name
+            )
+        )
+        + (
+            "background_level",
+        )
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,7 +120,7 @@ class ModelScreeningSimulationCase:
             )
 
         expected_parameters = set(
-            parameter_names(
+            screening_parameter_names(
                 self.model_name
             )
         )
@@ -242,11 +250,6 @@ def simulate_model_screening_case(
             f"Unknown BayMorph model: {model_name!r}."
         )
 
-    if model_name not in _MODEL_FACTORIES:
-        raise ValueError(
-            f"No screening simulator is available for {model_name!r}."
-        )
-
     if len(
         image_shape
     ) != 2:
@@ -270,7 +273,7 @@ def simulate_model_screening_case(
         )
 
     expected_parameters = set(
-        parameter_names(
+        screening_parameter_names(
             model_name
         )
     )
@@ -317,11 +320,12 @@ def simulate_model_screening_case(
         fwhm=psf_fwhm
     )
 
-    model = _MODEL_FACTORIES[
-        model_name
-    ](
-        **normalized_parameters,
+    model = ObservedModelFactory(
+        model_name,
+        background_model="constant",
         psf=psf,
+    )(
+        **normalized_parameters,
     )
 
     noiseless_image = np.asarray(

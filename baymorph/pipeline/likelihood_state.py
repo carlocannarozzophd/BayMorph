@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 
+from baymorph.likelihood.factory import normalize_likelihood_type
 from baymorph.likelihood.vecchia_gaussian import (
     VecchiaFactorization,
 )
@@ -519,42 +520,4 @@ def _normalization_metadata(
     }
 
 
-def _normalize_likelihood_type(
-    likelihood_type: str,
-) -> str:
-    """Normalize likelihood aliases used by the pipeline."""
-    normalized = str(
-        likelihood_type
-    ).strip().lower()
-
-    aliases = {
-        "normal": (
-            "gaussian"
-        ),
-        "correlated-gaussian": (
-            "correlated_gaussian"
-        ),
-        "gaussian_correlated": (
-            "correlated_gaussian"
-        ),
-        "gaussian-correlated": (
-            "correlated_gaussian"
-        ),
-        "poisson": (
-            "cash"
-        ),
-        "cash_statistic": (
-            "cash"
-        ),
-        "poisson-gaussian": (
-            "poisson_gaussian"
-        ),
-        "poisson+gaussian": (
-            "poisson_gaussian"
-        ),
-    }
-
-    return aliases.get(
-        normalized,
-        normalized,
-    )
+_normalize_likelihood_type = normalize_likelihood_type

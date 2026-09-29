@@ -10,7 +10,12 @@ from typing import Any, TypeVar
 import numpy as np
 
 from baymorph.fitting.problem import InferenceProblem
-from baymorph.validation.run import ValidationRun
+from baymorph.validation.run import (
+    ValidationRun,
+    posterior_mean,
+    required_likelihood_calls,
+    required_logz,
+)
 
 T = TypeVar("T")
 
@@ -224,45 +229,13 @@ def compare_results(
     )
 
 
-def _posterior_mean(
-    run: ValidationRun,
-) -> np.ndarray:
-    """Return the weighted posterior mean."""
-    return np.average(
-        run.result.samples,
-        axis=0,
-        weights=run.result.weights,
-    )
+_posterior_mean = posterior_mean
 
 
-def _required_logz(
-    run: ValidationRun,
-) -> float:
-    """Return evidence, requiring it to exist."""
-    value = run.result.logz
-
-    if value is None:
-        raise ValueError(
-            "Validation comparison requires Bayesian evidence."
-        )
-
-    return float(
-        value
-    )
+_required_logz = required_logz
 
 
-def _required_likelihood_calls(
-    run: ValidationRun,
-) -> int:
-    """Return likelihood calls, requiring the diagnostic to exist."""
-    calls = run.likelihood_calls
-
-    if calls is None:
-        raise ValueError(
-            "Validation comparison requires likelihood-call diagnostics."
-        )
-
-    return calls
+_required_likelihood_calls = required_likelihood_calls
 
 
 def _safe_ratio(

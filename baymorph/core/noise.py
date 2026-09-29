@@ -95,19 +95,24 @@ def estimate_noise_map(
     values = data[valid]
 
     if values.size == 0:
-        sigma = robust_sigma(data)
-    else:
-        clipped = sigma_clip(
-            values,
-            sigma=clip_sigma,
-            maxiters=maxiters,
-            masked=True,
-        )
-        sigma = robust_sigma(
-            clipped.compressed()
+        raise ValueError(
+            "Noise estimation requires at least one finite unmasked pixel."
         )
 
-    if not np.isfinite(sigma) or sigma <= 0:
-        sigma = robust_sigma(data)
+    clipped = sigma_clip(
+        values,
+        sigma=clip_sigma,
+        maxiters=maxiters,
+        masked=True,
+    )
+    sigma = robust_sigma(
+        clipped.compressed()
+    )
+
+    if not np.isfinite(sigma) or sigma < 0.0:
+        raise ValueError(
+            "Noise estimation produced a non-finite scale from the unmasked "
+            "pixels."
+        )
 
     return np.full_like(data, sigma, dtype=float)

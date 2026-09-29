@@ -117,8 +117,8 @@ def test_build_multi_observation_problem_does_not_run_sampler(
 
     monkeypatch.setattr(
         multi_observation_fit,
-        "_resolve_model_factory",
-        lambda model_name: (
+        "ObservedModelFactory",
+        lambda model_name, **options: (
             lambda **parameters: parameters
         ),
     )

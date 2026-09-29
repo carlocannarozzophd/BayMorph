@@ -119,13 +119,10 @@ def detect_sources_segmentation(
 
     mask = segmentation.data > 0
 
-    try:
-        catalog = SourceCatalog(
-            data,
-            segmentation,
-        )
-    except Exception:
-        catalog = None
+    catalog = SourceCatalog(
+        data,
+        segmentation,
+    )
 
     return DetectionResult(
         segmentation=segmentation,

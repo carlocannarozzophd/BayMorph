@@ -11,9 +11,8 @@ import yaml
 from astropy.io import fits
 from astropy.wcs import WCS
 
-from baymorph.fitting.model_factories import (
-    make_single_sersic_psf_sky_model,
-)
+from baymorph.validation.workspace import validate_case_id
+from baymorph.fitting.model_factories import ObservedModelFactory
 from baymorph.models.geometry import get_model_geometry
 from baymorph.observation.model_parameter_transforms import (
     SkyModelParameterTransform,
@@ -164,8 +163,11 @@ class MultiObservationValidationWorkspace:
                 fwhm=psf_fwhm
             )
 
-            model = make_single_sersic_psf_sky_model(
+            model = ObservedModelFactory(
+                truth.model_name,
+                background_model="constant",
                 psf=psf,
+            )(
                 **detector_parameters,
             )
 
@@ -500,16 +502,16 @@ class MultiObservationValidationWorkspace:
                     + 1.0 / 3600.0,
                 ),
             },
-            "sky": {
+            "background_level": {
                 "coupling": "independent",
                 "priors": {
                     name: uniform(
                         truth.parameter(
-                            f"sky__{name}"
+                            f"background_level__{name}"
                         )
                         - 20.0,
                         truth.parameter(
-                            f"sky__{name}"
+                            f"background_level__{name}"
                         )
                         + 20.0,
                     )
@@ -584,27 +586,4 @@ class MultiObservationValidationWorkspace:
 
         return wcs
 
-    @staticmethod
-    def _validate_case_id(
-        case_id: str,
-    ) -> str:
-        """Validate one case identifier."""
-        if (
-            not isinstance(
-                case_id,
-                str,
-            )
-            or not case_id.strip()
-        ):
-            raise ValueError(
-                "Case ID must be a non-empty string."
-            )
-
-        normalized = case_id.strip()
-
-        if Path(normalized).name != normalized:
-            raise ValueError(
-                "Case ID must not contain path components."
-            )
-
-        return normalized
+    _validate_case_id = staticmethod(validate_case_id)

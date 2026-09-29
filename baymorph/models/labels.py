@@ -1,4 +1,9 @@
-"""Parameter names and display labels for built-in BayMorph models."""
+"""Parameter names and display labels for built-in BayMorph models.
+
+The tables list morphology parameters only. Residual-background
+parameters are owned by ``fit.background`` and labelled through
+:func:`latex_parameter_label`.
+"""
 
 from __future__ import annotations
 
@@ -11,7 +16,6 @@ MODEL_PARAMETER_LABELS = {
         "theta": r"$\theta$",
         "x0": r"$x_0$",
         "y0": r"$y_0$",
-        "sky": r"$S$",
     },
     "double_sersic": {
         "flux_bulge": r"$F_{\mathrm{b}}$",
@@ -26,7 +30,6 @@ MODEL_PARAMETER_LABELS = {
         "theta_disk": r"$\theta_d$",
         "x0": r"$x_0$",
         "y0": r"$y_0$",
-        "sky": r"$S$",
     },
     "sersic_point_source": {
         "flux_sersic": r"$F_{\mathrm{Sersic}}$",
@@ -37,7 +40,6 @@ MODEL_PARAMETER_LABELS = {
         "flux_point_source": r"$F_{\mathrm{PS}}$",
         "x0": r"$x_0$",
         "y0": r"$y_0$",
-        "sky": r"$S$",
     },
     "bulge_disk": {
         "flux_bulge": r"$F_{\mathrm{b}}$",
@@ -51,7 +53,6 @@ MODEL_PARAMETER_LABELS = {
         "theta_disk": r"$\theta_{\mathrm{d}}$",
         "x0": r"$x_0$",
         "y0": r"$y_0$",
-        "sky": r"$S$",
     },
 }
 
@@ -129,8 +130,16 @@ def latex_parameter_label(
     if name.startswith("$") and name.endswith("$"):
         return name
 
-    if name == "background_level":
-        return r"$B$"
+    background_labels = {
+        "background_level": r"$B$",
+        "background_gradient_x": r"$B_x$",
+        "background_gradient_y": r"$B_y$",
+    }
+
+    if name in background_labels:
+        return background_labels[
+            name
+        ]
 
     for labels in MODEL_PARAMETER_LABELS.values():
         if name in labels:

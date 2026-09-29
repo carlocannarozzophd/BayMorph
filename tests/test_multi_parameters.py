@@ -89,7 +89,7 @@ def test_single_sersic_parameters_are_built_from_registry(
         "position_angle",
         "ra",
         "dec",
-        "sky",
+        "background_level",
     )
 
     assert parameters["flux"]["coupling"] == "independent"
@@ -99,7 +99,7 @@ def test_single_sersic_parameters_are_built_from_registry(
     assert parameters["position_angle"]["coupling"] == "shared"
     assert parameters["ra"]["coupling"] == "shared"
     assert parameters["dec"]["coupling"] == "shared"
-    assert parameters["sky"]["coupling"] == "independent"
+    assert parameters["background_level"]["coupling"] == "independent"
 
     assert parameters[
         "re_arcsec"
@@ -185,7 +185,7 @@ def test_double_sersic_uses_same_generic_builder(
         "position_angle_disk",
         "ra",
         "dec",
-        "sky",
+        "background_level",
     }
 
     assert parameters["q_bulge"]["coupling"] == "shared"

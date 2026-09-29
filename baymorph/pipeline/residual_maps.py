@@ -9,11 +9,6 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 
-from baymorph.pipeline.config import (
-    load_config,
-    load_resolved_config,
-    resolve_config,
-)
 from baymorph.pipeline.image_preparation import (
     load_image_preparation_products,
 )
@@ -29,8 +24,9 @@ from baymorph.pipeline.outputs import (
 from baymorph.pipeline.psf_construction import (
     load_empirical_psf,
 )
-from baymorph.pipeline.real_fit import (
-    _fit_diagnostic_title as _diagnostic_title,
+from baymorph.pipeline.diagnostics_common import (
+    fit_diagnostic_title as _diagnostic_title,
+    resolve_diagnostic_config,
 )
 from baymorph.plotting.images import (
     plot_pipeline_fit_maps,
@@ -135,67 +131,7 @@ def _load_display_psf(
         return None
 
 
-def _resolve_residual_config(
-    config: str | Path | Mapping[str, Any],
-) -> tuple[
-    dict[str, Any],
-    bool,
-    Path,
-]:
-    """Resolve a diagnostic configuration and identify its workflow mode."""
-    if isinstance(
-        config,
-        (str, Path),
-    ):
-        path = Path(
-            config
-        )
-
-        raw_config = load_config(
-            path
-        )
-
-        if "observations" in raw_config:
-            return (
-                raw_config,
-                True,
-                path.parent,
-            )
-
-        return (
-            load_resolved_config(
-                path
-            ),
-            False,
-            path.parent,
-        )
-
-    if isinstance(
-        config,
-        Mapping,
-    ):
-        raw_config = dict(
-            config
-        )
-
-        if "observations" in raw_config:
-            return (
-                raw_config,
-                True,
-                Path.cwd(),
-            )
-
-        return (
-            resolve_config(
-                raw_config
-            ),
-            False,
-            Path.cwd(),
-        )
-
-    raise TypeError(
-        "config must be a path or a mapping."
-    )
+_resolve_residual_config = resolve_diagnostic_config
 
 
 def _normalize_fit_results(

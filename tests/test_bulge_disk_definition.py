@@ -22,7 +22,6 @@ EXPECTED_PARAMETER_NAMES = [
     "theta_disk",
     "x0",
     "y0",
-    "sky",
 ]
 
 

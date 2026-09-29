@@ -221,7 +221,7 @@ def test_simulation_connects_to_feature_dataset() -> None:
             "theta": 0.2,
             "x0": 31.5,
             "y0": 31.5,
-            "sky": 10.0,
+            "background_level": 10.0,
         },
         image_shape=(
             64,

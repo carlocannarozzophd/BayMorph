@@ -12,6 +12,19 @@ from baymorph.validation.simulation import build_synthetic_observation
 from baymorph.validation.truth import GroundTruth
 
 
+def validate_case_id(case_id: str) -> str:
+    """Validate and normalize one validation case identifier."""
+    if not isinstance(case_id, str) or not case_id.strip():
+        raise ValueError("Case ID must be a non-empty string.")
+
+    normalized = case_id.strip()
+
+    if Path(normalized).name != normalized:
+        raise ValueError("Case ID must not contain path components.")
+
+    return normalized
+
+
 @dataclass(frozen=True)
 class ValidationWorkspace:
     """Materialize one validation case for the public BayMorph pipeline.
@@ -51,7 +64,10 @@ class ValidationWorkspace:
         models : tuple of str, default=("single_sersic",)
             Morphological models fitted by BayMorph.
         sampler : dict, optional
-            Sampler settings overriding the validation defaults.
+            Sampler envelope entries (``name``, ``mode``, ``execution``,
+            ``init``, ``run``) overriding the validation defaults. The
+            ``execution``, ``init`` and ``run`` sections are merged
+            key by key.
 
         Returns
         -------
@@ -82,18 +98,34 @@ class ValidationWorkspace:
         image_path = input_dir / "synthetic_observation.fits"
         observation.to_fits(image_path)
 
-        sampler_config = {
+        sampler_config: dict[str, Any] = {
             "name": "dynesty",
-            "nlive": 100,
-            "sample": "auto",
-            "dlogz": 0.5,
-            "seed": truth.random_seed,
-            "n_processes": 1,
-            "queue_size": None,
+            "mode": "static",
+            "execution": {
+                "processes": 1,
+            },
+            "init": {
+                "nlive": 100,
+                "sample": "auto",
+            },
+            "run": {
+                "dlogz": 0.5,
+            },
         }
 
         if sampler is not None:
-            sampler_config.update(sampler)
+            for key, value in sampler.items():
+                if (
+                    key in {"execution", "init", "run"}
+                    and isinstance(value, dict)
+                    and isinstance(sampler_config.get(key), dict)
+                ):
+                    sampler_config[key] = {
+                        **sampler_config[key],
+                        **value,
+                    }
+                else:
+                    sampler_config[key] = value
 
         config = {
             "object": {
@@ -117,16 +149,13 @@ class ValidationWorkspace:
             },
             "preparation": {
                 "background": {
-                    "method": "empirical",
                     "box_size": 30,
                     "filter_size": 3,
                 },
-                "noise": {
-                    "method": "empirical",
-                },
+                "noise": {},
                 "detection": {
                     "n_sigma": 3.0,
-                    "npixels": 20,
+                    "n_pixels": 20,
                     "n_levels": 32,
                 },
             },
@@ -157,18 +186,7 @@ class ValidationWorkspace:
 
         return config_path
 
-    @staticmethod
-    def _validate_case_id(case_id: str) -> str:
-        """Validate and normalize one case identifier."""
-        if not isinstance(case_id, str) or not case_id.strip():
-            raise ValueError("Case ID must be a non-empty string.")
-
-        normalized = case_id.strip()
-
-        if Path(normalized).name != normalized:
-            raise ValueError("Case ID must not contain path components.")
-
-        return normalized
+    _validate_case_id = staticmethod(validate_case_id)
 
     @staticmethod
     def _validate_truth(truth: GroundTruth) -> None:

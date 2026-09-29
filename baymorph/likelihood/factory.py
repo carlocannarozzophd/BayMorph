@@ -86,7 +86,7 @@ def make_likelihood(
         )
     ).strip().lower()
 
-    likelihood_type = _normalize_likelihood_type(
+    likelihood_type = normalize_likelihood_type(
         likelihood_type
     )
 
@@ -457,10 +457,18 @@ def _normalize_config(
     return dict(config)
 
 
-def _normalize_likelihood_type(
+def normalize_likelihood_type(
     likelihood_type: str,
 ) -> str:
-    """Normalize supported likelihood aliases."""
+    """Return the canonical name of a supported likelihood alias.
+
+    This is the single alias table shared by the likelihood factory, the
+    pipeline likelihood state, and the runner.
+    """
+    likelihood_type = str(
+        likelihood_type
+    ).strip().lower()
+
     aliases = {
         "normal": "gaussian",
         "correlated-gaussian": "correlated_gaussian",

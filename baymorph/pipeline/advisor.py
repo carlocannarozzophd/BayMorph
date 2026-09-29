@@ -32,8 +32,8 @@ from baymorph.pipeline.psf_candidates import (
 from baymorph.pipeline.psf_construction import (
     run_psf_construction_from_config,
 )
+from baymorph.observation.background import background_parameter_names
 from baymorph.pipeline.real_fit import (
-    _background_parameter_names,
     _load_psf_from_config,
 )
 from baymorph.pipeline.preparation_steps import (
@@ -1501,7 +1501,7 @@ class ObservationAdvisor:
             "model": background_model,
             "priors": {
                 name: deepcopy(background_resolved["priors"][name])
-                for name in _background_parameter_names(background_resolved)
+                for name in background_parameter_names(background_model)
             },
         }
 

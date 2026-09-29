@@ -19,7 +19,6 @@ EXPECTED_PARAMETER_NAMES = [
     "flux_point_source",
     "x0",
     "y0",
-    "sky",
 ]
 
 

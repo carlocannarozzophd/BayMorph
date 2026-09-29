@@ -313,3 +313,44 @@ def with_validation_seed(
     ] = init
 
     return resolved
+
+
+def posterior_mean(
+    run: ValidationRun,
+) -> np.ndarray:
+    """Return the weighted posterior mean of one validation run."""
+    return np.average(
+        run.result.samples,
+        axis=0,
+        weights=run.result.weights,
+    )
+
+
+def required_logz(
+    run: ValidationRun,
+) -> float:
+    """Return the evidence of one validation run, requiring it to exist."""
+    value = run.result.logz
+
+    if value is None:
+        raise ValueError(
+            "Validation analysis requires Bayesian evidence for this run."
+        )
+
+    return float(
+        value
+    )
+
+
+def required_likelihood_calls(
+    run: ValidationRun,
+) -> int:
+    """Return likelihood calls of one run, requiring the diagnostic."""
+    calls = run.likelihood_calls
+
+    if calls is None:
+        raise ValueError(
+            "Validation analysis requires likelihood-call diagnostics."
+        )
+
+    return calls

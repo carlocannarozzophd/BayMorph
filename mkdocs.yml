@@ -73,6 +73,8 @@ nav:
   - Multi-Observation Workflow: architecture/MULTI_OBSERVATION_PUBLIC_WORKFLOW.md
   - Validation: architecture/VALIDATION.md
   - Validation Architecture: architecture/VALIDATION_ARCHITECTURE.md
+  - Core Contract: architecture/BAYMORPH_CORE_CONTRACT.md
+  - Inference Geometry: architecture/INFERENCE_GEOMETRY.md
   - Architecture Decisions:
     - Policy: architecture/decisions/README.md
 
@@ -87,6 +89,17 @@ nav:
   - Adaptive Rendering: research/ADAPTIVE_RENDERING.md
   - PSF Characterization: research/PSF_CHARACTERIZATION.md
   - pocoMC-Dynesty Initial Validation: research/pocomc_dynesty_initial_validation.md
+  - Prior and Configuration Contract: research/PRIOR_AND_CONFIGURATION_CONTRACT.md
+  - Flux Prior Calibration: research/FLUX_PRIOR_CALIBRATION.md
+  - Hierarchical Morphology Coupling: research/HIERARCHICAL_MORPHOLOGY_COUPLING.md
+  - Wavelength Coupling Validation: research/WAVELENGTH_COUPLING_VALIDATION.md
+  - Sérsic Rendering Optimization: research/SERSIC_RENDERING_OPTIMIZATION.md
+  - P0 Sérsic Rendering Benchmark: research/P0_SERSIC_RENDERING_BENCHMARK.md
+  - Performance Architecture P0: research/PERFORMANCE_ARCHITECTURE_P0.md
+  - Likelihood Cost Decomposition: research/LIKELIHOOD_COST_DECOMPOSITION_2026-09-20.md
+  - Production Cutout Footprint Selection: research/TARGET_CUTOUT_FOOTPRINT_SELECTION_2026-09-16.md
+  - Production Empirical PSF Selection: research/TARGET_EMPIRICAL_PSF_SELECTION_2026-09-16.md
+  - Production Residual Diagnostic: research/TARGET_R_RESIDUAL_DIAGNOSTIC_2026-09-20.md
 
 plugins:
   - search

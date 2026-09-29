@@ -137,7 +137,6 @@ def test_unknown_model_geometry_is_rejected():
                 "position_angle",
                 "ra",
                 "dec",
-                "sky",
             ),
         ),
         (
@@ -155,7 +154,6 @@ def test_unknown_model_geometry_is_rejected():
                 "position_angle_disk",
                 "ra",
                 "dec",
-                "sky",
             ),
         ),
         (
@@ -172,7 +170,6 @@ def test_unknown_model_geometry_is_rejected():
                 "position_angle_disk",
                 "ra",
                 "dec",
-                "sky",
             ),
         ),
         (
@@ -186,7 +183,6 @@ def test_unknown_model_geometry_is_rejected():
                 "flux_point_source",
                 "ra",
                 "dec",
-                "sky",
             ),
         ),
     ],

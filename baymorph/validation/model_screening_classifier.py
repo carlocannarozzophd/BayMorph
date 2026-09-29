@@ -231,8 +231,8 @@ def screening_feature_dataset(
             ],
             psf_fwhm=case.psf_fwhm,
             background=case.parameters[
-                "sky"
-            ],
+                    "background_level"
+                ],
             noise_sigma=case.noise_sigma,
         )
 

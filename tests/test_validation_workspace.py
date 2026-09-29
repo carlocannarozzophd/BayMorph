@@ -4,6 +4,7 @@ import pytest
 import yaml
 from astropy.io import fits
 
+from baymorph.pipeline.config import resolve_config
 from baymorph.validation import (
     GroundTruth,
     ValidationWorkspace,
@@ -67,8 +68,13 @@ def test_validation_workspace_writes_pipeline_inputs(tmp_path):
     assert config["psf"]["type"] == "gaussian"
     assert config["psf"]["gaussian"]["fwhm"] == 2.0
     assert config["fit"]["models"] == ["single_sersic"]
-    assert config["fit"]["sampler"]["seed"] == 42
+    assert config["fit"]["sampler"]["init"]["nlive"] == 100
     assert "masking" not in config
+
+    resolved = resolve_config(config)
+
+    assert resolved["preparation"]["detection"]["n_pixels"] == 20
+    assert resolved["fit"]["sampler"]["name"] == "dynesty"
 
     with fits.open(image_path) as hdul:
         assert hdul[0].data.shape == (32, 32)
@@ -81,17 +87,22 @@ def test_validation_workspace_accepts_sampler_overrides(tmp_path):
         "case-0001",
         make_truth(),
         sampler={
-            "nlive": 250,
-            "dlogz": 0.1,
+            "init": {
+                "nlive": 250,
+            },
+            "run": {
+                "dlogz": 0.1,
+            },
         },
     )
 
     with config_path.open() as stream:
         config = yaml.safe_load(stream)
 
-    assert config["fit"]["sampler"]["nlive"] == 250
-    assert config["fit"]["sampler"]["dlogz"] == 0.1
-    assert config["fit"]["sampler"]["seed"] == 42
+    assert config["fit"]["sampler"]["init"]["nlive"] == 250
+    assert config["fit"]["sampler"]["init"]["sample"] == "auto"
+    assert config["fit"]["sampler"]["run"]["dlogz"] == 0.1
+    assert config["fit"]["sampler"]["execution"]["processes"] == 1
 
 
 def test_validation_workspace_enables_model_comparison(tmp_path):

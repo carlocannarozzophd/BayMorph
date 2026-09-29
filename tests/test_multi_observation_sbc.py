@@ -28,8 +28,8 @@ def _reference_truth() -> MultiObservationGroundTruth:
             "position_angle": 0.35,
             "ra": 150.0,
             "dec": 30.0,
-            "sky__g": 0.0,
-            "sky__r": 0.0,
+            "background_level__g": 0.0,
+            "background_level__r": 0.0,
         },
         observations={
             "g": ObservationTruth(
@@ -138,8 +138,8 @@ def test_sbc_prior_contract_has_expected_global_support():
     assert bounds["re_arcsec"] == pytest.approx((0.6, 1.8))
     assert bounds["n"] == pytest.approx((0.8, 4.0))
     assert bounds["q"] == pytest.approx((0.3, 1.0))
-    assert bounds["sky__g"] == pytest.approx((-20.0, 20.0))
-    assert bounds["sky__r"] == pytest.approx((-20.0, 20.0))
+    assert bounds["background_level__g"] == pytest.approx((-20.0, 20.0))
+    assert bounds["background_level__r"] == pytest.approx((-20.0, 20.0))
 
 
 def test_sbc_routing_preserves_shared_and_independent_parameters():
@@ -158,8 +158,8 @@ def test_sbc_routing_preserves_shared_and_independent_parameters():
 
     assert routed["g"]["flux"] == draw.truth.parameter("flux__g")
     assert routed["r"]["flux"] == draw.truth.parameter("flux__r")
-    assert routed["g"]["sky"] == draw.truth.parameter("sky__g")
-    assert routed["r"]["sky"] == draw.truth.parameter("sky__r")
+    assert routed["g"]["background_level"] == draw.truth.parameter("background_level__g")
+    assert routed["r"]["background_level"] == draw.truth.parameter("background_level__r")
 
 
 def test_sbc_truth_and_noise_randomness_are_distinct():
@@ -289,8 +289,8 @@ def test_sbc_campaign_builds_problem_with_fixed_sbc_prior(tmp_path):
                 30.0 - 1.0 / 3600.0,
                 30.0 + 1.0 / 3600.0,
             ),
-            "sky__g": (-20.0, 20.0),
-            "sky__r": (-20.0, 20.0),
+            "background_level__g": (-20.0, 20.0),
+            "background_level__r": (-20.0, 20.0),
         }
     )
 

@@ -5,9 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from baymorph.fitting.model_factories import (
-    make_single_sersic_psf_sky_model,
-)
+from baymorph.fitting.model_factories import ObservedModelFactory
 from baymorph.models.geometry import (
     get_model_geometry,
 )
@@ -31,7 +29,7 @@ TRUTH = {
     "position_angle": 0.35,
     "ra": 150.0,
     "dec": 30.0,
-    "sky": 0.0,
+    "background_level": 0.0,
 }
 
 
@@ -92,8 +90,13 @@ def test_full_to_cutout_forward_rendering_closes(
         fwhm=psf_fwhm
     )
 
-    full_model = make_single_sersic_psf_sky_model(
+    factory = ObservedModelFactory(
+        "single_sersic",
+        background_model="constant",
         psf=psf,
+    )
+
+    full_model = factory(
         **full_parameters,
     )
 
@@ -161,8 +164,7 @@ def test_full_to_cutout_forward_rendering_closes(
         TRUTH
     )
 
-    cutout_model = make_single_sersic_psf_sky_model(
-        psf=psf,
+    cutout_model = factory(
         **cutout_parameters,
     )
 

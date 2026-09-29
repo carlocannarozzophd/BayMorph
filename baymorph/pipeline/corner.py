@@ -9,11 +9,6 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 
-from baymorph.pipeline.config import (
-    load_config,
-    load_resolved_config,
-    resolve_config,
-)
 from baymorph.pipeline.image_preparation import (
     load_image_preparation_products,
 )
@@ -24,48 +19,16 @@ from baymorph.pipeline.outputs import (
     pipeline_paths,
     simulation_truth_path,
 )
-from baymorph.pipeline.real_fit import (
-    _fit_diagnostic_title,
+from baymorph.pipeline.diagnostics_common import (
+    fit_diagnostic_title as _fit_diagnostic_title,
+    posterior_samples,
+    resolve_diagnostic_config,
 )
 from baymorph.plotting import corner_plot
 
 
-def _posterior_samples(posterior):
-    """Return equal-weight posterior samples when available."""
-    nested_posterior = getattr(
-        posterior,
-        "posterior",
-        None,
-    )
+_posterior_samples = posterior_samples
 
-    if (
-        nested_posterior is not None
-        and hasattr(
-            nested_posterior,
-            "equal_weight_samples",
-        )
-    ):
-        return nested_posterior.equal_weight_samples
-
-    if hasattr(
-        posterior,
-        "equal_weight_samples",
-    ):
-        return posterior.equal_weight_samples
-
-    if hasattr(
-        posterior,
-        "posterior_samples",
-    ):
-        return posterior.posterior_samples
-
-    if hasattr(
-        posterior,
-        "samples",
-    ):
-        return posterior.samples
-
-    return posterior
 
 def _simulation_truth_vector(
     config: Mapping[str, Any],
@@ -179,42 +142,13 @@ def _resolve_corner_config(
     config: str | Path | Mapping[str, Any],
 ) -> tuple[dict[str, Any], bool]:
     """Resolve a diagnostic configuration and identify its workflow mode."""
-    if isinstance(
-        config,
-        (str, Path),
-    ):
-        raw_config = load_config(
-            config
-        )
-
-        if "observations" in raw_config:
-            return (
-                raw_config,
-                True,
-            )
-
-        return (
-            load_resolved_config(
-                config
-            ),
-            False,
-        )
-
-    raw_config = dict(
+    resolved_config, is_multi_observation, _ = resolve_diagnostic_config(
         config
     )
 
-    if "observations" in raw_config:
-        return (
-            raw_config,
-            True,
-        )
-
     return (
-        resolve_config(
-            raw_config
-        ),
-        False,
+        resolved_config,
+        is_multi_observation,
     )
 
 

@@ -12,6 +12,8 @@ from baymorph.fitting.sampler_factory import make_sampler
 from baymorph.validation.run import (
     ValidationRun,
     execute_validation_case,
+    required_likelihood_calls,
+    required_logz,
     with_validation_seed,
 )
 
@@ -299,35 +301,11 @@ def summarize_repeatability(
     )
 
 
-
-def _required_logz(
-    run: ValidationRun,
-) -> float:
-    """Return evidence required by repeatability analysis."""
-    value = run.result.logz
-
-    if value is None:
-        raise ValueError(
-            "Repeatability analysis requires Bayesian evidence."
-        )
-
-    return float(
-        value
-    )
+_required_logz = required_logz
 
 
-def _required_likelihood_calls(
-    run: ValidationRun,
-) -> int:
-    """Return likelihood calls required by repeatability analysis."""
-    calls = run.likelihood_calls
+_required_likelihood_calls = required_likelihood_calls
 
-    if calls is None:
-        raise ValueError(
-            "Repeatability analysis requires likelihood-call diagnostics."
-        )
-
-    return calls
 
 def _make_record(
     *,

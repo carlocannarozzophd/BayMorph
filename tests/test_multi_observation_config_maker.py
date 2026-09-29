@@ -128,7 +128,7 @@ def _sky_parameters(
                 2.01,
             ),
         },
-        "sky": {
+        "background_level": {
             "coupling": "independent",
             "priors": {
                 name: _uniform(
@@ -485,7 +485,7 @@ def test_multi_observation_config_rejects_incomplete_parameter_contract(
     )
 
     del parameters[
-        "sky"
+        "background_level"
     ]
 
     output_dir = (

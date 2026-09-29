@@ -34,7 +34,7 @@ def fixed_model_priors() -> dict:
             "theta": 0.2,
             "x0": 15.5,
             "y0": 15.5,
-            "sky": 10.0,
+            "background_level": 10.0,
         },
         "double_sersic": {
             "flux_bulge": 600.0,
@@ -49,7 +49,7 @@ def fixed_model_priors() -> dict:
             "theta_disk": 0.3,
             "x0": 15.5,
             "y0": 15.5,
-            "sky": 10.0,
+            "background_level": 10.0,
         },
         "sersic_point_source": {
             "flux_sersic": 1000.0,
@@ -60,7 +60,7 @@ def fixed_model_priors() -> dict:
             "flux_point_source": 200.0,
             "x0": 15.5,
             "y0": 15.5,
-            "sky": 10.0,
+            "background_level": 10.0,
         },
         "bulge_disk": {
             "flux_bulge": 600.0,
@@ -74,7 +74,7 @@ def fixed_model_priors() -> dict:
             "theta_disk": 0.3,
             "x0": 15.5,
             "y0": 15.5,
-            "sky": 10.0,
+            "background_level": 10.0,
         },
     }
 
@@ -296,7 +296,7 @@ def controlled_latents() -> dict[str, float]:
         "point_source_fraction": 0.15,
         "centroid_x_offset_pixels": 0.25,
         "centroid_y_offset_pixels": -0.25,
-        "sky": 3.0,
+        "background_level": 3.0,
         "psf_fwhm_pixels": 2.0,
         "noise_sigma": 1.5,
     }

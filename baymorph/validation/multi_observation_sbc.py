@@ -81,7 +81,7 @@ def reference_multi_observation_sbc_parameter_config() -> dict[str, Any]:
                 30.0 + arcsec_in_degrees,
             ),
         },
-        "sky": {
+        "background_level": {
             "coupling": "independent",
             "priors": {
                 "g": uniform(-20.0, 20.0),

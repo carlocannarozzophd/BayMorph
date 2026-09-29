@@ -9,7 +9,7 @@ from baymorph.fitting import (
     Parameter,
     ParameterSet,
     make_sampler,
-    make_sersic_point_source_psf_sky_model,
+    make_sersic_point_source_psf_model,
 )
 from baymorph.fitting.image_problem import ImageInferenceProblem
 from baymorph.likelihood import GaussianImageLikelihood
@@ -36,10 +36,9 @@ def test_sersic_point_source_recovers_extended_and_unresolved_fluxes() -> None:
         "theta": 0.0,
         "x0": 10.0,
         "y0": 10.0,
-        "sky": 0.0,
     }
 
-    truth_model = make_sersic_point_source_psf_sky_model(
+    truth_model = make_sersic_point_source_psf_model(
         **truth,
         **fixed_parameters,
         psf=psf,
@@ -88,7 +87,7 @@ def test_sersic_point_source_recovers_extended_and_unresolved_fluxes() -> None:
         re: float,
         flux_point_source: float,
     ):
-        return make_sersic_point_source_psf_sky_model(
+        return make_sersic_point_source_psf_model(
             flux_sersic=flux_sersic,
             re=re,
             flux_point_source=flux_point_source,

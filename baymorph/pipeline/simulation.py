@@ -48,20 +48,7 @@ def _simulation_psf_config(
         "psf",
     )
 
-    if psf_cfg is not None:
-        return psf_cfg
-
-    psf_fwhm = simulation_cfg.get(
-        "psf_fwhm",
-    )
-
-    if psf_fwhm is None:
-        return None
-
-    return {
-        "type": "gaussian",
-        "fwhm": float(psf_fwhm),
-    }
+    return psf_cfg
 
 
 def _simulation_noise_config(
@@ -94,29 +81,17 @@ def _simulation_noise_config(
         "sky": float(
             nested_noise.get(
                 "sky",
-                simulation_cfg.get(
-                    "sky",
-                    0.0,
-                ),
+                0.0,
             )
         ),
         "poisson_noise": bool(
             nested_noise.get(
                 "poisson_noise",
-                simulation_cfg.get(
-                    "poisson_noise",
-                    True,
-                ),
+                True,
             )
         ),
         "read_noise_sigma": nested_noise.get(
             "read_noise",
-            nested_noise.get(
-                "read_noise_sigma",
-                simulation_cfg.get(
-                    "read_noise_sigma",
-                ),
-            ),
         ),
     }
 
@@ -126,8 +101,9 @@ def _normalized_simulation_config(
 ) -> dict[str, Any]:
     """Return a simulation configuration accepted by the backend.
 
-    This helper preserves the current nested YAML structure while also
-    supporting the older flat simulation keys.
+    The nested ``simulation.noise`` and ``simulation.psf`` sections are the
+    only supported configuration surface; the flat keys consumed by the
+    simulation backend are derived from them.
 
     Parameters
     ----------

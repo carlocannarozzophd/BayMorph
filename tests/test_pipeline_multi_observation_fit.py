@@ -98,15 +98,15 @@ def _layout():
                 )
             ),
             MultiObservationParameterSpec.independent(
-                "sky",
+                "background_level",
                 {
                     "g": Parameter(
-                        "sky",
+                        "background_level",
                         lower=-5.0,
                         upper=5.0,
                     ),
                     "r": Parameter(
-                        "sky",
+                        "background_level",
                         lower=-5.0,
                         upper=5.0,
                     ),
@@ -660,8 +660,8 @@ def test_multi_observation_fit_builds_joint_and_observation_products(
 
     monkeypatch.setattr(
         multi_observation_fit,
-        "_resolve_model_factory",
-        lambda model_name: ConstantModel,
+        "ObservedModelFactory",
+        lambda model_name, **options: ConstantModel,
     )
 
     names = layout.parameter_set.names
@@ -675,8 +675,8 @@ def test_multi_observation_fit_builds_joint_and_observation_products(
         "theta": 0.0,
         "x0": 5.0,
         "y0": 5.0,
-        "sky__g": 0.0,
-        "sky__r": 0.0,
+        "background_level__g": 0.0,
+        "background_level__r": 0.0,
     }
 
     sample = np.asarray(

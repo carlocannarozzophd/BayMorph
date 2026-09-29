@@ -18,11 +18,6 @@ _SYMBOLIC_BOUNDS = {
     "pi": np.pi,
 }
 
-_PARAMETER_ALIASES = {
-    "background_level": "sky",
-}
-
-
 def _numeric_bound(
     value: Any,
 ) -> float | None:
@@ -154,7 +149,6 @@ def audit_posterior_prior_boundaries(
     *,
     edge_fraction: float = 1.0e-3,
     mass_threshold: float = 1.0e-2,
-    parameter_aliases: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Measure weighted posterior mass near supported prior boundaries.
 
@@ -168,8 +162,6 @@ def audit_posterior_prior_boundaries(
         Width of each inspected edge in prior-measure coordinates.
     mass_threshold : float, default=1e-2
         Posterior-mass threshold used to declare boundary contact.
-    parameter_aliases : mapping, optional
-        Mapping from posterior parameter names to configuration prior names.
 
     Returns
     -------
@@ -208,28 +200,13 @@ def audit_posterior_prior_boundaries(
             "mass_threshold must lie in (0, 1]."
         )
 
-    aliases = dict(
-        _PARAMETER_ALIASES
-    )
-
-    if parameter_aliases is not None:
-        aliases.update(
-            {
-                str(key): str(value)
-                for key, value in parameter_aliases.items()
-            }
-        )
-
     parameter_diagnostics: dict[str, dict[str, Any]] = {}
     flagged_parameters: list[str] = []
 
     for column, parameter_name in enumerate(
         posterior.parameter_names
     ):
-        prior_name = aliases.get(
-            parameter_name,
-            parameter_name,
-        )
+        prior_name = parameter_name
 
         prior = priors.get(
             prior_name

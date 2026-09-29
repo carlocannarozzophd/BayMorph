@@ -7,7 +7,7 @@ import numpy as np
 from baymorph.fitting import (
     Parameter,
     ParameterSet,
-    make_bulge_disk_psf_sky_model,
+    make_bulge_disk_psf_model,
     make_sampler,
 )
 from baymorph.fitting.image_problem import ImageInferenceProblem
@@ -41,14 +41,13 @@ def test_bulge_disk_sampler_recovers_linear_gaussian_posterior() -> None:
         "theta_disk": 0.0,
         "x0": 12.0,
         "y0": 12.0,
-        "sky": 0.0,
     }
 
     def render(
         flux_bulge: float,
         flux_disk: float,
     ) -> np.ndarray:
-        model = make_bulge_disk_psf_sky_model(
+        model = make_bulge_disk_psf_model(
             flux_bulge=flux_bulge,
             flux_disk=flux_disk,
             **fixed_parameters,
@@ -96,7 +95,7 @@ def test_bulge_disk_sampler_recovers_linear_gaussian_posterior() -> None:
         flux_bulge: float,
         flux_disk: float,
     ):
-        return make_bulge_disk_psf_sky_model(
+        return make_bulge_disk_psf_model(
             flux_bulge=flux_bulge,
             flux_disk=flux_disk,
             **fixed_parameters,

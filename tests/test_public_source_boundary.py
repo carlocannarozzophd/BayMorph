@@ -50,8 +50,12 @@ OPERATIONAL_DOCUMENTS = {
     "docs/architecture/PRODUCTION_WORKFLOW.md",
 }
 
+# A catalogue identifier followed by an underscore suffix, such as a band or a
+# version tag, is still a real-object name, so no trailing word boundary is
+# required. At least two digits are required so that short letter-digit runs
+# inside encoded blobs are not mistaken for catalogue numbers.
 REAL_OBJECT_PATTERN = re.compile(
-    r"\b(?:PGC|NGC|UGC|IC)\s*[-_]?\s*\d+\b",
+    r"(?<![A-Za-z0-9])(?:PGC|NGC|UGC|IC)\s*[-_]?\s*\d{2,}",
     flags=re.IGNORECASE,
 )
 
@@ -171,6 +175,28 @@ def test_operational_surface_is_real_object_neutral() -> None:
     assert sorted(
         offenders
     ) == []
+
+
+LOCAL_ABSOLUTE_PATH_PATTERN = re.compile(
+    r"/(?:Users|home)/[A-Za-z0-9_.-]+/",
+)
+
+
+def test_public_source_contains_no_local_absolute_paths() -> None:
+    """Tracked text must not carry paths from a contributor's machine."""
+    offenders = sorted(
+        filename.as_posix()
+        for filename in _tracked_files()
+        if filename.suffix.lower() in TEXT_SUFFIXES
+        and LOCAL_ABSOLUTE_PATH_PATTERN.search(
+            (PROJECT_ROOT / filename).read_text(
+                encoding="utf-8",
+                errors="ignore",
+            )
+        )
+    )
+
+    assert offenders == []
 
 
 def test_public_source_boundary_policy_is_documented() -> None:

@@ -5,11 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from baymorph.models import (
-    parameter_names,
-    registered_models,
-)
+from baymorph.models import registered_models
 from baymorph.validation.model_screening_simulation import (
+    screening_parameter_names,
     simulate_model_screening_case,
 )
 
@@ -23,7 +21,7 @@ MODEL_PARAMETERS = {
         "theta": 0.2,
         "x0": 15.5,
         "y0": 15.5,
-        "sky": 10.0,
+        "background_level": 10.0,
     },
     "double_sersic": {
         "flux_bulge": 600.0,
@@ -38,7 +36,7 @@ MODEL_PARAMETERS = {
         "theta_disk": 0.3,
         "x0": 15.5,
         "y0": 15.5,
-        "sky": 10.0,
+        "background_level": 10.0,
     },
     "sersic_point_source": {
         "flux_sersic": 1000.0,
@@ -49,7 +47,7 @@ MODEL_PARAMETERS = {
         "flux_point_source": 200.0,
         "x0": 15.5,
         "y0": 15.5,
-        "sky": 10.0,
+        "background_level": 10.0,
     },
     "bulge_disk": {
         "flux_bulge": 600.0,
@@ -63,7 +61,7 @@ MODEL_PARAMETERS = {
         "theta_disk": 0.3,
         "x0": 15.5,
         "y0": 15.5,
-        "sky": 10.0,
+        "background_level": 10.0,
     },
 }
 
@@ -98,7 +96,7 @@ def test_simulator_supports_every_registered_model(
     assert set(
         case.parameters
     ) == set(
-        parameter_names(
+        screening_parameter_names(
             model_name
         )
     )

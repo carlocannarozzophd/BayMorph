@@ -33,8 +33,8 @@ def _truth() -> MultiObservationGroundTruth:
             "position_angle": 0.35,
             "ra": 150.0,
             "dec": 30.0,
-            "sky__g": 0.0,
-            "sky__r": 0.0,
+            "background_level__g": 0.0,
+            "background_level__r": 0.0,
         },
         observations={
             "g": ObservationTruth(
@@ -158,8 +158,8 @@ def test_preparation_free_case_preserves_end_to_end_prior_contract():
         "position_angle",
         "ra",
         "dec",
-        "sky__g",
-        "sky__r",
+        "background_level__g",
+        "background_level__r",
     ]
     expected_bounds = {
         "flux__g": (450.0, 1350.0),
@@ -170,8 +170,8 @@ def test_preparation_free_case_preserves_end_to_end_prior_contract():
         "position_angle": (-1.5, 1.5),
         "ra": (150.0 - 1.0 / 3600.0, 150.0 + 1.0 / 3600.0),
         "dec": (30.0 - 1.0 / 3600.0, 30.0 + 1.0 / 3600.0),
-        "sky__g": (-20.0, 20.0),
-        "sky__r": (-20.0, 20.0),
+        "background_level__g": (-20.0, 20.0),
+        "background_level__r": (-20.0, 20.0),
     }
     actual_bounds = case.problem.parameter_layout.parameter_set.bounds
 

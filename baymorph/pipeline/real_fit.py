@@ -11,25 +11,22 @@ from typing import Any
 
 import numpy as np
 
+from baymorph.pipeline.diagnostics_common import (
+    diagnostic_title,
+    fit_diagnostic_title,
+    object_label,
+)
 from baymorph.core.observation import Observation
 from baymorph.fitting import make_sampler
 from baymorph.fitting.image_problem import ImageInferenceProblem
-from baymorph.fitting.model_factories import (
-    make_bulge_disk_psf_sky_model,
-    make_double_sersic_psf_sky_model,
-    make_sersic_point_source_psf_sky_model,
-    make_single_sersic_psf_sky_model,
-)
+from baymorph.fitting.model_factories import ObservedModelFactory
 from baymorph.fitting.parameters import Parameter, ParameterSet
 from baymorph.likelihood import (
     CorrelatedGaussianImageLikelihood,
     make_likelihood,
 )
 from baymorph.models import get_model
-from baymorph.observation.background import (
-    BackgroundAppliedModel,
-    make_background_effect,
-)
+from baymorph.observation.background import background_parameter_names
 from baymorph.pipeline.checkpoint_signing import (
     baymorph_source_signature as _baymorph_source_signature,
     checkpoint_array_signature as _checkpoint_array_signature,
@@ -341,9 +338,6 @@ def _resolved_boundary_priors(
     for parameter_name in get_model(
         model_name
     ).parameter_names:
-        if parameter_name == "sky":
-            continue
-
         prior = dict(
             prior_config_for_parameter(
                 parameter_name,
@@ -374,23 +368,14 @@ def _resolved_boundary_priors(
             parameter_name
         ] = prior
 
-    background_model = str(
-        background_cfg.get(
-            "model",
-            "constant",
-        )
-    ).strip().lower()
     background_priors = background_cfg.get(
         "priors",
         {},
     )
-    background_names = (
-        ("background_level",)
-        if background_model == "constant"
-        else (
-            "background_level",
-            "background_gradient_x",
-            "background_gradient_y",
+    background_names = background_parameter_names(
+        background_cfg.get(
+            "model",
+            "constant",
         )
     )
 
@@ -1068,9 +1053,6 @@ def save_real_fit_products(
             audit_posterior_prior_boundaries(
                 products.posterior.posterior,
                 model_priors,
-                parameter_aliases={
-                    "background_level": "background_level",
-                },
             )
         )
 
@@ -1597,32 +1579,6 @@ def _build_parameter_list(
     )
 
 
-def _background_parameter_names(
-    background_cfg: dict,
-) -> list[str]:
-    """Return the sampled parameter contract for one background model."""
-    model = str(
-        background_cfg["model"]
-    ).strip().lower()
-
-    if model == "constant":
-        return [
-            "background_level",
-        ]
-
-    if model == "plane":
-        return [
-            "background_level",
-            "background_gradient_x",
-            "background_gradient_y",
-        ]
-
-    raise ValueError(
-        f"Unsupported background model {model!r}. "
-        "Available models: 'constant', 'plane'."
-    )
-
-
 def _build_parameter_set(
     model_name: str,
     *,
@@ -1647,11 +1603,9 @@ def _build_parameter_set(
         model_name
     )
 
-    morphology_parameter_names = [
-        name
-        for name in model_definition.parameter_names
-        if name != "sky"
-    ]
+    morphology_parameter_names = list(
+        model_definition.parameter_names
+    )
 
     morphology_parameters = _build_parameter_list(
         morphology_parameter_names,
@@ -1659,19 +1613,21 @@ def _build_parameter_set(
         references=references,
     )
 
-    background_parameter_names = _background_parameter_names(
-        background_cfg
+    background_names = list(
+        background_parameter_names(
+            background_cfg["model"]
+        )
     )
 
     background_parameters = _build_parameter_list(
-        background_parameter_names,
+        background_names,
         background_cfg["priors"],
         references=references,
     )
 
     parameter_names = (
         morphology_parameter_names
-        + background_parameter_names
+        + background_names
     )
 
     parameters = ParameterSet(
@@ -1685,111 +1641,19 @@ def _build_parameter_set(
     )
 
 
-def _resolve_model_factory(
-    model_name,
-):
-    """Return the production factory associated with a registered model."""
-    model_definition = get_model(
-        model_name
-    )
-
-    factories = {
-        "SingleSersicModelFactory": make_single_sersic_psf_sky_model,
-        "DoubleSersicModelFactory": make_double_sersic_psf_sky_model,
-        "BulgeDiskModelFactory": make_bulge_disk_psf_sky_model,
-        "SersicPointSourceModelFactory": (
-            make_sersic_point_source_psf_sky_model
-        ),
-    }
-
-    try:
-        return factories[
-            model_definition.factory_name
-        ]
-    except KeyError as exc:
-        raise ValueError(
-            "Unsupported model factory: "
-            f"{model_definition.factory_name}"
-        ) from exc
-
-
-class _ObservedModelFactory:
-    """Pickle-safe observation-specific source-plus-background factory."""
-
-    def __init__(
-        self,
-        model_name,
-        psf,
-        *,
-        background_cfg,
-    ) -> None:
-        self.model_name = str(
-            model_name
-        )
-        self.psf = psf
-
-        self.background_model = str(
-            background_cfg["model"]
-        ).strip().lower()
-
-        model_definition = get_model(
-            self.model_name
-        )
-
-        self.morphology_parameter_names = tuple(
-            name
-            for name in model_definition.parameter_names
-            if name != "sky"
-        )
-
-    def __call__(
-        self,
-        **parameters,
-    ):
-        """Build one observed source-plus-background model."""
-        source_parameters = {
-            name: parameters[
-                name
-            ]
-            for name in self.morphology_parameter_names
-        }
-
-        source_model = _resolve_model_factory(
-            self.model_name
-        )(
-            **source_parameters,
-            psf=self.psf,
-            sky=0.0,
-        )
-
-        background = make_background_effect(
-            self.background_model,
-            level=parameters[
-                "background_level"
-            ],
-            gradient_x=parameters.get(
-                "background_gradient_x",
-                0.0,
-            ),
-            gradient_y=parameters.get(
-                "background_gradient_y",
-                0.0,
-            ),
-        )
-
-        return BackgroundAppliedModel(
-            model=source_model,
-            background=background,
-        )
-
-
 def _make_model_factory(
     model_name,
     psf,
     *,
     background_cfg=None,
 ):
-    """Build a pickle-safe observation-specific production model factory."""
+    """Build the pickle-safe production model factory of one observation.
+
+    The factory composes the registered morphology with the observation PSF
+    and applies the declared residual background (AD-031). The same class
+    serves joint multi-observation inference, where each observation injects
+    its own PSF at call time instead of binding it here.
+    """
     if background_cfg is None:
         background_cfg = DEFAULT_CONFIG[
             "fit"
@@ -1797,10 +1661,12 @@ def _make_model_factory(
             "background"
         ]
 
-    return _ObservedModelFactory(
+    return ObservedModelFactory(
         model_name,
-        psf,
-        background_cfg=background_cfg,
+        background_model=background_cfg[
+            "model"
+        ],
+        psf=psf,
     )
 
 
@@ -2104,88 +1970,10 @@ def _build_image_inference_problem(
     )
 
 
-def _object_label(
-    config: dict[str, Any],
-) -> str | None:
-    """Return a human-readable object label for diagnostic figures."""
-    object_cfg = config.get(
-        "object",
-        {},
-    )
-
-    if not isinstance(
-        object_cfg,
-        dict,
-    ):
-        return None
-
-    name = object_cfg.get(
-        "name"
-    )
-
-    if name is None:
-        return None
-
-    label = str(
-        name
-    ).strip()
-
-    if not label:
-        return None
-
-    return label.replace(
-        "_",
-        " ",
-    )
+_object_label = object_label
 
 
-def _fit_diagnostic_title(
-    config: dict[str, Any],
-    model_name: str,
-) -> str:
-    """Return an object- and model-aware diagnostic title."""
-    diagnostics_cfg = config.get(
-        "diagnostics",
-        {},
-    )
-
-    if isinstance(
-        diagnostics_cfg,
-        dict,
-    ):
-        configured_titles = diagnostics_cfg.get(
-            "titles",
-            {},
-        )
-
-        if (
-            isinstance(
-                configured_titles,
-                dict,
-            )
-            and model_name in configured_titles
-        ):
-            return str(
-                configured_titles[
-                    model_name
-                ]
-            )
-
-    model_label = _diagnostic_title(
-        config,
-        model_name,
-    )
-
-    object_label = _object_label(
-        config
-    )
-
-    if object_label is None:
-        return model_label
-
-    return (
-        f"{object_label} | {model_label}"
-    )
+_fit_diagnostic_title = fit_diagnostic_title
 
 
 def _run_sampler(
@@ -2221,37 +2009,4 @@ def _run_sampler(
     )
 
 
-def _diagnostic_title(
-    config: dict[str, Any],
-    model_name: str,
-) -> str:
-    """Return a human-readable diagnostic title for a model."""
-    diagnostics_cfg = config.get(
-        "diagnostics",
-        {},
-    )
-
-    titles = diagnostics_cfg.get(
-        "titles",
-        {},
-    )
-
-    if model_name in titles:
-        return str(
-            titles[
-                model_name
-            ]
-        )
-
-    return (
-        model_name
-        .replace(
-            "_",
-            " ",
-        )
-        .title()
-        .replace(
-            "Sersic",
-            "Sérsic",
-        )
-    )
+_diagnostic_title = diagnostic_title
