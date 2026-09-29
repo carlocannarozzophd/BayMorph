@@ -23,6 +23,7 @@ EXPECTED_NOTEBOOKS: set[str] = {
 # so they are listed separately rather than relaxing the public-notebook rules.
 EXPECTED_VALIDATION_NOTEBOOKS: set[str] = {
     "repeated_noise_recovery/repeated_noise_recovery.ipynb",
+    "structure_informed_evidence/nautilus_vs_model_informed.ipynb",
 }
 
 
