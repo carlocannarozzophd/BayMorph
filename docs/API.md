@@ -469,7 +469,10 @@ candidate peak ceiling was declared, without choosing either value. The Advisor
 summary reports the FITS `BUNIT` and saturation keyword as header metadata
 that is not unit-checked, and labels its background and noise scales as
 whole-image diagnostics: the noise scale used by the likelihood is measured
-on the prepared cutout.
+on the prepared cutout. Those diagnostics come from a mesh background
+estimated with the source-detection mask. When the detected sources leave too
+few unmasked pixels in every mesh box, the Advisor raises an error instead of
+estimating a background that includes the sources.
 
 ## Model screening advisor
 

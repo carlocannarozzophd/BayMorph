@@ -11,7 +11,7 @@ import numpy as np
 
 from baymorph.core.image import ImageData
 from baymorph.pipeline.config import load_resolved_config
-from baymorph.pipeline.image_preparation import prepare_real_fits_image
+from baymorph.pipeline.image_preparation import detect_real_fits_sources
 from baymorph.pipeline.outputs import make_output_tree, pipeline_paths
 
 
@@ -177,21 +177,16 @@ def run_psf_candidate_selection_from_config(
     image = ImageData.from_fits(resolved["data"]["image_path"])
 
     detection_cfg = resolved["preparation"]["detection"]
-    background_cfg = resolved["preparation"]["background"]
 
-    detection_n_pixels = detection_cfg["n_pixels"]
-
-    prepared = prepare_real_fits_image(
+    detection = detect_real_fits_sources(
         image.data,
-        background_box_size=background_cfg["box_size"],
-        background_filter_size=background_cfg["filter_size"],
         detection_sigma=detection_cfg["n_sigma"],
-        detection_n_pixels=detection_n_pixels,
+        detection_n_pixels=detection_cfg["n_pixels"],
         detection_n_levels=detection_cfg["n_levels"],
     )
 
-    segmentation = prepared.detection.segmentation
-    source_catalog = prepared.detection.catalog
+    segmentation = detection.segmentation
+    source_catalog = detection.catalog
 
     if segmentation is None:
         raise RuntimeError("No segmentation map was produced.")

@@ -18,11 +18,16 @@ from baymorph import (
 def write_observation(
     directory: Path,
 ) -> Path:
-    """Write a simple finite target for Advisor tests."""
+    """Write a simple finite target for Advisor tests.
+
+    The frame is large enough for the whole-image mesh background, which
+    the Advisor refuses to estimate when detected sources fill most of the
+    image.
+    """
     y, x = np.indices(
         (
-            41,
-            41,
+            81,
+            81,
         ),
         dtype=float,
     )

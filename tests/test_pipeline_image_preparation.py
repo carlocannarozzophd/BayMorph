@@ -419,6 +419,63 @@ def test_prepare_real_image_from_config_applies_mask_mode(
         )
 
 
+def test_preparation_does_not_estimate_a_discarded_mesh_background(
+    tmp_path,
+    monkeypatch,
+):
+    """Preparation needs source detection only, never a mesh background."""
+    from baymorph.pipeline import prepare_real_image_from_config
+
+    yy, xx = np.indices((80, 80))
+    radius_squared = (xx - 40.0) ** 2 + (yy - 40.0) ** 2
+    image_path = tmp_path / "image.fits"
+    fits.writeto(
+        image_path,
+        100.0 * np.exp(-0.5 * radius_squared / 4.0**2),
+    )
+
+    def forbidden_mesh_background(*args, **kwargs):
+        raise AssertionError(
+            "Image preparation must not estimate a mesh background."
+        )
+
+    monkeypatch.setattr(
+        image_preparation_module,
+        "estimate_background_photutils",
+        forbidden_mesh_background,
+    )
+    monkeypatch.setattr(
+        image_preparation_module,
+        "validate_plateau_cutout_containment",
+        lambda **kwargs: None,
+    )
+
+    products = prepare_real_image_from_config(
+        {
+            "object": {"name": "synthetic"},
+            "data": {
+                "image_path": str(image_path),
+                "target_position": {"x": 40, "y": 40},
+                "cutout": {"mode": "fixed", "size": 70},
+            },
+            "preparation": {
+                "detection": {
+                    "n_sigma": 2.0,
+                    "n_pixels": 5,
+                    "n_levels": 32,
+                },
+            },
+            "outputs": {
+                "root": str(tmp_path / "outputs"),
+                "overwrite": True,
+            },
+        },
+        save=False,
+    )
+
+    assert products.fitting_mask.shape == (70, 70)
+
+
 @pytest.mark.parametrize("invalid_value", [np.nan, np.inf, -np.inf])
 def test_prepare_real_fits_image_rejects_non_finite_science_data(
     invalid_value,
@@ -469,10 +526,8 @@ def test_auto_cutout_exact_mask_does_not_relabel_contaminants(
     detection = SimpleNamespace(
         target_segment=target_segment,
         contaminant_mask=automatic_mask,
-        prepared=SimpleNamespace(
-            detection=SimpleNamespace(
-                segmentation=segmentation
-            ),
+        detection=SimpleNamespace(
+            segmentation=segmentation
         ),
     )
 
@@ -572,7 +627,6 @@ def test_auto_cutout_exact_mask_does_not_relabel_contaminants(
             "sky_margin": 2.0,
         },
         detection_cfg={},
-        background_cfg={},
         external_mask=curated_mask,
         fitting_mask_mode="exact",
     )
@@ -709,9 +763,9 @@ def test_prepare_real_image_rejects_final_plateau_outside_auto_cutout(
         target_label=1,
         target_segment=np.ones((20, 20), dtype=bool),
         contaminant_mask=np.zeros((20, 20), dtype=bool),
-        prepared=SimpleNamespace(
+        detection=SimpleNamespace(
             mask=np.zeros((20, 20), dtype=bool),
-            detection=SimpleNamespace(segmentation=segmentation),
+            segmentation=segmentation,
         ),
     )
     monkeypatch.setattr(
@@ -770,9 +824,9 @@ def test_prepare_real_image_rejects_final_plateau_outside_fixed_cutout(
         target_label=1,
         target_segment=np.ones((20, 20), dtype=bool),
         contaminant_mask=np.zeros((20, 20), dtype=bool),
-        prepared=SimpleNamespace(
+        detection=SimpleNamespace(
             mask=np.zeros((20, 20), dtype=bool),
-            detection=SimpleNamespace(segmentation=segmentation),
+            segmentation=segmentation,
         ),
     )
     monkeypatch.setattr(

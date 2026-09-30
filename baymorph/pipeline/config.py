@@ -65,6 +65,9 @@ DEFAULT_CONFIG = {
         "overwrite": False,
     },
     "preparation": {
+        # Mesh-background settings that no preparation step reads any more.
+        # They stay because the preparation section is part of the identity
+        # of persisted preparation products.
         "background": {
             "box_size": 30,
             "filter_size": 3,

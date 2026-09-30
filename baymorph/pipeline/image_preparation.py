@@ -620,6 +620,46 @@ def _load_and_verify_preparation_bundle(directory: Path) -> frozenset[str]:
     return artifact_names
 
 
+def detect_real_fits_sources(
+    data,
+    detection_sigma: float = 3.0,
+    detection_n_pixels: int = 5,
+    detection_n_levels: int = 32,
+) -> DetectionResult:
+    """Detect and deblend the sources of one real image.
+
+    Target selection and empirical-PSF candidate selection need only the
+    segmentation, the detection mask and the source catalogue, so they call
+    this function rather than :func:`prepare_real_fits_image`, whose mesh
+    background and noise map they would discard.
+
+    Parameters
+    ----------
+    data : array-like
+        Input image. Non-finite pixels are rejected, not repaired.
+    detection_sigma : float, default=3.0
+        Source-detection threshold in units of noise.
+    detection_n_pixels : int, default=5
+        Minimum connected pixels required for source detection.
+    detection_n_levels : int, default=32
+        Number of detection levels forwarded to the detection interface.
+
+    Returns
+    -------
+    DetectionResult
+        Segmentation, detection mask and source catalogue.
+    """
+    return detect_sources_segmentation(
+        _as_finite_image(
+            data,
+            context="source detection",
+        ),
+        n_sigma=detection_sigma,
+        n_pixels=detection_n_pixels,
+        n_levels=detection_n_levels,
+    )
+
+
 def prepare_real_fits_image(
     data,
     background_box_size: int = 20,
@@ -628,7 +668,12 @@ def prepare_real_fits_image(
     detection_n_pixels: int = 5,
     detection_n_levels: int = 32,
 ):
-    """Prepare a real image array for fitting.
+    """Detect sources and estimate a whole-image background and noise map.
+
+    The observation advisor uses these products as whole-image diagnostics.
+    The fitting workflow does not: it detects sources with
+    :func:`detect_real_fits_sources` and measures the background and the
+    noise scale of the likelihood on the sky region of the prepared cutout.
 
     Parameters
     ----------
@@ -650,17 +695,25 @@ def prepare_real_fits_image(
     RealFITSPreparation
         Prepared image, background estimate, detection mask, noise map, and
         detection products.
+
+    Raises
+    ------
+    ValueError
+        If the image contains non-finite pixels, or if the mesh background
+        cannot be estimated because the detected sources leave too few
+        unmasked pixels in every mesh box. There is no fallback to a
+        background estimate that ignores the detection mask.
     """
     data = _as_finite_image(
         data,
         context="source detection",
     )
 
-    detection = detect_sources_segmentation(
+    detection = detect_real_fits_sources(
         data,
-        n_sigma=detection_sigma,
-        n_pixels=detection_n_pixels,
-        n_levels=detection_n_levels,
+        detection_sigma=detection_sigma,
+        detection_n_pixels=detection_n_pixels,
+        detection_n_levels=detection_n_levels,
     )
 
     mask = detection.mask
@@ -672,10 +725,12 @@ def prepare_real_fits_image(
             filter_size=background_filter_size,
             mask=mask,
         )
-    except ValueError:
-        background_result = estimate_background_constant(
-            data,
-        )
+    except ValueError as exc:
+        raise ValueError(
+            "The whole-image mesh background could not be estimated with "
+            f"{background_box_size}-pixel boxes: detected sources cover "
+            f"{float(np.mean(mask)):.0%} of the image. {exc}"
+        ) from exc
 
     background_subtracted = subtract_background(
         data,
@@ -700,7 +755,7 @@ def prepare_real_fits_image(
 class _TargetDetection:
     """Target-selection products for one image coordinate system."""
 
-    prepared: RealFITSPreparation
+    detection: DetectionResult
     target_label: int
     target_segment: np.ndarray
     contaminant_mask: np.ndarray
@@ -771,22 +826,17 @@ def _detect_target_in_image(
     target_x: float,
     target_y: float,
     detection_cfg: dict[str, Any],
-    background_cfg: dict[str, Any],
     context: str,
 ) -> _TargetDetection:
     """Detect sources and select the target near a requested position."""
-    detection_n_pixels = detection_cfg["n_pixels"]
-
-    prepared = prepare_real_fits_image(
+    detection = detect_real_fits_sources(
         data,
-        background_box_size=background_cfg["box_size"],
-        background_filter_size=background_cfg["filter_size"],
         detection_sigma=detection_cfg["n_sigma"],
-        detection_n_pixels=detection_n_pixels,
+        detection_n_pixels=detection_cfg["n_pixels"],
         detection_n_levels=detection_cfg["n_levels"],
     )
 
-    segmentation = prepared.detection.segmentation
+    segmentation = detection.segmentation
     if segmentation is None:
         raise RuntimeError(f"No segmentation map was produced during {context}.")
 
@@ -801,7 +851,7 @@ def _detect_target_in_image(
     contaminant_mask = (segmentation.data > 0) & (segmentation.data != target_label)
 
     return _TargetDetection(
-        prepared=prepared,
+        detection=detection,
         target_label=int(target_label),
         target_segment=target_segment,
         contaminant_mask=contaminant_mask,
@@ -815,7 +865,6 @@ def _resolve_auto_cutout(
     target_y: float,
     cutout_cfg: dict[str, Any],
     detection_cfg: dict[str, Any],
-    background_cfg: dict[str, Any],
     external_mask: np.ndarray | None = None,
     fitting_mask_mode: str = "union",
 ) -> AutoCutoutResult:
@@ -825,7 +874,6 @@ def _resolve_auto_cutout(
         target_x=target_x,
         target_y=target_y,
         detection_cfg=detection_cfg,
-        background_cfg=background_cfg,
         context="full-image detection",
     )
 
@@ -861,7 +909,6 @@ def _resolve_auto_cutout(
         target_x=target_x - preliminary_definition.xmin,
         target_y=target_y - preliminary_definition.ymin,
         detection_cfg=detection_cfg,
-        background_cfg=background_cfg,
         context="preliminary-cutout detection",
     )
 
@@ -922,7 +969,7 @@ def _resolve_auto_cutout(
         cutout=final_cutout,
         preliminary_cutout=preliminary_cutout,
         preliminary_segmentation=(
-            preliminary_detection.prepared.detection.segmentation.data.copy()
+            preliminary_detection.detection.segmentation.data.copy()
         ),
         geometry=geometry,
         radial_profile=radial_profile,
@@ -1115,7 +1162,6 @@ def prepare_real_image_from_config(
 
     cutout_cfg = resolved["data"]["cutout"]
     detection_cfg = resolved["preparation"]["detection"]
-    background_cfg = resolved["preparation"]["background"]
 
     fitting_mask_mode = _resolve_fitting_mask_mode(resolved["data"])
 
@@ -1151,8 +1197,7 @@ def prepare_real_image_from_config(
             target_y=target_position["y"],
             cutout_cfg=cutout_cfg,
             detection_cfg=detection_cfg,
-            background_cfg=background_cfg,
-            external_mask=external_mask,
+                external_mask=external_mask,
             fitting_mask_mode=fitting_mask_mode,
         )
         cutout_definition = auto_cutout_result.cutout
@@ -1180,12 +1225,10 @@ def prepare_real_image_from_config(
         target_x=seed_target_x,
         target_y=seed_target_y,
         detection_cfg=detection_cfg,
-        background_cfg=background_cfg,
         context="final-cutout detection",
     )
 
-    prepared = final_detection.prepared
-    segmentation = prepared.detection.segmentation
+    segmentation = final_detection.detection.segmentation
     target_label = final_detection.target_label
     target_segment = final_detection.target_segment
     contaminant_mask = final_detection.contaminant_mask
@@ -1271,7 +1314,7 @@ def prepare_real_image_from_config(
         cutout=cutout,
         prepared_data=prepared_data,
         noise=noise,
-        automatic_mask=prepared.mask,
+        automatic_mask=final_detection.detection.mask,
         fitting_mask=fitting_mask,
         target_segment=target_segment,
         contaminant_mask=contaminant_mask,
