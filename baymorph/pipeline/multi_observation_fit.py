@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping
-from copy import deepcopy
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -38,12 +36,13 @@ from baymorph.observation.model_parameter_transforms import (
 )
 from baymorph.pipeline.checkpoint_signing import (
     baymorph_source_signature as _baymorph_source_signature,
+    canonical_json_sha256 as _canonical_json_sha256,
     checkpoint_array_signature as _checkpoint_array_signature,
     checkpoint_runtime_versions as _checkpoint_runtime_versions,
     checkpoint_signature_value as _checkpoint_signature_value,
+    prepare_signed_sampler_checkpoint,
     prior_checkpoint_signature as _prior_checkpoint_signature,
     qualified_class_name as _qualified_class_name,
-    resolve_json_signed_checkpoint,
     runtime_psf_checkpoint_signature as _runtime_psf_checkpoint_signature,
     write_json_atomic as _write_json_atomic,
 )
@@ -312,30 +311,18 @@ def _write_multi_observation_completion_marker(
     products: MultiObservationFitProducts,
 ) -> None:
     """Mark a fully persisted joint multi-observation fit complete."""
-    canonical_config = json.dumps(
-        _checkpoint_signature_value(
-            dict(
-                config
-            )
-        ),
-        sort_keys=True,
-        separators=(
-            ",",
-            ":",
-        ),
-        ensure_ascii=True,
-        allow_nan=False,
-    )
     evidence = products.posterior.evidence
 
     payload = {
         "schema_version": 1,
         "model": model_name,
-        "config_sha256": hashlib.sha256(
-            canonical_config.encode(
-                "utf-8"
+        "config_sha256": _canonical_json_sha256(
+            _checkpoint_signature_value(
+                dict(
+                    config
+                )
             )
-        ).hexdigest(),
+        ),
         "logz": products.logz,
         "logz_error": products.logz_error,
         "evidence_method": (
@@ -511,189 +498,38 @@ def _multi_observation_problem_signature(
         "runtime_versions": _checkpoint_runtime_versions(),
     }
 
-    canonical = json.dumps(
-        payload,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-        allow_nan=False,
-    )
-
     return (
         "sha256:"
-        + hashlib.sha256(
-            canonical.encode(
-                "utf-8"
-            )
-        ).hexdigest()
+        + _canonical_json_sha256(
+            payload
+        )
     )
 
 
-def _prepare_multi_observation_nautilus_sampler_config(
+_CHECKPOINT_SCHEMAS = {
+    "nautilus": "baymorph_multi_observation_nautilus_checkpoint_target_v1",
+    "pocomc": "baymorph_multi_observation_pocomc_checkpoint_target_v1",
+}
+
+
+def _prepare_multi_observation_sampler_checkpoint(
     sampler_cfg,
     *,
     model_name: str,
     context: _MultiObservationBuildContext,
     checkpoint_directory: Path | None,
 ):
-    """Resolve and authenticate one model-specific joint Nautilus checkpoint."""
-    sampler_name = str(
-        sampler_cfg.get(
-            "name",
-            "",
-        )
-    ).strip().lower()
-
-    if sampler_name != "nautilus":
-        return sampler_cfg
-
-    runtime_config = deepcopy(
-        sampler_cfg
-    )
-    init_config = dict(
-        runtime_config.get(
-            "init",
-            {},
-        )
-    )
-    runtime_config["init"] = init_config
-    configured_path = init_config.get(
-        "filepath"
-    )
-
-    if configured_path is None:
-        return runtime_config
-
-    if (
-        isinstance(
-            configured_path,
-            str,
-        )
-        and configured_path.strip().lower()
-        == "auto"
-    ):
-        if checkpoint_directory is None:
-            raise ValueError(
-                "Nautilus filepath='auto' requires a pipeline-managed "
-                "model output directory."
-            )
-
-        configured_path = str(
-            (
-                Path(
-                    checkpoint_directory
-                )
-                / "nautilus_checkpoint.hdf5"
-            ).expanduser().resolve()
-        )
-        init_config["filepath"] = configured_path
-
-    checkpoint_path = Path(
-        configured_path
-    ).expanduser().resolve()
-    problem_signature = _multi_observation_problem_signature(
-        model_name=model_name,
-        context=context,
-    )
-
-    resolve_json_signed_checkpoint(
-        checkpoint_path=checkpoint_path,
-        schema="baymorph_multi_observation_nautilus_checkpoint_target_v1",
-        problem_signature=problem_signature,
-        runtime_sampler_config=runtime_config,
-        label="Nautilus checkpoint",
-        require_resume_flag=True,
-        resume_requested=bool(
-            init_config.get(
-                "resume",
-                True,
-            )
+    """Resolve and authenticate the native checkpoint of one joint fit."""
+    return prepare_signed_sampler_checkpoint(
+        sampler_cfg,
+        schemas=_CHECKPOINT_SCHEMAS,
+        checkpoint_directory=checkpoint_directory,
+        problem_signature=partial(
+            _multi_observation_problem_signature,
+            model_name=model_name,
+            context=context,
         ),
     )
-
-    return runtime_config
-
-
-def _prepare_multi_observation_pocomc_sampler_config(
-    sampler_cfg,
-    *,
-    model_name: str,
-    context: _MultiObservationBuildContext,
-    checkpoint_directory: Path | None,
-):
-    """Resolve and authenticate one model-specific joint pocoMC resume target."""
-    sampler_name = str(
-        sampler_cfg.get(
-            "name",
-            "",
-        )
-    ).strip().lower()
-
-    if sampler_name != "pocomc":
-        return sampler_cfg
-
-    runtime_config = deepcopy(
-        sampler_cfg
-    )
-    run_config = dict(
-        runtime_config.get(
-            "run",
-            {},
-        )
-    )
-    runtime_config["run"] = run_config
-    configured_path = run_config.get(
-        "resume_state_path"
-    )
-
-    if configured_path is None:
-        return runtime_config
-
-    is_auto = (
-        isinstance(
-            configured_path,
-            str,
-        )
-        and configured_path.strip().lower()
-        == "auto"
-    )
-
-    if is_auto:
-        if checkpoint_directory is None:
-            raise ValueError(
-                "pocoMC resume_state_path='auto' requires a "
-                "pipeline-managed model output directory."
-            )
-
-        configured_path = str(
-            (
-                Path(
-                    checkpoint_directory
-                )
-                / "pocomc_state.h5"
-            ).expanduser().resolve()
-        )
-        run_config["resume_state_path"] = configured_path
-
-    checkpoint_path = Path(
-        configured_path
-    ).expanduser().resolve()
-    problem_signature = _multi_observation_problem_signature(
-        model_name=model_name,
-        context=context,
-    )
-
-    resolve_json_signed_checkpoint(
-        checkpoint_path=checkpoint_path,
-        schema="baymorph_multi_observation_pocomc_checkpoint_target_v1",
-        problem_signature=problem_signature,
-        runtime_sampler_config=runtime_config,
-        label="pocoMC resume state",
-        require_resume_flag=False,
-        resume_requested=True,
-    )
-
-    return runtime_config
 
 
 def _run_multi_observation_inference(
@@ -718,16 +554,8 @@ def _run_multi_observation_inference(
         )
 
     runtime_sampler_config = (
-        _prepare_multi_observation_nautilus_sampler_config(
+        _prepare_multi_observation_sampler_checkpoint(
             sampler_config,
-            model_name=model_name,
-            context=context,
-            checkpoint_directory=checkpoint_directory,
-        )
-    )
-    runtime_sampler_config = (
-        _prepare_multi_observation_pocomc_sampler_config(
-            runtime_sampler_config,
             model_name=model_name,
             context=context,
             checkpoint_directory=checkpoint_directory,

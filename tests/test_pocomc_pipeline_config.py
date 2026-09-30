@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from baymorph.pipeline.real_fit import (
-    _prepare_pocomc_sampler_config,
+    _prepare_sampler_checkpoint,
 )
 
 
@@ -21,7 +21,7 @@ def _prepare_checkpoint(
         lambda **kwargs: f"signature:{kwargs['model_name']}",
     )
 
-    return _prepare_pocomc_sampler_config(
+    return _prepare_sampler_checkpoint(
         {
             "name": "pocomc",
             "execution": {
@@ -62,7 +62,7 @@ def test_pocomc_sampler_config_is_unchanged_without_resume_state_path() -> None:
         "run": {},
     }
 
-    resolved = _prepare_pocomc_sampler_config(
+    resolved = _prepare_sampler_checkpoint(
         sampler_cfg,
         model_name="single_sersic",
         problem=object(),
@@ -116,7 +116,7 @@ def test_pocomc_auto_resume_state_path_requires_checkpoint_directory() -> None:
         ValueError,
         match="requires a pipeline-managed",
     ):
-        _prepare_pocomc_sampler_config(
+        _prepare_sampler_checkpoint(
             {
                 "name": "pocomc",
                 "init": {},
@@ -159,7 +159,7 @@ def test_pocomc_resume_rejects_target_mismatch(
         RuntimeError,
         match="does not match",
     ):
-        _prepare_pocomc_sampler_config(
+        _prepare_sampler_checkpoint(
             resolved,
             model_name="single_sersic",
             problem=object(),
@@ -192,7 +192,7 @@ def test_pocomc_resume_rejects_state_with_no_recorded_signature(
         RuntimeError,
         match="no BayMorph target signature",
     ):
-        _prepare_pocomc_sampler_config(
+        _prepare_sampler_checkpoint(
             {
                 "name": "pocomc",
                 "init": {},

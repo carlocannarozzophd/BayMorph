@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -65,6 +64,7 @@ from baymorph.pipeline.preparation_steps import (
 )
 from baymorph.pipeline.prepared_identity import (
     build_prepared_input_identity,
+    file_content_identity,
     validate_prepared_input_identity,
 )
 from baymorph.pipeline.runtime_report import (
@@ -494,26 +494,8 @@ def _validate_products_against_current_sources(
 
 
 def _sha256_file(path: Path) -> str:
-    """Return a stable SHA-256 digest for one regular file."""
-    before = path.stat()
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    after = path.stat()
-    if (
-        before.st_dev,
-        before.st_ino,
-        before.st_size,
-        before.st_mtime_ns,
-    ) != (
-        after.st_dev,
-        after.st_ino,
-        after.st_size,
-        after.st_mtime_ns,
-    ):
-        raise RuntimeError(f"Artifact changed while it was hashed: {path}")
-    return digest.hexdigest()
+    """Return the SHA-256 digest of one artifact, rejecting a concurrent change."""
+    return file_content_identity(path)["sha256"]
 
 
 def _artifact_manifest(

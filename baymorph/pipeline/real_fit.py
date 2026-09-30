@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import warnings
 from copy import deepcopy
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -29,12 +29,13 @@ from baymorph.models import get_model
 from baymorph.observation.background import background_parameter_names
 from baymorph.pipeline.checkpoint_signing import (
     baymorph_source_signature as _baymorph_source_signature,
+    canonical_json_sha256 as _canonical_json_sha256,
     checkpoint_array_signature as _checkpoint_array_signature,
     checkpoint_runtime_versions as _checkpoint_runtime_versions,
     checkpoint_signature_value as _checkpoint_signature_value,
     prior_checkpoint_signature as _prior_checkpoint_signature,
+    prepare_signed_sampler_checkpoint,
     qualified_class_name as _qualified_class_name,
-    resolve_json_signed_checkpoint,
     runtime_psf_checkpoint_signature as _runtime_psf_checkpoint_signature,
     write_json_atomic as _write_json_atomic,
 )
@@ -372,18 +373,6 @@ def _write_fit_completion_marker(
     products: RealFitProducts,
 ) -> None:
     """Mark a fully persisted model fit complete."""
-    canonical_config = json.dumps(
-        _checkpoint_signature_value(
-            config
-        ),
-        sort_keys=True,
-        separators=(
-            ",",
-            ":",
-        ),
-        ensure_ascii=True,
-        allow_nan=False,
-    )
     posterior = products.posterior
     evidence = (
         None
@@ -393,11 +382,11 @@ def _write_fit_completion_marker(
     payload = {
         "schema_version": 1,
         "model": model_name,
-        "config_sha256": hashlib.sha256(
-            canonical_config.encode(
-                "utf-8"
+        "config_sha256": _canonical_json_sha256(
+            _checkpoint_signature_value(
+                config
             )
-        ).hexdigest(),
+        ),
         "logz": (
             None
             if posterior is None
@@ -511,25 +500,21 @@ def _real_fit_problem_signature(
         "runtime_versions": _checkpoint_runtime_versions(),
     }
 
-    canonical = json.dumps(
-        payload,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=True,
-        allow_nan=False,
-    )
-
     return (
         "sha256:"
-        + hashlib.sha256(
-            canonical.encode(
-                "utf-8"
-            )
-        ).hexdigest()
+        + _canonical_json_sha256(
+            payload
+        )
     )
 
 
-def _prepare_nautilus_sampler_config(
+_CHECKPOINT_SCHEMAS = {
+    "nautilus": "baymorph_nautilus_checkpoint_target_v1",
+    "pocomc": "baymorph_pocomc_checkpoint_target_v1",
+}
+
+
+def _prepare_sampler_checkpoint(
     sampler_cfg,
     *,
     model_name,
@@ -541,190 +526,22 @@ def _prepare_nautilus_sampler_config(
     correlation_kernel_fit,
     checkpoint_directory,
 ):
-    """Resolve and authenticate one model-specific Nautilus checkpoint."""
-    sampler_name = str(
-        sampler_cfg.get(
-            "name",
-            "",
-        )
-    ).strip().lower()
-
-    if sampler_name != "nautilus":
-        return sampler_cfg
-
-    runtime_config = deepcopy(
-        sampler_cfg
-    )
-    init_config = dict(
-        runtime_config.get(
-            "init",
-            {},
-        )
-    )
-    runtime_config["init"] = init_config
-    configured_path = init_config.get(
-        "filepath"
-    )
-
-    if configured_path is None:
-        return runtime_config
-
-    if (
-        isinstance(
-            configured_path,
-            str,
-        )
-        and configured_path.strip().lower()
-        == "auto"
-    ):
-        if checkpoint_directory is None:
-            raise ValueError(
-                "Nautilus filepath='auto' requires a pipeline-managed "
-                "model output directory."
-            )
-
-        configured_path = str(
-            (
-                Path(
-                    checkpoint_directory
-                )
-                / "nautilus_checkpoint.hdf5"
-            ).expanduser().resolve()
-        )
-        init_config["filepath"] = configured_path
-
-    checkpoint_path = Path(
-        configured_path
-    ).expanduser().resolve()
-    problem_signature = _real_fit_problem_signature(
-        model_name=model_name,
-        problem=problem,
-        likelihood_cfg=likelihood_cfg,
-        data_fit=data_fit,
-        noise_fit=noise_fit,
-        mask_fit=mask_fit,
-        correlation_kernel_fit=correlation_kernel_fit,
-    )
-
-    resolve_json_signed_checkpoint(
-        checkpoint_path=checkpoint_path,
-        schema="baymorph_nautilus_checkpoint_target_v1",
-        problem_signature=problem_signature,
-        runtime_sampler_config=runtime_config,
-        label="Nautilus checkpoint",
-        require_resume_flag=True,
-        resume_requested=bool(
-            init_config.get(
-                "resume",
-                True,
-            )
+    """Resolve and authenticate the native checkpoint of one real fit."""
+    return prepare_signed_sampler_checkpoint(
+        sampler_cfg,
+        schemas=_CHECKPOINT_SCHEMAS,
+        checkpoint_directory=checkpoint_directory,
+        problem_signature=partial(
+            _real_fit_problem_signature,
+            model_name=model_name,
+            problem=problem,
+            likelihood_cfg=likelihood_cfg,
+            data_fit=data_fit,
+            noise_fit=noise_fit,
+            mask_fit=mask_fit,
+            correlation_kernel_fit=correlation_kernel_fit,
         ),
     )
-
-    return runtime_config
-
-
-def _prepare_pocomc_sampler_config(
-    sampler_cfg,
-    *,
-    model_name,
-    problem,
-    likelihood_cfg,
-    data_fit,
-    noise_fit,
-    mask_fit,
-    correlation_kernel_fit,
-    checkpoint_directory,
-):
-    """Resolve and authenticate one model-specific pocoMC resume target.
-
-    pocoMC's native ``run(resume_state_path=...)`` option loads an
-    arbitrary state file with no BayMorph-side awareness of what scientific
-    problem produced it. Whenever it is set, this requires and validates a
-    sibling ``.target.json`` signature exactly like a Nautilus checkpoint,
-    so BayMorph never resumes an incompatible pocoMC state.
-    """
-    sampler_name = str(
-        sampler_cfg.get(
-            "name",
-            "",
-        )
-    ).strip().lower()
-
-    if sampler_name != "pocomc":
-        return sampler_cfg
-
-    runtime_config = deepcopy(
-        sampler_cfg
-    )
-    run_config = dict(
-        runtime_config.get(
-            "run",
-            {},
-        )
-    )
-    runtime_config["run"] = run_config
-    configured_path = run_config.get(
-        "resume_state_path"
-    )
-
-    if configured_path is None:
-        return runtime_config
-
-    if checkpoint_directory is not None and (
-        isinstance(
-            configured_path,
-            str,
-        )
-        and configured_path.strip().lower()
-        == "auto"
-    ):
-        configured_path = str(
-            (
-                Path(
-                    checkpoint_directory
-                )
-                / "pocomc_state.h5"
-            ).expanduser().resolve()
-        )
-        run_config["resume_state_path"] = configured_path
-    elif (
-        isinstance(
-            configured_path,
-            str,
-        )
-        and configured_path.strip().lower()
-        == "auto"
-    ):
-        raise ValueError(
-            "pocoMC resume_state_path='auto' requires a pipeline-managed "
-            "model output directory."
-        )
-
-    checkpoint_path = Path(
-        configured_path
-    ).expanduser().resolve()
-    problem_signature = _real_fit_problem_signature(
-        model_name=model_name,
-        problem=problem,
-        likelihood_cfg=likelihood_cfg,
-        data_fit=data_fit,
-        noise_fit=noise_fit,
-        mask_fit=mask_fit,
-        correlation_kernel_fit=correlation_kernel_fit,
-    )
-
-    resolve_json_signed_checkpoint(
-        checkpoint_path=checkpoint_path,
-        schema="baymorph_pocomc_checkpoint_target_v1",
-        problem_signature=problem_signature,
-        runtime_sampler_config=runtime_config,
-        label="pocoMC resume state",
-        require_resume_flag=False,
-        resume_requested=True,
-    )
-
-    return runtime_config
 
 
 def _execute_single_model_fit(
@@ -765,24 +582,8 @@ def _execute_single_model_fit(
     )
 
     runtime_sampler_cfg = (
-        _prepare_nautilus_sampler_config(
+        _prepare_sampler_checkpoint(
             sampler_cfg,
-            model_name=model_name,
-            problem=problem,
-            likelihood_cfg=likelihood_cfg,
-            data_fit=image_products.prepared_data,
-            noise_fit=likelihood_state.noise,
-            mask_fit=image_products.fitting_mask,
-            correlation_kernel_fit=(
-                likelihood_state.correlation_kernel
-            ),
-            checkpoint_directory=checkpoint_directory,
-        )
-    )
-
-    runtime_sampler_cfg = (
-        _prepare_pocomc_sampler_config(
-            runtime_sampler_cfg,
             model_name=model_name,
             problem=problem,
             likelihood_cfg=likelihood_cfg,

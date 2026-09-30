@@ -8,8 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from baymorph.pipeline.multi_observation_fit import (
-    _prepare_multi_observation_nautilus_sampler_config,
-    _prepare_multi_observation_pocomc_sampler_config,
+    _prepare_multi_observation_sampler_checkpoint,
     run_multi_observation_fit_from_config,
 )
 
@@ -32,7 +31,7 @@ def test_multi_observation_nautilus_auto_checkpoint_is_model_specific(
         monkeypatch,
         "signature:single_sersic",
     )
-    single = _prepare_multi_observation_nautilus_sampler_config(
+    single = _prepare_multi_observation_sampler_checkpoint(
         {
             "name": "nautilus",
             "init": {
@@ -52,7 +51,7 @@ def test_multi_observation_nautilus_auto_checkpoint_is_model_specific(
         monkeypatch,
         "signature:double_sersic",
     )
-    double = _prepare_multi_observation_nautilus_sampler_config(
+    double = _prepare_multi_observation_sampler_checkpoint(
         {
             "name": "nautilus",
             "init": {
@@ -88,7 +87,7 @@ def test_multi_observation_nautilus_resume_rejects_target_mismatch(
         monkeypatch,
         "signature:original",
     )
-    resolved = _prepare_multi_observation_nautilus_sampler_config(
+    resolved = _prepare_multi_observation_sampler_checkpoint(
         {
             "name": "nautilus",
             "init": {
@@ -120,7 +119,7 @@ def test_multi_observation_nautilus_resume_rejects_target_mismatch(
         RuntimeError,
         match="does not match",
     ):
-        _prepare_multi_observation_nautilus_sampler_config(
+        _prepare_multi_observation_sampler_checkpoint(
             resolved,
             model_name="single_sersic",
             context=object(),
@@ -135,7 +134,7 @@ def test_multi_observation_pocomc_auto_resume_state_path_is_model_specific(
     """Automatic joint-fit pocoMC resume states must live per model."""
     _patch_signature(monkeypatch)
 
-    resolved = _prepare_multi_observation_pocomc_sampler_config(
+    resolved = _prepare_multi_observation_sampler_checkpoint(
         {
             "name": "pocomc",
             "run": {

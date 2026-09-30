@@ -7,14 +7,19 @@ module owns the canonical, backend-neutral pieces of that contract:
 
 - deterministic signature-value canonicalization for arbitrary Python and
   NumPy state (:func:`checkpoint_signature_value` and friends);
+- the SHA-256 digest of strict canonical JSON
+  (:func:`canonical_json_sha256`), shared by every signature and completion
+  marker of both fit workflows;
 - a generic sibling ``<checkpoint>.target.json`` signing contract for native
   checkpoint formats that BayMorph does not itself annotate internally
   (:func:`resolve_json_signed_checkpoint`), used by both Nautilus and pocoMC,
-  for both single-observation and multi-observation fits.
+  for both single-observation and multi-observation fits;
+- the resolution of each backend's native checkpoint path in the sampler
+  configuration (:func:`prepare_signed_sampler_checkpoint`).
 
 Backend- and target-specific signature payloads (what exactly gets hashed
-for one real fit vs. one multi-observation joint fit) remain the
-responsibility of their own pipeline modules.
+for one real fit vs. one multi-observation joint fit) and signature schemas
+remain the responsibility of their own pipeline modules.
 """
 
 from __future__ import annotations
@@ -25,6 +30,8 @@ import importlib.metadata
 import json
 import os
 import sys
+from collections.abc import Callable
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -474,6 +481,46 @@ def checkpoint_runtime_versions() -> dict[str, Any]:
     return versions
 
 
+def canonical_json_sha256(
+    value: Any,
+) -> str:
+    """Return the SHA-256 digest of strict canonical JSON.
+
+    Keys are sorted, separators carry no whitespace, the output is ASCII and
+    non-finite numbers are rejected, so equal values always serialize to the
+    same bytes. Every checkpoint signature and fit completion marker hashes
+    through this function, so changing its serialization would invalidate
+    all of them.
+
+    Parameters
+    ----------
+    value : Any
+        JSON-compatible value, typically canonicalized first with
+        :func:`checkpoint_signature_value`.
+
+    Returns
+    -------
+    str
+        Hexadecimal SHA-256 digest of the UTF-8 serialization.
+    """
+    canonical = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(
+            ",",
+            ":",
+        ),
+        ensure_ascii=True,
+        allow_nan=False,
+    )
+
+    return hashlib.sha256(
+        canonical.encode(
+            "utf-8"
+        )
+    ).hexdigest()
+
+
 def resolve_json_signed_checkpoint(
     *,
     checkpoint_path: Path,
@@ -543,25 +590,13 @@ def resolve_json_signed_checkpoint(
             )
         ),
     }
-    canonical = json.dumps(
-        signature_payload,
-        sort_keys=True,
-        separators=(
-            ",",
-            ":",
-        ),
-        ensure_ascii=True,
-        allow_nan=False,
-    )
     expected = {
         "schema_version": 1,
         "signature": (
             "sha256:"
-            + hashlib.sha256(
-                canonical.encode(
-                    "utf-8"
-                )
-            ).hexdigest()
+            + canonical_json_sha256(
+                signature_payload
+            )
         ),
         "target": signature_payload,
     }
@@ -618,3 +653,184 @@ def resolve_json_signed_checkpoint(
             signature_path,
             expected,
         )
+
+
+@dataclasses.dataclass(frozen=True)
+class SamplerCheckpoint:
+    """Where one backend keeps its native checkpoint in a sampler config.
+
+    Attributes
+    ----------
+    section : str
+        Sampler-configuration section holding the checkpoint path, ``init``
+        or ``run``.
+    path_key : str
+        Native option naming the checkpoint path in that section.
+    auto_filename : str
+        File name used when the path is declared as ``auto``.
+    display_name : str
+        Backend name used in error messages.
+    label : str
+        Checkpoint identity used in signature error messages.
+    resume_key : str or None
+        Native option selecting resume when a checkpoint exists, or ``None``
+        when the presence of the path already means resume.
+    """
+
+    section: str
+    path_key: str
+    auto_filename: str
+    display_name: str
+    label: str
+    resume_key: str | None = None
+
+
+SAMPLER_CHECKPOINTS = {
+    "nautilus": SamplerCheckpoint(
+        section="init",
+        path_key="filepath",
+        auto_filename="nautilus_checkpoint.hdf5",
+        display_name="Nautilus",
+        label="Nautilus checkpoint",
+        resume_key="resume",
+    ),
+    "pocomc": SamplerCheckpoint(
+        section="run",
+        path_key="resume_state_path",
+        auto_filename="pocomc_state.h5",
+        display_name="pocoMC",
+        label="pocoMC resume state",
+    ),
+}
+
+
+def prepare_signed_sampler_checkpoint(
+    sampler_config: Mapping[str, Any],
+    *,
+    schemas: Mapping[str, str],
+    checkpoint_directory: str | Path | None,
+    problem_signature: Callable[[], str],
+) -> Mapping[str, Any]:
+    """Resolve and authenticate the native checkpoint of one model fit.
+
+    Nautilus keeps its checkpoint at ``init.filepath`` and pocoMC resumes
+    from ``run.resume_state_path``. Neither format records which scientific
+    problem produced it, so whenever such a path is declared the sibling
+    ``.target.json`` signature is validated or created with
+    :func:`resolve_json_signed_checkpoint`, and BayMorph never resumes a
+    checkpoint of another problem. A path declared as ``auto`` resolves
+    inside the model output directory.
+
+    Parameters
+    ----------
+    sampler_config : mapping
+        Resolved sampler configuration of one model fit.
+    schemas : mapping of str to str
+        Signature schema of each checkpointing backend, owned by the calling
+        workflow so that single-observation and joint signatures are never
+        compared as if they were the same contract.
+    checkpoint_directory : str, Path or None
+        Pipeline-managed output directory of the model, required by an
+        ``auto`` path.
+    problem_signature : callable
+        Returns the strict signature of the scientific problem. It is called
+        only when a checkpoint path is declared.
+
+    Returns
+    -------
+    mapping
+        ``sampler_config`` itself for a backend without a checkpoint or when
+        no checkpoint path is declared; otherwise a copy with the resolved
+        checkpoint path.
+
+    Raises
+    ------
+    ValueError
+        If an ``auto`` path is declared without a checkpoint directory.
+    """
+    sampler_name = str(
+        sampler_config.get(
+            "name",
+            "",
+        )
+    ).strip().lower()
+    checkpoint = SAMPLER_CHECKPOINTS.get(
+        sampler_name
+    )
+
+    if checkpoint is None:
+        return sampler_config
+
+    runtime_config = deepcopy(
+        dict(
+            sampler_config
+        )
+    )
+    section = dict(
+        runtime_config.get(
+            checkpoint.section,
+            {},
+        )
+    )
+    runtime_config[
+        checkpoint.section
+    ] = section
+    configured_path = section.get(
+        checkpoint.path_key
+    )
+
+    if configured_path is None:
+        return runtime_config
+
+    if (
+        isinstance(
+            configured_path,
+            str,
+        )
+        and configured_path.strip().lower()
+        == "auto"
+    ):
+        if checkpoint_directory is None:
+            raise ValueError(
+                f"{checkpoint.display_name} {checkpoint.path_key}='auto' "
+                "requires a pipeline-managed model output directory."
+            )
+
+        configured_path = str(
+            (
+                Path(
+                    checkpoint_directory
+                )
+                / checkpoint.auto_filename
+            ).expanduser().resolve()
+        )
+        section[
+            checkpoint.path_key
+        ] = configured_path
+
+    resolve_json_signed_checkpoint(
+        checkpoint_path=Path(
+            configured_path
+        ).expanduser().resolve(),
+        schema=schemas[
+            sampler_name
+        ],
+        problem_signature=problem_signature(),
+        runtime_sampler_config=runtime_config,
+        label=checkpoint.label,
+        require_resume_flag=(
+            checkpoint.resume_key is not None
+        ),
+        resume_requested=(
+            True
+            if checkpoint.resume_key is None
+            else bool(
+                section.get(
+                    checkpoint.resume_key,
+                    True,
+                )
+            )
+        ),
+    )
+
+    return runtime_config

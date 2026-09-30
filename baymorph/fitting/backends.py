@@ -41,13 +41,18 @@ def _mapping_section(
     )
 
 
-class DynestyBackend(InferenceBackend):
-    """Backend-neutral adapter for Dynesty inference.
+class _NativeSamplerBackend(InferenceBackend):
+    """Thin BayMorph envelope around one built-in sampler.
 
-    BayMorph owns only the backend name and Dynesty execution mode.
-    Entries under ``init`` and ``run`` retain their native Dynesty names
-    and semantics.
+    BayMorph owns the backend name, the ``execution`` section and any
+    backend-specific envelope option. Entries under ``init`` and ``run``
+    retain their native upstream names and semantics.
     """
+
+    backend_name: str
+    display_name: str
+    fitter_class: type
+    envelope_options: tuple[str, ...] = ()
 
     def __init__(
         self,
@@ -63,7 +68,7 @@ class DynestyBackend(InferenceBackend):
 
         allowed_envelope = {
             "name",
-            "mode",
+            *self.envelope_options,
             "execution",
             "init",
             "run",
@@ -79,10 +84,98 @@ class DynestyBackend(InferenceBackend):
                 unknown
             )
             raise ValueError(
-                "Dynesty configuration options must be placed under "
-                f"'init' or 'run'. Unexpected top-level option(s): {names}."
+                f"{self.display_name} configuration options must be placed "
+                "under 'init' or 'run'. Unexpected top-level option(s): "
+                f"{names}."
             )
 
+        resolved = {
+            "name": self.backend_name,
+            **self._resolve_envelope_options(
+                raw
+            ),
+            "execution": _mapping_section(
+                raw,
+                "execution",
+            ),
+            "init": _mapping_section(
+                raw,
+                "init",
+            ),
+            "run": _mapping_section(
+                raw,
+                "run",
+            ),
+        }
+
+        super().__init__(
+            problem=problem,
+            config=resolved,
+        )
+
+    def _resolve_envelope_options(
+        self,
+        raw: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Return the validated backend-specific envelope options."""
+        return {}
+
+    def _run_options(
+        self,
+    ) -> dict[str, Any]:
+        """Return the backend-specific options of the fitter run."""
+        return {}
+
+    @property
+    def name(self) -> str:
+        """Return the stable backend identifier."""
+        return self.backend_name
+
+    def fit(
+        self,
+        *,
+        progress_label: str | None = None,
+    ) -> InferenceResult:
+        """Run the sampler with native constructor and run keyword arguments."""
+        fitter = self.fitter_class(
+            problem=self.problem
+        )
+
+        return fitter.run(
+            **self._run_options(),
+            init_kwargs=self.config[
+                "init"
+            ],
+            run_kwargs=self.config[
+                "run"
+            ],
+            execution=resolve_sampler_execution(
+                self.config[
+                    "execution"
+                ]
+            ),
+            progress_label=progress_label,
+        )
+
+
+class DynestyBackend(_NativeSamplerBackend):
+    """Backend-neutral adapter for Dynesty inference.
+
+    BayMorph owns only the backend name and Dynesty execution mode.
+    Entries under ``init`` and ``run`` retain their native Dynesty names
+    and semantics.
+    """
+
+    backend_name = "dynesty"
+    display_name = "Dynesty"
+    fitter_class = DynestyFitter
+    envelope_options = ("mode",)
+
+    def _resolve_envelope_options(
+        self,
+        raw: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Return the validated Dynesty nested-sampling mode."""
         mode = str(
             raw.get(
                 "mode",
@@ -98,32 +191,17 @@ class DynestyBackend(InferenceBackend):
                 "Dynesty mode must be 'static' or 'dynamic'."
             )
 
-        resolved = {
-            "name": "dynesty",
+        return {
             "mode": mode,
-            "execution": _mapping_section(
-                raw,
-                "execution",
-            ),
-            "init": _mapping_section(
-                raw,
-                "init",
-            ),
-            "run": _mapping_section(
-                raw,
-                "run",
-            ),
         }
 
-        super().__init__(
-            problem=problem,
-            config=resolved,
-        )
-
-    @property
-    def name(self) -> str:
-        """Return the stable backend identifier."""
-        return "dynesty"
+    def _run_options(
+        self,
+    ) -> dict[str, Any]:
+        """Pass the selected nested-sampling mode to the fitter."""
+        return {
+            "mode": self.mode,
+        }
 
     @property
     def mode(self) -> str:
@@ -132,215 +210,29 @@ class DynestyBackend(InferenceBackend):
             self.config["mode"]
         )
 
-    def fit(
-        self,
-        *,
-        progress_label: str | None = None,
-    ) -> InferenceResult:
-        """Run Dynesty with native constructor and run keyword arguments."""
-        fitter = DynestyFitter(
-            problem=self.problem
-        )
 
-        return fitter.run(
-            mode=self.mode,
-            init_kwargs=self.config[
-                "init"
-            ],
-            run_kwargs=self.config[
-                "run"
-            ],
-            execution=resolve_sampler_execution(
-                self.config[
-                    "execution"
-                ]
-            ),
-            progress_label=progress_label,
-        )
-
-
-class PocoMCBackend(InferenceBackend):
+class PocoMCBackend(_NativeSamplerBackend):
     """Backend-neutral adapter for pocoMC inference.
 
     Entries under ``init`` and ``run`` retain their native pocoMC names
     and semantics.
     """
 
-    def __init__(
-        self,
-        *,
-        problem: InferenceProblem,
-        config: Mapping[str, Any] | None = None,
-    ) -> None:
-        raw = (
-            {}
-            if config is None
-            else dict(config)
-        )
-
-        allowed_envelope = {
-            "name",
-            "execution",
-            "init",
-            "run",
-        }
-
-        unknown = sorted(
-            set(raw)
-            - allowed_envelope
-        )
-
-        if unknown:
-            names = ", ".join(
-                unknown
-            )
-            raise ValueError(
-                "pocoMC configuration options must be placed under "
-                f"'init' or 'run'. Unexpected top-level option(s): {names}."
-            )
-
-        resolved = {
-            "name": "pocomc",
-            "execution": _mapping_section(
-                raw,
-                "execution",
-            ),
-            "init": _mapping_section(
-                raw,
-                "init",
-            ),
-            "run": _mapping_section(
-                raw,
-                "run",
-            ),
-        }
-
-        super().__init__(
-            problem=problem,
-            config=resolved,
-        )
-
-    @property
-    def name(self) -> str:
-        """Return the stable backend identifier."""
-        return "pocomc"
-
-    def fit(
-        self,
-        *,
-        progress_label: str | None = None,
-    ) -> InferenceResult:
-        """Run pocoMC with native constructor and run keyword arguments."""
-        fitter = PocoMCFitter(
-            problem=self.problem
-        )
-
-        return fitter.run(
-            init_kwargs=self.config[
-                "init"
-            ],
-            run_kwargs=self.config[
-                "run"
-            ],
-            execution=resolve_sampler_execution(
-                self.config[
-                    "execution"
-                ]
-            ),
-            progress_label=progress_label,
-        )
+    backend_name = "pocomc"
+    display_name = "pocoMC"
+    fitter_class = PocoMCFitter
 
 
-class NautilusBackend(InferenceBackend):
+class NautilusBackend(_NativeSamplerBackend):
     """Backend-neutral adapter for Nautilus inference.
 
     Entries under ``init`` and ``run`` retain their native Nautilus names
     and semantics.
     """
 
-    def __init__(
-        self,
-        *,
-        problem: InferenceProblem,
-        config: Mapping[str, Any] | None = None,
-    ) -> None:
-        raw = (
-            {}
-            if config is None
-            else dict(config)
-        )
-
-        allowed_envelope = {
-            "name",
-            "execution",
-            "init",
-            "run",
-        }
-
-        unknown = sorted(
-            set(raw)
-            - allowed_envelope
-        )
-
-        if unknown:
-            names = ", ".join(
-                unknown
-            )
-            raise ValueError(
-                "Nautilus configuration options must be placed under "
-                f"'init' or 'run'. Unexpected top-level option(s): {names}."
-            )
-
-        resolved = {
-            "name": "nautilus",
-            "execution": _mapping_section(
-                raw,
-                "execution",
-            ),
-            "init": _mapping_section(
-                raw,
-                "init",
-            ),
-            "run": _mapping_section(
-                raw,
-                "run",
-            ),
-        }
-
-        super().__init__(
-            problem=problem,
-            config=resolved,
-        )
-
-    @property
-    def name(self) -> str:
-        """Return the stable backend identifier."""
-        return "nautilus"
-
-    def fit(
-        self,
-        *,
-        progress_label: str | None = None,
-    ) -> InferenceResult:
-        """Run Nautilus with native constructor and run keyword arguments."""
-        fitter = NautilusFitter(
-            problem=self.problem
-        )
-
-        return fitter.run(
-            init_kwargs=self.config[
-                "init"
-            ],
-            run_kwargs=self.config[
-                "run"
-            ],
-            execution=resolve_sampler_execution(
-                self.config[
-                    "execution"
-                ]
-            ),
-            progress_label=progress_label,
-        )
+    backend_name = "nautilus"
+    display_name = "Nautilus"
+    fitter_class = NautilusFitter
 
 
 def _make_dynesty_backend(

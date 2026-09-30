@@ -10,7 +10,7 @@ from baymorph.pipeline.config import (
     validate_sampler_config,
 )
 from baymorph.pipeline.real_fit import (
-    _prepare_nautilus_sampler_config,
+    _prepare_sampler_checkpoint,
 )
 
 
@@ -132,7 +132,7 @@ def _prepare_checkpoint(
         lambda **kwargs: f"signature:{kwargs['model_name']}",
     )
 
-    return _prepare_nautilus_sampler_config(
+    return _prepare_sampler_checkpoint(
         {
             "name": "nautilus",
             "execution": {
@@ -218,7 +218,7 @@ def test_nautilus_resume_rejects_target_mismatch(
         RuntimeError,
         match="does not match",
     ):
-        _prepare_nautilus_sampler_config(
+        _prepare_sampler_checkpoint(
             resolved,
             model_name="single_sersic",
             problem=object(),

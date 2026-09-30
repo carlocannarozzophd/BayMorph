@@ -21,7 +21,7 @@ from baymorph.pipeline.config import (
 PREPARED_INPUT_IDENTITY_VERSION = 2
 
 
-def _sha256_file(path: str | Path) -> str:
+def sha256_file(path: str | Path) -> str:
     """Return the SHA-256 digest of one file."""
     digest = hashlib.sha256()
 
@@ -32,10 +32,10 @@ def _sha256_file(path: str | Path) -> str:
     return digest.hexdigest()
 
 
-def _content_identity(path: Path) -> dict[str, Any]:
+def file_content_identity(path: Path) -> dict[str, Any]:
     """Hash a file and reject mutation during fingerprinting."""
     before = path.stat()
-    digest = _sha256_file(path)
+    digest = sha256_file(path)
     after = path.stat()
 
     before_state = (
@@ -66,7 +66,7 @@ def _file_identity(path: Path) -> dict[str, Any]:
     """Return canonical path and content identity for one file."""
     return {
         "path": str(path),
-        **_content_identity(path),
+        **file_content_identity(path),
     }
 
 
@@ -178,7 +178,7 @@ def _package_generator_identity() -> dict[str, Any]:
 
     for source_path in sorted(package_root.rglob("*.py")):
         relative_path = source_path.relative_to(package_root).as_posix()
-        source_manifest[relative_path] = _content_identity(source_path)
+        source_manifest[relative_path] = file_content_identity(source_path)
 
     manifest_sha256 = hashlib.sha256(
         _canonical_json(source_manifest)

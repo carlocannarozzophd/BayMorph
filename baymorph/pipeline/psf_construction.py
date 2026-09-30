@@ -16,7 +16,7 @@ from baymorph.core.observation import Observation
 from baymorph.pipeline.config import load_resolved_config
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
 from baymorph.pipeline.outputs import make_output_tree, pipeline_paths
-from baymorph.pipeline.prepared_identity import _sha256_file as _file_sha256
+from baymorph.pipeline.prepared_identity import sha256_file as _file_sha256
 from baymorph.pipeline.psf_candidates import load_psf_candidates
 from baymorph.plotting.style import make_plot
 from baymorph.simulation.psf import (
