@@ -103,6 +103,7 @@ nav:
   - Structure-Informed Evidence Estimation: research/STRUCTURE_INFORMED_EVIDENCE_2026-09-29.md
   - Structure-Informed Evidence for Other Likelihoods: research/STRUCTURE_INFORMED_EVIDENCE_LIKELIHOODS_2026-09-29.md
   - Adaptive Structure-Informed Evidence: research/STRUCTURE_INFORMED_EVIDENCE_ADAPTIVE_2026-09-30.md
+  - Empirical PSF Test Bench: research/PSF_TEST_BENCH_2026-09-30.md
 
 plugins:
   - search
