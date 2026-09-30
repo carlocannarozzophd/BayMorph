@@ -43,7 +43,6 @@ from baymorph.pipeline.checkpoint_signing import (
     checkpoint_signature_value as _checkpoint_signature_value,
     prior_checkpoint_signature as _prior_checkpoint_signature,
     qualified_class_name as _qualified_class_name,
-    resolve_embedded_signed_checkpoint,
     resolve_json_signed_checkpoint,
     runtime_psf_checkpoint_signature as _runtime_psf_checkpoint_signature,
     write_json_atomic as _write_json_atomic,
@@ -375,7 +374,11 @@ def _require_evidence_safe_likelihoods(
     fit_config: Mapping[str, Any],
     context: _MultiObservationBuildContext,
 ) -> None:
-    """Block evidence-producing backends on incomplete normalizations."""
+    """Require a completely normalized likelihood for every observation.
+
+    The requirement applies whatever the backend: every built-in backend
+    produces Bayesian evidence.
+    """
     sampler_config = fit_config.get(
         "sampler",
         {},
@@ -390,17 +393,9 @@ def _require_evidence_safe_likelihoods(
             "'sampler' mapping."
         )
 
-    sampler_name = str(
-        sampler_config.get(
-            "name",
-            "",
-        )
-    ).strip().lower()
-
-    if sampler_name != "emcee":
-        require_complete_likelihood_normalization(
-            context.likelihood_states
-        )
+    require_complete_likelihood_normalization(
+        context.likelihood_states
+    )
 
 
 def _multi_observation_problem_signature(
@@ -532,83 +527,6 @@ def _multi_observation_problem_signature(
             )
         ).hexdigest()
     )
-
-
-def _prepare_multi_observation_emcee_sampler_config(
-    sampler_cfg,
-    *,
-    model_name: str,
-    context: _MultiObservationBuildContext,
-    checkpoint_directory: Path | None,
-):
-    """Resolve automatic emcee checkpointing for one joint multi-obs fit."""
-    sampler_name = str(
-        sampler_cfg.get(
-            "name",
-            "",
-        )
-    ).strip().lower()
-
-    if sampler_name != "emcee":
-        return sampler_cfg
-
-    runtime_config = dict(
-        sampler_cfg
-    )
-    init_config = dict(
-        runtime_config.get(
-            "init",
-            {},
-        )
-    )
-    runtime_config["init"] = init_config
-
-    configured_path = init_config.get(
-        "checkpoint_path"
-    )
-
-    if configured_path is None:
-        return runtime_config
-
-    if (
-        isinstance(
-            configured_path,
-            str,
-        )
-        and configured_path.strip().lower() == "auto"
-    ):
-        if checkpoint_directory is None:
-            raise ValueError(
-                "emcee checkpoint_path='auto' requires a "
-                "pipeline-managed model output directory."
-            )
-
-        init_config["checkpoint_path"] = str(
-            (
-                Path(
-                    checkpoint_directory
-                )
-                / "emcee_checkpoint.h5"
-            ).expanduser().resolve()
-        )
-
-    init_config.setdefault(
-        "checkpoint_mode",
-        "fresh",
-    )
-
-    generated_signature = _multi_observation_problem_signature(
-        model_name=model_name,
-        context=context,
-    )
-
-    resolve_embedded_signed_checkpoint(
-        init_config,
-        problem_signature=generated_signature,
-        label="emcee",
-    )
-
-    return runtime_config
 
 
 def _prepare_multi_observation_nautilus_sampler_config(
@@ -800,16 +718,8 @@ def _run_multi_observation_inference(
         )
 
     runtime_sampler_config = (
-        _prepare_multi_observation_emcee_sampler_config(
-            sampler_config,
-            model_name=model_name,
-            context=context,
-            checkpoint_directory=checkpoint_directory,
-        )
-    )
-    runtime_sampler_config = (
         _prepare_multi_observation_nautilus_sampler_config(
-            runtime_sampler_config,
+            sampler_config,
             model_name=model_name,
             context=context,
             checkpoint_directory=checkpoint_directory,

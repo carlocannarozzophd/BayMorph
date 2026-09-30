@@ -3,9 +3,6 @@
 from baymorph.fitting.dynesty import (
     DynestyFitter,
 )
-from baymorph.fitting.emcee import (
-    EmceeFitter,
-)
 from baymorph.fitting.model_factories import (
     ObservedModelFactory,
     make_bulge_disk_psf_model,
@@ -34,7 +31,6 @@ from baymorph.fitting.sampler_factory import make_sampler
 __all__ = [
     "BetaPrior",
     "DynestyFitter",
-    "EmceeFitter",
     "FixedPrior",
     "LogUniformPrior",
     "NormalPrior",

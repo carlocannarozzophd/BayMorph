@@ -474,48 +474,6 @@ def checkpoint_runtime_versions() -> dict[str, Any]:
     return versions
 
 
-def resolve_embedded_signed_checkpoint(
-    init_config: dict[str, Any],
-    *,
-    problem_signature: str,
-    label: str,
-) -> None:
-    """Validate a user-declared checkpoint signature and inject the current one.
-
-    Used for native checkpoint formats that BayMorph annotates internally
-    with their own stored compatibility signature (for example emcee's HDF5
-    backend, keyed by ``checkpoint_signature``), for both single- and
-    multi-observation fits. Mutates ``init_config`` in place.
-
-    Raises
-    ------
-    ValueError
-        If ``init_config`` already declares a ``checkpoint_signature`` that
-        does not match ``problem_signature``.
-    """
-    declared_signature = init_config.get(
-        "checkpoint_signature"
-    )
-
-    if declared_signature is not None:
-        if (
-            not isinstance(
-                declared_signature,
-                str,
-            )
-            or declared_signature.strip()
-            != problem_signature
-        ):
-            raise ValueError(
-                f"The declared {label} checkpoint_signature does not "
-                "match the current scientific problem."
-            )
-
-    init_config[
-        "checkpoint_signature"
-    ] = problem_signature
-
-
 def resolve_json_signed_checkpoint(
     *,
     checkpoint_path: Path,

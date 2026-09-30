@@ -68,18 +68,10 @@ def recovery_fit_from_inference_result(
             float(summary["q84"]),
         )
 
-    effective_sample_size = (
-        result.effective_sample_size
-    )
-
     fit_metadata: dict[str, Any] = {
         "adapter": "baymorph_inference_result",
-        "effective_sample_size": (
-            None
-            if effective_sample_size is None
-            else float(
-                effective_sample_size
-            )
+        "effective_sample_size": float(
+            result.effective_sample_size
         ),
     }
 

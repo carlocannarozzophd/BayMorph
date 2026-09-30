@@ -338,29 +338,6 @@ Nautilus, the default production backend, uses:
         run:
           # Native nautilus.Sampler.run keyword arguments, for example n_eff.
 
-emcee uses a convergence-driven run loop rather than a thin passthrough,
-because emcee has no native evidence-producing stopping rule:
-
-    sampler:
-      name: emcee
-      init:
-        nwalkers: auto          # 'auto' or a positive even integer
-        seed: 42                # optional
-        checkpoint_path: auto   # optional; 'auto' uses the managed run directory
-        checkpoint_mode: fresh  # 'fresh' or 'resume'
-      run:
-        burn_in: 500
-        max_steps: 10000
-        check_interval: 100
-        min_autocorr_times: 50.0
-        tau_tolerance: 0.05
-
-emcee is posterior-only: it does not produce a Bayesian evidence estimate and
-cannot be used when `fit.comparison.enabled` is true. `init.checkpoint_path`,
-`init.checkpoint_mode`, and `init.checkpoint_signature` are BayMorph-owned
-options layered on top of the native emcee constructor arguments; they are
-not native `emcee.EnsembleSampler` keywords.
-
 pocoMC uses:
 
     fit:
@@ -407,9 +384,8 @@ scientific problem, sampler settings, and BayMorph source that produced it.
 Both accept `auto`, resolving to a path inside the pipeline-managed run
 directory. Resuming from a checkpoint whose recorded signature does not match
 the current problem raises `RuntimeError`; a checkpoint with no recorded
-signature at all is never trusted. For emcee, the equivalent contract is the
-embedded `init.checkpoint_signature` described above. This applies to both
-single-observation and joint multi-observation fits.
+signature at all is never trusted. This applies to both single-observation
+and joint multi-observation fits. Dynesty has no checkpoint.
 
 ## Configuration builders
 

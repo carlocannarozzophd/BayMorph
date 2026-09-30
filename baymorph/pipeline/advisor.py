@@ -221,24 +221,11 @@ class ObservationConfigProposal:
                 "not specified",
             )
         ).strip().lower()
-        posterior_only = sampler_name == "emcee"
-
-        if posterior_only:
-            sampler_scope = (
-                "Selected sampler: emcee (posterior only; "
-                "Bayesian evidence unavailable)."
-            )
-            comparison_scope = (
-                "This posterior-only run cannot establish a preferred model "
-                "through Bayes factors; use an evidence-producing backend "
-                "for that comparison."
-            )
-        else:
-            sampler_scope = f"Selected sampler: {sampler_name}."
-            comparison_scope = (
-                "A preferred model can be established only through "
-                "appropriate evidence-producing fits and diagnostics."
-            )
+        sampler_scope = f"Selected sampler: {sampler_name}."
+        comparison_scope = (
+            "A preferred model can be established only through "
+            "appropriate evidence-producing fits and diagnostics."
+        )
 
         lines = [
             "BayMorph Configuration Proposal",

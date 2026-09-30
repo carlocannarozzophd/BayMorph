@@ -323,10 +323,10 @@ def test_run_real_fit_passes_prepared_likelihood_state(
                 "type": (
                     "correlated_gaussian"
                 ),
-                "include_normalization": False,
+                "include_normalization": True,
             },
             "sampler": {
-                "name": "emcee",
+                "name": "nautilus",
             },
             "comparison": {
                 "enabled": False,
@@ -371,7 +371,7 @@ def test_run_real_fit_passes_prepared_likelihood_state(
             "type": (
                 "correlated_gaussian"
             ),
-            "normalization_complete": False,
+            "normalization_complete": True,
         },
     )
 

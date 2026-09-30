@@ -8,7 +8,6 @@ import pytest
 from baymorph.fitting.backend import InferenceBackend
 from baymorph.fitting.backends import (
     DynestyBackend,
-    EmceeBackend,
     PocoMCBackend,
 )
 from baymorph.fitting.problem import InferenceProblem
@@ -96,29 +95,6 @@ def test_make_sampler_returns_pocomc_backend():
     )
 
 
-def test_make_sampler_returns_emcee_backend():
-    backend = make_sampler(
-        {
-            "name": "emcee",
-            "init": {
-                "nwalkers": 32,
-                "seed": 42,
-            },
-            "run": {
-                "max_steps": 1000,
-            },
-        },
-        problem=ScalarProblem(),
-    )
-
-    assert isinstance(
-        backend,
-        EmceeBackend,
-    )
-    assert backend.name == "emcee"
-    assert backend.produces_evidence is False
-
-
 def test_make_sampler_defaults_to_nautilus():
     backend = make_sampler(
         None,
@@ -171,6 +147,19 @@ def test_archived_native_backend_is_not_registered():
         make_sampler(
             {
                 "name": "native",
+            },
+            problem=ScalarProblem(),
+        )
+
+
+def test_archived_emcee_backend_is_not_registered():
+    with pytest.raises(
+        ValueError,
+        match="Unknown inference backend",
+    ):
+        make_sampler(
+            {
+                "name": "emcee",
             },
             problem=ScalarProblem(),
         )

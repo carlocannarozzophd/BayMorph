@@ -126,7 +126,7 @@ The current scope intentionally excludes:
 | Morphology models | Single-Sérsic, double-Sérsic, bulge-disc, and Sérsic plus point-source models |
 | Rendering | Detector-pixel integration, extended-domain rendering, PSF convolution, adaptive integration infrastructure |
 | PSF workflows | Analytic Gaussian PSFs and empirical PSF construction |
-| Likelihoods | Normalized diagonal Gaussian likelihood in both workflows; within-observation correlated Gaussian likelihood in the multi-observation workflow only |
+| Likelihoods | Normalized diagonal Gaussian likelihood in both workflows; within-observation correlated Gaussian likelihood, through its nearest-neighbour factorization, in the multi-observation workflow only |
 | Inference | Backend-neutral inference problems with Nautilus, Dynesty, and pocoMC production backends |
 | Dynesty modes | Static and dynamic nested sampling |
 | Posterior products | Weighted posterior samples, summaries, diagnostics, and canonical backend-neutral inference results |

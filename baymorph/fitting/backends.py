@@ -11,7 +11,6 @@ from baymorph.fitting.backend import (
     backend_registry,
 )
 from baymorph.fitting.dynesty import DynestyFitter
-from baymorph.fitting.emcee import EmceeFitter
 from baymorph.fitting.execution import resolve_sampler_execution
 from baymorph.fitting.nautilus import NautilusFitter
 from baymorph.fitting.pocomc import PocoMCFitter
@@ -145,97 +144,6 @@ class DynestyBackend(InferenceBackend):
 
         return fitter.run(
             mode=self.mode,
-            init_kwargs=self.config[
-                "init"
-            ],
-            run_kwargs=self.config[
-                "run"
-            ],
-            execution=resolve_sampler_execution(
-                self.config[
-                    "execution"
-                ]
-            ),
-            progress_label=progress_label,
-        )
-
-
-class EmceeBackend(InferenceBackend):
-    """Backend-neutral adapter for posterior-only emcee inference."""
-
-    def __init__(
-        self,
-        *,
-        problem: InferenceProblem,
-        config: Mapping[str, Any] | None = None,
-    ) -> None:
-        raw = (
-            {}
-            if config is None
-            else dict(config)
-        )
-
-        allowed_envelope = {
-            "name",
-            "execution",
-            "init",
-            "run",
-        }
-
-        unknown = sorted(
-            set(raw)
-            - allowed_envelope
-        )
-
-        if unknown:
-            names = ", ".join(unknown)
-            raise ValueError(
-                "emcee configuration options must be placed under "
-                f"'init' or 'run'. Unexpected top-level option(s): {names}."
-            )
-
-        resolved = {
-            "name": "emcee",
-            "execution": _mapping_section(
-                raw,
-                "execution",
-            ),
-            "init": _mapping_section(
-                raw,
-                "init",
-            ),
-            "run": _mapping_section(
-                raw,
-                "run",
-            ),
-        }
-
-        super().__init__(
-            problem=problem,
-            config=resolved,
-        )
-
-    @property
-    def name(self) -> str:
-        """Return the stable backend identifier."""
-        return "emcee"
-
-    @property
-    def produces_evidence(self) -> bool:
-        """Return that emcee is a posterior-only backend."""
-        return False
-
-    def fit(
-        self,
-        *,
-        progress_label: str | None = None,
-    ) -> InferenceResult:
-        """Run posterior-only emcee inference."""
-        fitter = EmceeFitter(
-            problem=self.problem
-        )
-
-        return fitter.run(
             init_kwargs=self.config[
                 "init"
             ],
@@ -446,17 +354,6 @@ def _make_dynesty_backend(
     )
 
 
-def _make_emcee_backend(
-    problem: InferenceProblem,
-    config: Mapping[str, Any],
-) -> InferenceBackend:
-    """Construct the built-in emcee backend."""
-    return EmceeBackend(
-        problem=problem,
-        config=config,
-    )
-
-
 def _make_pocomc_backend(
     problem: InferenceProblem,
     config: Mapping[str, Any],
@@ -488,12 +385,6 @@ def register_builtin_backends(
     registry.register(
         "dynesty",
         _make_dynesty_backend,
-        replace=replace,
-    )
-
-    registry.register(
-        "emcee",
-        _make_emcee_backend,
         replace=replace,
     )
 

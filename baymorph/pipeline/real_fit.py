@@ -34,7 +34,6 @@ from baymorph.pipeline.checkpoint_signing import (
     checkpoint_signature_value as _checkpoint_signature_value,
     prior_checkpoint_signature as _prior_checkpoint_signature,
     qualified_class_name as _qualified_class_name,
-    resolve_embedded_signed_checkpoint,
     resolve_json_signed_checkpoint,
     runtime_psf_checkpoint_signature as _runtime_psf_checkpoint_signature,
     write_json_atomic as _write_json_atomic,
@@ -125,18 +124,9 @@ def run_real_fit_from_config(
         resolved,
         image_products,
     )
-    sampler_cfg = resolved["fit"]["sampler"]
-    sampler_name = str(
-        sampler_cfg.get(
-            "name",
-            "",
-        )
-    ).strip().lower()
-
-    if sampler_name != "emcee":
-        require_complete_likelihood_normalization(
-            likelihood_state
-        )
+    require_complete_likelihood_normalization(
+        likelihood_state
+    )
 
     # Accepted preparation and PSF products are validated before fit output
     # directories or inference configuration snapshots are written.
@@ -281,23 +271,6 @@ def _single_model_fit_config(
     fit_directory = pipeline_paths(
         config
     )["fits"][model_name]["dir"]
-
-    if (
-        sampler_name == "emcee"
-        and str(
-            init_config.get(
-                "checkpoint_path",
-                "",
-            )
-        ).strip().lower()
-        == "auto"
-    ):
-        init_config["checkpoint_path"] = str(
-            (
-                fit_directory
-                / "emcee_checkpoint.h5"
-            ).expanduser().resolve()
-        )
 
     if (
         sampler_name == "nautilus"
@@ -556,97 +529,6 @@ def _real_fit_problem_signature(
     )
 
 
-def _prepare_emcee_sampler_config(
-    sampler_cfg,
-    *,
-    model_name,
-    problem,
-    likelihood_cfg,
-    data_fit,
-    noise_fit,
-    mask_fit,
-    correlation_kernel_fit,
-    checkpoint_directory,
-):
-    """Resolve automatic emcee checkpointing for one real fit."""
-    sampler_name = str(
-        sampler_cfg.get(
-            "name",
-            "",
-        )
-    ).strip().lower()
-
-    if sampler_name != "emcee":
-        return sampler_cfg
-
-    runtime_config = dict(
-        sampler_cfg
-    )
-    init_config = dict(
-        runtime_config.get(
-            "init",
-            {},
-        )
-    )
-    runtime_config[
-        "init"
-    ] = init_config
-
-    configured_path = init_config.get(
-        "checkpoint_path"
-    )
-
-    if configured_path is None:
-        return runtime_config
-
-    if (
-        isinstance(
-            configured_path,
-            str,
-        )
-        and configured_path.strip().lower() == "auto"
-    ):
-        if checkpoint_directory is None:
-            raise ValueError(
-                "emcee checkpoint_path='auto' requires a "
-                "pipeline-managed model output directory."
-            )
-
-        init_config[
-            "checkpoint_path"
-        ] = str(
-            (
-                Path(
-                    checkpoint_directory
-                )
-                / "emcee_checkpoint.h5"
-            ).expanduser().resolve()
-        )
-
-    init_config.setdefault(
-        "checkpoint_mode",
-        "fresh",
-    )
-
-    generated_signature = _real_fit_problem_signature(
-        model_name=model_name,
-        problem=problem,
-        likelihood_cfg=likelihood_cfg,
-        data_fit=data_fit,
-        noise_fit=noise_fit,
-        mask_fit=mask_fit,
-        correlation_kernel_fit=correlation_kernel_fit,
-    )
-
-    resolve_embedded_signed_checkpoint(
-        init_config,
-        problem_signature=generated_signature,
-        label="emcee",
-    )
-
-    return runtime_config
-
-
 def _prepare_nautilus_sampler_config(
     sampler_cfg,
     *,
@@ -883,24 +765,8 @@ def _execute_single_model_fit(
     )
 
     runtime_sampler_cfg = (
-        _prepare_emcee_sampler_config(
-            sampler_cfg,
-            model_name=model_name,
-            problem=problem,
-            likelihood_cfg=likelihood_cfg,
-            data_fit=image_products.prepared_data,
-            noise_fit=likelihood_state.noise,
-            mask_fit=image_products.fitting_mask,
-            correlation_kernel_fit=(
-                likelihood_state.correlation_kernel
-            ),
-            checkpoint_directory=checkpoint_directory,
-        )
-    )
-
-    runtime_sampler_cfg = (
         _prepare_nautilus_sampler_config(
-            runtime_sampler_cfg,
+            sampler_cfg,
             model_name=model_name,
             problem=problem,
             likelihood_cfg=likelihood_cfg,

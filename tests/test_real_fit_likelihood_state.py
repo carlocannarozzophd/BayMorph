@@ -338,6 +338,181 @@ def test_evidence_gate_rejects_incomplete_observation():
         require_complete_likelihood_normalization({"g": state})
 
 
+_UNNORMALIZED_LIKELIHOOD = {
+    "type": "gaussian",
+    "include_normalization": False,
+}
+
+_REGISTERED_BACKENDS = (
+    "dynesty",
+    "nautilus",
+    "pocomc",
+)
+
+
+@pytest.mark.parametrize(
+    "sampler_name",
+    _REGISTERED_BACKENDS,
+)
+def test_real_fit_rejects_incomplete_normalization_before_outputs(
+    monkeypatch,
+    sampler_name,
+):
+    """No backend may fit a likelihood without complete normalization."""
+    from baymorph.pipeline import real_fit
+
+    resolved = {
+        "data": {
+            "image_path": "missing.fits",
+        },
+        "fit": {
+            "likelihood": dict(
+                _UNNORMALIZED_LIKELIHOOD
+            ),
+            "sampler": {
+                "name": sampler_name,
+            },
+        },
+    }
+    image_products = _image_products()
+    image_products.cutout_bounds = {
+        "xmin": 0,
+        "xmax": 4,
+        "ymin": 0,
+        "ymax": 3,
+    }
+    created = []
+
+    monkeypatch.setattr(
+        real_fit,
+        "resolve_config",
+        lambda config: resolved,
+    )
+    monkeypatch.setattr(
+        real_fit,
+        "validate_fit_priors",
+        lambda config: None,
+    )
+    monkeypatch.setattr(
+        real_fit,
+        "load_image_preparation_products",
+        lambda config: image_products,
+    )
+    monkeypatch.setattr(
+        real_fit,
+        "_load_psf_from_config",
+        lambda config: object(),
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit.Observation.from_fits",
+        lambda path: None,
+    )
+    monkeypatch.setattr(
+        real_fit,
+        "_target_reference_coordinates",
+        lambda **kwargs: {
+            "target_x": 1.0,
+            "target_y": 1.0,
+        },
+    )
+    monkeypatch.setattr(
+        real_fit,
+        "make_output_tree",
+        created.append,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="completely normalized likelihood",
+    ):
+        real_fit.run_real_fit_from_config({})
+
+    assert created == []
+
+
+@pytest.mark.parametrize(
+    "sampler_name",
+    _REGISTERED_BACKENDS,
+)
+def test_joint_inference_rejects_incomplete_normalization_before_sampling(
+    monkeypatch,
+    sampler_name,
+):
+    """No backend may sample a joint likelihood without normalization."""
+    from pathlib import Path
+
+    from baymorph.pipeline import multi_observation_fit
+
+    raw_config = {
+        "fit": {
+            "models": [
+                "single_sersic",
+            ],
+            "sampler": {
+                "name": sampler_name,
+            },
+        },
+    }
+    state = prepare_real_fit_likelihood_state(
+        {
+            "fit": {
+                "likelihood": dict(
+                    _UNNORMALIZED_LIKELIHOOD
+                ),
+            },
+        },
+        _image_products(),
+    )
+    context = SimpleNamespace(
+        problem=object(),
+        image_products={},
+        observation_configs={},
+        likelihood_states={
+            "g": state,
+        },
+    )
+    events = []
+
+    monkeypatch.setattr(
+        multi_observation_fit,
+        "_load_multi_observation_config",
+        lambda config: (
+            raw_config,
+            Path("."),
+        ),
+    )
+    monkeypatch.setattr(
+        multi_observation_fit,
+        "_build_multi_observation_context",
+        lambda config, base_dir: context,
+    )
+    monkeypatch.setattr(
+        multi_observation_fit,
+        "_estimate_pre_fit_noise_diagnostics",
+        lambda **kwargs: events.append(
+            "noise_diagnostic"
+        ),
+    )
+    monkeypatch.setattr(
+        multi_observation_fit,
+        "_run_multi_observation_inference",
+        lambda **kwargs: events.append(
+            "sampler"
+        ),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="completely normalized likelihood",
+    ):
+        (
+            multi_observation_fit
+            .run_multi_observation_inference_from_config({})
+        )
+
+    assert events == []
+
+
 def test_likelihood_noise_override_is_rejected():
     """Prepared noise is authoritative for real-image inference."""
     with pytest.raises(

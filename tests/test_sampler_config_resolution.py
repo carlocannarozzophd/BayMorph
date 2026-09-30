@@ -38,37 +38,19 @@ def test_default_sampler_is_nautilus():
     }
 
 
-def test_emcee_sampler_configuration_is_resolved():
+def test_archived_emcee_sampler_is_rejected():
     config = _base_config()
     config["fit"] = {
         "sampler": {
             "name": "emcee",
-            "init": {
-                "nwalkers": 32,
-                "seed": 42,
-            },
-            "run": {
-                "max_steps": 1000,
-            },
         }
     }
 
-    resolved = resolve_config(config)
-
-    assert resolved["fit"]["sampler"] == {
-        "name": "emcee",
-        "execution": {
-            "processes": "auto",
-            "progress": True,
-        },
-        "init": {
-            "nwalkers": 32,
-            "seed": 42,
-        },
-        "run": {
-            "max_steps": 1000,
-        },
-    }
+    with pytest.raises(
+        ValueError,
+        match="Unknown sampler 'emcee'",
+    ):
+        resolve_config(config)
 
 
 def test_pocomc_native_kwargs_are_preserved_verbatim():
@@ -282,25 +264,6 @@ def test_sampler_execution_override_is_preserved():
         "processes": 3,
         "progress": False,
     }
-
-def test_emcee_rejects_enabled_evidence_comparison():
-    config = _base_config()
-    config["fit"] = {
-        "sampler": {
-            "name": "emcee",
-        },
-        "comparison": {
-            "enabled": True,
-            "metric": "bayes_factor",
-        },
-    }
-
-    with pytest.raises(
-        ValueError,
-        match="posterior-only.*evidence",
-    ):
-        resolve_config(config)
-
 
 def test_enabled_comparison_requires_exact_scientific_model_pair():
     """Single-band comparison must not silently accept another model set."""

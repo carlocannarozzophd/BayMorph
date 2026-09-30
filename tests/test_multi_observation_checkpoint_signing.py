@@ -8,7 +8,6 @@ from types import SimpleNamespace
 import pytest
 
 from baymorph.pipeline.multi_observation_fit import (
-    _prepare_multi_observation_emcee_sampler_config,
     _prepare_multi_observation_nautilus_sampler_config,
     _prepare_multi_observation_pocomc_sampler_config,
     run_multi_observation_fit_from_config,
@@ -21,34 +20,6 @@ def _patch_signature(monkeypatch, value="signature:multi"):
         "baymorph.pipeline.multi_observation_fit."
         "_multi_observation_problem_signature",
         lambda **kwargs: value,
-    )
-
-
-def test_multi_observation_emcee_injects_checkpoint_signature(
-    monkeypatch,
-) -> None:
-    """Emcee checkpointing must be signed exactly like a single-obs fit."""
-    _patch_signature(monkeypatch)
-
-    resolved = _prepare_multi_observation_emcee_sampler_config(
-        {
-            "name": "emcee",
-            "init": {
-                "checkpoint_path": "/tmp/does-not-matter.h5",
-            },
-        },
-        model_name="single_sersic",
-        context=object(),
-        checkpoint_directory=None,
-    )
-
-    assert (
-        resolved["init"]["checkpoint_signature"]
-        == "signature:multi"
-    )
-    assert (
-        resolved["init"]["checkpoint_mode"]
-        == "fresh"
     )
 
 

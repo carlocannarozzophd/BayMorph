@@ -203,7 +203,7 @@ def test_noise_diagnostic_precedes_sampler(
                 "single_sersic",
             ],
             "sampler": {
-                "name": "emcee",
+                "name": "nautilus",
             },
         }
     }
@@ -212,6 +212,7 @@ def test_noise_diagnostic_precedes_sampler(
         problem=object(),
         image_products={},
         observation_configs={},
+        likelihood_states={},
     )
 
     monkeypatch.setattr(

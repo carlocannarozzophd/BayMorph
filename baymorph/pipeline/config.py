@@ -19,15 +19,6 @@ from baymorph.fitting.execution import resolve_sampler_execution
 REQUIRED_TOP_LEVEL_KEYS = ("object", "data", "outputs")
 
 SAMPLER_DEFAULTS = {
-    "emcee": {
-        "name": "emcee",
-        "execution": {
-            "processes": "auto",
-            "progress": True,
-        },
-        "init": {},
-        "run": {},
-    },
     "pocomc": {
         "name": "pocomc",
         "execution": {
@@ -803,16 +794,6 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
     validate_sampler_config(
         resolved["fit"]["sampler"]
     )
-
-    if (
-        sampler_name == "emcee"
-        and resolved["fit"]["comparison"]["enabled"] is True
-    ):
-        raise ValueError(
-            "emcee is posterior-only and cannot be used when "
-            "fit.comparison.enabled is true because Bayesian "
-            "evidence is unavailable."
-        )
 
     if resolved["fit"]["comparison"]["enabled"] is True:
         comparison_models = resolved["fit"]["models"]
