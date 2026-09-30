@@ -105,7 +105,8 @@ BayMorph currently focuses on:
 - physically motivated forward modelling;
 - single-observation inference;
 - multi-observation inference with explicit conditional-independence assumptions;
-- within-observation correlated-noise likelihoods;
+- within-observation correlated-noise likelihoods, in the multi-observation
+  workflow only;
 - reproducible scientific workflows;
 - scientific validation.
 
@@ -125,7 +126,7 @@ The current scope intentionally excludes:
 | Morphology models | Single-Sérsic, double-Sérsic, bulge-disc, and Sérsic plus point-source models |
 | Rendering | Detector-pixel integration, extended-domain rendering, PSF convolution, adaptive integration infrastructure |
 | PSF workflows | Analytic Gaussian PSFs and empirical PSF construction |
-| Likelihoods | Diagonal Gaussian and validated within-observation correlated Gaussian likelihoods |
+| Likelihoods | Normalized diagonal Gaussian likelihood in both workflows; within-observation correlated Gaussian likelihood in the multi-observation workflow only |
 | Inference | Backend-neutral inference problems with Nautilus, Dynesty, and pocoMC production backends |
 | Dynesty modes | Static and dynamic nested sampling |
 | Posterior products | Weighted posterior samples, summaries, diagnostics, and canonical backend-neutral inference results |
@@ -327,19 +328,23 @@ run directory to preserve reproducibility.
 
 Nautilus is the default production inference backend.
 
-A sampler configuration has a deliberately thin BayMorph envelope. For example, a non-default pocoMC configuration is:
+A sampler configuration has a deliberately thin BayMorph envelope, declared
+under `fit.sampler`. A `sampler` block at the top level of the configuration
+is not read, and the default backend is then used. For example, a non-default
+pocoMC configuration is:
 
 ~~~yaml
-sampler:
-  name: pocomc
-  init:
-    n_effective: 512
-    n_active: 256
-    random_state: 42
-  run:
-    n_total: 4096
-    n_evidence: 4096
-    progress: true
+fit:
+  sampler:
+    name: pocomc
+    init:
+      n_effective: 512
+      n_active: 256
+      random_state: 42
+    run:
+      n_total: 4096
+      n_evidence: 4096
+      progress: true
 ~~~
 
 Entries under `init` and `run` use the native names and semantics of the
@@ -357,31 +362,33 @@ the installed upstream package version:
 ### Dynesty static nested sampling
 
 ~~~yaml
-sampler:
-  name: dynesty
-  mode: static
-  init:
-    nlive: 500
-    sample: rwalk
-  run:
-    dlogz: 0.05
-    print_progress: true
+fit:
+  sampler:
+    name: dynesty
+    mode: static
+    init:
+      nlive: 500
+      sample: rwalk
+    run:
+      dlogz: 0.05
+      print_progress: true
 ~~~
 
 ### Dynesty dynamic nested sampling
 
 ~~~yaml
-sampler:
-  name: dynesty
-  mode: dynamic
-  init:
-    nlive: 500
-    sample: rwalk
-  run:
-    nlive_init: 500
-    nlive_batch: 250
-    dlogz_init: 0.05
-    print_progress: true
+fit:
+  sampler:
+    name: dynesty
+    mode: dynamic
+    init:
+      nlive: 500
+      sample: rwalk
+    run:
+      nlive_init: 500
+      nlive_batch: 250
+      dlogz_init: 0.05
+      print_progress: true
 ~~~
 
 The numerical configuration belongs to the selected sampler.
@@ -439,13 +446,8 @@ distributed.
 BayMorph is an active scientific research programme and an evolving Python
 package.
 
-Current priorities are:
-
-1. complete the first real multi-observation production fit;
-2. validate its posterior, evidence, diagnostics, and persisted products;
-3. freeze and scale the workflow to the remaining galaxy sample;
-4. complete the BayMorph manuscript;
-5. prepare the paper-associated software release.
+The current priority and the order of the remaining work are stated in the
+[roadmap](ROADMAP.md).
 
 The native BayMorph nested sampler is archived and is not an active development
 priority. General cross-observation residual covariance is not a current

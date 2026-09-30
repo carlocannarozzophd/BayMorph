@@ -46,10 +46,18 @@ interfaces rather than internal pipeline or fitting classes.
 
 ### Repeating a stage
 
-`prepare_image()`, `select_psf_candidates()`, `build_psf()` and `fit()` can be
-run again. A stage that finds a completed product for the configured output
+`prepare_image()`, `select_psf_candidates()` and `build_psf()` can be run
+again. A stage that finds a completed product for the configured output
 namespace loads it, and reports the reuse, instead of rebuilding it (AD-042).
 An interrupted workflow therefore continues by rerunning it from the start.
+
+`fit()` does not reuse a completed fit. When the completion marker of a model
+exists and `outputs.overwrite` is false, it raises `FileExistsError`, and no
+public stage loads a completed fit: the diagnostics require the in-memory
+result of a fit executed in the same session. A fit interrupted before its
+completion marker resumes only from a signed checkpoint, when one was
+configured for a backend that supports it (see "Checkpoint and resume
+safety" below).
 
 Reuse is the fail-closed path, not a shortcut: persisted preparation products
 are accepted only when their immutable inputs still match the configuration,
@@ -315,17 +323,20 @@ pipeline configuration rather than through backend-specific public workflows.
 
 ## Sampler configuration
 
-The public sampler configuration contract is intentionally minimal.
+The public sampler configuration contract is intentionally minimal. The
+sampler is declared under `fit.sampler`; a `sampler` block at the top level
+of the configuration is not read.
 
 Nautilus, the default production backend, uses:
 
-    sampler:
-      name: nautilus
-      init:
-        # Native nautilus.Sampler keyword arguments, for example n_live,
-        # seed, filepath, resume.
-      run:
-        # Native nautilus.Sampler.run keyword arguments, for example n_eff.
+    fit:
+      sampler:
+        name: nautilus
+        init:
+          # Native nautilus.Sampler keyword arguments, for example n_live,
+          # seed, filepath, resume.
+        run:
+          # Native nautilus.Sampler.run keyword arguments, for example n_eff.
 
 emcee uses a convergence-driven run loop rather than a thin passthrough,
 because emcee has no native evidence-producing stopping rule:
@@ -352,32 +363,35 @@ not native `emcee.EnsembleSampler` keywords.
 
 pocoMC uses:
 
-    sampler:
-      name: pocomc
-      init:
-        # Native pocomc.Sampler keyword arguments.
-      run:
-        # Native pocomc.Sampler.run keyword arguments.
+    fit:
+      sampler:
+        name: pocomc
+        init:
+          # Native pocomc.Sampler keyword arguments.
+        run:
+          # Native pocomc.Sampler.run keyword arguments.
 
 Dynesty static nested sampling uses:
 
-    sampler:
-      name: dynesty
-      mode: static
-      init:
-        # Native dynesty.NestedSampler keyword arguments.
-      run:
-        # Native dynesty.NestedSampler.run_nested keyword arguments.
+    fit:
+      sampler:
+        name: dynesty
+        mode: static
+        init:
+          # Native dynesty.NestedSampler keyword arguments.
+        run:
+          # Native dynesty.NestedSampler.run_nested keyword arguments.
 
 Dynesty dynamic nested sampling uses:
 
-    sampler:
-      name: dynesty
-      mode: dynamic
-      init:
-        # Native dynesty.DynamicNestedSampler keyword arguments.
-      run:
-        # Native dynesty.DynamicNestedSampler.run_nested keyword arguments.
+    fit:
+      sampler:
+        name: dynesty
+        mode: dynamic
+        init:
+          # Native dynesty.DynamicNestedSampler keyword arguments.
+        run:
+          # Native dynesty.DynamicNestedSampler.run_nested keyword arguments.
 
 BayMorph deliberately does not duplicate the complete upstream sampler API.
 

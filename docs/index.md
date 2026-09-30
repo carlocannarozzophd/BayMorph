@@ -197,13 +197,8 @@ The current scope excludes:
 
 ## Current priorities
 
-Current development follows this order:
-
-1. probabilistic formulation;
-2. BayMorph manuscript;
-3. architecture;
-4. implementation;
-5. validation.
+The current priority and the order of the remaining work are stated in the
+[roadmap](https://github.com/carlocannarozzophd/BayMorph/blob/main/ROADMAP.md).
 
 The native BayMorph nested sampler is archived and is not an active development
 priority.
