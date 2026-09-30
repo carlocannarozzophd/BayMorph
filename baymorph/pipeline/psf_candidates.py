@@ -227,43 +227,6 @@ def run_psf_candidate_selection_from_config(
     return candidates
 
 
-def estimate_candidate_half_size(
-    fwhm: float,
-    *,
-    scale_factor: float = 4.0,
-    min_half_size: int = 12,
-    max_half_size: int = 40,
-) -> int:
-    """Estimate a PSF cutout half-size from an FWHM value.
-
-    Parameters
-    ----------
-    fwhm : float
-        Full width at half maximum, in pixels.
-    scale_factor : float, default=4.0
-        Multiplicative factor applied to ``fwhm``.
-    min_half_size : int, default=12
-        Minimum allowed half-size.
-    max_half_size : int, default=40
-        Maximum allowed half-size.
-
-    Returns
-    -------
-    int
-        Clipped PSF cutout half-size.
-
-    Raises
-    ------
-    ValueError
-        If ``fwhm`` is not strictly positive.
-    """
-    if fwhm <= 0:
-        raise ValueError("fwhm must be positive.")
-
-    half_size = int(np.ceil(scale_factor * fwhm))
-    return int(np.clip(half_size, min_half_size, max_half_size))
-
-
 def is_isolated_candidate(
     segmentation: np.ndarray,
     *,

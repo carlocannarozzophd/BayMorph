@@ -712,7 +712,6 @@ def test_build_runtime_report_returns_independent_data(tmp_path):
 def test_runtime_report_roundtrip(tmp_path):
     from baymorph.pipeline import (
         build_runtime_report,
-        load_runtime_report,
         save_runtime_report,
     )
 
@@ -736,7 +735,9 @@ def test_runtime_report_roundtrip(tmp_path):
         config,
         report,
     )
-    loaded = load_runtime_report(config)
+    loaded = yaml.safe_load(
+        path.read_text()
+    )
 
     assert path == tmp_path / "example_galaxy" / "runtime_report.yaml"
     assert loaded == report

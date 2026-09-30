@@ -8,7 +8,6 @@ from astropy.io import fits
 from baymorph.pipeline import (
     centroid_from_flux,
     crop_center,
-    estimate_psf_half_size,
     extract_centered_cutout,
     load_empirical_psf,
     normalize_psf,
@@ -434,28 +433,6 @@ def test_save_empirical_psf_metadata(tmp_path):
         loaded = json.load(f)
 
     assert loaded == metadata
-
-
-def test_estimate_psf_half_size_uses_candidate_maximum():
-    from baymorph.pipeline import PSFCandidate
-
-    candidates = [
-        PSFCandidate(x=1, y=1, half_size=8),
-        PSFCandidate(x=2, y=2, half_size=12),
-    ]
-
-    assert estimate_psf_half_size(candidates) == 12
-
-
-def test_estimate_psf_half_size_uses_fallback_without_sizes():
-    from baymorph.pipeline import PSFCandidate
-
-    candidates = [
-        PSFCandidate(x=1, y=1),
-        PSFCandidate(x=2, y=2),
-    ]
-
-    assert estimate_psf_half_size(candidates, fallback_half_size=25) == 25
 
 
 def test_crop_center_returns_expected_shape_and_center():

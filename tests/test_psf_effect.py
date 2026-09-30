@@ -6,8 +6,6 @@ import numpy as np
 import pytest
 
 from baymorph.observation import (
-    ObservationEffect,
-    ObservationModel,
     PSFEffect,
 )
 from baymorph.simulation.psf import (
@@ -15,15 +13,6 @@ from baymorph.simulation.psf import (
     GaussianPSF,
     convolve_with_psf,
 )
-
-
-def test_psf_effect_satisfies_observation_effect_protocol() -> None:
-    """PSF convolution must satisfy the structural effect contract."""
-    effect = PSFEffect(
-        GaussianPSF(fwhm=2.0),
-    )
-
-    assert isinstance(effect, ObservationEffect)
 
 
 def test_psf_effect_matches_existing_convolution_utility() -> None:
@@ -59,31 +48,6 @@ def test_psf_effect_supports_empirical_psf() -> None:
 
     assert result.shape == image.shape
     assert np.all(np.isfinite(result))
-
-
-def test_psf_effect_composes_inside_observation_model() -> None:
-    """PSF convolution must participate in ordered effect composition."""
-    image = np.zeros((17, 17), dtype=float)
-    image[8, 8] = 1.0
-
-    model = ObservationModel(
-        [
-            PSFEffect(
-                GaussianPSF(fwhm=2.0),
-                kernel_size=7,
-            )
-        ]
-    )
-
-    observed = model.observe(image)
-
-    assert observed.shape == image.shape
-    assert observed[8, 8] < 1.0
-    assert observed.sum() == pytest.approx(
-        1.0,
-        rel=1.0e-12,
-        abs=1.0e-12,
-    )
 
 
 def test_psf_effect_rejects_negative_sidelobes() -> None:

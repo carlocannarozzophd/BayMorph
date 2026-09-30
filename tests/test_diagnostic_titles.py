@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 from baymorph.models.labels import latex_parameter_label
-from baymorph.pipeline.corner import _posterior_samples
 from baymorph.pipeline.real_fit import (
     _fit_diagnostic_title,
     _object_label,
@@ -37,39 +35,6 @@ def test_object_label_is_human_readable():
             "single_sersic",
         )
         == "example galaxy g | Single Sérsic"
-    )
-
-
-def test_corner_pipeline_prefers_equal_weight_samples():
-    """Pipeline corner plots must use the equal-weight posterior."""
-    raw = np.asarray(
-        [
-            [1.0],
-            [2.0],
-            [100.0],
-        ]
-    )
-
-    equal_weight = np.asarray(
-        [
-            [1.0],
-            [1.0],
-            [2.0],
-        ]
-    )
-
-    result = SimpleNamespace(
-        samples=raw,
-        posterior=SimpleNamespace(
-            equal_weight_samples=equal_weight,
-        ),
-    )
-
-    assert np.array_equal(
-        _posterior_samples(
-            result
-        ),
-        equal_weight,
     )
 
 

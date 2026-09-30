@@ -72,44 +72,6 @@ def save_runtime_report(
     return path
 
 
-def load_runtime_report(
-    config: dict[str, Any],
-) -> dict[str, Any]:
-    """Load a previously saved runtime report.
-
-    Parameters
-    ----------
-    config : dict
-        BayMorph pipeline configuration used to resolve the output path.
-
-    Returns
-    -------
-    dict
-        Loaded runtime report.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the runtime report does not exist.
-    ValueError
-        If the runtime report is empty.
-    TypeError
-        If the YAML top level is not a mapping.
-    """
-    path = pipeline_paths(config)["runtime_report"]
-
-    with path.open("r") as stream:
-        report = yaml.safe_load(stream)
-
-    if report is None:
-        raise ValueError(f"Runtime report is empty: {path}")
-
-    if not isinstance(report, dict):
-        raise TypeError("Runtime report must define a YAML mapping at top level.")
-
-    return report
-
-
 def _masked_fraction(mask) -> float | None:
     """Return the fraction of excluded pixels in an optional mask."""
     if mask is None:

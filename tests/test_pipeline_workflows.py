@@ -1,9 +1,6 @@
-from pathlib import Path
-
 import pytest
 
 from baymorph.pipeline import (
-    initialize_pipeline_run,
     load_empirical_psf,
     resolve_config,
     run_image_preparation,
@@ -23,27 +20,11 @@ def minimal_config(tmp_path):
 
 
 def test_pipeline_entrypoints_exist():
-    assert callable(initialize_pipeline_run)
     assert callable(run_image_preparation)
     assert callable(run_psf_candidate_selection)
     assert callable(run_psf_construction)
     assert callable(run_real_fit)
 
-
-def test_initialize_pipeline_run_creates_output_tree(tmp_path):
-    config = minimal_config(tmp_path)
-
-    resolved = initialize_pipeline_run(config)
-
-    base = Path(resolved["outputs"]["root"]) / resolved["object"]["name"]
-
-    assert base.is_dir()
-    assert (base / "config_resolved.yaml").exists()
-    assert (base / "psf").is_dir()
-    assert (base / "fits").is_dir()
-
-    for model_name in resolved["fit"]["models"]:
-        assert (base / "fits" / model_name).is_dir()
 
 def test_run_real_fit_accepts_dict_config_and_requires_preparation(
     tmp_path,

@@ -259,11 +259,3 @@ def make_plot(
         ax = ax.flatten()
 
     return fig, ax
-
-
-def finalize_figure(
-    fig,
-):
-    """Apply final layout adjustments to a BayMorph figure."""
-    fig.tight_layout()
-    return fig

@@ -1761,37 +1761,6 @@ def save_empirical_psf_metadata(
     return path
 
 
-def estimate_psf_half_size(
-    candidates,
-    *,
-    fallback_half_size: int = 25,
-) -> int:
-    """Estimate a representative PSF half-size from candidates.
-
-    Parameters
-    ----------
-    candidates : iterable
-        PSF candidates with optional ``half_size`` attributes.
-    fallback_half_size : int, default=25
-        Value returned when no candidates contain a half-size.
-
-    Returns
-    -------
-    int
-        Maximum candidate half-size, or the fallback value.
-    """
-    half_sizes = [
-        candidate.half_size
-        for candidate in candidates
-        if candidate.half_size is not None
-    ]
-
-    if len(half_sizes) == 0:
-        return fallback_half_size
-
-    return int(np.max(half_sizes))
-
-
 def crop_center(
     image: np.ndarray,
     half_size: int,
