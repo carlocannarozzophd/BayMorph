@@ -106,6 +106,7 @@ nav:
   - Empirical PSF Test Bench: research/PSF_TEST_BENCH_2026-09-30.md
   - Empirical PSF Builder Candidates: research/PSF_BUILDER_CANDIDATES_2026-09-30.md
   - Rendering Convention under an Empirical PSF: research/RENDERING_CONVENTION_2026-10-01.md
+  - PSF and Rendering Errors in Fitted Sérsic Parameters: research/PSF_PARAMETER_SENSITIVITY_2026-10-01.md
 
 plugins:
   - search
