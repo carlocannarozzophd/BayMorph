@@ -66,6 +66,21 @@ that no longer match are rejected, and none are ever rewritten in place.
 Setting `outputs.overwrite` selects rebuilding; a different scientific
 declaration belongs in a new output namespace.
 
+### Empirical PSF
+
+`build_psf()` builds the empirical PSF with the builder of AD-046. The stars
+that pass the candidate selection are combined by a weighted fit of each
+kernel pixel in their sub-pixel phase, with no interpolation. The sky of each
+star is measured between `psf.empirical.construction.sky_inner_radius` and
+`sky_outer_radius`, 80 and 160 px by default, with the other detected
+sources masked after growing them by `mask_growth_pixels`, 5 px; the kernel
+continues to `support_half_size`, 64 px, with the measured wings of the
+stars. These radii enter the identity of the PSF. The product holds the
+kernel at integer offsets and at the eleven sub-pixel phases of each axis,
+through which the forward model renders the profile. An empirical PSF built
+before AD-046 has no sub-pixel kernels and is rejected for fits: build a new
+PSF in a new output namespace.
+
 ## Scientific data
 
 The public scientific data interfaces are:

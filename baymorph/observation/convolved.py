@@ -67,11 +67,11 @@ class ConvolvedModel:
         """Return extra ``render()`` kwargs enforcing the PSF pixel-response contract.
 
         A PSF object must declare ``includes_pixel_response`` (see
-        ``GaussianPSF``/``EmpiricalPSF`` in ``baymorph.simulation.psf``).
-        When it already includes the detector pixel response, the intrinsic
-        model must be point-sampled at pixel centers (``renderer="point"``)
-        rather than pixel-footprint integrated, or convolution would apply
-        the pixel response twice.
+        ``GaussianPSF``/``EmpiricalPSF`` in ``baymorph.simulation.psf``). A
+        kernel without the pixel response is convolved with the profile
+        integrated over pixels. A kernel with it takes the effective-PSF
+        rendering of AD-046 and must provide sub-pixel kernels; reaching
+        this method with such a kernel means it does not, which is an error.
         """
         if not hasattr(self.psf, "includes_pixel_response"):
             raise TypeError(
@@ -81,7 +81,12 @@ class ConvolvedModel:
             )
 
         if self.psf.includes_pixel_response:
-            return {"renderer": "point"}
+            raise ValueError(
+                "A PSF that already includes the pixel response must provide "
+                "the effective PSF at sub-pixel offsets (AD-046); sampling "
+                "the profile at pixel centres is no longer supported. Build "
+                "the empirical PSF with its sub-pixel kernels."
+            )
 
         return {}
 

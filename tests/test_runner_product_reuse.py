@@ -21,11 +21,12 @@ from baymorph.pipeline.psf_candidates import (
     save_psf_candidates,
 )
 from baymorph.pipeline.psf_construction import (
-    EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION,
+    EMPIRICAL_PSF_PRODUCT_SCHEMA_VERSION,
     build_empirical_psf_provenance,
     empirical_psf_centroid_tolerance_pixels,
     validate_empirical_psf,
 )
+from baymorph.rendering.effective_psf import SUBPIXEL_FACTOR
 
 
 PACKAGED_SIMULATED_CONFIG = (
@@ -121,7 +122,14 @@ def _empirical_psf_runner(
     psf = np.zeros((9, 9), dtype=float)
     psf[4, 4] = 1.0
 
-    save_empirical_psf(resolved, psf)
+    save_empirical_psf(
+        resolved,
+        psf,
+        subpixel_kernels=np.broadcast_to(
+            psf,
+            (SUBPIXEL_FACTOR, SUBPIXEL_FACTOR, *psf.shape),
+        ).copy(),
+    )
     save_psf_candidates(
         resolved,
         [
@@ -135,7 +143,7 @@ def _empirical_psf_runner(
     save_empirical_psf_metadata(
         resolved,
         {
-            "schema_version": EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION,
+            "schema_version": EMPIRICAL_PSF_PRODUCT_SCHEMA_VERSION,
             "type": "empirical",
             "validation": validate_empirical_psf(
                 psf,

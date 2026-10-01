@@ -89,23 +89,15 @@ def test_renderer_respects_extended_domain_origin() -> None:
     assert measured_y == pytest.approx(14.75, abs=0.05)
 
 
-def test_renderer_supports_empirical_psf() -> None:
-    """Empirical PSFs must use the same observation-level renderer.
-
-    The kernel must be a physically valid, adequately sampled band-limited
-    PSF (not a single-occupied-pixel delta), otherwise cubic-spline
-    sub-pixel shifting produces ringing large enough to legitimately exceed
-    the declared ringing tolerance.
-    """
-    kernel = GaussianPSF(fwhm=2.5).kernel(size=7)
-
+def test_renderer_supports_empirical_psf(subpixel_gaussian_psf) -> None:
+    """Empirical PSFs place a source with their sub-pixel kernels (AD-046)."""
     source = PointSourceModel(
         flux=25.0,
         x0=10.2,
         y0=9.8,
     )
     renderer = PSFPointSourceRenderer(
-        EmpiricalPSF(kernel),
+        subpixel_gaussian_psf,
     )
 
     image = renderer.render(
@@ -119,6 +111,18 @@ def test_renderer_supports_empirical_psf() -> None:
         abs=1.0e-12,
     )
     assert np.all(image >= 0.0)
+
+
+def test_renderer_rejects_empirical_psf_without_subpixel_kernels() -> None:
+    renderer = PSFPointSourceRenderer(
+        EmpiricalPSF(GaussianPSF(fwhm=2.5).kernel(size=7)),
+    )
+
+    with pytest.raises(ValueError, match="sub-pixel"):
+        renderer.render(
+            PointSourceModel(flux=25.0, x0=10.2, y0=9.8),
+            shape=(21, 21),
+        )
 
 
 def test_renderer_rejects_invalid_source_object() -> None:

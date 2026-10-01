@@ -21,14 +21,32 @@ from baymorph.pipeline import (
 )
 from baymorph.pipeline.psf_construction import (
     EMPIRICAL_PSF_CENTROID_TOLERANCE_PIXELS,
+    EMPIRICAL_PSF_PRODUCT_SCHEMA_VERSION,
     EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION,
     build_empirical_psf_provenance,
     empirical_psf_centroid_tolerance_pixels,
     validate_empirical_psf,
 )
+from baymorph.rendering.effective_psf import SUBPIXEL_FACTOR
 
 
-def _save_valid_empirical_psf_bundle(tmp_path):
+def _replicated_phases(psf):
+    """Return sub-pixel kernels equal to ``psf`` at every phase.
+
+    They satisfy the structural contract of the product, which is what the
+    persistence tests exercise; they are not a physical sub-pixel PSF.
+    """
+    return np.broadcast_to(
+        psf,
+        (SUBPIXEL_FACTOR, SUBPIXEL_FACTOR, *psf.shape),
+    ).copy()
+
+
+def _save_valid_empirical_psf_bundle(
+    tmp_path,
+    *,
+    schema_version=EMPIRICAL_PSF_PRODUCT_SCHEMA_VERSION,
+):
     """Create a complete empirical-PSF product with immutable provenance."""
     image_path = tmp_path / "image.fits"
     fits.writeto(
@@ -48,7 +66,14 @@ def _save_valid_empirical_psf_bundle(tmp_path):
     psf = np.zeros((9, 9), dtype=float)
     psf[4, 4] = 1.0
 
-    save_empirical_psf(resolved, psf)
+    if schema_version == EMPIRICAL_PSF_PRODUCT_SCHEMA_VERSION:
+        save_empirical_psf(
+            resolved,
+            psf,
+            subpixel_kernels=_replicated_phases(psf),
+        )
+    else:
+        save_empirical_psf(resolved, psf)
 
     candidates_path = pipeline_paths(resolved)["psf"]["candidates"]
     candidates_path.write_text(
@@ -65,7 +90,7 @@ def _save_valid_empirical_psf_bundle(tmp_path):
     save_empirical_psf_metadata(
         resolved,
         {
-            "schema_version": EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION,
+            "schema_version": schema_version,
             "type": "empirical",
             "validation": validation,
             "provenance": build_empirical_psf_provenance(
@@ -93,6 +118,29 @@ def test_save_and_load_empirical_psf_roundtrip(tmp_path):
         loaded.kernel(),
         psf,
     )
+    assert loaded.has_subpixel_kernels
+    assert np.array_equal(loaded.subpixel_kernels, _replicated_phases(psf))
+
+
+def test_load_empirical_psf_rejects_products_built_before_ad046(tmp_path):
+    """A product without sub-pixel kernels is rejected for fits (AD-046)."""
+    resolved, _, _ = _save_valid_empirical_psf_bundle(
+        tmp_path,
+        schema_version=EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION,
+    )
+
+    with pytest.raises(ValueError, match="built before AD-046"):
+        load_empirical_psf(resolved)
+
+
+def test_save_empirical_psf_rejects_inconsistent_subpixel_kernels(tmp_path):
+    resolved, psf, _ = _save_valid_empirical_psf_bundle(tmp_path)
+    kernels = _replicated_phases(psf)
+    centre = (SUBPIXEL_FACTOR - 1) // 2
+    kernels[centre, centre] = np.roll(psf, 1, axis=1)
+
+    with pytest.raises(ValueError, match="zero-phase"):
+        save_empirical_psf(resolved, psf, subpixel_kernels=kernels)
 
 
 def test_normalize_psf_returns_unit_sum():
@@ -624,16 +672,20 @@ def test_psf_construction_rejects_low_snr_candidates(
 
     captured = {}
 
-    def fake_stack(cutouts):
-        captured["n_cutouts"] = len(
-            cutouts
-        )
+    def fake_build(image, used, labels, settings):
+        captured["n_used"] = len(used)
         psf = np.zeros(
             (7, 7),
             dtype=float,
         )
         psf[3, 3] = 1.0
-        return psf
+        return SimpleNamespace(
+            native=psf,
+            subpixel_kernels=_replicated_phases(psf),
+            wing_profile={"radius": [], "value": [], "error": []},
+            stars=[{"label": candidate["label"]} for candidate in used],
+            windows=[psf],
+        )
 
     def fake_save_metadata(
         config,
@@ -643,8 +695,13 @@ def test_psf_construction_rejects_low_snr_candidates(
 
     monkeypatch.setattr(
         module,
-        "stack_psf_cutouts",
-        fake_stack,
+        "build_empirical_psf",
+        fake_build,
+    )
+    monkeypatch.setattr(
+        module,
+        "detect_real_fits_sources",
+        lambda image: SimpleNamespace(segmentation=None),
     )
     monkeypatch.setattr(
         module,
@@ -669,7 +726,7 @@ def test_psf_construction_rejects_low_snr_candidates(
         config
     )
 
-    assert captured["n_cutouts"] == 1
+    assert captured["n_used"] == 1
 
     metadata = captured[
         "metadata"
@@ -696,6 +753,8 @@ def test_psf_construction_rejects_low_snr_candidates(
         "peak_snr_below_threshold"
     )
     assert metadata["type"] == "empirical"
+    assert metadata["schema_version"] == EMPIRICAL_PSF_PRODUCT_SCHEMA_VERSION
+    assert metadata["builder"]["decision"] == "AD-046"
     assert metadata["validation"][
         "centroid_offset_pixels"
     ] == pytest.approx(0.0)

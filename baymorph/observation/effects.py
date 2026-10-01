@@ -194,6 +194,13 @@ def render_shifted_psf(
         shifted_kernel = psf.kernel_at(-shift_x, -shift_y) * float(flux)
         return _place_kernel(shifted_kernel, shape, anchor_x, anchor_y)
 
+    if getattr(psf, "includes_pixel_response", False):
+        raise ValueError(
+            "A PSF that already includes the pixel response must provide "
+            "the effective PSF at sub-pixel offsets to place a point source "
+            "(AD-046)."
+        )
+
     kernel = normalized_psf_kernel(
         psf,
         kernel_size=kernel_size,

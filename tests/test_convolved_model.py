@@ -201,8 +201,8 @@ def test_component_rendering_requires_decomposition() -> None:
         )
 
 
-def test_convolved_model_point_samples_for_empirical_psf() -> None:
-    """An empirical PSF must trigger point sampling, not pixel integration."""
+def test_convolved_model_rejects_empirical_psf_without_subpixel_kernels() -> None:
+    """AD-046: a kernel with the pixel response needs sub-pixel kernels."""
     model = make_model(
         re=0.6,
         n=6.0,
@@ -211,62 +211,13 @@ def test_convolved_model_point_samples_for_empirical_psf() -> None:
         x0=15.3,
         y0=14.7,
     )
-
-    psf = EmpiricalPSF(
-        kernel_array=np.ones((7, 7)),
-    )
-
     convolved = ConvolvedModel(
         model,
-        psf,
+        EmpiricalPSF(kernel_array=np.ones((7, 7))),
     )
 
-    actual = convolved.render(
-        shape=(31, 31),
-    )
-
-    pad = 3
-    extended_shape = (31 + 2 * pad, 31 + 2 * pad)
-    extended_origin = (-float(pad), -float(pad))
-
-    point_sampled = model.render(
-        shape=extended_shape,
-        origin=extended_origin,
-        renderer="point",
-    )
-    expected = convolve_with_psf(
-        point_sampled,
-        psf,
-    )[
-        pad : pad + 31,
-        pad : pad + 31,
-    ]
-
-    np.testing.assert_allclose(
-        actual,
-        expected,
-        rtol=0.0,
-        atol=0.0,
-    )
-
-    pixel_integrated = model.render(
-        shape=extended_shape,
-        origin=extended_origin,
-    )
-    double_counted_reference = convolve_with_psf(
-        pixel_integrated,
-        psf,
-    )[
-        pad : pad + 31,
-        pad : pad + 31,
-    ]
-
-    assert (
-        np.linalg.norm(
-            actual - double_counted_reference
-        )
-        > 1.0e-6
-    )
+    with pytest.raises(ValueError, match="sub-pixel"):
+        convolved.render(shape=(31, 31))
 
 
 def test_convolved_model_gaussian_psf_still_pixel_integrates() -> None:
@@ -306,69 +257,40 @@ def test_convolved_model_gaussian_psf_still_pixel_integrates() -> None:
     )
 
 
-def test_convolved_model_point_samples_double_sersic_for_empirical_psf() -> None:
-    """The empirical-PSF contract must reach composite morphology models too."""
+def test_convolved_model_rejects_composites_without_subpixel_kernels() -> None:
+    """The empirical-PSF contract reaches composite morphology models too."""
     from baymorph import DoubleSersicModel
 
-    bulge = make_model(
-        flux=300.0,
-        re=0.8,
-        n=5.0,
-        q=0.8,
-        theta=0.1,
-        x0=15.0,
-        y0=15.0,
-    )
-    disk = make_model(
-        flux=700.0,
-        re=10.0,
-        n=1.0,
-        q=0.6,
-        theta=0.2,
-        x0=15.0,
-        y0=15.0,
-    )
     galaxy = DoubleSersicModel(
-        bulge=bulge,
-        disk=disk,
+        bulge=make_model(
+            flux=300.0,
+            re=0.8,
+            n=5.0,
+            q=0.8,
+            theta=0.1,
+            x0=15.0,
+            y0=15.0,
+        ),
+        disk=make_model(
+            flux=700.0,
+            re=10.0,
+            n=1.0,
+            q=0.6,
+            theta=0.2,
+            x0=15.0,
+            y0=15.0,
+        ),
     )
-
-    psf = EmpiricalPSF(
-        kernel_array=np.ones((7, 7)),
-    )
-
     convolved = ConvolvedModel(
         galaxy,
-        psf,
+        EmpiricalPSF(kernel_array=np.ones((7, 7))),
     )
 
-    actual = convolved.render(
-        shape=(31, 31),
-    )
+    with pytest.raises(ValueError, match="sub-pixel"):
+        convolved.render(shape=(31, 31))
 
-    pad = 3
-    extended_shape = (31 + 2 * pad, 31 + 2 * pad)
-    extended_origin = (-float(pad), -float(pad))
-
-    point_sampled = galaxy.render(
-        shape=extended_shape,
-        origin=extended_origin,
-        renderer="point",
-    )
-    expected = convolve_with_psf(
-        point_sampled,
-        psf,
-    )[
-        pad : pad + 31,
-        pad : pad + 31,
-    ]
-
-    np.testing.assert_allclose(
-        actual,
-        expected,
-        rtol=0.0,
-        atol=0.0,
-    )
+    with pytest.raises(ValueError, match="sub-pixel"):
+        convolved.render_components(shape=(31, 31))
 
 
 def test_convolved_model_requires_pixel_response_contract() -> None:

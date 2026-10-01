@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from copy import deepcopy
-from numbers import Real
+from numbers import Integral, Real
 from pathlib import Path
 from typing import Any
 
@@ -105,6 +105,12 @@ DEFAULT_CONFIG = {
             },
             "construction": {
                 "centroid_tolerance_pixels": 0.05,
+                # Radii of the builder of AD-046, validated on the test
+                # bench of the PSF workstream; they enter the PSF identity.
+                "sky_inner_radius": 80.0,
+                "sky_outer_radius": 160.0,
+                "mask_growth_pixels": 5,
+                "support_half_size": 64,
             },
         },
     },
@@ -359,6 +365,53 @@ def load_config(path: str | Path) -> dict[str, Any]:
     return config
 
 
+def _validate_psf_builder_radii(construction: dict[str, Any]) -> None:
+    """Validate the radii of the empirical-PSF builder of AD-046."""
+    for key in ("sky_inner_radius", "sky_outer_radius"):
+        if key not in construction:
+            continue
+
+        value = construction[key]
+
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, Real)
+            or not math.isfinite(float(value))
+            or float(value) <= 0.0
+        ):
+            raise ValueError(
+                f"psf.empirical.construction.{key} must be a finite "
+                "positive number."
+            )
+
+    for key, minimum in (("mask_growth_pixels", 0), ("support_half_size", 1)):
+        if key not in construction:
+            continue
+
+        value = construction[key]
+
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, Integral)
+            or value < minimum
+        ):
+            raise ValueError(
+                f"psf.empirical.construction.{key} must be an integer of at "
+                f"least {minimum}."
+            )
+
+    support = construction.get("support_half_size", 64)
+    inner = construction.get("sky_inner_radius", 80.0)
+    outer = construction.get("sky_outer_radius", 160.0)
+
+    if not support < inner < outer:
+        raise ValueError(
+            "psf.empirical.construction needs support_half_size < "
+            "sky_inner_radius < sky_outer_radius, so that the sky of each "
+            "star is measured beyond its light."
+        )
+
+
 def validate_config(config: dict[str, Any]) -> None:
     """Validate required top-level BayMorph configuration entries.
 
@@ -504,6 +557,8 @@ def validate_config(config: dict[str, Any]) -> None:
                 "psf.empirical.construction.centroid_tolerance_pixels "
                 "must be a finite positive number."
             )
+
+    _validate_psf_builder_radii(psf_construction_config)
 
     fit_config = config.get(
         "fit",

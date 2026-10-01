@@ -14,11 +14,20 @@ from astropy.io import fits
 
 from baymorph.core.observation import Observation
 from baymorph.pipeline.config import load_resolved_config
+from baymorph.pipeline.empirical_psf_builder import (
+    BuilderSettings,
+    build_empirical_psf,
+)
+from baymorph.pipeline.image_preparation import detect_real_fits_sources
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
 from baymorph.pipeline.outputs import make_output_tree, pipeline_paths
 from baymorph.pipeline.prepared_identity import sha256_file as _file_sha256
 from baymorph.pipeline.psf_candidates import load_psf_candidates
 from baymorph.plotting.style import make_plot
+from baymorph.rendering.effective_psf import (
+    RENDERING_CONVENTION,
+    SUBPIXEL_FACTOR,
+)
 from baymorph.simulation.psf import (
     EmpiricalPSF,
     GaussianPSF,
@@ -28,6 +37,8 @@ from baymorph.stats.robust import robust_sigma
 
 
 EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION = 1
+EMPIRICAL_PSF_PRODUCT_SCHEMA_VERSION = 2
+EMPIRICAL_PSF_SUBPIXEL_EXTENSION = "SUBPIXEL"
 EMPIRICAL_PSF_CENTROID_TOLERANCE_PIXELS = 0.05
 EMPIRICAL_PSF_NORMALIZATION_ATOL = 1.0e-8
 
@@ -73,6 +84,42 @@ def empirical_psf_centroid_tolerance_pixels(
         )
 
     return tolerance
+
+
+def empirical_psf_builder_settings(
+    config: Mapping[str, Any],
+) -> BuilderSettings:
+    """Return the radii of the empirical-PSF builder from the configuration.
+
+    Absent keys take the values validated with AD-046.
+    """
+    construction = (
+        config.get("psf", {})
+        .get("empirical", {})
+        .get("construction", {})
+    )
+    defaults = BuilderSettings()
+
+    return BuilderSettings(
+        sky_inner_radius=float(
+            construction.get("sky_inner_radius", defaults.sky_inner_radius)
+        ),
+        sky_outer_radius=float(
+            construction.get("sky_outer_radius", defaults.sky_outer_radius)
+        ),
+        mask_growth_pixels=int(
+            construction.get(
+                "mask_growth_pixels",
+                defaults.mask_growth_pixels,
+            )
+        ),
+        support_half_size=int(
+            construction.get(
+                "support_half_size",
+                defaults.support_half_size,
+            )
+        ),
+    )
 
 
 def validate_empirical_psf(
@@ -233,6 +280,8 @@ def validate_empirical_psf_provenance(
 def save_empirical_psf(
     config: dict[str, Any],
     psf: np.ndarray,
+    *,
+    subpixel_kernels: np.ndarray | None = None,
 ) -> Path:
     """Save an empirical PSF image to disk.
 
@@ -241,7 +290,10 @@ def save_empirical_psf(
     config : dict
         Resolved pipeline configuration.
     psf : ndarray
-        Empirical PSF image.
+        Empirical PSF image: the effective PSF at integer offsets.
+    subpixel_kernels : ndarray, optional
+        The effective PSF at every sub-pixel phase, written to the
+        ``SUBPIXEL`` extension after validation against ``psf``.
 
     Returns
     -------
@@ -267,8 +319,18 @@ def save_empirical_psf(
             empirical_psf_centroid_tolerance_pixels(config)
         ),
     )
+    hdus = [fits.PrimaryHDU(data)]
 
-    fits.writeto(path, data, overwrite=overwrite)
+    if subpixel_kernels is not None:
+        cube = EmpiricalPSF(
+            data,
+            subpixel_kernels=subpixel_kernels,
+        ).subpixel_kernels
+        hdus.append(
+            fits.ImageHDU(cube, name=EMPIRICAL_PSF_SUBPIXEL_EXTENSION)
+        )
+
+    fits.HDUList(hdus).writeto(path, overwrite=overwrite)
 
     return path
 
@@ -319,7 +381,7 @@ def load_empirical_psf(
 
     paths = pipeline_paths(resolved)["psf"]
     path = paths["psf_fits"]
-    data = fits.getdata(path)
+    data = fits.getdata(path, ext=0)
     validation = validate_empirical_psf(
         data,
         centroid_tolerance_pixels=(
@@ -345,7 +407,19 @@ def load_empirical_psf(
 
     if (
         metadata.get("schema_version")
-        != EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION
+        == EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION
+        and metadata.get("type") == "empirical"
+    ):
+        raise ValueError(
+            "This empirical PSF was built before AD-046 and has no "
+            "sub-pixel kernels, so it cannot be used for a fit. Build a new "
+            "PSF in a new output namespace; the accepted product is left "
+            "untouched."
+        )
+
+    if (
+        metadata.get("schema_version")
+        != EMPIRICAL_PSF_PRODUCT_SCHEMA_VERSION
         or metadata.get("type") != "empirical"
     ):
         raise ValueError(
@@ -371,7 +445,18 @@ def load_empirical_psf(
         metadata,
     )
 
-    return EmpiricalPSF(data)
+    with fits.open(path) as hdus:
+        if EMPIRICAL_PSF_SUBPIXEL_EXTENSION not in hdus:
+            raise ValueError(
+                "The empirical PSF has no sub-pixel kernels. Rebuild the PSF."
+            )
+
+        cube = np.array(hdus[EMPIRICAL_PSF_SUBPIXEL_EXTENSION].data)
+
+    return EmpiricalPSF(
+        np.asarray(data, dtype=float),
+        subpixel_kernels=cube,
+    )
 
 
 def estimate_psf_equivalent_gaussian_fwhm(
@@ -988,7 +1073,11 @@ def run_psf_construction_from_config(
     """Construct an empirical PSF from selected candidates.
 
     Candidates are validated using a local robust peak signal-to-noise
-    estimate before recentering and stacking.
+    estimate. The stars that pass are turned into the effective PSF at
+    integer offsets and at every sub-pixel phase by the builder of AD-046,
+    :mod:`baymorph.pipeline.empirical_psf_builder`: phase-regression core,
+    sky far from each star with the other detected sources masked, and the
+    measured azimuthal wings out to the configured support.
 
     Parameters
     ----------
@@ -998,13 +1087,14 @@ def run_psf_construction_from_config(
     Returns
     -------
     ndarray
-        Normalized empirical PSF image.
+        Normalized empirical PSF image, the effective PSF at integer
+        offsets; the sub-pixel kernels are written beside it.
 
     Raises
     ------
     ValueError
         If no candidates are available, if any candidate is missing its
-        cutout half-size, or if no candidate satisfies the configured
+        cutout half-size, or if too few candidates satisfy the configured
         signal-to-noise threshold.
     """
     if isinstance(config, (str, Path)):
@@ -1052,7 +1142,6 @@ def run_psf_construction_from_config(
             "min_peak_snr must be finite and non-negative."
         )
 
-    cutouts = []
     used_candidates = []
     rejected_candidates = []
 
@@ -1097,29 +1186,34 @@ def run_psf_construction_from_config(
             )
             continue
 
-        cutout = subtract_outer_background(
-            cutout
-        )
-        cutout = recenter_cutout(
-            cutout
-        )
-
-        cutouts.append(
-            cutout
-        )
         used_candidates.append(
             candidate_metadata
         )
 
-    if len(cutouts) == 0:
+    if len(used_candidates) == 0:
         raise ValueError(
             "No PSF candidates satisfy "
             f"min_peak_snr={min_peak_snr:g}."
         )
 
-    psf = stack_psf_cutouts(
-        cutouts
+    settings = empirical_psf_builder_settings(
+        resolved
     )
+    detection = detect_real_fits_sources(
+        image.data
+    )
+    labels = (
+        np.zeros(image.data.shape, dtype=int)
+        if detection.segmentation is None
+        else np.asarray(detection.segmentation.data)
+    )
+    build = build_empirical_psf(
+        image.data,
+        used_candidates,
+        labels,
+        settings,
+    )
+    psf = build.native
 
     validation = validate_empirical_psf(
         psf,
@@ -1141,12 +1235,13 @@ def run_psf_construction_from_config(
     save_empirical_psf_diagnostics(
         resolved,
         psf,
-        cutouts,
+        build.windows,
     )
 
     save_empirical_psf(
         resolved,
         psf,
+        subpixel_kernels=build.subpixel_kernels,
     )
 
     provenance = build_empirical_psf_provenance(
@@ -1157,14 +1252,29 @@ def run_psf_construction_from_config(
         resolved,
         {
             "schema_version": (
-                EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION
+                EMPIRICAL_PSF_PRODUCT_SCHEMA_VERSION
             ),
             "type": "empirical",
+            "builder": {
+                "name": "phase_regression_extended_wings",
+                "decision": "AD-046",
+                "sky_inner_radius": settings.sky_inner_radius,
+                "sky_outer_radius": settings.sky_outer_radius,
+                "mask_growth_pixels": settings.mask_growth_pixels,
+                "support_half_size": settings.support_half_size,
+                "subpixel_factor": SUBPIXEL_FACTOR,
+                "rendering_convention": RENDERING_CONVENTION,
+            },
+            "wing_profile": {
+                key: [float(value) for value in values]
+                for key, values in build.wing_profile.items()
+            },
+            "stars": build.stars,
             "observation": observation_metadata_dict(
                 observation
             ),
             "n_candidates_input": len(candidates),
-            "n_candidates_used": len(cutouts),
+            "n_candidates_used": len(build.stars),
             "n_candidates_rejected_snr": len(
                 rejected_candidates
             ),
@@ -1184,7 +1294,7 @@ def run_psf_construction_from_config(
             "rejected_candidates": rejected_candidates,
             "warnings": _empirical_psf_warnings(
                 psf,
-                n_candidates_used=len(cutouts),
+                n_candidates_used=len(build.stars),
                 psf_equivalent_gaussian_fwhm_pix=(
                     psf_equivalent_gaussian_fwhm
                 ),

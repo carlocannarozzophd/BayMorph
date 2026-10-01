@@ -231,15 +231,41 @@ def test_empirical_psf_auto_size_is_rejected() -> None:
         resolve_config(config)
 
 
-def test_resolved_config_exposes_only_empirical_psf_centering_gate() -> None:
-    """Resolved configs must freeze the empirical-PSF centering gate."""
+def test_resolved_config_freezes_the_empirical_psf_construction() -> None:
+    """Resolved configs freeze the centering gate and the builder radii.
+
+    The radii of the builder of AD-046 enter the PSF identity, so their
+    validated values are written into every resolved configuration.
+    """
     resolved = resolve_config(_minimal_config())
 
     empirical = resolved["psf"]["empirical"]
 
     assert empirical["construction"] == {
         "centroid_tolerance_pixels": 0.05,
+        "sky_inner_radius": 80.0,
+        "sky_outer_radius": 160.0,
+        "mask_growth_pixels": 5,
+        "support_half_size": 64,
     }
+
+
+@pytest.mark.parametrize(
+    "construction",
+    [
+        {"sky_inner_radius": 50.0},
+        {"sky_outer_radius": 70.0},
+        {"support_half_size": 2.5},
+        {"mask_growth_pixels": -1},
+        {"sky_inner_radius": float("nan")},
+    ],
+)
+def test_invalid_empirical_psf_builder_radii_are_rejected(construction) -> None:
+    config = _minimal_config()
+    config["psf"] = {"empirical": {"construction": construction}}
+
+    with pytest.raises(ValueError, match=r"psf\.empirical\.construction"):
+        resolve_config(config)
 
 
 def test_empirical_psf_normalize_option_is_rejected() -> None:

@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from baymorph.observation import render_shifted_psf
-from baymorph.simulation.psf import EmpiricalPSF, GaussianPSF
+from baymorph.simulation.psf import GaussianPSF
 
 
 def _centroid(image: np.ndarray) -> tuple[float, float]:
@@ -86,18 +86,10 @@ def test_shifted_psf_respects_global_origin() -> None:
     assert measured_y == pytest.approx(14.75, abs=0.05)
 
 
-def test_shifted_psf_supports_empirical_kernel() -> None:
-    """Empirical PSFs must use the same shifted-rendering contract.
-
-    The kernel must be a physically valid, adequately sampled band-limited
-    PSF (not a single-occupied-pixel delta), otherwise cubic-spline
-    sub-pixel shifting produces ringing large enough to legitimately exceed
-    ``PSF_SHIFT_RINGING_TOLERANCE``.
-    """
-    kernel = GaussianPSF(fwhm=2.5).kernel(size=7)
-
+def test_shifted_psf_supports_empirical_kernel(subpixel_gaussian_psf) -> None:
+    """Empirical PSFs place the source with their sub-pixel kernels."""
     image = render_shifted_psf(
-        psf=EmpiricalPSF(kernel),
+        psf=subpixel_gaussian_psf,
         flux=25.0,
         x0=10.2,
         y0=9.8,
@@ -111,16 +103,26 @@ def test_shifted_psf_supports_empirical_kernel() -> None:
         abs=1.0e-12,
     )
     assert np.all(image >= 0.0)
+    assert _centroid(image) == pytest.approx((10.2, 9.8), abs=1e-3)
+
+
+class _DeltaPSF:
+    """A kernel without the pixel response, too narrow to shift cleanly."""
+
+    includes_pixel_response = False
+
+    def kernel(self, size=None):
+        del size
+        kernel = np.zeros((7, 7), dtype=float)
+        kernel[3, 3] = 1.0
+        return kernel
 
 
 def test_shifted_psf_rejects_excessive_ringing() -> None:
     """A pathologically undersampled kernel must fail closed, not be repaired."""
-    kernel = np.zeros((7, 7), dtype=float)
-    kernel[3, 3] = 1.0
-
     with pytest.raises(ValueError, match="ringing tolerance"):
         render_shifted_psf(
-            psf=EmpiricalPSF(kernel),
+            psf=_DeltaPSF(),
             flux=25.0,
             x0=10.2,
             y0=9.8,
