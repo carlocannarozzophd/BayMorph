@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from baymorph.models.composite import CompositeModel
+from baymorph.models.composite import CompositeModel, common_centre
 from baymorph.models.exponential import ExponentialComponent
 from baymorph.models.sersic import SersicModel
 
@@ -59,6 +59,17 @@ class BulgeDiskModel:
             raise TypeError(
                 "BulgeDiskModel requires an ExponentialComponent disk."
             )
+
+    def centre(self) -> tuple[float, float]:
+        """Return the centre shared by the bulge and the disc."""
+        return common_centre((self.bulge, self.disk))
+
+    def scaled(self, factor: int) -> "BulgeDiskModel":
+        """Return this model on a pixel grid finer by ``factor``."""
+        return BulgeDiskModel(
+            bulge=self.bulge.scaled(factor),
+            disk=self.disk.scaled(factor),
+        )
 
     def _composite(self) -> CompositeModel:
         """Return the delegated additive intrinsic composition."""

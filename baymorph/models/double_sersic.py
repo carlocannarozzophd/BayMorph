@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from baymorph.models.composite import common_centre
+
 
 @dataclass
 class DoubleSersicModel:
@@ -12,6 +14,22 @@ class DoubleSersicModel:
     bulge: object
     disk: object
     sky: float = 0.0
+
+    def centre(self) -> tuple[float, float]:
+        """Return the centre shared by the two components."""
+        return common_centre((self.bulge, self.disk))
+
+    def scaled(self, factor: int) -> "DoubleSersicModel":
+        """Return this model on a pixel grid finer by ``factor``.
+
+        The constant level is per pixel, so it is divided by the number of
+        fine cells in a pixel.
+        """
+        return DoubleSersicModel(
+            bulge=self.bulge.scaled(factor),
+            disk=self.disk.scaled(factor),
+            sky=self.sky / factor**2,
+        )
 
     def render_components(
         self,

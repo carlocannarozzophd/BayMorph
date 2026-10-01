@@ -48,6 +48,20 @@ class ExponentialComponent(SersicModel):
             y0=y0,
         )
 
+    def scaled(self, factor: int) -> "ExponentialComponent":
+        """Return this disc on a pixel grid finer by ``factor``.
+
+        See :meth:`SersicModel.scaled`.
+        """
+        return ExponentialComponent(
+            flux=self.flux,
+            re=self.re * factor,
+            q=self.q,
+            theta=self.theta,
+            x0=factor * (self.x0 + 0.5) - 0.5,
+            y0=factor * (self.y0 + 0.5) - 0.5,
+        )
+
     def render_components(
         self,
         shape: tuple[int, int],

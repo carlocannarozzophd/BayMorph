@@ -12,6 +12,41 @@ from baymorph.models.protocols import MorphologicalComponent
 FloatArray = NDArray[np.float64]
 
 
+def common_centre(components: Iterable) -> tuple[float, float]:
+    """Return the centre shared by every component.
+
+    The effective-PSF rendering of AD-046 places one window on the centre of
+    a model, so it requires its components to share it.
+
+    Raises
+    ------
+    TypeError
+        If a component does not declare its centre.
+    ValueError
+        If the components have different centres.
+    """
+    centres = []
+
+    for component in components:
+        if not hasattr(component, "centre"):
+            raise TypeError(
+                f"{type(component).__name__} does not declare its centre."
+            )
+
+        centres.append(tuple(component.centre()))
+
+    if not centres:
+        raise ValueError("A model without components has no centre.")
+
+    if any(centre != centres[0] for centre in centres[1:]):
+        raise ValueError(
+            "The components of this model have different centres; the "
+            "effective-PSF rendering of AD-046 needs a single centre."
+        )
+
+    return centres[0]
+
+
 class CompositeModel:
     """Additive model formed from named morphological components.
 
@@ -85,6 +120,24 @@ class CompositeModel:
             )
 
         self.components[name] = component
+
+    def centre(self) -> tuple[float, float]:
+        """Return the centre shared by every component."""
+        return common_centre(self.components.values())
+
+    def scaled(self, factor: int) -> "CompositeModel":
+        """Return this model on a pixel grid finer by ``factor``.
+
+        Every component is scaled; the constant level is per pixel, so it is
+        divided by the number of fine cells in a pixel.
+        """
+        return CompositeModel(
+            {
+                name: component.scaled(factor)
+                for name, component in self.components.items()
+            },
+            sky=self.sky / factor**2,
+        )
 
     def render_components(
         self,

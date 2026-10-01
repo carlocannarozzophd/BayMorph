@@ -7,6 +7,13 @@ from typing import Any
 import numpy as np
 
 from baymorph.observation.effects import PSFEffect
+from baymorph.rendering.effective_psf import (
+    SUBPIXEL_FACTOR,
+    WINDOW_HALF,
+    apply_outer_weight,
+    fine_box_origin,
+    local_images,
+)
 
 
 class ConvolvedModel:
@@ -15,6 +22,13 @@ class ConvolvedModel:
     The intrinsic model is rendered beyond the requested output footprint by
     the half-width of the PSF kernel. This retains light originating outside
     the observed cutout that is scattered into it by the PSF.
+
+    With a PSF that provides the effective PSF at sub-pixel offsets, the
+    model follows the effective-PSF rendering of AD-046: about its centre
+    the profile is integrated over finer cells and convolved with the
+    sub-pixel kernels, elsewhere it is sampled at pixel centres and
+    convolved with the native kernel. The model must then declare its
+    centre and render on a finer grid.
 
     Parameters
     ----------
@@ -119,6 +133,87 @@ class ConvolvedModel:
             dtype=float,
         )
 
+    def _uses_effective_psf(self) -> bool:
+        """Return whether the PSF selects the rendering of AD-046."""
+        return bool(
+            getattr(self.psf, "has_subpixel_kernels", False)
+        )
+
+    def _render_effective(
+        self,
+        extended_shape: tuple[int, int],
+        extended_origin: tuple[float, float],
+        *,
+        components: bool,
+    ) -> dict[str, np.ndarray]:
+        """Render with the effective-PSF convention of AD-046, uncropped.
+
+        The point-sampled images are weighted by one minus the window and
+        convolved with the native kernel; the fine images, integrated by the
+        hybrid renderer over cells ``SUBPIXEL_FACTOR`` times finer within the
+        box of the window, are weighted by the window and convolved with the
+        sub-pixel kernels.
+        """
+        model = self.model
+
+        if not hasattr(model, "centre") or not hasattr(model, "scaled"):
+            raise TypeError(
+                "The effective-PSF rendering of AD-046 needs a model that "
+                "declares its centre and renders on a finer grid."
+            )
+
+        x, y = model.centre()
+        factor = SUBPIXEL_FACTOR
+        box = (2 * WINDOW_HALF + 1) * factor
+        first_row, first_column = fine_box_origin(x, y, factor=factor)
+        fine_origin = (float(first_row), float(first_column))
+        scaled = model.scaled(factor)
+
+        if components:
+            outer = model.render_components(
+                shape=extended_shape,
+                origin=extended_origin,
+                renderer="point",
+            )
+            fine = scaled.render_components(
+                shape=(box, box),
+                origin=fine_origin,
+                renderer="hybrid",
+            )
+        else:
+            outer = {
+                "model": model.render(
+                    shape=extended_shape,
+                    origin=extended_origin,
+                    renderer="point",
+                )
+            }
+            fine = {
+                "model": scaled.render(
+                    shape=(box, box),
+                    origin=fine_origin,
+                    renderer="hybrid",
+                )
+            }
+
+        local = local_images(
+            {name: np.asarray(image, dtype=float) for name, image in fine.items()},
+            self.psf.fine_kernel(),
+            x,
+            y,
+            extended_shape,
+            extended_origin,
+            factor=factor,
+        )
+        convolved = {}
+
+        for name, image in outer.items():
+            weighted = np.array(image, dtype=float)
+            apply_outer_weight(weighted, extended_origin, x, y)
+            convolved[name] = self.psf_effect.apply(weighted) + local[name]
+
+        return convolved
+
     def render(
         self,
         shape: tuple[int, int],
@@ -130,6 +225,18 @@ class ConvolvedModel:
             pad_y,
             pad_x,
         ) = self._extended_domain(shape)
+
+        if self._uses_effective_psf():
+            return self._crop(
+                self._render_effective(
+                    extended_shape,
+                    extended_origin,
+                    components=False,
+                )["model"],
+                shape=shape,
+                pad_y=pad_y,
+                pad_x=pad_x,
+            )
 
         render_kwargs = self._model_render_kwargs()
 
@@ -174,6 +281,27 @@ class ConvolvedModel:
             pad_y,
             pad_x,
         ) = self._extended_domain(shape)
+
+        if self._uses_effective_psf():
+            if not hasattr(self.model, "render_components"):
+                raise TypeError(
+                    "PSF-convolved component models must implement "
+                    "render_components()."
+                )
+
+            return {
+                name: self._crop(
+                    image,
+                    shape=shape,
+                    pad_y=pad_y,
+                    pad_x=pad_x,
+                )
+                for name, image in self._render_effective(
+                    extended_shape,
+                    extended_origin,
+                    components=True,
+                ).items()
+            }
 
         render_kwargs = self._model_render_kwargs()
 

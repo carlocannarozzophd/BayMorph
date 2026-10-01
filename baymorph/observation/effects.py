@@ -187,6 +187,13 @@ def render_shifted_psf(
     shift_x = local_x - anchor_x
     shift_y = local_y - anchor_y
 
+    if getattr(psf, "has_subpixel_kernels", False):
+        # AD-046: the effective PSF is known at sub-pixel offsets, so the
+        # source is placed by interpolating between them instead of
+        # shifting the native kernel.
+        shifted_kernel = psf.kernel_at(-shift_x, -shift_y) * float(flux)
+        return _place_kernel(shifted_kernel, shape, anchor_x, anchor_y)
+
     kernel = normalized_psf_kernel(
         psf,
         kernel_size=kernel_size,
@@ -238,6 +245,20 @@ def render_shifted_psf(
     shifted_kernel /= shifted_total
     shifted_kernel *= float(flux)
 
+    return _place_kernel(shifted_kernel, shape, anchor_x, anchor_y)
+
+
+def _place_kernel(
+    shifted_kernel: FloatArray,
+    shape: tuple[int, int],
+    anchor_x: int,
+    anchor_y: int,
+) -> FloatArray:
+    """Place a flux-scaled kernel centred on a pixel of a footprint.
+
+    The kernel centre falls on the local pixel ``(anchor_y, anchor_x)``;
+    the part of the kernel outside the footprint is lost.
+    """
     image = np.zeros(
         shape,
         dtype=float,

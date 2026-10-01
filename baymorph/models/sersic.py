@@ -1,6 +1,6 @@
 """Sersic morphology model."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -83,6 +83,26 @@ class SersicModel:
 
         if not np.isfinite(self.x0) or not np.isfinite(self.y0):
             raise ValueError("Sersic center coordinates must be finite.")
+
+    def centre(self) -> tuple[float, float]:
+        """Return the centre ``(x0, y0)`` in pixel coordinates."""
+        return float(self.x0), float(self.y0)
+
+    def scaled(self, factor: int) -> "SersicModel":
+        """Return this profile on a pixel grid finer by ``factor``.
+
+        Cell ``J`` of the finer grid is centred at the coordinate
+        ``(J + 0.5) / factor - 0.5`` of this grid, so the radius is
+        multiplied by ``factor`` and the centre mapped accordingly. The total
+        flux is unchanged: each fine cell holds the flux of this profile over
+        that cell.
+        """
+        return replace(
+            self,
+            re=self.re * factor,
+            x0=factor * (self.x0 + 0.5) - 0.5,
+            y0=factor * (self.y0 + 0.5) - 0.5,
+        )
 
     @property
     def bn(self) -> float:

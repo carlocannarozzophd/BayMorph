@@ -1,10 +1,21 @@
 """PSF models and convolution utilities."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy.fft import irfftn, next_fast_len, rfftn
+from scipy.ndimage import map_coordinates, spline_filter
+
+from baymorph.rendering.effective_psf import (
+    RENDERING_CONVENTION,
+    SUBPIXEL_FACTOR,
+    divide_cell_response,
+    interleave,
+)
+
+SUBPIXEL_SUM_TOLERANCE = 1e-9
+SUBPIXEL_ZERO_PHASE_TOLERANCE = 1e-12
 
 
 def validate_finite_nonnegative_kernel(
@@ -147,10 +158,38 @@ class EmpiricalPSF:
     Parameters
     ----------
     kernel_array : ndarray
-        Empirical PSF kernel.
+        Empirical PSF kernel: the effective PSF at integer offsets.
+    subpixel_kernels : ndarray, optional
+        The effective PSF at the ``SUBPIXEL_FACTOR`` sub-pixel phases of
+        each axis, shaped ``(f, f, size, size)`` with ``size`` the side of
+        ``kernel_array``. Element ``[j, i]`` is the kernel at the phase
+        ``((i - c) / f, (j - c) / f)``, ``c = (f - 1) / 2``: its pixel
+        ``[b, a]`` is the effective PSF at offset ``(a - h, b - h)`` plus
+        the phase, ``h = size // 2``. Every phase is non-negative with unit
+        sum, and the zero phase equals the normalized ``kernel_array``.
+        With them, convolved models follow the effective-PSF rendering of
+        AD-046; without them, they sample the profile at pixel centres.
+
+    Attributes
+    ----------
+    rendering_convention : str or None
+        The rendering convention the sub-pixel kernels select, recorded in
+        the checkpoint signature; ``None`` without sub-pixel kernels.
     """
 
     kernel_array: np.ndarray
+    subpixel_kernels: np.ndarray | None = None
+    rendering_convention: str | None = field(default=None, init=False)
+
+    def __post_init__(self) -> None:
+        if self.subpixel_kernels is None:
+            return
+
+        self.subpixel_kernels = validate_subpixel_kernels(
+            self.subpixel_kernels,
+            self.kernel(),
+        )
+        self.rendering_convention = RENDERING_CONVENTION
 
     @property
     def includes_pixel_response(self) -> bool:
@@ -158,12 +197,96 @@ class EmpiricalPSF:
 
         ``EmpiricalPSF`` kernels are built from real detector-pixel star
         cutouts with no deconvolution: by construction they already equal
-        ``optical_PSF ⊛ pixel_response``. The intrinsic model must therefore
-        be point-sampled at pixel centers rather than pixel-footprint
-        integrated before convolution, or the pixel response would be
-        applied twice.
+        ``optical_PSF ⊛ pixel_response``, the effective PSF. Integrating the
+        profile over pixels before convolving with it would apply the pixel
+        response twice.
         """
         return True
+
+    @property
+    def has_subpixel_kernels(self) -> bool:
+        """Return whether the effective PSF is known at sub-pixel offsets."""
+        return self.subpixel_kernels is not None
+
+    def fine_kernel(self) -> np.ndarray:
+        """Return the sub-pixel kernels as one grid, corrected for the cell.
+
+        The grid is finer by ``SUBPIXEL_FACTOR`` with the zero offset at its
+        middle pixel, divided by the response of one fine cell. It is
+        computed once and kept on the object.
+        """
+        if not self.has_subpixel_kernels:
+            raise ValueError(
+                "This empirical PSF has no sub-pixel kernels."
+            )
+
+        cached = self.__dict__.get("_fine_kernel")
+
+        if cached is None:
+            cached = divide_cell_response(
+                interleave(self.subpixel_kernels),
+                SUBPIXEL_FACTOR,
+            )
+            self.__dict__["_fine_kernel"] = cached
+
+        return cached
+
+    def kernel_at(
+        self,
+        phase_x: float,
+        phase_y: float,
+    ) -> np.ndarray:
+        """Return the normalized effective PSF at a sub-pixel phase.
+
+        Pixel ``[b, a]`` of the result is the effective PSF at offset
+        ``(a - h + phase_x, b - h + phase_y)``, interpolated with cubic
+        splines between the sub-pixel kernels, which it reproduces at their
+        own phases. Negative interpolation ringing is set to zero before the
+        normalization.
+        """
+        if not self.has_subpixel_kernels:
+            raise ValueError(
+                "This empirical PSF has no sub-pixel kernels."
+            )
+
+        if not (abs(phase_x) <= 0.5 and abs(phase_y) <= 0.5):
+            raise ValueError(
+                "Sub-pixel phases must lie within half a pixel."
+            )
+
+        coefficients = self.__dict__.get("_spline_coefficients")
+
+        if coefficients is None:
+            coefficients = spline_filter(
+                interleave(self.subpixel_kernels),
+                order=3,
+                mode="constant",
+            )
+            self.__dict__["_spline_coefficients"] = coefficients
+
+        factor = SUBPIXEL_FACTOR
+        size = self.subpixel_kernels.shape[-1]
+        offset = (factor - 1) / 2
+        indices = factor * np.arange(size, dtype=float) + offset
+        rows, columns = np.meshgrid(
+            indices + factor * phase_y,
+            indices + factor * phase_x,
+            indexing="ij",
+        )
+        kernel = np.clip(
+            map_coordinates(
+                coefficients,
+                [rows, columns],
+                order=3,
+                mode="constant",
+                cval=0.0,
+                prefilter=False,
+            ),
+            0.0,
+            None,
+        )
+
+        return kernel / kernel.sum()
 
     def kernel(
         self,
@@ -203,6 +326,59 @@ class EmpiricalPSF:
             )
 
         return kernel / total
+
+
+def validate_subpixel_kernels(
+    subpixel_kernels: ArrayLike,
+    native_kernel: np.ndarray,
+) -> np.ndarray:
+    """Validate the sub-pixel kernels of an empirical PSF.
+
+    They must have ``SUBPIXEL_FACTOR`` phases per axis and the footprint of
+    the native kernel, be finite and non-negative with unit sum at every
+    phase, and equal the normalized native kernel at zero phase. Invalid
+    kernels are rejected, never repaired.
+    """
+    kernels = np.asarray(
+        subpixel_kernels,
+        dtype=float,
+    )
+    factor = SUBPIXEL_FACTOR
+
+    if kernels.shape != (factor, factor, *native_kernel.shape):
+        raise ValueError(
+            "Sub-pixel kernels must have shape "
+            f"({factor}, {factor}, {native_kernel.shape[0]}, "
+            f"{native_kernel.shape[1]}); got {kernels.shape}."
+        )
+
+    if not np.all(np.isfinite(kernels)):
+        raise ValueError(
+            "Sub-pixel kernels must contain only finite values."
+        )
+
+    if np.any(kernels < 0.0):
+        raise ValueError(
+            "Sub-pixel kernels must contain only non-negative values."
+        )
+
+    sums = kernels.sum(axis=(-2, -1))
+
+    if np.any(np.abs(sums - 1.0) > SUBPIXEL_SUM_TOLERANCE):
+        raise ValueError(
+            "Every sub-pixel kernel must have unit sum."
+        )
+
+    centre = (factor - 1) // 2
+    difference = np.abs(kernels[centre, centre] - native_kernel).max()
+
+    if difference > SUBPIXEL_ZERO_PHASE_TOLERANCE * native_kernel.max():
+        raise ValueError(
+            "The zero-phase sub-pixel kernel differs from the native "
+            f"kernel by {difference:.3e}."
+        )
+
+    return kernels
 
 
 _CONVOLUTION_CACHE_ATTRIBUTE = "_baymorph_convolution_cache"
