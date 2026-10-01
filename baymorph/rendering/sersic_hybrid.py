@@ -27,6 +27,7 @@ DEFAULT_GUARD_RINGS = 2
 DEFAULT_MAX_HALF_WIDTH = 16
 DEFAULT_EPSABS = 1.0e-13
 DEFAULT_EPSREL = 1.0e-12
+DEFAULT_CUSP_HALF_WIDTH = 22
 
 
 @lru_cache(maxsize=None)
@@ -981,6 +982,99 @@ def render_sersic_hybrid(
         max_half_width=max_half_width,
         epsabs=epsabs,
         epsrel=epsrel,
+    )
+
+    return image
+
+
+def _render_corrected_point_samples(
+    model: SersicModel,
+    shape: tuple[int, int],
+    *,
+    origin: tuple[float, float],
+) -> FloatArray:
+    """Return cell means from point samples corrected to sixth order.
+
+    The profile is sampled at the cell centres of ``shape`` extended by two
+    cells on every side, the midpoint rule of :func:`_render_outer_fixed_fast`,
+    and filtered along each axis with ``[-17, 308, 5178, 308, -17] / 5760``.
+    The filter adds the second- and fourth-order terms of the cell mean, so
+    the result is exact for quintic profiles and leaves an error of order
+    ``h**6`` in the cell size ``h``: accurate where the profile is smooth on
+    the scale of a cell, away from its centre.
+    """
+    samples = _render_outer_fixed_fast(
+        model,
+        (shape[0] + 4, shape[1] + 4),
+        origin=(origin[0] - 2.0, origin[1] - 2.0),
+        integration_order=1,
+    )
+    weights = np.array([-17.0, 308.0, 5178.0, 308.0, -17.0]) / 5760.0
+    rows = sum(
+        weight * samples[offset:offset + shape[0]]
+        for offset, weight in enumerate(weights)
+    )
+
+    return sum(
+        weight * rows[:, offset:offset + shape[1]]
+        for offset, weight in enumerate(weights)
+    )
+
+
+def render_sersic_cusp_hybrid(
+    model: SersicModel,
+    shape: tuple[int, int],
+    *,
+    origin: tuple[float, float] = (0.0, 0.0),
+    cusp_half_width: int = DEFAULT_CUSP_HALF_WIDTH,
+    outer_integration_order: int = DEFAULT_OUTER_INTEGRATION_ORDER,
+) -> FloatArray:
+    """Render a Sérsic profile with the hybrid rule near its centre only.
+
+    Cells within ``cusp_half_width`` cells of the cell containing the centre
+    (Chebyshev distance) take the values of :func:`render_sersic_hybrid`,
+    bit for bit when ``origin`` holds whole numbers; the other cells are the
+    corrected point samples of :func:`_render_corrected_point_samples`. The
+    half-width exceeds the rings the semi-analytic refinement may use, so
+    its failure to converge still raises.
+
+    This is the cell rule of the effective-PSF rendering of AD-046 on its
+    finer grid, where every cell away from the centre is small against the
+    scale on which the profile changes.
+    """
+    model._validate_shape(shape)
+
+    if (
+        not isinstance(cusp_half_width, (int, np.integer))
+        or cusp_half_width <= DEFAULT_MAX_HALF_WIDTH
+    ):
+        raise ValueError(
+            "cusp_half_width must be an integer larger than "
+            f"{DEFAULT_MAX_HALF_WIDTH}, the rings of the semi-analytic "
+            "refinement."
+        )
+
+    image = _render_corrected_point_samples(
+        model,
+        shape,
+        origin=origin,
+    )
+    y_origin, x_origin = origin
+    central_x = int(np.floor(model.x0 - x_origin + 0.5))
+    central_y = int(np.floor(model.y0 - y_origin + 0.5))
+    top = max(central_y - cusp_half_width, 0)
+    bottom = min(central_y + cusp_half_width + 1, shape[0])
+    left = max(central_x - cusp_half_width, 0)
+    right = min(central_x + cusp_half_width + 1, shape[1])
+
+    if top >= bottom or left >= right:
+        return image
+
+    image[top:bottom, left:right] = render_sersic_hybrid(
+        model,
+        (bottom - top, right - left),
+        origin=(y_origin + top, x_origin + left),
+        outer_integration_order=outer_integration_order,
     )
 
     return image

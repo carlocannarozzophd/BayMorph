@@ -373,10 +373,10 @@ class SersicModel:
 
     def _point_sample(
         self,
-        pixel_x: ArrayLike,
-        pixel_y: ArrayLike,
+        shape: tuple[int, int],
+        origin: tuple[float, float],
     ) -> FloatArray:
-        """Evaluate the continuous profile at pixel centers.
+        """Evaluate the continuous profile at the pixel centers of a grid.
 
         This is not a pixel-footprint integral: it is the surface brightness
         sampled exactly at each pixel center. It is the correct rendering
@@ -384,13 +384,36 @@ class SersicModel:
         response (see ``renderer="point"`` on :meth:`render`), since
         integrating over the pixel footprint before convolving with such a
         kernel would apply the pixel response twice.
-        """
-        radius = self._elliptical_radius(
-            x=np.asarray(pixel_x, dtype=float),
-            y=np.asarray(pixel_y, dtype=float),
-        )
 
-        return self.surface_brightness(radius)
+        The rotated coordinates are formed from one-dimensional vectors, and
+        every pixel goes through the floating-point operations of
+        :meth:`_elliptical_radius` and :meth:`surface_brightness` in the
+        same order, so the result equals theirs bit for bit without the
+        full-size intermediate arrays.
+        """
+        ny, nx = shape
+        y_origin, x_origin = origin
+        dx = np.arange(nx, dtype=float) + x_origin - self.x0
+        dy = np.arange(ny, dtype=float) + y_origin - self.y0
+
+        if not (np.all(np.isfinite(dx)) and np.all(np.isfinite(dy))):
+            raise ValueError("Sersic radii must be finite.")
+
+        cos_theta = np.cos(self.theta)
+        sin_theta = np.sin(self.theta)
+        x_rotated = (dx * cos_theta)[None, :] + (dy * sin_theta)[:, None]
+        y_rotated = (-dx * sin_theta)[None, :] + (dy * cos_theta)[:, None]
+        y_rotated /= self.q
+        np.square(x_rotated, out=x_rotated)
+        np.square(y_rotated, out=y_rotated)
+        x_rotated += y_rotated
+        exponent = np.sqrt(x_rotated, out=x_rotated)
+        exponent /= self.re
+        np.power(exponent, 1.0 / self.n, out=exponent)
+        exponent *= self.bn
+        np.subtract(self.log_central_intensity, exponent, out=exponent)
+
+        return np.exp(exponent, out=exponent)
 
     def render_components(
         self,
@@ -442,6 +465,12 @@ class SersicModel:
         when the PSF kernel already includes the detector pixel response
         (for example ``EmpiricalPSF``), so that convolution does not apply
         the pixel response twice.
+
+        ``hybrid_cusp`` applies ``hybrid`` only to the cells near the
+        centre and takes the others from point samples corrected to sixth
+        order; it is the cell rule of the effective-PSF rendering of AD-046
+        on its finer grid. See
+        :func:`baymorph.rendering.sersic_hybrid.render_sersic_cusp_hybrid`.
         """
         self._validate_shape(shape)
         self._validate_integration_order(
@@ -450,12 +479,14 @@ class SersicModel:
 
         if renderer not in {
             "hybrid",
+            "hybrid_cusp",
             "fixed",
             "adaptive",
             "point",
         }:
             raise ValueError(
-                "renderer must be 'hybrid', 'fixed', 'adaptive', or 'point'."
+                "renderer must be 'hybrid', 'hybrid_cusp', 'fixed', "
+                "'adaptive', or 'point'."
             )
 
         if renderer == "hybrid":
@@ -469,6 +500,21 @@ class SersicModel:
                 origin=origin,
                 outer_integration_order=integration_order,
             )
+
+        if renderer == "hybrid_cusp":
+            from baymorph.rendering.sersic_hybrid import (
+                render_sersic_cusp_hybrid,
+            )
+
+            return render_sersic_cusp_hybrid(
+                self,
+                shape,
+                origin=origin,
+                outer_integration_order=integration_order,
+            )
+
+        if renderer == "point":
+            return self._point_sample(shape, origin)
 
         ny, nx = shape
         y_origin, x_origin = origin
@@ -497,12 +543,6 @@ class SersicModel:
                 pixel_x=pixel_x,
                 pixel_y=pixel_y,
                 integration_order=integration_order,
-            )
-
-        if renderer == "point":
-            return self._point_sample(
-                pixel_x=pixel_x,
-                pixel_y=pixel_y,
             )
 
         return self._integrate_pixel_adaptive(

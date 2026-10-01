@@ -10,6 +10,7 @@ from scipy.ndimage import map_coordinates, spline_filter
 from baymorph.rendering.effective_psf import (
     RENDERING_CONVENTION,
     SUBPIXEL_FACTOR,
+    PolyphaseConvolution,
     divide_cell_response,
     interleave,
 )
@@ -231,6 +232,21 @@ class EmpiricalPSF:
 
         return cached
 
+    def fine_convolution(self) -> PolyphaseConvolution:
+        """Return the convolution of AD-046 with the sub-pixel kernels.
+
+        It applies :meth:`fine_kernel` to the fine box of the window and
+        reads the result at the native pixel centres; its kernel transforms
+        are computed once and kept on the object.
+        """
+        cached = self.__dict__.get("_fine_convolution")
+
+        if cached is None:
+            cached = PolyphaseConvolution(self.fine_kernel())
+            self.__dict__["_fine_convolution"] = cached
+
+        return cached
+
     def kernel_at(
         self,
         phase_x: float,
@@ -335,15 +351,26 @@ def validate_subpixel_kernels(
     """Validate the sub-pixel kernels of an empirical PSF.
 
     They must have ``SUBPIXEL_FACTOR`` phases per axis and the footprint of
-    the native kernel, be finite and non-negative with unit sum at every
-    phase, and equal the normalized native kernel at zero phase. Invalid
-    kernels are rejected, never repaired.
+    the native kernel, a square of an odd number of pixels centred on the
+    zero offset, be finite and non-negative with unit sum at every phase,
+    and equal the normalized native kernel at zero phase. Invalid kernels
+    are rejected, never repaired.
     """
     kernels = np.asarray(
         subpixel_kernels,
         dtype=float,
     )
     factor = SUBPIXEL_FACTOR
+
+    if (
+        native_kernel.ndim != 2
+        or native_kernel.shape[0] != native_kernel.shape[1]
+        or native_kernel.shape[0] % 2 != 1
+    ):
+        raise ValueError(
+            "An empirical PSF with sub-pixel kernels must be a square of an "
+            f"odd number of pixels; got {native_kernel.shape}."
+        )
 
     if kernels.shape != (factor, factor, *native_kernel.shape):
         raise ValueError(

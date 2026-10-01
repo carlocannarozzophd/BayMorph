@@ -154,10 +154,10 @@ class ConvolvedModel:
         """Render with the effective-PSF convention of AD-046, uncropped.
 
         The point-sampled images are weighted by one minus the window and
-        convolved with the native kernel; the fine images, integrated by the
-        hybrid renderer over cells ``SUBPIXEL_FACTOR`` times finer within the
-        box of the window, are weighted by the window and convolved with the
-        sub-pixel kernels.
+        convolved with the native kernel; the fine images, integrated over
+        cells ``SUBPIXEL_FACTOR`` times finer within the box of the window by
+        the ``hybrid_cusp`` rule, are weighted by the window and convolved
+        with the sub-pixel kernels by the polyphase convolution of the PSF.
         """
         model = self.model
 
@@ -183,7 +183,7 @@ class ConvolvedModel:
             fine = scaled.render_components(
                 shape=(box, box),
                 origin=fine_origin,
-                renderer="hybrid",
+                renderer="hybrid_cusp",
             )
         else:
             outer = {
@@ -197,13 +197,13 @@ class ConvolvedModel:
                 "model": scaled.render(
                     shape=(box, box),
                     origin=fine_origin,
-                    renderer="hybrid",
+                    renderer="hybrid_cusp",
                 )
             }
 
         local = local_images(
             {name: np.asarray(image, dtype=float) for name, image in fine.items()},
-            self.psf.fine_kernel(),
+            self.psf.fine_convolution(),
             x,
             y,
             extended_shape,
