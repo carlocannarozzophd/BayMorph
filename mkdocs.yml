@@ -108,7 +108,8 @@ nav:
   - Rendering Convention under an Empirical PSF: research/RENDERING_CONVENTION_2026-10-01.md
   - PSF and Rendering Errors in Fitted Sérsic Parameters: research/PSF_PARAMETER_SENSITIVITY_2026-10-01.md
   - Empirical PSF with Extended Wings: research/PSF_EXTENDED_WINGS_2026-10-01.md
-  - Proposed AD-046, Effective-PSF Rendering: research/PSF_RENDERING_PROPOSAL_2026-10-01.md
+  - AD-046 Proposal, Effective-PSF Rendering: research/PSF_RENDERING_PROPOSAL_2026-10-01.md
+  - Cost of the Effective-PSF Rendering: research/EFFECTIVE_PSF_COST_2026-10-01.md
 
 plugins:
   - search
