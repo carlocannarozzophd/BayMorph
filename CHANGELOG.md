@@ -351,6 +351,11 @@ and the project follows Semantic Versioning in spirit.
 
 ### Fixed
 
+* The status note on milestone 1 of AD-047 attributed to the r-band target a
+  sky region of about 11 600 pixels, the size of the region of the packaged
+  simulated example; the region of the target holds 477 362 pixels. The note
+  now gives the measured dependence on the size of the region, and the
+  measurement on the example.
 * Two attributions of the components, in the pages and the docstrings: the
   Ferrers profile was credited to Imfit (Erwin 2015), whose paper does not
   describe it, and is now credited to GALFIT (Peng et al. 2010); the
