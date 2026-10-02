@@ -22,6 +22,7 @@ EXPECTED_NOTEBOOKS: set[str] = {
 # They keep the hygiene contract but may use internal APIs and plot directly,
 # so they are listed separately rather than relaxing the public-notebook rules.
 EXPECTED_VALIDATION_NOTEBOOKS: set[str] = {
+    "cv_source_identification/cv_methods_on_one_image.ipynb",
     "repeated_noise_recovery/repeated_noise_recovery.ipynb",
     "structure_informed_evidence/nautilus_vs_model_informed.ipynb",
 }

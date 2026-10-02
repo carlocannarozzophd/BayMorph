@@ -113,6 +113,7 @@ nav:
   - Noise and Background Chain: research/NOISE_BACKGROUND_AUDIT_2026-10-01.md
   - A Noise Model for Any Image: research/NOISE_MODEL_BENCH_2026-10-01.md
   - AD-047 Proposal, Noise Model: research/NOISE_MODEL_PROPOSAL_2026-10-02.md
+  - Computer-Vision Source Identification: research/CV_SOURCE_IDENTIFICATION_2026-10-01.md
 
 plugins:
   - search
