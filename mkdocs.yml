@@ -60,60 +60,76 @@ nav:
 
 - Home: index.md
 
+- Getting Started:
+
+  - Installation: guide/INSTALLATION.md
+  - Quick Start: guide/QUICK_START.md
+  - Command-Line Interface: guide/CLI.md
+  - Configuration Reference: guide/CONFIGURATION.md
+  - Preparation and Products: guide/PREPARATION_AND_PRODUCTS.md
+  - Tutorials: guide/TUTORIALS.md
+
+- Public API: API.md
+
 - Architecture:
 
   - Overview: architecture/ARCHITECTURE.md
   - Core Architecture: architecture/CORE_ARCHITECTURE.md
+  - Core Contract: architecture/BAYMORPH_CORE_CONTRACT.md
   - Observation Model: architecture/OBSERVATION_MODEL.md
-  - Inference: architecture/INFERENCE.md
-  - Rendering: architecture/RENDERING.md
   - Morphological Components: architecture/MORPHOLOGICAL_COMPONENTS.md
+  - Rendering: architecture/RENDERING.md
+  - Inference: architecture/INFERENCE.md
+  - Inference Geometry: architecture/INFERENCE_GEOMETRY.md
   - Pipeline: architecture/PIPELINE.md
   - Production Workflow: architecture/PRODUCTION_WORKFLOW.md
   - Multi-Observation Workflow: architecture/MULTI_OBSERVATION_PUBLIC_WORKFLOW.md
-  - Validation: architecture/VALIDATION.md
-  - Validation Architecture: architecture/VALIDATION_ARCHITECTURE.md
-  - Core Contract: architecture/BAYMORPH_CORE_CONTRACT.md
-  - Inference Geometry: architecture/INFERENCE_GEOMETRY.md
-  - Architecture Decisions:
-    - Policy: architecture/decisions/README.md
-
-- Public API: API.md
+  - Validation Methodology: architecture/VALIDATION.md
+  - Validation Code Boundary: architecture/VALIDATION_ARCHITECTURE.md
+  - Architecture Decisions: architecture/decisions/README.md
 
 - Research:
 
-  - Paper Blueprint: research/PAPER_BLUEPRINT.md
-  - Multi-Observation Formulation: research/MULTI_OBSERVATION_FORMULATION.md
-  - Preparation-Free Multi-Observation Recovery: research/PREPARATION_FREE_MULTI_OBSERVATION_RECOVERY.md
-  - Multi-Observation Simulation-Based Calibration: research/MULTI_OBSERVATION_SBC.md
-  - Adaptive Rendering: research/ADAPTIVE_RENDERING.md
-  - PSF Characterization: research/PSF_CHARACTERIZATION.md
-  - pocoMC-Dynesty Initial Validation: research/pocomc_dynesty_initial_validation.md
-  - Prior and Configuration Contract: research/PRIOR_AND_CONFIGURATION_CONTRACT.md
-  - Flux Prior Calibration: research/FLUX_PRIOR_CALIBRATION.md
-  - Hierarchical Morphology Coupling: research/HIERARCHICAL_MORPHOLOGY_COUPLING.md
-  - Wavelength Coupling Validation: research/WAVELENGTH_COUPLING_VALIDATION.md
-  - Sérsic Rendering Optimization: research/SERSIC_RENDERING_OPTIMIZATION.md
-  - P0 Sérsic Rendering Benchmark: research/P0_SERSIC_RENDERING_BENCHMARK.md
-  - Performance Architecture P0: research/PERFORMANCE_ARCHITECTURE_P0.md
-  - Likelihood Cost Decomposition: research/LIKELIHOOD_COST_DECOMPOSITION_2026-09-20.md
-  - Production Cutout Footprint Selection: research/TARGET_CUTOUT_FOOTPRINT_SELECTION_2026-09-16.md
-  - Production Empirical PSF Selection: research/TARGET_EMPIRICAL_PSF_SELECTION_2026-09-16.md
-  - Production Residual Diagnostic: research/TARGET_R_RESIDUAL_DIAGNOSTIC_2026-09-20.md
-  - Structure-Informed Evidence Estimation: research/STRUCTURE_INFORMED_EVIDENCE_2026-09-29.md
-  - Structure-Informed Evidence for Other Likelihoods: research/STRUCTURE_INFORMED_EVIDENCE_LIKELIHOODS_2026-09-29.md
-  - Adaptive Structure-Informed Evidence: research/STRUCTURE_INFORMED_EVIDENCE_ADAPTIVE_2026-09-30.md
-  - Empirical PSF Test Bench: research/PSF_TEST_BENCH_2026-09-30.md
-  - Empirical PSF Builder Candidates: research/PSF_BUILDER_CANDIDATES_2026-09-30.md
-  - Rendering Convention under an Empirical PSF: research/RENDERING_CONVENTION_2026-10-01.md
-  - PSF and Rendering Errors in Fitted Sérsic Parameters: research/PSF_PARAMETER_SENSITIVITY_2026-10-01.md
-  - Empirical PSF with Extended Wings: research/PSF_EXTENDED_WINGS_2026-10-01.md
-  - AD-046 Proposal, Effective-PSF Rendering: research/PSF_RENDERING_PROPOSAL_2026-10-01.md
-  - Cost of the Effective-PSF Rendering: research/EFFECTIVE_PSF_COST_2026-10-01.md
-  - Noise and Background Chain: research/NOISE_BACKGROUND_AUDIT_2026-10-01.md
-  - A Noise Model for Any Image: research/NOISE_MODEL_BENCH_2026-10-01.md
-  - AD-047 Proposal, Noise Model: research/NOISE_MODEL_PROPOSAL_2026-10-02.md
-  - Computer-Vision Source Identification: research/CV_SOURCE_IDENTIFICATION_2026-10-01.md
+  - research/index.md
+  - Formulation and Priors:
+    - Multi-Observation Formulation: research/MULTI_OBSERVATION_FORMULATION.md
+    - Prior and Configuration Contract: research/PRIOR_AND_CONFIGURATION_CONTRACT.md
+    - Flux Prior Calibration: research/FLUX_PRIOR_CALIBRATION.md
+  - Multi-Observation Inference:
+    - Hierarchical Morphology Coupling: research/HIERARCHICAL_MORPHOLOGY_COUPLING.md
+    - Wavelength Coupling Validation: research/WAVELENGTH_COUPLING_VALIDATION.md
+    - Multi-Observation Simulation-Based Calibration: research/MULTI_OBSERVATION_SBC.md
+    - Preparation-Free Multi-Observation Recovery: research/PREPARATION_FREE_MULTI_OBSERVATION_RECOVERY.md
+  - Rendering and PSF:
+    - Adaptive Rendering: research/ADAPTIVE_RENDERING.md
+    - Sérsic Rendering Optimization: research/SERSIC_RENDERING_OPTIMIZATION.md
+    - P0 Sérsic Rendering Benchmark: research/P0_SERSIC_RENDERING_BENCHMARK.md
+    - PSF Characterization: research/PSF_CHARACTERIZATION.md
+    - Empirical PSF Test Bench: research/PSF_TEST_BENCH_2026-09-30.md
+    - Empirical PSF Builder Candidates: research/PSF_BUILDER_CANDIDATES_2026-09-30.md
+    - Rendering Convention under an Empirical PSF: research/RENDERING_CONVENTION_2026-10-01.md
+    - PSF and Rendering Errors in Fitted Sérsic Parameters: research/PSF_PARAMETER_SENSITIVITY_2026-10-01.md
+    - Empirical PSF with Extended Wings: research/PSF_EXTENDED_WINGS_2026-10-01.md
+    - AD-046 Proposal, Effective-PSF Rendering: research/PSF_RENDERING_PROPOSAL_2026-10-01.md
+    - Cost of the Effective-PSF Rendering: research/EFFECTIVE_PSF_COST_2026-10-01.md
+  - Noise and Background:
+    - Noise and Background Chain: research/NOISE_BACKGROUND_AUDIT_2026-10-01.md
+    - A Noise Model for Any Image: research/NOISE_MODEL_BENCH_2026-10-01.md
+    - AD-047 Proposal, Noise Model: research/NOISE_MODEL_PROPOSAL_2026-10-02.md
+  - Inference and Evidence:
+    - pocoMC-Dynesty Initial Validation: research/pocomc_dynesty_initial_validation.md
+    - Structure-Informed Evidence Estimation: research/STRUCTURE_INFORMED_EVIDENCE_2026-09-29.md
+    - Structure-Informed Evidence for Other Likelihoods: research/STRUCTURE_INFORMED_EVIDENCE_LIKELIHOODS_2026-09-29.md
+    - Adaptive Structure-Informed Evidence: research/STRUCTURE_INFORMED_EVIDENCE_ADAPTIVE_2026-09-30.md
+  - Performance:
+    - Performance Architecture P0: research/PERFORMANCE_ARCHITECTURE_P0.md
+    - Likelihood Cost Decomposition: research/LIKELIHOOD_COST_DECOMPOSITION_2026-09-20.md
+  - Production Target:
+    - Cutout Footprint Selection: research/TARGET_CUTOUT_FOOTPRINT_SELECTION_2026-09-16.md
+    - Empirical PSF Selection: research/TARGET_EMPIRICAL_PSF_SELECTION_2026-09-16.md
+    - Residual Diagnostic: research/TARGET_R_RESIDUAL_DIAGNOSTIC_2026-09-20.md
+  - Source Identification:
+    - Computer-Vision Source Identification: research/CV_SOURCE_IDENTIFICATION_2026-10-01.md
 
 plugins:
   - search

@@ -39,6 +39,7 @@ GENERATED_RESULT_DIRECTORIES = {
 OPERATIONAL_PREFIXES = (
     "baymorph/",
     "configs/",
+    "docs/guide/",
     "notebooks/",
     "tests/",
 )
@@ -46,6 +47,7 @@ OPERATIONAL_PREFIXES = (
 OPERATIONAL_DOCUMENTS = {
     "README.md",
     "docs/API.md",
+    "docs/index.md",
     "docs/architecture/MULTI_OBSERVATION_PUBLIC_WORKFLOW.md",
     "docs/architecture/PRODUCTION_WORKFLOW.md",
 }
