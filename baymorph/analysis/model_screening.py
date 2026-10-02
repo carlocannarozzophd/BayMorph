@@ -6,8 +6,20 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from math import isclose, isfinite
 
-from baymorph.models import registered_models
 
+SCREENING_MODELS = (
+    "bulge_disk",
+    "double_sersic",
+    "sersic_point_source",
+    "single_sersic",
+)
+"""Morphology models the screening was designed and trained to rank.
+
+These are the four models the registry held when the screening was built,
+in the order it listed them. Models registered later, such as those of
+AD-048, are outside the declared candidates of the screening, so its
+simulations, classifier and reports do not change with the registry.
+"""
 
 SCREENING_STATUSES = (
     "recommended",
@@ -58,7 +70,7 @@ class ModelScreeningReport:
                 "BayMorph model screening must require a user decision."
             )
 
-        expected_models = set(registered_models())
+        expected_models = set(SCREENING_MODELS)
         supplied_models = {
             item.model_name
             for item in self.scores
@@ -73,7 +85,7 @@ class ModelScreeningReport:
             )
 
             raise ValueError(
-                "A screening report must contain every registered model. "
+                "A screening report must contain every screening model. "
                 f"Missing: {missing}. Extra: {extra}."
             )
 
@@ -140,8 +152,8 @@ class ModelScreeningReport:
         method: str,
         warnings: Sequence[str] = (),
     ) -> ModelScreeningReport:
-        """Normalize and rank scores for all registered models."""
-        expected_models = set(registered_models())
+        """Normalize and rank scores for all screening models."""
+        expected_models = set(SCREENING_MODELS)
         supplied_models = set(scores)
 
         if supplied_models != expected_models:
@@ -153,7 +165,7 @@ class ModelScreeningReport:
             )
 
             raise ValueError(
-                "Scores must be supplied for every registered model. "
+                "Scores must be supplied for every screening model. "
                 f"Missing: {missing}. Extra: {extra}."
             )
 

@@ -7,6 +7,7 @@ from collections.abc import Sequence
 import numpy as np
 from numpy.typing import NDArray
 
+from baymorph.analysis.model_screening import SCREENING_MODELS
 from baymorph.analysis.model_screening_classifier import (
     LinearDiscriminantScreeningClassifier,
 )
@@ -14,7 +15,6 @@ from baymorph.analysis.model_screening_features import (
     SCREENING_FEATURE_NAMES,
     extract_model_screening_features,
 )
-from baymorph.models import registered_models
 from baymorph.validation.model_screening_simulation import (
     ModelScreeningSimulationCase,
 )
@@ -40,7 +40,7 @@ def fit_linear_discriminant_screening_classifier(
         dtype=str,
     )
     model_names = tuple(
-        registered_models()
+        SCREENING_MODELS
     )
     feature_names = tuple(
         feature_names
@@ -78,7 +78,7 @@ def fit_linear_discriminant_screening_classifier(
         model_names
     ):
         raise ValueError(
-            "Training labels must contain every registered model."
+            "Training labels must contain every screening model."
         )
 
     ridge = float(

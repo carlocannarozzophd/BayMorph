@@ -7,7 +7,7 @@ from collections import Counter
 import numpy as np
 import pytest
 
-from baymorph.models import registered_models
+from baymorph.analysis.model_screening import SCREENING_MODELS
 from baymorph.validation.model_screening_dataset import (
     generate_model_screening_cases,
 )
@@ -112,7 +112,7 @@ def generation_options() -> dict:
     }
 
 
-def test_generator_is_balanced_across_registered_models() -> None:
+def test_generator_is_balanced_across_screening_models() -> None:
     """Every model must contribute the same number of cases."""
     cases = list(
         generate_model_screening_cases(
@@ -128,12 +128,12 @@ def test_generator_is_balanced_across_registered_models() -> None:
     assert len(
         cases
     ) == 2 * len(
-        registered_models()
+        SCREENING_MODELS
     )
 
     assert counts == {
         model_name: 2
-        for model_name in registered_models()
+        for model_name in SCREENING_MODELS
     }
 
     assert [
@@ -206,7 +206,7 @@ def test_generator_requires_every_registered_model() -> None:
 
     with pytest.raises(
         ValueError,
-        match="cover every registered model",
+        match="cover every screening model",
     ):
         list(
             generate_model_screening_cases(
@@ -332,14 +332,13 @@ def total_model_flux(
 
 def test_controlled_mapping_conserves_total_flux() -> None:
     """Every model mapping must preserve the common total flux."""
-    from baymorph.models import registered_models
     from baymorph.validation.model_screening_dataset import (
         controlled_parameters_from_latents,
     )
 
     latents = controlled_latents()
 
-    for model_name in registered_models():
+    for model_name in SCREENING_MODELS:
         parameters = controlled_parameters_from_latents(
             model_name=model_name,
             latents=latents,
@@ -356,14 +355,13 @@ def test_controlled_mapping_conserves_total_flux() -> None:
 
 def test_controlled_mapping_preserves_common_outer_scale() -> None:
     """The common size latent must map to every outer component."""
-    from baymorph.models import registered_models
     from baymorph.validation.model_screening_dataset import (
         controlled_parameters_from_latents,
     )
 
     latents = controlled_latents()
 
-    for model_name in registered_models():
+    for model_name in SCREENING_MODELS:
         parameters = controlled_parameters_from_latents(
             model_name=model_name,
             latents=latents,
@@ -387,7 +385,6 @@ def test_controlled_generator_is_balanced() -> None:
     """The controlled generator must return equal class counts."""
     from collections import Counter
 
-    from baymorph.models import registered_models
     from baymorph.validation.model_screening_dataset import (
         generate_controlled_model_screening_cases,
     )
@@ -408,7 +405,7 @@ def test_controlled_generator_is_balanced() -> None:
 
     assert counts == {
         model_name: 2
-        for model_name in registered_models()
+        for model_name in SCREENING_MODELS
     }
     assert len(
         {

@@ -7,11 +7,13 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from baymorph.analysis.model_screening import ModelScreeningReport
+from baymorph.analysis.model_screening import (
+    SCREENING_MODELS,
+    ModelScreeningReport,
+)
 from baymorph.analysis.model_screening_features import (
     ModelScreeningFeatureVector,
 )
-from baymorph.models import registered_models
 
 
 FloatArray = NDArray[np.float64]
@@ -46,14 +48,14 @@ class LinearDiscriminantScreeningClassifier:
         )
 
         expected_models = set(
-            registered_models()
+            SCREENING_MODELS
         )
 
         if set(
             model_names
         ) != expected_models:
             raise ValueError(
-                "The classifier must contain every registered model."
+                "The classifier must contain every screening model."
             )
 
         if len(

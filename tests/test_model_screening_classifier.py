@@ -5,11 +5,11 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from baymorph.analysis.model_screening import SCREENING_MODELS
 from baymorph.analysis.model_screening_features import (
     SCREENING_FEATURE_NAMES,
     ModelScreeningFeatureVector,
 )
-from baymorph.models import registered_models
 from baymorph.validation.model_screening_classifier import (
     fit_linear_discriminant_screening_classifier,
     screening_feature_dataset,
@@ -31,7 +31,7 @@ def make_separated_training_data() -> tuple[
     labels = []
 
     for model_index, model_name in enumerate(
-        registered_models()
+        SCREENING_MODELS
     ):
         for _ in range(
             20
@@ -61,7 +61,7 @@ def make_separated_training_data() -> tuple[
 
 
 def test_classifier_returns_normalized_model_scores() -> None:
-    """The classifier must score every registered model."""
+    """The classifier must score every screening model."""
     features, labels = make_separated_training_data()
 
     classifier = (
@@ -71,7 +71,7 @@ def test_classifier_returns_normalized_model_scores() -> None:
         )
     )
 
-    target_model = registered_models()[
+    target_model = SCREENING_MODELS[
         1
     ]
 
@@ -91,7 +91,7 @@ def test_classifier_returns_normalized_model_scores() -> None:
     assert set(
         scores
     ) == set(
-        registered_models()
+        SCREENING_MODELS
     )
 
     assert sum(
@@ -144,7 +144,7 @@ def test_classifier_requires_every_model_in_training() -> None:
     """Training cannot silently omit a registered candidate model."""
     features, labels = make_separated_training_data()
 
-    excluded_model = registered_models()[
+    excluded_model = SCREENING_MODELS[
         -1
     ]
 
@@ -158,7 +158,7 @@ def test_classifier_requires_every_model_in_training() -> None:
 
     with pytest.raises(
         ValueError,
-        match="must contain every registered model",
+        match="must contain every screening model",
     ):
         fit_linear_discriminant_screening_classifier(
             features[

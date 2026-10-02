@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from baymorph.models import registered_models
+from baymorph.analysis.model_screening import SCREENING_MODELS
 from baymorph.validation.model_screening_simulation import (
     screening_parameter_names,
     simulate_model_screening_case,
@@ -68,9 +68,9 @@ MODEL_PARAMETERS = {
 
 @pytest.mark.parametrize(
     "model_name",
-    registered_models(),
+    SCREENING_MODELS,
 )
-def test_simulator_supports_every_registered_model(
+def test_simulator_supports_every_screening_model(
     model_name: str,
 ) -> None:
     """Every production morphology must generate a labelled image."""

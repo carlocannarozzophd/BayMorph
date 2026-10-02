@@ -8,11 +8,11 @@ import numpy as np
 import pytest
 from astropy.io import fits
 
+from baymorph.analysis.model_screening import SCREENING_MODELS
 from baymorph.analysis.model_screening_features import (
     SCREENING_FEATURE_NAMES,
     extract_model_screening_features,
 )
-from baymorph.models import registered_models
 from baymorph.pipeline.advisor import ObservationAdvisor
 from baymorph.pipeline.model_screening_advisor import (
     SingleObservationModelAdvisor,
@@ -96,7 +96,7 @@ def make_classifier(
     labels = []
 
     for model_index, model_name in enumerate(
-        registered_models()
+        SCREENING_MODELS
     ):
         feature_blocks.append(
             target.values
@@ -121,7 +121,7 @@ def make_classifier(
 def test_screening_reads_header_and_ranks_all_models(
     tmp_path: Path,
 ) -> None:
-    """The advisor must return metadata and every registered model."""
+    """The advisor must return metadata and every screening model."""
     filename = write_test_fits(
         tmp_path
     )
@@ -163,7 +163,7 @@ def test_screening_reads_header_and_ranks_all_models(
         score.model_name
         for score in result.report.scores
     } == set(
-        registered_models()
+        SCREENING_MODELS
     )
 
 

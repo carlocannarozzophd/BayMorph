@@ -9,11 +9,9 @@ from types import MappingProxyType
 import numpy as np
 from numpy.typing import NDArray
 
+from baymorph.analysis.model_screening import SCREENING_MODELS
 from baymorph.fitting.model_factories import ObservedModelFactory
-from baymorph.models import (
-    parameter_names,
-    registered_models,
-)
+from baymorph.models import parameter_names
 from baymorph.simulation.psf import GaussianPSF
 
 
@@ -76,9 +74,9 @@ class ModelScreeningSimulationCase:
                 "Simulation-case random seed must be non-negative."
             )
 
-        if self.model_name not in registered_models():
+        if self.model_name not in SCREENING_MODELS:
             raise ValueError(
-                f"Unknown BayMorph model: {self.model_name!r}."
+                f"Not a model-screening model: {self.model_name!r}."
             )
 
         image = np.asarray(
@@ -245,9 +243,9 @@ def simulate_model_screening_case(
     This initial validation simulator uses a circular Gaussian PSF and
     independent Gaussian noise. It is not yet a production-realism claim.
     """
-    if model_name not in registered_models():
+    if model_name not in SCREENING_MODELS:
         raise ValueError(
-            f"Unknown BayMorph model: {model_name!r}."
+            f"Not a model-screening model: {model_name!r}."
         )
 
     if len(

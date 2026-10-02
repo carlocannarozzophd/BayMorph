@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from baymorph.models import registered_models
+from baymorph.analysis.model_screening import SCREENING_MODELS
 from baymorph.pipeline.prior_config import parse_prior_config
 from baymorph.validation.model_screening_simulation import (
     ModelScreeningSimulationCase,
@@ -55,9 +55,9 @@ def _sample_prior(
 def _validate_model_priors(
     model_priors: ModelPriorConfig,
 ) -> None:
-    """Require complete priors for every registered model."""
+    """Require complete priors for every screening model."""
     expected_models = set(
-        registered_models()
+        SCREENING_MODELS
     )
     supplied_models = set(
         model_priors
@@ -72,11 +72,11 @@ def _validate_model_priors(
         )
 
         raise ValueError(
-            "Model-screening priors must cover every registered model. "
+            "Model-screening priors must cover every screening model. "
             f"Missing: {missing}. Extra: {extra}."
         )
 
-    for model_name in registered_models():
+    for model_name in SCREENING_MODELS:
         expected_parameters = set(
             screening_parameter_names(
                 model_name
@@ -112,12 +112,12 @@ def generate_model_screening_cases(
     noise_sigma_prior: PriorConfig,
     random_state: int = 0,
 ) -> Iterator[ModelScreeningSimulationCase]:
-    """Generate balanced cases from all registered BayMorph models.
+    """Generate balanced cases from all screening models.
 
     Parameters
     ----------
     model_priors : mapping
-        Complete parameter priors for every registered model. These
+        Complete parameter priors for every screening model. These
         distributions define the model-conditional training population.
     n_per_model : int
         Number of simulated observations generated for each model.
@@ -207,7 +207,7 @@ def generate_model_screening_cases(
 
     case_index = 0
 
-    for model_name in registered_models():
+    for model_name in SCREENING_MODELS:
         for _ in range(
             n_per_model
         ):
@@ -346,23 +346,7 @@ def controlled_parameters_from_latents(
     and the outer-component radius for two-component models. The inner
     radius is obtained through ``inner_re_fraction``.
     """
-    registered = tuple(
-        registered_models()
-    )
-    supported = {
-        "single_sersic",
-        "double_sersic",
-        "sersic_point_source",
-        "bulge_disk",
-    }
-
-    if set(registered) != supported:
-        raise RuntimeError(
-            "The controlled population mapping must be updated when the "
-            "BayMorph model registry changes."
-        )
-
-    if model_name not in supported:
+    if model_name not in SCREENING_MODELS:
         raise ValueError(
             f"Unknown model name: {model_name!r}."
         )
@@ -637,7 +621,7 @@ def generate_controlled_model_screening_cases(
     )
     case_index = 0
 
-    for model_name in registered_models():
+    for model_name in SCREENING_MODELS:
         for _ in range(
             normalized_count
         ):

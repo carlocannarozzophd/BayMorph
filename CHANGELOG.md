@@ -133,6 +133,9 @@ and the project follows Semantic Versioning in spirit.
 
 ### Changed
 
+* The model screening is pinned to the four models it was trained on
+  (`SCREENING_MODELS`), so models registered later leave its simulations,
+  classifier and reports unchanged (AD-048).
 * `README.md`, `CONTRIBUTING.md`, `ROADMAP.md` and the ADR policy are revised,
   `DECISIONS.md` gains an index, and the Unreleased entries of this changelog
   are shortened.

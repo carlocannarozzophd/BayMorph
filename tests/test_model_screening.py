@@ -17,8 +17,8 @@ def example_scores() -> dict[str, float]:
     }
 
 
-def test_report_ranks_all_registered_models() -> None:
-    """The report must rank every implemented BayMorph model."""
+def test_report_ranks_all_screening_models() -> None:
+    """The report must rank every model the screening was built for."""
     report = ModelScreeningReport.from_scores(
         example_scores(),
         status="ambiguous",
@@ -95,7 +95,7 @@ def test_report_requires_every_registered_model() -> None:
 
     with pytest.raises(
         ValueError,
-        match="every registered model",
+        match="every screening model",
     ):
         ModelScreeningReport.from_scores(
             scores,

@@ -96,7 +96,7 @@ class SingleObservationModelAdvisor(ObservationAdvisor):
         noise_sigma: float | None = None,
         target_mask: NDArray[np.bool_] | None = None,
     ) -> SingleObservationScreeningResult:
-        """Screen all registered models without preparing the observation.
+        """Screen the screening models without preparing the observation.
 
         The FITS ``FWHM`` keyword has no universal unit contract. BayMorph
         therefore never converts it silently. The caller must either supply
