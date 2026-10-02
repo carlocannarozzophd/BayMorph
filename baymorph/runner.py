@@ -40,7 +40,7 @@ from baymorph.pipeline.psf_construction import (
 from baymorph.pipeline.noise_calibration import (
     build_correlated_noise_calibration,
     correlated_noise_calibration_path,
-    correlated_noise_settings_from_config,
+    reject_correlated_noise_calibration_settings,
 )
 from baymorph.pipeline.vecchia_factorization import (
     DEFAULT_MIN_CONDITIONAL_VARIANCE,
@@ -830,12 +830,11 @@ class BayMorphRunner:
                 "fit.likelihood mapping."
             )
 
-        settings = correlated_noise_settings_from_config(config)
+        reject_correlated_noise_calibration_settings(config)
         calibration_path = correlated_noise_calibration_path(config)
         if not calibration_path.is_file():
             build_correlated_noise_calibration(
                 config,
-                **settings,
                 save=True,
                 overwrite=False,
             )

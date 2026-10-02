@@ -31,12 +31,16 @@ from baymorph.likelihood.vecchia_gaussian import (
     VecchiaFactorization,
     build_vecchia_factorization,
 )
+from baymorph.core.correlated_noise import (
+    CORRELATION_ESTIMATOR,
+    CORRELATION_MAX_LAG,
+)
 from baymorph.pipeline.config import load_resolved_config
 from baymorph.pipeline.image_preparation import load_image_preparation_products
 from baymorph.pipeline.noise_calibration import (
     correlated_noise_calibration_path,
-    correlated_noise_settings_from_config,
     load_correlated_noise_calibration,
+    reject_correlated_noise_calibration_settings,
     validate_correlated_noise_calibration_sources,
 )
 
@@ -45,7 +49,10 @@ DEFAULT_VECCHIA_FACTORIZATION_DIRECTORY = "correlated_gaussian_vecchia"
 VECCHIA_MANIFEST_FILENAME = "manifest.json"
 VECCHIA_COMPLETE_FILENAME = "COMPLETE.json"
 VECCHIA_SCHEMA = VECCHIA_FACTORIZATION_SCHEMA
-VECCHIA_SCHEMA_VERSION = VECCHIA_FACTORIZATION_VERSION
+# Version of the artifact, which binds the factorization to its sources; the
+# factorization object keeps VECCHIA_FACTORIZATION_VERSION. Version 2 binds
+# the sky correlation of AD-047 and no marginal scale.
+VECCHIA_SCHEMA_VERSION = 2
 VECCHIA_ALGORITHM = CORE_VECCHIA_ALGORITHM
 VECCHIA_ORDERING = CORE_VECCHIA_ORDERING
 VECCHIA_NEIGHBOR_POLICY = CORE_VECCHIA_NEIGHBOR_POLICY
@@ -82,11 +89,9 @@ _SOURCE_BINDING_KEYS = {
     "prepared_image_sha256",
     "sky_mask_sha256",
     "fitting_mask_sha256",
-    "marginal_sigma_sha256",
     "correlation_kernel_sha256",
     "correlated_noise_calibration_sha256",
-    "correlation_taper",
-    "calibration_settings",
+    "correlation_estimator",
     "calibration_generator_identity",
 }
 
@@ -437,11 +442,12 @@ def _validate_manifest_structure(manifest: Mapping[str, Any]) -> None:
     for key in _SOURCE_BINDING_KEYS:
         if key.endswith("_sha256") and not _is_sha256(binding[key]):
             raise ValueError(f"Vecchia source binding {key} is invalid.")
-    for key in ("calibration_settings", "calibration_generator_identity"):
-        if not isinstance(binding[key], Mapping):
-            raise ValueError(f"Vecchia source binding {key} is invalid.")
-    if binding["correlation_taper"] != "separable_bartlett":
-        raise ValueError("Vecchia source binding correlation_taper is invalid.")
+    if not isinstance(binding["calibration_generator_identity"], Mapping):
+        raise ValueError(
+            "Vecchia source binding calibration_generator_identity is invalid."
+        )
+    if binding["correlation_estimator"] != CORRELATION_ESTIMATOR:
+        raise ValueError("Vecchia source binding correlation_estimator is invalid.")
 
     shape = manifest.get("image_shape")
     if (
@@ -545,7 +551,7 @@ def _make_factorization(
         ordering=VECCHIA_ORDERING,
         approximation="nearest_neighbor_conditional_gaussian",
         schema=VECCHIA_SCHEMA,
-        version=VECCHIA_SCHEMA_VERSION,
+        version=VECCHIA_FACTORIZATION_VERSION,
     )
 
 
@@ -629,14 +635,13 @@ def _capture_source_snapshot(
     calibration_path = correlated_noise_calibration_path(resolved)
     calibration_state = _file_state(calibration_path)
     calibration = load_correlated_noise_calibration(calibration_path)
-    settings = correlated_noise_settings_from_config(resolved)
-    _validate_calibration_settings(settings, calibration)
+    reject_correlated_noise_calibration_settings(resolved)
+    _validate_calibration_kernel(calibration)
     validate_correlated_noise_calibration_sources(
         calibration,
         products,
-        settings=settings,
     )
-    _validate_source_shapes(products, calibration)
+    _validate_source_shapes(products)
 
     cutout = _stable_array_snapshot(products.cutout, name="cutout")
     prepared_image = _stable_array_snapshot(
@@ -652,11 +657,6 @@ def _capture_source_snapshot(
         products.fitting_mask,
         name="fitting mask",
         dtype=bool,
-    )
-    marginal_sigma = _stable_array_snapshot(
-        calibration.marginal_sigma,
-        name="marginal sigma",
-        dtype=np.float64,
     )
     correlation_kernel = _stable_array_snapshot(
         calibration.correlation_kernel,
@@ -676,11 +676,9 @@ def _capture_source_snapshot(
         "prepared_image_sha256": _array_sha256(prepared_image),
         "sky_mask_sha256": _array_sha256(sky_mask),
         "fitting_mask_sha256": _array_sha256(fitting_mask),
-        "marginal_sigma_sha256": _array_sha256(marginal_sigma),
         "correlation_kernel_sha256": _array_sha256(correlation_kernel),
         "correlated_noise_calibration_sha256": calibration_sha256,
-        "correlation_taper": calibration.metadata["correlation_taper"],
-        "calibration_settings": _json_value(settings),
+        "correlation_estimator": calibration.metadata["estimator"],
         "calibration_generator_identity": _json_value(
             calibration.metadata.get("generator_identity")
         ),
@@ -709,7 +707,7 @@ def _stable_array_snapshot(
     return snapshot
 
 
-def _validate_source_shapes(products: Any, calibration: Any) -> None:
+def _validate_source_shapes(products: Any) -> None:
     if products.sky_region is None:
         raise RuntimeError("Vecchia factorization requires a persisted sky region.")
     shape = np.asarray(products.prepared_data).shape
@@ -719,33 +717,27 @@ def _validate_source_shapes(products: Any, calibration: Any) -> None:
         ("cutout", products.cutout),
         ("fitting_mask", products.fitting_mask),
         ("sky_mask", products.sky_region.mask),
-        ("marginal_sigma", calibration.marginal_sigma),
     ):
         if np.asarray(value).shape != shape:
             raise ValueError(f"{name} must match the prepared image shape.")
 
 
-def _validate_calibration_settings(
-    settings: Mapping[str, Any],
-    calibration: Any,
-) -> None:
-    """Require the calibrated kernel to match its stated finite-lag policy."""
-    tile_size = int(settings["correlation_tile_size"])
-    max_lag = int(settings["max_lag"])
-    if max_lag < 1 or tile_size <= 2 * max_lag:
+def _validate_calibration_kernel(calibration: Any) -> None:
+    """Require the sky correlation of the estimator and lag of AD-047."""
+    if calibration.metadata.get("estimator") != CORRELATION_ESTIMATOR:
         raise ValueError(
-            "Vecchia calibration requires correlation_tile_size > 2 * max_lag."
+            "Vecchia factorization requires the sky correlation estimated "
+            f"by {CORRELATION_ESTIMATOR!r} (AD-047)."
         )
-    expected_shape = (2 * max_lag + 1, 2 * max_lag + 1)
+    if calibration.metadata.get("max_lag") != CORRELATION_MAX_LAG:
+        raise ValueError(
+            f"Vecchia factorization requires a correlation to lag "
+            f"{CORRELATION_MAX_LAG} (AD-047)."
+        )
+    expected_shape = (2 * CORRELATION_MAX_LAG + 1, 2 * CORRELATION_MAX_LAG + 1)
     if np.asarray(calibration.correlation_kernel).shape != expected_shape:
         raise ValueError(
-            "Correlation-kernel shape does not match the configured max_lag."
-        )
-    taper = calibration.metadata.get("correlation_taper")
-    if taper != "separable_bartlett":
-        raise ValueError(
-            "Production Vecchia calibration requires an explicitly recorded "
-            "separable_bartlett correlation taper."
+            "Correlation-kernel shape does not match the lag of AD-047."
         )
 
 

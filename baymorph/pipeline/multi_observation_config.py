@@ -252,6 +252,11 @@ def _joint_likelihood(value, context):
         raise ValueError(
             f"{context} cannot define 'noise'."
         )
+    if "calibration" in value:
+        raise ValueError(
+            f"{context} cannot define 'calibration': AD-047 fixes the "
+            "sky-correlation estimator."
+        )
 
 
 def multi_observation_background_model(

@@ -112,7 +112,7 @@ and the project follows Semantic Versioning in spirit.
   tutorials. `tests/test_documentation.py` keeps it in step with the default
   configuration, the models and the command line.
 * AD-047, source variance and sky correlation in the noise model, accepted on
-  2026-10-02 with three amendments and not yet implemented
+  2026-10-02 with three amendments
   ([proposal](docs/research/NOISE_MODEL_PROPOSAL_2026-10-02.md)).
 * A simulation bench of noise models (`benchmarks/noise_model_bench.py`): the
   production model reports intervals up to 3.0 times too narrow, a model with
@@ -217,6 +217,16 @@ and the project follows Semantic Versioning in spirit.
 
 ### Changed
 
+* The sky correlation of the correlated Gaussian likelihood follows AD-047,
+  milestone 1 of its plan: it is estimated on the whole sky region of the
+  preparation with one plane removed, normalized by the number of pixel pairs
+  at each lag, without a taper and up to lag 8, and rejected unless its
+  spectrum is strictly positive; the correlation at lags 9 to 16 is recorded
+  as a diagnostic of the truncation. The tapered tile estimator and the
+  smooth marginal field are retired, and the correlated likelihood takes its
+  marginal scale from the prepared noise map. The calibration product and
+  the nearest-neighbour factorization artifact take their schema 2; products
+  of the earlier schemas are rejected and never converted.
 * The model screening is pinned to the four models it was trained on
   (`SCREENING_MODELS`), so models registered later leave its simulations,
   classifier and reports unchanged (AD-048).
@@ -300,6 +310,9 @@ and the project follows Semantic Versioning in spirit.
 
 ### Removed
 
+* `fit.likelihood.calibration` and its estimator settings, rejected now that
+  AD-047 fixes the estimator, and the unused `package_correlation` helper of
+  the noise-model bench, which called the retired estimator.
 * Code used only by tests, found by the deep audit of 2026-09-30, with its
   tests: five modules and sixteen functions, none of them in the top-level
   public API ([audit](docs/archive/audits/BayMorph_DEEP_AUDIT_2026-09-30.md)).

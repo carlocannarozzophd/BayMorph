@@ -14,8 +14,8 @@ from baymorph.likelihood.vecchia_gaussian import (
 )
 from baymorph.pipeline.noise_calibration import (
     correlated_noise_calibration_path,
-    correlated_noise_settings_from_config,
     load_correlated_noise_calibration,
+    reject_correlated_noise_calibration_settings,
     validate_correlated_noise_calibration_sources,
 )
 from baymorph.pipeline.vecchia_factorization import (
@@ -87,8 +87,9 @@ def prepare_real_fit_likelihood_state(
 
     Independent-pixel likelihoods reuse the prepared noise map.
 
-    The correlated Gaussian likelihood loads the persisted within-observation
-    calibration on the same prepared observation footprint.
+    The correlated Gaussian likelihood of AD-047 also takes its marginal
+    scale from the prepared noise map, and loads the persisted sky
+    correlation of the same prepared observation footprint.
 
     Parameters
     ----------
@@ -247,6 +248,10 @@ def prepare_real_fit_likelihood_state(
             "immutable artifact."
         )
 
+    reject_correlated_noise_calibration_settings(
+        config
+    )
+
     try:
         calibration = (
             load_correlated_noise_calibration(
@@ -260,13 +265,9 @@ def prepare_real_fit_likelihood_state(
             "calibration before fitting."
         ) from exc
 
-    settings = correlated_noise_settings_from_config(
-        config
-    )
     validate_correlated_noise_calibration_sources(
         calibration,
         image_products,
-        settings=settings,
     )
 
     vecchia_factorization = None
@@ -307,7 +308,7 @@ def prepare_real_fit_likelihood_state(
             )
 
     noise = np.array(
-        calibration.marginal_sigma,
+        image_products.noise,
         dtype=float,
         copy=True,
     )
@@ -318,8 +319,8 @@ def prepare_real_fit_likelihood_state(
 
     if noise.shape != prepared_shape:
         raise ValueError(
-            "Correlated-noise marginal scale does not match the "
-            "prepared observation footprint."
+            "The prepared noise map does not match the prepared "
+            "observation footprint."
         )
 
     if (
@@ -333,8 +334,8 @@ def prepare_real_fit_likelihood_state(
         )
     ):
         raise ValueError(
-            "Correlated-noise marginal scale must be finite and "
-            "strictly positive on the prepared observation footprint."
+            "The prepared noise map must be finite and strictly positive "
+            "on the prepared observation footprint."
         )
 
     kernel = np.array(
@@ -380,10 +381,13 @@ def prepare_real_fit_likelihood_state(
                 "correlation_model"
             )
         ),
-        "marginal_model": (
+        "correlation_estimator": (
             calibration.metadata.get(
-                "marginal_model"
+                "estimator"
             )
+        ),
+        "marginal_model": (
+            "prepared_sky_scale"
         ),
         "max_lag": (
             calibration.metadata.get(

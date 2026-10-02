@@ -1,4 +1,4 @@
-"""Persistence workflow for correlated Gaussian noise calibration."""
+"""Persistence workflow for the sky correlation of the noise model (AD-047)."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ from typing import Any
 import numpy as np
 
 from baymorph.core.correlated_noise import (
+    CALIBRATION_SCHEMA_VERSION,
+    CORRELATION_ESTIMATOR,
     CorrelatedGaussianNoiseCalibration,
     calibrate_correlated_gaussian_noise,
 )
@@ -49,33 +51,18 @@ def correlated_noise_calibration_path(
 def build_correlated_noise_calibration(
     config: str | Path | dict[str, Any],
     *,
-    marginal_tile_size: int,
-    marginal_min_coverage: float,
-    correlation_tile_size: int,
-    correlation_stride: int,
-    max_lag: int,
-    spectrum_grid_size: int = 512,
     save: bool = True,
     overwrite: bool | None = None,
 ) -> CorrelatedGaussianNoiseCalibration:
-    """Build correlated-noise calibration from persisted preparation products.
+    """Estimate the sky correlation from persisted preparation products.
+
+    The estimator and its constants are fixed by AD-047; the configuration
+    selects none of them.
 
     Parameters
     ----------
     config : str, pathlib.Path, or dict
         BayMorph configuration or resolved configuration.
-    marginal_tile_size : int
-        Tile size used for the smooth marginal-scale calibration.
-    marginal_min_coverage : float
-        Minimum valid sky fraction for marginal-scale tiles.
-    correlation_tile_size : int
-        Fully valid tile size used for correlation calibration.
-    correlation_stride : int
-        Stride between correlation-calibration tiles.
-    max_lag : int
-        Maximum retained correlation lag.
-    spectrum_grid_size : int, default=512
-        Fourier verification grid for the finite correlation kernel.
     save : bool, default=True
         Persist the calibration in the image-preparation output directory.
     overwrite : bool, optional
@@ -84,10 +71,13 @@ def build_correlated_noise_calibration(
     Returns
     -------
     CorrelatedGaussianNoiseCalibration
-        Calibrated fixed noise model.
+        The fixed sky correlation of the observation.
     """
     resolved = _resolve_config(
         config
+    )
+    reject_correlated_noise_calibration_settings(
+        resolved
     )
 
     products = (
@@ -101,27 +91,9 @@ def build_correlated_noise_calibration(
             "Correlated-noise calibration requires a persisted sky region."
         )
 
-    calibration = (
-        calibrate_correlated_gaussian_noise(
-            products.cutout,
-            products.sky_region.mask,
-            marginal_tile_size=(
-                marginal_tile_size
-            ),
-            marginal_min_coverage=(
-                marginal_min_coverage
-            ),
-            correlation_tile_size=(
-                correlation_tile_size
-            ),
-            correlation_stride=(
-                correlation_stride
-            ),
-            max_lag=max_lag,
-            spectrum_grid_size=(
-                spectrum_grid_size
-            ),
-        )
+    calibration = calibrate_correlated_gaussian_noise(
+        products.cutout,
+        products.sky_region.mask,
     )
 
     metadata = dict(
@@ -146,43 +118,15 @@ def build_correlated_noise_calibration(
                     products
                 )
             ),
-            "calibration_settings": {
-                "marginal_tile_size": int(
-                    marginal_tile_size
-                ),
-                "marginal_min_coverage": float(
-                    marginal_min_coverage
-                ),
-                "correlation_tile_size": int(
-                    correlation_tile_size
-                ),
-                "correlation_stride": int(
-                    correlation_stride
-                ),
-                "max_lag": int(max_lag),
-                "spectrum_grid_size": int(
-                    spectrum_grid_size
-                ),
-            },
-            "correlation_taper": (
-                "separable_bartlett"
-            ),
             "generator_identity": (
                 _correlated_noise_calibration_generator_identity()
             ),
         }
     )
 
-    calibration = (
-        CorrelatedGaussianNoiseCalibration(
-            marginal_sigma=(
-                calibration.marginal_sigma
-            ),
-            correlation_kernel=(
-                calibration.correlation_kernel
-            ),
-            metadata=metadata,
-        )
+    calibration = CorrelatedGaussianNoiseCalibration(
+        correlation_kernel=calibration.correlation_kernel,
+        metadata=metadata,
     )
 
     if save:
@@ -244,9 +188,6 @@ def save_correlated_noise_calibration(
 
     np.savez_compressed(
         output_path,
-        marginal_sigma=(
-            calibration.marginal_sigma
-        ),
         correlation_kernel=(
             calibration.correlation_kernel
         ),
@@ -263,7 +204,12 @@ def load_correlated_noise_calibration(
         | dict[str, Any]
     ),
 ) -> CorrelatedGaussianNoiseCalibration:
-    """Load a persisted correlated Gaussian noise calibration."""
+    """Load a persisted calibration of the schema of AD-047.
+
+    A calibration of an earlier schema, made with the tapered tile estimator
+    and the smooth marginal field that AD-047 retired, is rejected; it is
+    never converted or overwritten.
+    """
     if isinstance(
         path_or_config,
         dict,
@@ -296,12 +242,29 @@ def load_correlated_noise_calibration(
         path,
         allow_pickle=False,
     ) as payload:
-        marginal_sigma = np.asarray(
-            payload[
-                "marginal_sigma"
-            ],
-            dtype=float,
+        names = set(payload.files)
+        metadata = json.loads(
+            str(
+                payload[
+                    "metadata_json"
+                ].item()
+            )
         )
+        schema_version = metadata.get(
+            "schema_version"
+        )
+
+        if (
+            schema_version != CALIBRATION_SCHEMA_VERSION
+            or names != {"correlation_kernel", "metadata_json"}
+        ):
+            raise ValueError(
+                f"Correlated-noise calibration {path} has schema "
+                f"{schema_version!r}; AD-047 accepts only schema "
+                f"{CALIBRATION_SCHEMA_VERSION}, whose sky correlation is "
+                "estimated on the whole sky region without a taper. Build a "
+                "new calibration in a new output namespace."
+            )
 
         correlation_kernel = np.asarray(
             payload[
@@ -310,18 +273,7 @@ def load_correlated_noise_calibration(
             dtype=float,
         )
 
-        metadata_json = str(
-            payload[
-                "metadata_json"
-            ].item()
-        )
-
-    metadata = json.loads(
-        metadata_json
-    )
-
     return CorrelatedGaussianNoiseCalibration(
-        marginal_sigma=marginal_sigma,
         correlation_kernel=correlation_kernel,
         metadata=metadata,
     )
@@ -340,15 +292,6 @@ def _resolve_config(
     return load_resolved_config(
         config
     )
-
-DEFAULT_CORRELATED_NOISE_SETTINGS = {
-    "marginal_tile_size": 32,
-    "marginal_min_coverage": 0.20,
-    "correlation_tile_size": 48,
-    "correlation_stride": 8,
-    "max_lag": 20,
-    "spectrum_grid_size": 512,
-}
 
 
 def array_sha256(array: np.ndarray) -> str:
@@ -382,79 +325,32 @@ def correlated_noise_source_fingerprints(products) -> dict[str, str]:
     }
 
 
-def correlated_noise_settings_from_config(
+def reject_correlated_noise_calibration_settings(
     config: dict[str, Any],
-) -> dict[str, int | float]:
-    """Resolve fixed correlated-noise calibration settings from config."""
+) -> None:
+    """Reject estimator settings, which AD-047 fixes, in the configuration."""
     likelihood = config.get("fit", {}).get("likelihood", {})
 
-    if not isinstance(likelihood, dict):
-        raise TypeError("fit.likelihood must be a mapping.")
-
-    calibration = likelihood.get("calibration", {})
-    if calibration is None:
-        calibration = {}
-
-    if not isinstance(calibration, dict):
-        raise TypeError(
-            "fit.likelihood.calibration must be a mapping."
-        )
-
-    values = {
-        key: calibration.get(key, default)
-        for key, default in DEFAULT_CORRELATED_NOISE_SETTINGS.items()
-    }
-
-    settings: dict[str, int | float] = {
-        "marginal_tile_size": int(values["marginal_tile_size"]),
-        "marginal_min_coverage": float(
-            values["marginal_min_coverage"]
-        ),
-        "correlation_tile_size": int(
-            values["correlation_tile_size"]
-        ),
-        "correlation_stride": int(values["correlation_stride"]),
-        "max_lag": int(values["max_lag"]),
-        "spectrum_grid_size": int(values["spectrum_grid_size"]),
-    }
-
-    max_lag = int(settings["max_lag"])
-
-    if int(settings["marginal_tile_size"]) < 2:
+    if isinstance(likelihood, dict) and "calibration" in likelihood:
         raise ValueError(
-            "marginal_tile_size must be at least two."
+            "fit.likelihood.calibration is no longer accepted: AD-047 fixes "
+            "the sky-correlation estimator (the whole sky region, one plane "
+            "removed, no taper, lags up to 8). Remove the block."
         )
-
-    if not 0.0 < float(
-        settings["marginal_min_coverage"]
-    ) <= 1.0:
-        raise ValueError(
-            "marginal_min_coverage must lie in (0, 1]."
-        )
-
-    if max_lag < 1:
-        raise ValueError("max_lag must be at least one.")
-
-    if int(settings["correlation_tile_size"]) <= 2 * max_lag:
-        raise ValueError(
-            "correlation_tile_size must exceed twice max_lag."
-        )
-
-    if int(settings["correlation_stride"]) < 1:
-        raise ValueError(
-            "correlation_stride must be at least one."
-        )
-
-    return settings
 
 
 def validate_correlated_noise_calibration_sources(
     calibration: CorrelatedGaussianNoiseCalibration,
     products,
-    *,
-    settings: dict[str, int | float] | None = None,
 ) -> None:
     """Reject calibration metadata stale for current prepared inputs."""
+    if calibration.metadata.get(
+        "schema_version"
+    ) != CALIBRATION_SCHEMA_VERSION:
+        raise ValueError(
+            "Correlated-noise calibration does not have the schema of AD-047."
+        )
+
     expected_sources = correlated_noise_source_fingerprints(
         products
     )
@@ -478,16 +374,6 @@ def validate_correlated_noise_calibration_sources(
             "match the current implementation and numerical runtime."
         )
 
-    if settings is not None:
-        recorded = calibration.metadata.get(
-            "calibration_settings"
-        )
-
-        if recorded != dict(settings):
-            raise ValueError(
-                "Correlated-noise calibration settings do not match "
-                "the current resolved configuration."
-            )
 
 def _correlated_noise_calibration_generator_identity(
 ) -> dict[str, Any]:
@@ -524,9 +410,7 @@ def _correlated_noise_calibration_generator_identity(
         ).hexdigest()
 
     return {
-        "algorithm": (
-            "empirical_stationary_srs_v1"
-        ),
+        "algorithm": CORRELATION_ESTIMATOR,
         "pipeline_source_sha256": file_sha256(
             __file__
         ),

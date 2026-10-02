@@ -1583,26 +1583,58 @@ def test_runner_fit_builds_required_correlated_noise_calibration(
         "fit",
     ]
 
-    calibration_kwargs = calls[0][2]
+    # AD-047 fixes the estimator: the runner passes no estimator settings.
+    assert calls[0][2] == {
+        "save": True,
+        "overwrite": False,
+    }
 
-    assert calibration_kwargs[
-        "marginal_tile_size"
-    ] == 32
-    assert calibration_kwargs[
-        "marginal_min_coverage"
-    ] == pytest.approx(0.20)
-    assert calibration_kwargs[
-        "correlation_tile_size"
-    ] == 48
-    assert calibration_kwargs[
-        "correlation_stride"
-    ] == 8
-    assert calibration_kwargs[
-        "max_lag"
-    ] == 20
-    assert calibration_kwargs[
-        "spectrum_grid_size"
-    ] == 512
+
+def test_runner_fit_rejects_estimator_settings_before_any_artifact(
+    monkeypatch,
+    tmp_path,
+):
+    """A calibration block is rejected before a calibration is built."""
+    config = make_runner_config()
+
+    config["fit"] = {
+        "likelihood": {
+            "type": "correlated_gaussian",
+            "include_normalization": False,
+            "calibration": {
+                "max_lag": 20,
+            },
+        },
+    }
+
+    runner = BayMorphRunner(
+        config,
+        verbose=False,
+    )
+
+    monkeypatch.setattr(
+        "baymorph.runner.correlated_noise_calibration_path",
+        lambda config: tmp_path / "correlated_gaussian_noise.npz",
+    )
+
+    calls = []
+
+    monkeypatch.setattr(
+        "baymorph.runner.build_correlated_noise_calibration",
+        lambda config, **kwargs: calls.append("calibrate"),
+    )
+    monkeypatch.setattr(
+        "baymorph.runner.run_real_fit",
+        lambda config: calls.append("fit"),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="AD-047",
+    ):
+        runner.fit()
+
+    assert calls == []
 
 
 def test_runner_multi_observation_fit_builds_noise_artifacts(
@@ -1623,9 +1655,6 @@ def test_runner_multi_observation_fit_builds_noise_artifacts(
                 "likelihood": {
                     "type": "correlated_gaussian",
                     "include_normalization": True,
-                    "calibration": {
-                        "max_lag": 5,
-                    },
                     "factorization": {
                         "type": "nearest_neighbor",
                         "max_neighbors": 64,
@@ -1737,6 +1766,9 @@ def test_runner_multi_observation_fit_builds_noise_artifacts(
     ]
 
     assert events[0][1] == "galaxy_g"
-    assert events[0][2]["max_lag"] == 5
+    assert events[0][2] == {
+        "save": True,
+        "overwrite": False,
+    }
     assert events[1][1] == "galaxy_g"
     assert events[1][2]["max_neighbors"] == 64

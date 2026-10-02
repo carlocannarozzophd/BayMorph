@@ -91,7 +91,7 @@ residuals and in the reduced chi-square, not in the posterior widths.
   and a correlated sky, the production noise model reports intervals up to
   three times too narrow
   ([noise-model bench](../research/NOISE_MODEL_BENCH_2026-10-01.md));
-  AD-047, accepted and not yet implemented, addresses it.
+  AD-047, accepted and being implemented, addresses it.
 - **Real data.** No real-data fit is validated yet. The completed r-band fit
   of the production target is a demonstration of the workflow.
 

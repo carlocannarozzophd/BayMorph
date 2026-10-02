@@ -184,9 +184,11 @@ def _make_correlated_gaussian_likelihood(
     vecchia_factorization: VecchiaFactorization | None,
 ) -> ImageLikelihood:
     """Construct a correlated Gaussian image likelihood."""
-    calibration = config.pop("calibration", None)
-    if calibration is not None and not isinstance(calibration, Mapping):
-        raise TypeError("correlated_gaussian calibration must be a mapping.")
+    if "calibration" in config:
+        raise ValueError(
+            "correlated_gaussian no longer accepts calibration options: "
+            "AD-047 fixes the sky-correlation estimator."
+        )
     config.pop("correlation_logdet_fingerprint", None)
 
     gaussian_noise = config.pop(

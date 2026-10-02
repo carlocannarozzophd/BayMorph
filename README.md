@@ -39,7 +39,7 @@
 > BayMorph is under active scientific development. The observation model of
 > the real-data path is being revised where the first real fit measured
 > defects: the effective-PSF rendering of AD-046 is implemented, and the new
-> noise model of AD-047 is accepted but not yet implemented. No real-data fit
+> noise model of AD-047 is accepted and being implemented. No real-data fit
 > has yet been validated scientifically. The order of the remaining work is
 > in the [roadmap](ROADMAP.md).
 
@@ -86,7 +86,7 @@ observations, or survey-level population inference.
 | Morphology models | Single Sérsic, two labelled Sérsic components, bulge and disc, Sérsic plus point source |
 | Rendering | Detector-pixel integration, and effective-PSF rendering of empirical PSFs with sub-pixel kernels (AD-046) |
 | PSF | Analytic Gaussian PSFs; empirical PSFs built from the stars of the image, with sub-pixel kernels and extended wings (AD-046) |
-| Likelihoods | Normalized Gaussian likelihood with the prepared noise scale in both workflows; within-observation correlated Gaussian likelihood in the multi-observation workflow only. The noise model of the single path excludes the source Poisson variance and the correlation of the sky, which AD-047, accepted and not yet implemented, adds |
+| Likelihoods | Normalized Gaussian likelihood with the prepared noise scale in both workflows; within-observation correlated Gaussian likelihood in the multi-observation workflow only. The noise model of the single path excludes the source Poisson variance and the correlation of the sky, which AD-047, accepted and being implemented, adds |
 | Inference | Backend-neutral inference problems with Nautilus (default), Dynesty (static and dynamic nested sampling) and pocoMC |
 | Results | Weighted posterior samples, Bayesian evidence, diagnostics and provenance in a backend-neutral `InferenceResult` |
 | Multi-observation inference | One joint workflow with explicit coupling across observations (shared, independent, hierarchical, wavelength-dependent) and conditionally factorized likelihoods |

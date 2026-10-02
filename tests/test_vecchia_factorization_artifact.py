@@ -57,13 +57,10 @@ def artifact_environment(tmp_path, monkeypatch):
             ),
         )
         calibration = SimpleNamespace(
-            marginal_sigma=np.full(
-                shape,
-                1.7,
-            ),
             correlation_kernel=_kernel(),
             metadata={
-                "correlation_taper": "separable_bartlett",
+                "estimator": artifacts.CORRELATION_ESTIMATOR,
+                "max_lag": 1,
                 "generator_identity": {
                     "name": "test-calibration",
                     "version": 1,
@@ -100,13 +97,12 @@ def artifact_environment(tmp_path, monkeypatch):
         "load_correlated_noise_calibration",
         lambda path: calibrations[Path(path)],
     )
+    # A kernel to lag 1 keeps the artifact tests small; production kernels
+    # reach the lag of AD-047.
     monkeypatch.setattr(
         artifacts,
-        "correlated_noise_settings_from_config",
-        lambda config: {
-            "correlation_tile_size": 5,
-            "max_lag": 1,
-        },
+        "CORRELATION_MAX_LAG",
+        1,
     )
     monkeypatch.setattr(
         artifacts,
@@ -523,3 +519,49 @@ def test_settings_and_path_bypasses_are_rejected(
     )
 
     assert manifest["max_neighbors"] == 64
+
+
+def test_manifest_binds_the_sky_correlation_of_ad047(
+    artifact_environment,
+):
+    """The artifact records its schema and the estimator of its kernel."""
+    config, _ = artifact_environment(
+        "schema"
+    )
+
+    artifacts.build_vecchia_factorization_artifact(
+        config
+    )
+    manifest = artifacts.load_vecchia_factorization_manifest(
+        config
+    )
+
+    assert manifest["schema_version"] == 2
+    assert (
+        manifest["source_binding"]["correlation_estimator"]
+        == artifacts.CORRELATION_ESTIMATOR
+    )
+    assert "marginal_sigma_sha256" not in manifest["source_binding"]
+
+
+def test_calibration_of_another_estimator_is_rejected(
+    artifact_environment,
+):
+    """A kernel not estimated as AD-047 prescribes cannot be factorized."""
+    config, _ = artifact_environment(
+        "estimator"
+    )
+    calibration = artifacts.load_correlated_noise_calibration(
+        artifacts.correlated_noise_calibration_path(
+            config
+        )
+    )
+    calibration.metadata["estimator"] = "tapered_tiles"
+
+    with pytest.raises(
+        ValueError,
+        match="AD-047",
+    ):
+        artifacts.build_vecchia_factorization_artifact(
+            config
+        )

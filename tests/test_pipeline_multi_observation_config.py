@@ -1236,3 +1236,22 @@ def test_observation_config_resolution_accepts_covariates(
         tmp_path / "g.yaml",
         tmp_path / "r.yaml",
     ]
+
+
+def test_joint_likelihood_rejects_estimator_settings():
+    """AD-047 fixes the sky-correlation estimator of every observation."""
+    config = _multi_observation_config()
+    config["fit"]["likelihood"] = {
+        "type": "correlated_gaussian",
+        "calibration": {
+            "max_lag": 20,
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="AD-047",
+    ):
+        resolve_multi_observation_observation_configs(
+            config,
+        )

@@ -40,15 +40,9 @@ def _image_products(
     )
 
 
-def _calibration(
-    marginal_sigma,
-):
-    """Return a deterministic correlated-noise calibration."""
+def _calibration():
+    """Return a deterministic sky-correlation calibration of AD-047."""
     return SimpleNamespace(
-        marginal_sigma=np.asarray(
-            marginal_sigma,
-            dtype=float,
-        ),
         correlation_kernel=np.array(
             [
                 [0.0, 0.1, 0.0],
@@ -57,14 +51,10 @@ def _calibration(
             ]
         ),
         metadata={
-            "schema_version": 1,
+            "schema_version": 2,
             "factorization": "C = S R S",
-            "correlation_model": (
-                "empirical_stationary_2d"
-            ),
-            "marginal_model": (
-                "quadratic_log_sigma"
-            ),
+            "correlation_model": "stationary_sky_autocovariance",
+            "estimator": "masked_sky_autocovariance_v1",
             "max_lag": 1,
         },
     )
@@ -104,128 +94,92 @@ def test_independent_gaussian_reuses_prepared_noise():
     )
 
 
-def test_correlated_gaussian_uses_full_prepared_scale(
-    monkeypatch,
-):
-    """Correlated state must use the calibration on the prepared footprint."""
-    marginal_sigma = np.arange(
-        12,
-        dtype=float,
-    ).reshape(
-        3,
-        4,
-    ) + 1.0
+def _correlated_config(**likelihood):
+    """Return the configuration of an unnormalized correlated likelihood."""
+    return {
+        "fit": {
+            "likelihood": {
+                "type": "correlated_gaussian",
+                "include_normalization": False,
+                **likelihood,
+            },
+        },
+    }
 
-    calibration = _calibration(
-        marginal_sigma
-    )
 
+def _install_calibration(monkeypatch, calibration):
+    """Serve ``calibration`` as the persisted, source-validated product."""
     monkeypatch.setattr(
         "baymorph.pipeline.likelihood_state."
         "load_correlated_noise_calibration",
         lambda config: calibration,
     )
-
     monkeypatch.setattr(
         "baymorph.pipeline.likelihood_state."
         "correlated_noise_calibration_path",
-        lambda config: (
-            "correlated_gaussian_noise.npz"
-        ),
+        lambda config: "correlated_gaussian_noise.npz",
     )
-
     monkeypatch.setattr(
         "baymorph.pipeline.likelihood_state."
         "validate_correlated_noise_calibration_sources",
         lambda *args, **kwargs: None,
     )
 
-    config = {
-        "fit": {
-            "likelihood": {
-                "type": (
-                    "correlated_gaussian"
-                ),
-                "include_normalization": False,
-            },
-        },
-    }
+
+def test_correlated_gaussian_uses_the_prepared_noise_map(
+    monkeypatch,
+):
+    """AD-047 takes the marginal scale from the prepared noise map."""
+    noise = np.arange(12, dtype=float).reshape(3, 4) + 1.0
+    calibration = _calibration()
+    _install_calibration(monkeypatch, calibration)
 
     state = prepare_real_fit_likelihood_state(
-        config,
-        _image_products(),
+        _correlated_config(),
+        _image_products(noise=noise),
     )
 
-    np.testing.assert_array_equal(
-        state.noise,
-        marginal_sigma,
-    )
-
+    np.testing.assert_array_equal(state.noise, noise)
     np.testing.assert_array_equal(
         state.correlation_kernel,
         calibration.correlation_kernel,
     )
-
+    assert state.metadata["marginal_model"] == "prepared_sky_scale"
     assert (
-        state.metadata[
-            "fit_statistic"
-        ]
-        == "mahalanobis_chi2"
+        state.metadata["correlation_estimator"]
+        == "masked_sky_autocovariance_v1"
     )
-
-    assert (
-        state.metadata[
-            "residual_diagnostic"
-        ]
-        == "marginal_standardized"
-    )
-
-    assert (
-        state.metadata[
-            "normalization_complete"
-        ]
-        is False
-    )
+    assert state.metadata["calibration_schema_version"] == 2
+    assert state.metadata["fit_statistic"] == "mahalanobis_chi2"
+    assert state.metadata["residual_diagnostic"] == "marginal_standardized"
+    assert state.metadata["normalization_complete"] is False
 
 
-def test_correlated_gaussian_rejects_calibration_shape_mismatch(
+def test_correlated_gaussian_rejects_a_noise_map_of_another_footprint(
     monkeypatch,
 ):
-    """Calibration and prepared observation must have identical footprints."""
-    monkeypatch.setattr(
-        "baymorph.pipeline.likelihood_state."
-        "load_correlated_noise_calibration",
-        lambda config: _calibration(
-            np.ones(
-                (2, 2),
-                dtype=float,
-            )
-        ),
-    )
-
-    monkeypatch.setattr(
-        "baymorph.pipeline.likelihood_state."
-        "validate_correlated_noise_calibration_sources",
-        lambda *args, **kwargs: None,
-    )
-
-    config = {
-        "fit": {
-            "likelihood": {
-                "type": (
-                    "correlated_gaussian"
-                ),
-                "include_normalization": False,
-            },
-        },
-    }
+    """The prepared noise map must cover the prepared observation."""
+    _install_calibration(monkeypatch, _calibration())
 
     with pytest.raises(
         ValueError,
         match="prepared observation footprint",
     ):
         prepare_real_fit_likelihood_state(
-            config,
+            _correlated_config(),
+            _image_products(noise=np.ones((2, 2))),
+        )
+
+
+def test_correlated_gaussian_rejects_estimator_settings(
+    monkeypatch,
+):
+    """AD-047 fixes the estimator, so the configuration cannot set it."""
+    _install_calibration(monkeypatch, _calibration())
+
+    with pytest.raises(ValueError, match="AD-047"):
+        prepare_real_fit_likelihood_state(
+            _correlated_config(calibration={"max_lag": 20}),
             _image_products(),
         )
 

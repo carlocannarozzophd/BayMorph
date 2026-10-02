@@ -117,7 +117,7 @@ section, and a `method` under `preparation.background` or
 | Type | Options | Note |
 | --- | --- | --- |
 | `gaussian` | `include_normalization` (default `true`) | Independent pixels with the prepared noise scale. |
-| `correlated_gaussian` | `include_normalization`, `factorization` (`type: nearest_neighbor`, `max_neighbors` 64 or 96), `calibration` | Correlated noise through a nearest-neighbour factorization; a single-observation fit cannot yet use it (finding A1 of the deep audit), and its noise calibration is revised by AD-047, accepted and not yet implemented. |
+| `correlated_gaussian` | `include_normalization`, `factorization` (`type: nearest_neighbor`, `max_neighbors` 64 or 96) | Correlated noise of AD-047 through a nearest-neighbour factorization: the prepared sky scale and the stationary sky correlation, estimated on the whole sky region with one plane removed, no taper and lags up to 8. The estimator is fixed, so `calibration` options are rejected. A single-observation fit cannot yet use it (finding A1 of the deep audit), and the source variance of AD-047 is not yet implemented. |
 | `cash` | `include_data_term`, `require_integer_data`, `integer_tolerance` | Poisson likelihood of images in counts. |
 | `poisson_gaussian` | `read_noise`, `tail_probability`, `minimum_terms`, `maximum_terms` | Marginalized Poisson-Gaussian likelihood of images in counts. |
 
