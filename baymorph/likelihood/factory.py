@@ -379,7 +379,7 @@ def _make_vecchia_correlated_gaussian_likelihood(
 
     max_neighbors = options.pop(
         "max_neighbors",
-        64,
+        24,
     )
     min_conditional_variance = options.pop(
         "min_conditional_variance",

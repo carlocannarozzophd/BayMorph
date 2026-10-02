@@ -7,6 +7,15 @@ from pathlib import Path
 import yaml
 
 from baymorph import BayMorphRunner
+from baymorph.pipeline.likelihood_state import (
+    prepare_real_fit_likelihood_state,
+)
+from baymorph.pipeline.noise_calibration import (
+    build_correlated_noise_calibration,
+)
+from baymorph.pipeline.vecchia_factorization import (
+    ensure_vecchia_factorization_artifact,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -97,7 +106,11 @@ def test_simulated_template_passes_image_preparation(
     tmp_path,
     monkeypatch,
 ) -> None:
-    """The shipped simulated field must satisfy the preparation contracts."""
+    """The shipped simulated field must satisfy the preparation contracts.
+
+    Its sky must also satisfy the sky-correlation estimator of AD-047, so
+    that the shipped example can be fitted with the noise model of AD-047.
+    """
     config_directory = tmp_path / "configs"
     config_directory.mkdir()
     config_file = config_directory / "simulated_galaxy.yaml"
@@ -121,6 +134,22 @@ def test_simulated_template_passes_image_preparation(
     assert prepared.prepared_data.shape == tuple(
         runner.config["simulation"]["shape"]
     )
+
+    build_correlated_noise_calibration(
+        runner.config,
+        save=True,
+    )
+    ensure_vecchia_factorization_artifact(
+        runner.config,
+    )
+    state = prepare_real_fit_likelihood_state(
+        runner.config,
+        prepared,
+    )
+
+    assert state.effective_gain.value is None
+    assert state.metadata["vecchia_max_neighbors"] == 24
+    assert state.metadata["normalization_complete"] is True
 
 
 def test_runner_anchors_standard_project_configuration(

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from baymorph.simulation.observation import (
     SyntheticObservation,
     make_observation,
@@ -19,6 +22,26 @@ _REQUIRED_SERSIC_PARAMETERS = (
     "x0",
     "y0",
 )
+
+
+def simulated_effective_gain(
+    noise_metadata: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Return the effective-gain declaration of a simulation (AD-047).
+
+    The simulations count photo-electrons with a gain of one, so their
+    Poisson noise has the source variance of a declared gain of one; without
+    Poisson noise the source variance is absent.
+    """
+    if bool(noise_metadata.get("poisson_noise", True)):
+        return {
+            "source": "declared",
+            "gain": 1.0,
+        }
+
+    return {
+        "source": "absent",
+    }
 
 
 def build_synthetic_observation(

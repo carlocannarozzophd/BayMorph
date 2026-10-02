@@ -518,7 +518,7 @@ def test_settings_and_path_bypasses_are_rejected(
         )
     )
 
-    assert manifest["max_neighbors"] == 64
+    assert manifest["max_neighbors"] == 24
 
 
 def test_manifest_binds_the_sky_correlation_of_ad047(

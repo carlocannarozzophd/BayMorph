@@ -15,8 +15,24 @@ from baymorph.core.observation import (
     resolve_seeing_fwhm_pixels,
 )
 from baymorph.fitting.execution import resolve_sampler_execution
+from baymorph.likelihood.factory import normalize_likelihood_type
 
 REQUIRED_TOP_LEVEL_KEYS = ("object", "data", "outputs")
+
+LIKELIHOOD_DEFAULTS = {
+    # AD-047: the noise model of every fit run from a configuration. Its
+    # factorization is fixed; the effective gain has no default and every
+    # configuration declares it.
+    "correlated_gaussian": {
+        "type": "correlated_gaussian",
+        "include_normalization": True,
+        "factorization": {
+            "type": "nearest_neighbor",
+            "max_neighbors": 24,
+        },
+    },
+}
+"""Defaults of each likelihood type, applied only to a block of that type."""
 
 SAMPLER_DEFAULTS = {
     "pocomc": {
@@ -116,9 +132,9 @@ DEFAULT_CONFIG = {
     },
     "fit": {
         "models": ["single_sersic"],
-        "likelihood": {
-            "type": "gaussian",
-        },
+        "likelihood": deepcopy(
+            LIKELIHOOD_DEFAULTS["correlated_gaussian"]
+        ),
         "sampler": {
             "name": "nautilus",
         },
@@ -1194,6 +1210,36 @@ def validate_fit_priors(
             )
 
 
+def resolve_likelihood_config(likelihood: Any) -> Any:
+    """Return a likelihood block completed with the defaults of its type.
+
+    The defaults of a type apply only to a block of that type, so a block of
+    another type keeps exactly its own options. A missing block takes the
+    defaults of the correlated Gaussian likelihood of AD-047.
+    """
+    if likelihood is None:
+        return deepcopy(LIKELIHOOD_DEFAULTS["correlated_gaussian"])
+
+    if isinstance(likelihood, str):
+        likelihood = {"type": likelihood}
+
+    if not isinstance(likelihood, dict):
+        return deepcopy(likelihood)
+
+    likelihood_type = normalize_likelihood_type(
+        str(likelihood.get("type", "correlated_gaussian"))
+    )
+    defaults = LIKELIHOOD_DEFAULTS.get(likelihood_type)
+
+    if defaults is None:
+        return deepcopy(likelihood)
+
+    return deep_update(
+        deepcopy(defaults),
+        deepcopy(likelihood),
+    )
+
+
 def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
     """Merge a user configuration with BayMorph defaults.
 
@@ -1242,6 +1288,7 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
         )
 
     config_without_sampler = deepcopy(config)
+    user_likelihood = None
 
     if "fit" in config_without_sampler:
         config_without_sampler["fit"] = dict(
@@ -1251,10 +1298,17 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
             "sampler",
             None,
         )
+        user_likelihood = config_without_sampler["fit"].pop(
+            "likelihood",
+            None,
+        )
 
     resolved = deep_update(
         deepcopy(DEFAULT_CONFIG),
         config_without_sampler,
+    )
+    resolved["fit"]["likelihood"] = resolve_likelihood_config(
+        user_likelihood
     )
 
     resolved["fit"]["sampler"] = deep_update(

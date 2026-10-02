@@ -8,7 +8,10 @@ from typing import Any
 
 import yaml
 
-from baymorph.validation.simulation import build_synthetic_observation
+from baymorph.validation.simulation import (
+    build_synthetic_observation,
+    simulated_effective_gain,
+)
 from baymorph.validation.truth import GroundTruth
 
 
@@ -167,6 +170,12 @@ class ValidationWorkspace:
             },
             "fit": {
                 "models": list(models),
+                "likelihood": {
+                    "type": "correlated_gaussian",
+                    "effective_gain": simulated_effective_gain(
+                        truth.noise_metadata
+                    ),
+                },
                 "sampler": sampler_config,
                 "comparison": {
                     "enabled": len(models) > 1,

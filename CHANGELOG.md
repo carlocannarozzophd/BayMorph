@@ -11,6 +11,9 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* An end-to-end test of the noise model of AD-047 through the runner, on a
+  simulated image (`tests/test_noise_model_workflow.py`, about a minute,
+  excluded from `scripts/test_fast.sh`).
 * The source Poisson variance of AD-047, milestone 2 of its plan: with an
   effective gain `g`, the nearest-neighbour correlated Gaussian likelihood
   computes the scale `sqrt(s^2 + max(m, 0) / g)` at every evaluation from
@@ -230,6 +233,19 @@ and the project follows Semantic Versioning in spirit.
 
 ### Changed
 
+* Every fit run from a configuration uses the noise model of AD-047,
+  milestone 3 of its plan. The single path passes the nearest-neighbour
+  factorization to its likelihood, which closes finding A1 of the deep audit;
+  the residual diagnostics of both paths are standardized by the scale of the
+  model and report the conditional quadratic form. A configuration without a
+  likelihood takes the correlated Gaussian with 24 neighbours, the only order
+  accepted for fits, and declares no gain, so the fit asks for one.
+  `baymorph config` writes `effective_gain: {source: measured_sky}` only when
+  the sky of the image passes the guard of AD-047, and says so otherwise.
+* The packaged simulated example is 201 x 201 px, which halves the scatter of
+  its sky correlation, and declares the source variance absent; the tutorial
+  notebooks, with their packaged copies, and the validation workspaces
+  declare the gain of their images.
 * Image likelihoods take an optional `source`, the source part of the model
   without the residual background, which only a likelihood whose covariance
   depends on it (`requires_source`) uses; `BackgroundAppliedModel` renders
@@ -327,6 +343,8 @@ and the project follows Semantic Versioning in spirit.
 
 ### Removed
 
+* The independent Gaussian likelihood for fits run from a configuration,
+  rejected by AD-047; it remains in the library for simulations and tests.
 * `fit.likelihood.calibration` and its estimator settings, rejected now that
   AD-047 fixes the estimator, and the unused `package_correlation` helper of
   the noise-model bench, which called the retired estimator.

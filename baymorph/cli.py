@@ -228,7 +228,7 @@ def _command_config(
         args
     )
 
-    make_config_from_fits(
+    config = make_config_from_fits(
         fits_path,
         target_position=target_position,
         output_path=output_path,
@@ -250,6 +250,14 @@ def _command_config(
         "BayMorph configuration written to:\n"
         f"{output_path.resolve()}"
     )
+
+    if "effective_gain" not in config["fit"].get("likelihood", {}):
+        print(
+            "The sky of the image is below ten times its scale, so it cannot "
+            "give the effective gain of AD-047. Declare "
+            "fit.likelihood.effective_gain (declared, sky_level or absent) "
+            "before running the fit."
+        )
 
     return 0
 

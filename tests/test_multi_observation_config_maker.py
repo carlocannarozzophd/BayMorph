@@ -712,8 +712,8 @@ def test_multi_observation_config_resolves_likelihood_per_observation(
         "include_normalization": False,
     }
     observation_override = {
-        "type": "gaussian",
-        "include_normalization": True,
+        "type": "cash",
+        "include_data_term": True,
     }
 
     output_dir = tmp_path / "configs"
@@ -744,5 +744,12 @@ def test_multi_observation_config_resolves_likelihood_per_observation(
         base_dir=output_dir,
     )
 
-    assert resolved["g"]["fit"]["likelihood"] == global_likelihood
+    # A correlated block takes the fixed factorization of AD-047.
+    assert resolved["g"]["fit"]["likelihood"] == {
+        **global_likelihood,
+        "factorization": {
+            "type": "nearest_neighbor",
+            "max_neighbors": 24,
+        },
+    }
     assert resolved["r"]["fit"]["likelihood"] == observation_override

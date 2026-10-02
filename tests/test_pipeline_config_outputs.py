@@ -818,8 +818,8 @@ def test_resolve_runtime_config_resolves_psf_candidate_auto_sizes(
     ) == expected
 
 
-def test_resolve_config_default_likelihood_omits_normalization_default():
-    """The generic merge must not inject a Gaussian-only option."""
+def test_resolve_config_default_likelihood_is_the_noise_model_of_ad047():
+    """A configuration without a likelihood takes the model of AD-047."""
     config = {
         "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
@@ -828,7 +828,14 @@ def test_resolve_config_default_likelihood_omits_normalization_default():
 
     resolved = resolve_config(config)
 
-    assert resolved["fit"]["likelihood"] == {"type": "gaussian"}
+    assert resolved["fit"]["likelihood"] == {
+        "type": "correlated_gaussian",
+        "include_normalization": True,
+        "factorization": {
+            "type": "nearest_neighbor",
+            "max_neighbors": 24,
+        },
+    }
 
 
 @pytest.mark.parametrize(
@@ -851,15 +858,18 @@ def test_resolve_config_does_not_force_normalization_on_other_likelihoods(
     assert "include_normalization" not in resolved["fit"]["likelihood"]
 
 
-def test_resolve_config_gaussian_likelihood_builds_from_make_likelihood():
-    """The default Gaussian type must still normalize by default downstream."""
+def test_resolve_config_gaussian_likelihood_keeps_only_its_options():
+    """The defaults of AD-047 apply only to a correlated block."""
     config = {
         "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": "outputs"},
+        "fit": {"likelihood": {"type": "gaussian"}},
     }
 
     resolved = resolve_config(config)
+
+    assert resolved["fit"]["likelihood"] == {"type": "gaussian"}
 
     likelihood = make_likelihood(
         resolved["fit"]["likelihood"],
@@ -896,23 +906,29 @@ def test_resolve_config_non_gaussian_likelihood_builds_from_make_likelihood(
     assert likelihood is not None
 
 
-def test_resolve_config_correlated_gaussian_likelihood_defaults_unnormalized():
-    """The resolved config must preserve the correlated-Gaussian default."""
+def test_resolve_config_correlated_gaussian_takes_the_defaults_of_ad047():
+    """A correlated block keeps its own keys over the defaults of AD-047."""
     config = {
         "object": {"name": "example_galaxy"},
         "data": {"image_path": "data/image.fits"},
         "outputs": {"root": "outputs"},
-        "fit": {"likelihood": {"type": "correlated_gaussian"}},
+        "fit": {
+            "likelihood": {
+                "type": "correlated_gaussian",
+                "effective_gain": {"source": "measured_sky"},
+            },
+        },
     }
 
     resolved = resolve_config(config)
+    expected = {
+        "type": "correlated_gaussian",
+        "include_normalization": True,
+        "factorization": {
+            "type": "nearest_neighbor",
+            "max_neighbors": 24,
+        },
+    }
+    expected["effective_gain"] = {"source": "measured_sky"}
 
-    likelihood = make_likelihood(
-        resolved["fit"]["likelihood"],
-        data=np.zeros((3, 3)),
-        noise=1.0,
-        correlation_kernel=np.ones((1, 1)),
-        correlation_logdet=0.0,
-    )
-
-    assert likelihood.include_normalization is False
+    assert resolved["fit"]["likelihood"] == expected

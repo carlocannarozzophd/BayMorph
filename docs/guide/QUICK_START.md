@@ -8,9 +8,8 @@ listed in [Command-Line Interface](CLI.md), and every configuration key in
 !!! warning "Status of the real-data path"
 
     The observation model of the real-data path is under revision. The
-    effective-PSF rendering of AD-046 is implemented; the noise model of
-    AD-047 is accepted and being implemented. No real-data fit has yet been
-    validated scientifically. The current priority is stated in the
+    effective-PSF rendering of AD-046 and the noise model of AD-047 are
+    implemented. No real-data fit has yet been validated scientifically. The current priority is stated in the
     [roadmap](https://github.com/carlocannarozzophd/BayMorph/blob/main/ROADMAP.md).
 
 ## Create a workspace
@@ -30,9 +29,12 @@ directories. It is a convenience: BayMorph also runs in any directory.
 baymorph run configs/simulated_galaxy.yaml
 ```
 
-The example simulates a 121 x 121 px image of one Sérsic galaxy with a
-Gaussian PSF and Gaussian noise, prepares it, fits a single Sérsic model with
-Nautilus and writes the diagnostics. Its products are written under
+The example simulates a 201 x 201 px image of one Sérsic galaxy with a
+Gaussian PSF and white Gaussian noise, prepares it, estimates the correlation
+of its sky and the nearest-neighbour factorization of the noise model of
+AD-047, fits a single Sérsic model with Nautilus and writes the diagnostics.
+Its noise has no Poisson term from the source, so the configuration declares
+the source variance absent. Its products are written under
 `runs/simulated_galaxy/`; [Preparation and Products](PREPARATION_AND_PRODUCTS.md)
 describes them.
 

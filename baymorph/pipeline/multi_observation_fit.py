@@ -46,6 +46,7 @@ from baymorph.pipeline.checkpoint_signing import (
     runtime_psf_checkpoint_signature as _runtime_psf_checkpoint_signature,
     write_json_atomic as _write_json_atomic,
 )
+from baymorph.pipeline.config import resolve_likelihood_config
 from baymorph.pipeline.image_preparation import (
     load_image_preparation_products,
 )
@@ -650,12 +651,10 @@ def _build_multi_observation_context(
             observation_name
         ]
 
-        global_likelihood_config = fit_config.get(
-            "likelihood",
-            {
-                "type": "gaussian",
-                "include_normalization": True,
-            },
+        global_likelihood_config = resolve_likelihood_config(
+            fit_config.get(
+                "likelihood"
+            )
         )
 
         observation_fit_config = observation_config.get(
@@ -765,7 +764,7 @@ def _build_multi_observation_fit_products(
         dtype=float,
     )
 
-    model_images = problem.render_models(
+    model_images, source_images = problem.render_predictions(
         best_sample
     )
 
@@ -818,6 +817,9 @@ def _build_multi_observation_fit_products(
             mask=products.fitting_mask,
             n_parameters=0,
             likelihood=context.likelihoods[
+                observation_name
+            ],
+            source_image=source_images[
                 observation_name
             ],
         )

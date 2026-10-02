@@ -157,8 +157,10 @@ def _config():
             "models": [
                 "single_sersic",
             ],
+            # A complete likelihood without a calibration keeps these tests on
+            # the joint mechanics; the noise model of AD-047 has its own tests.
             "likelihood": {
-                "type": "gaussian",
+                "type": "poisson_gaussian",
             },
             "sampler": {
                 "name": "dynesty",
@@ -983,6 +985,10 @@ def test_multi_observation_products_use_likelihood_consistent_statistics():
         render_models=lambda sample: {
             "g": model_image,
         },
+        render_predictions=lambda sample: (
+            {"g": model_image},
+            {"g": model_image},
+        ),
         routed_parameters=lambda sample: {
             "g": {
                 "flux": float(

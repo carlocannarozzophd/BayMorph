@@ -7,6 +7,25 @@ import pytest
 from baymorph import BayMorphRunner
 
 
+@pytest.fixture(autouse=True)
+def _noise_artifacts(monkeypatch, tmp_path):
+    """Keep the noise artifacts of AD-047 out of tests about other steps.
+
+    Tests about those artifacts patch the same names again.
+    """
+    monkeypatch.setattr(
+        "baymorph.runner.correlated_noise_calibration_path",
+        lambda config: tmp_path / "absent_calibration.npz",
+    )
+    monkeypatch.setattr(
+        "baymorph.runner.build_correlated_noise_calibration",
+        lambda config, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "baymorph.runner.ensure_vecchia_factorization_artifact",
+        lambda config, **kwargs: None,
+    )
+
 
 def make_runner_config(
     *,
@@ -55,7 +74,7 @@ def test_runner_resolves_default_configuration():
     )
 
     assert runner.config["fit"]["sampler"]["name"] == "nautilus"
-    assert runner.config["fit"]["likelihood"]["type"] == "gaussian"
+    assert runner.config["fit"]["likelihood"]["type"] == "correlated_gaussian"
     assert runner.config["diagnostics"]["corner"] is True
 
 
@@ -1518,7 +1537,9 @@ def test_runner_fit_builds_required_correlated_noise_calibration(
     config["fit"] = {
         "likelihood": {
             "type": "correlated_gaussian",
-            "include_normalization": False,
+            "effective_gain": {
+                "source": "absent",
+            },
         },
     }
 
@@ -1555,6 +1576,16 @@ def test_runner_fit_builds_required_correlated_noise_calibration(
         "baymorph.runner.build_correlated_noise_calibration",
         fake_build,
     )
+    monkeypatch.setattr(
+        "baymorph.runner.ensure_vecchia_factorization_artifact",
+        lambda config, **kwargs: calls.append(
+            (
+                "factorize",
+                config,
+                kwargs,
+            )
+        ),
+    )
 
     expected = object()
 
@@ -1580,8 +1611,12 @@ def test_runner_fit_builds_required_correlated_noise_calibration(
         for call in calls
     ] == [
         "calibrate",
+        "factorize",
         "fit",
     ]
+
+    # AD-047 fixes 24 nearest neighbours for every fit.
+    assert calls[1][2]["max_neighbors"] == 24
 
     # AD-047 fixes the estimator: the runner passes no estimator settings.
     assert calls[0][2] == {

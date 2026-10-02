@@ -25,6 +25,9 @@ from baymorph.likelihood import (
     CorrelatedGaussianImageLikelihood,
     make_likelihood,
 )
+from baymorph.likelihood.vecchia_gaussian import (
+    VecchiaCorrelatedGaussianImageLikelihood,
+)
 from baymorph.models import get_model
 from baymorph.observation.background import background_parameter_names
 from baymorph.pipeline.checkpoint_signing import (
@@ -584,6 +587,7 @@ def _execute_single_model_fit(
         noise_fit=likelihood_state.noise,
         mask_fit=image_products.fitting_mask,
         correlation_kernel_fit=likelihood_state.correlation_kernel,
+        vecchia_factorization=likelihood_state.vecchia_factorization,
         effective_gain=likelihood_state.effective_gain,
     )
 
@@ -612,11 +616,13 @@ def _execute_single_model_fit(
         progress_label=model_name,
     )
 
-    best_model_image, best_parameters = _compute_best_model(
-        result=result,
-        parameter_names=parameter_names,
-        model_factory=model_factory,
-        image_shape=image_products.prepared_data.shape,
+    best_model_image, best_parameters, best_source_image = (
+        _compute_best_model(
+            result=result,
+            parameter_names=parameter_names,
+            model_factory=model_factory,
+            image_shape=image_products.prepared_data.shape,
+        )
     )
 
     stats = _compute_fit_statistics(
@@ -628,6 +634,7 @@ def _execute_single_model_fit(
             parameter_names
         ),
         likelihood=problem.likelihood,
+        source_image=best_source_image,
     )
 
     return RealFitProducts(
@@ -1349,7 +1356,11 @@ def _compute_best_model(
     model_factory,
     image_shape,
 ):
-    """Render the best-fit model image from a posterior result."""
+    """Render the best-fit model image and its source part (AD-047).
+
+    The source part excludes the residual background; a model without one is
+    its own source part.
+    """
     best_parameters = {
         name: result.best_parameters[
             name
@@ -1361,13 +1372,26 @@ def _compute_best_model(
         **best_parameters,
     )
 
-    best_model_image = best_model.render(
-        image_shape,
+    render_prediction = getattr(
+        best_model,
+        "render_prediction",
+        None,
     )
+
+    if callable(render_prediction):
+        best_model_image, best_source_image = render_prediction(
+            image_shape,
+        )
+    else:
+        best_model_image = best_model.render(
+            image_shape,
+        )
+        best_source_image = best_model_image
 
     return (
         best_model_image,
         best_parameters,
+        best_source_image,
     )
 
 
@@ -1378,14 +1402,41 @@ def _compute_fit_statistics(
     mask,
     n_parameters: int,
     likelihood=None,
+    source_image=None,
 ):
-    """Compute residuals and likelihood-consistent fit statistics."""
+    """Compute residuals and likelihood-consistent fit statistics.
+
+    Under the nearest-neighbour likelihood of AD-047 the residuals are
+    standardized by the scale of the model, which depends on its source part
+    ``source_image``, and the statistic is the conditional quadratic form.
+    """
     residual = (
         data
         - model_image
     )
 
     if isinstance(
+        likelihood,
+        VecchiaCorrelatedGaussianImageLikelihood,
+    ):
+        norm_residual = (
+            likelihood.marginal_standardized_residual(
+                model_image,
+                source_image,
+            )
+        )
+
+        chi2 = float(
+            likelihood.quadratic_form(
+                model_image,
+                source_image,
+            )
+        )
+
+        n_valid = int(
+            likelihood.n_valid_pixels
+        )
+    elif isinstance(
         likelihood,
         CorrelatedGaussianImageLikelihood,
     ):
@@ -1626,6 +1677,7 @@ def _build_image_inference_problem(
     noise_fit,
     mask_fit,
     correlation_kernel_fit=None,
+    vecchia_factorization=None,
     effective_gain=None,
 ):
     """Build one backend-neutral image inference problem."""
@@ -1635,6 +1687,7 @@ def _build_image_inference_problem(
         noise=noise_fit,
         mask=mask_fit,
         correlation_kernel=correlation_kernel_fit,
+        vecchia_factorization=vecchia_factorization,
         effective_gain=effective_gain,
     )
 

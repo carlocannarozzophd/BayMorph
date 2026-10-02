@@ -296,6 +296,14 @@ class MultiObservationValidationWorkspace:
                     "models": [
                         truth.model_name
                     ],
+                    # The simulated noise is white and Gaussian, so the
+                    # source variance of AD-047 is absent.
+                    "likelihood": {
+                        "type": "correlated_gaussian",
+                        "effective_gain": {
+                            "source": "absent",
+                        },
+                    },
                 },
             }
 

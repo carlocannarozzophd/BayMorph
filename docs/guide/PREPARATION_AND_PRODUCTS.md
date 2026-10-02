@@ -63,13 +63,11 @@ Limitations, all explicit:
 - the correction assumes that the surviving core is Gaussian;
 - only a linear gradient is removed, so higher-order sky structure is
   counted as noise;
-- the noise of the production path is one constant sky scale with
-  independent pixels: it excludes the Poisson variance of the source, the
-  correlation of the sky and any external variance map. Their effect on the
-  intervals was measured by the
-  [noise-model bench](../research/NOISE_MODEL_BENCH_2026-10-01.md), and
-  [AD-047](../research/NOISE_MODEL_PROPOSAL_2026-10-02.md), accepted and
-  being implemented, replaces this model.
+- the prepared sky scale is the marginal scale of the noise model of
+  [AD-047](../research/NOISE_MODEL_PROPOSAL_2026-10-02.md), which adds the
+  Poisson variance of the source, with a declared effective gain, and the
+  correlation of the sky, estimated on the sky region after preparation; an
+  external variance map is not yet supported.
 
 `baymorph.stats.truncated_gaussian_sigma` and `truncated_variance_ratio`
 expose the correction. The separate `estimate_noise_map` serves only the

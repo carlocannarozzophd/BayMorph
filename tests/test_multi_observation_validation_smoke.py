@@ -13,6 +13,12 @@ from baymorph.pipeline.image_preparation import (
 from baymorph.pipeline.multi_observation_fit import (
     build_multi_observation_problem_from_config,
 )
+from baymorph.pipeline.noise_calibration import (
+    build_correlated_noise_calibration,
+)
+from baymorph.pipeline.vecchia_factorization import (
+    ensure_vecchia_factorization_artifact,
+)
 from baymorph.validation import (
     MultiObservationGroundTruth,
     MultiObservationValidationWorkspace,
@@ -36,8 +42,10 @@ def _truth() -> MultiObservationGroundTruth:
             "background_level__r": 0.0,
         },
         observations={
+            # Large enough for the sky correlation of AD-047, which needs
+            # 1000 sky pixel pairs at every lag up to 16.
             "g": ObservationTruth(
-                image_shape=(61, 61),
+                image_shape=(121, 121),
                 pixel_scale=0.20,
                 psf_metadata={
                     "fwhm_pixels": 2.0,
@@ -48,15 +56,15 @@ def _truth() -> MultiObservationGroundTruth:
                 metadata={
                     "rotation_deg": 0.0,
                     "crpix": (
-                        31.0,
-                        31.0,
+                        61.0,
+                        61.0,
                     ),
                     "seed": 11,
                     "raw_background": 100.0,
                 },
             ),
             "r": ObservationTruth(
-                image_shape=(47, 73),
+                image_shape=(95, 147),
                 pixel_scale=0.35,
                 psf_metadata={
                     "fwhm_pixels": 2.8,
@@ -67,8 +75,8 @@ def _truth() -> MultiObservationGroundTruth:
                 metadata={
                     "rotation_deg": 32.0,
                     "crpix": (
-                        38.0,
-                        24.0,
+                        74.0,
+                        48.0,
                     ),
                     "seed": 22,
                     "raw_background": 100.0,
@@ -96,6 +104,14 @@ def _prepare_observations(
         prepare_real_image_from_config(
             config_path,
             save=True,
+        )
+        # The noise artifacts of AD-047, which `baymorph run` builds.
+        build_correlated_noise_calibration(
+            config_path,
+            save=True,
+        )
+        ensure_vecchia_factorization_artifact(
+            config_path,
         )
 
 

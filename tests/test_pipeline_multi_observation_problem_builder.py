@@ -83,6 +83,9 @@ def test_build_multi_observation_problem_does_not_run_sampler(
             "models": [
                 "single_sersic",
             ],
+            "likelihood": {
+                "type": "poisson_gaussian",
+            },
             "multi_observation": {
                 "parameter_frame": "detector",
             },

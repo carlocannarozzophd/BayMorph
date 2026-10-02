@@ -11,8 +11,11 @@ from numbers import Real
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import yaml
+from astropy.stats import sigma_clipped_stats
 
+from baymorph.core.effective_gain import SKY_LEVEL_GUARD
 from baymorph.core.observation import (
     Observation,
     resolve_seeing_fwhm_pixels,
@@ -163,6 +166,43 @@ def _normalize_target_position(
         "x": x,
         "y": y,
     }
+
+
+def image_sky_gives_the_gain(
+    image: np.ndarray,
+) -> bool:
+    """Return whether the sky of an image may give the effective gain.
+
+    The sky level and scale are the median and the standard deviation of the
+    image after iterative three-sigma clipping. AD-047 lets a sky give the
+    gain only when its level is at least ``SKY_LEVEL_GUARD`` times its scale;
+    the fit repeats the test with the level and scale of the preparation.
+    """
+    values = np.asarray(
+        image,
+        dtype=float,
+    )
+    finite = values[
+        np.isfinite(
+            values
+        )
+    ]
+
+    if finite.size < 2:
+        return False
+
+    _, level, scale = sigma_clipped_stats(
+        finite,
+        sigma=3.0,
+        maxiters=10,
+    )
+
+    return bool(
+        np.isfinite(level)
+        and np.isfinite(scale)
+        and scale > 0.0
+        and level >= SKY_LEVEL_GUARD * scale
+    )
 
 
 def _cutout_config(
@@ -720,6 +760,16 @@ def make_config_from_fits(
         fit_config["likelihood"] = deepcopy(
             dict(likelihood)
         )
+    elif image_sky_gives_the_gain(observation.image.data):
+        # AD-047: the measured sky is written only when the image passes the
+        # guard; otherwise the gain stays undeclared and the fit refuses to
+        # start until it is declared.
+        fit_config["likelihood"] = {
+            "type": "correlated_gaussian",
+            "effective_gain": {
+                "source": "measured_sky",
+            },
+        }
 
     normalized_background = _normalize_background_config(
         background
@@ -1319,8 +1369,9 @@ def make_multi_observation_config(
         )
 
     if likelihood is None:
+        # Each observation declares its own effective gain (AD-047).
         likelihood_config = {
-            "type": "gaussian",
+            "type": "correlated_gaussian",
             "include_normalization": True,
         }
 

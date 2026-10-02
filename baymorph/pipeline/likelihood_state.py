@@ -13,6 +13,7 @@ from baymorph.core.effective_gain import (
     resolve_effective_gain,
 )
 from baymorph.likelihood.factory import normalize_likelihood_type
+from baymorph.pipeline.config import resolve_likelihood_config
 from baymorph.likelihood.vecchia_gaussian import (
     VecchiaFactorization,
 )
@@ -23,6 +24,7 @@ from baymorph.pipeline.noise_calibration import (
     validate_correlated_noise_calibration_sources,
 )
 from baymorph.pipeline.vecchia_factorization import (
+    PRODUCTION_VECCHIA_NEIGHBORS,
     load_vecchia_factorization_artifact,
     load_vecchia_factorization_manifest,
     vecchia_factorization_manifest_path,
@@ -113,19 +115,13 @@ def prepare_real_fit_likelihood_state(
         Fixed noise and correlation inputs required by the configured
         likelihood.
     """
-    likelihood_cfg = config[
-        "fit"
-    ].get(
-        "likelihood",
-        {
-            "type": "gaussian",
-        },
+    likelihood_cfg = resolve_likelihood_config(
+        config[
+            "fit"
+        ].get(
+            "likelihood"
+        )
     )
-
-    if likelihood_cfg is None:
-        likelihood_cfg = {
-            "type": "gaussian",
-        }
 
     if isinstance(
         likelihood_cfg,
@@ -158,6 +154,15 @@ def prepare_real_fit_likelihood_state(
         raise ValueError(
             "Real-image inference does not accept fit.likelihood.noise. "
             "The persisted prepared-noise product is authoritative."
+        )
+
+    if likelihood_type == "gaussian":
+        raise ValueError(
+            "AD-047 rejects the independent Gaussian likelihood for every fit "
+            "run from a configuration, because its intervals are too narrow "
+            "on real images. Use type 'correlated_gaussian' with "
+            "factorization.type 'nearest_neighbor' and a declared "
+            "effective_gain."
         )
 
     if (
@@ -210,8 +215,15 @@ def prepare_real_fit_likelihood_state(
     factorization_config = likelihood_options.get(
         "factorization"
     )
-    max_neighbors = 64
+    max_neighbors = PRODUCTION_VECCHIA_NEIGHBORS
     min_conditional_variance = 1.0e-12
+
+    if factorization_config is None:
+        raise ValueError(
+            "The correlated Gaussian likelihood of AD-047 is evaluated "
+            "through the nearest-neighbour factorization: set "
+            "fit.likelihood.factorization.type to 'nearest_neighbor'."
+        )
 
     if factorization_config is not None:
         if not isinstance(
@@ -240,8 +252,15 @@ def prepare_real_fit_likelihood_state(
 
         max_neighbors = factorization_options.pop(
             "max_neighbors",
-            64,
+            PRODUCTION_VECCHIA_NEIGHBORS,
         )
+
+        if max_neighbors != PRODUCTION_VECCHIA_NEIGHBORS:
+            raise ValueError(
+                f"AD-047 fixes {PRODUCTION_VECCHIA_NEIGHBORS} nearest "
+                "neighbours for fits; a higher order may be built only to "
+                "check the approximation outside a fit."
+            )
         min_conditional_variance = factorization_options.pop(
             "min_conditional_variance",
             1.0e-12,

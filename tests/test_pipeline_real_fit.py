@@ -322,7 +322,7 @@ def test_compute_best_model_uses_best_parameters():
     def model_factory(a, b):
         return DummyModel(a, b)
 
-    image, best_parameters = _compute_best_model(
+    image, best_parameters, source = _compute_best_model(
         result=DummyResult(),
         parameter_names=["a", "b"],
         model_factory=model_factory,
@@ -335,6 +335,8 @@ def test_compute_best_model_uses_best_parameters():
         "b": 3.0,
     }
     assert np.all(image == 5.0)
+    # A model without a residual background is its own source part.
+    assert source is image
 
 
 def test_compute_fit_statistics_uses_unmasked_valid_pixels():
@@ -670,8 +672,10 @@ def _run_two_model_fit_for_comparison_test(
                 "double_sersic",
             ],
             "priors": {},
+            # A complete likelihood without a calibration keeps the test on
+            # the comparison; the noise model of AD-047 has its own tests.
             "likelihood": {
-                "type": "gaussian",
+                "type": "poisson_gaussian",
             },
             "sampler": {},
             "comparison": {

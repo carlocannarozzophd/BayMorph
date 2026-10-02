@@ -18,6 +18,7 @@ from baymorph.pipeline.config import (
     load_config,
     load_resolved_config,
     resolve_config,
+    resolve_likelihood_config,
 )
 from baymorph.pipeline.image_preparation import (
     image_preparation_is_complete,
@@ -809,14 +810,16 @@ class BayMorphRunner:
         observation_name: str | None = None,
     ) -> None:
         """Build or validate immutable correlated-noise fit artifacts."""
-        likelihood_config = config["fit"].get(
-            "likelihood",
-            {"type": "gaussian"},
+        likelihood_config = resolve_likelihood_config(
+            config["fit"].get("likelihood")
         )
         if isinstance(likelihood_config, str):
             likelihood_type = likelihood_config
         elif isinstance(likelihood_config, Mapping):
-            likelihood_type = likelihood_config.get("type", "gaussian")
+            likelihood_type = likelihood_config.get(
+                "type",
+                "correlated_gaussian",
+            )
         else:
             raise TypeError(
                 "fit.likelihood must be a string or mapping."

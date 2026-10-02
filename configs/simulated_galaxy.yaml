@@ -4,11 +4,11 @@ object:
 data:
   image_path: runs/simulated_galaxy/input/simulated_galaxy.fits
   target_position:
-    x: 60
-    y: 60
+    x: 100
+    y: 100
   cutout:
     mode: fixed
-    size: 121
+    size: 201
 
 outputs:
   root: runs
@@ -19,8 +19,9 @@ diagnostics:
     single_sersic: "Simulated single-Sérsic observation"
 
 simulation:
-  # The field must contain the sky plateau plus the preparation sky margin.
-  shape: [121, 121]
+  # The field must contain the sky plateau plus the preparation sky margin,
+  # and enough sky for a stable sky correlation (AD-047).
+  shape: [201, 201]
   seed: 42
 
   truth:
@@ -29,8 +30,8 @@ simulation:
     n: 2.0
     q: 0.75
     theta_deg: 25.0
-    x0: 60.0
-    y0: 60.0
+    x0: 100.0
+    y0: 100.0
 
   psf:
     type: gaussian
@@ -50,9 +51,13 @@ fit:
   models:
     - single_sersic
 
+  # The noise model of AD-047. The simulated noise is white, without Poisson
+  # noise from the source, so the source variance is absent.
   likelihood:
-    type: gaussian
+    type: correlated_gaussian
     include_normalization: true
+    effective_gain:
+      source: absent
 
   sampler:
     name: nautilus

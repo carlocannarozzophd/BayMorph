@@ -21,6 +21,7 @@ python -m pytest -q \
     --ignore=tests/test_bulge_disk_ring_recovery.py \
     --ignore=tests/test_bulge_disk_spiral_recovery.py \
     --ignore=tests/test_empirical_psf_builder_benchmark.py \
+    --ignore=tests/test_noise_model_workflow.py \
     -k "not test_dynesty_generic_fit_runs \
         and not test_gaussian_mixture_reference_is_valid \
         and not test_normal_marginal_prior_is_preserved \

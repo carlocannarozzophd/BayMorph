@@ -60,8 +60,8 @@ def _calibration():
     )
 
 
-def test_independent_gaussian_reuses_prepared_noise():
-    """Independent Gaussian state must preserve the prepared noise map."""
+def test_independent_gaussian_is_rejected_for_configuration_fits():
+    """AD-047 rejects the independent Gaussian for configuration fits."""
     config = {
         "fit": {
             "likelihood": {
@@ -70,37 +70,16 @@ def test_independent_gaussian_reuses_prepared_noise():
         },
     }
 
-    products = _image_products()
-
-    state = prepare_real_fit_likelihood_state(
-        config,
-        products,
-    )
-
-    assert state.likelihood_type == "gaussian"
-
-    np.testing.assert_array_equal(
-        state.noise,
-        products.noise,
-    )
-
-    assert state.correlation_kernel is None
-
-    assert (
-        state.metadata[
-            "normalization_complete"
-        ]
-        is True
-    )
+    with pytest.raises(ValueError, match="rejects the independent Gaussian"):
+        prepare_real_fit_likelihood_state(config, _image_products())
 
 
 def _correlated_config(**likelihood):
-    """Return the configuration of an unnormalized correlated likelihood."""
+    """Return the configuration of a correlated likelihood of AD-047."""
     return {
         "fit": {
             "likelihood": {
                 "type": "correlated_gaussian",
-                "include_normalization": False,
                 "effective_gain": {"source": "absent"},
                 **likelihood,
             },
@@ -109,7 +88,7 @@ def _correlated_config(**likelihood):
 
 
 def _install_calibration(monkeypatch, calibration):
-    """Serve ``calibration`` as the persisted, source-validated product."""
+    """Serve ``calibration`` and its factorization as validated products."""
     monkeypatch.setattr(
         "baymorph.pipeline.likelihood_state."
         "load_correlated_noise_calibration",
@@ -124,6 +103,33 @@ def _install_calibration(monkeypatch, calibration):
         "baymorph.pipeline.likelihood_state."
         "validate_correlated_noise_calibration_sources",
         lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.likelihood_state."
+        "load_vecchia_factorization_artifact",
+        lambda config, **kwargs: SimpleNamespace(
+            correlation_logdet=-0.5,
+            max_neighbors=kwargs["max_neighbors"],
+        ),
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.likelihood_state."
+        "load_vecchia_factorization_manifest",
+        lambda config, **kwargs: {
+            "payload_sha256": "0" * 64,
+            "schema": "baymorph.vecchia_factorization",
+            "schema_version": 2,
+            "algorithm": "nearest_neighbor_conditional_gaussian",
+        },
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.likelihood_state.vecchia_factorization_path",
+        lambda config, **kwargs: "m24",
+    )
+    monkeypatch.setattr(
+        "baymorph.pipeline.likelihood_state."
+        "vecchia_factorization_manifest_path",
+        lambda config, **kwargs: "m24/manifest.json",
     )
 
 
@@ -151,9 +157,13 @@ def test_correlated_gaussian_uses_the_prepared_noise_map(
         == "masked_sky_autocovariance_v1"
     )
     assert state.metadata["calibration_schema_version"] == 2
-    assert state.metadata["fit_statistic"] == "mahalanobis_chi2"
+    assert (
+        state.metadata["fit_statistic"]
+        == "nearest_neighbor_innovation_quadratic"
+    )
     assert state.metadata["residual_diagnostic"] == "marginal_standardized"
-    assert state.metadata["normalization_complete"] is False
+    assert state.metadata["vecchia_max_neighbors"] == 24
+    assert state.metadata["normalization_complete"] is True
 
 
 def test_correlated_gaussian_rejects_a_noise_map_of_another_footprint(
@@ -224,12 +234,12 @@ def test_correlated_gaussian_takes_the_gain_from_the_measured_sky(
         prepare_real_fit_likelihood_state(config, products)
 
 
-def test_independent_gaussian_rejects_an_effective_gain():
+def test_a_likelihood_in_counts_rejects_an_effective_gain():
     """Only the correlated Gaussian of AD-047 models the source variance."""
     config = {
         "fit": {
             "likelihood": {
-                "type": "gaussian",
+                "type": "cash",
                 "effective_gain": {"source": "absent"},
             },
         },
@@ -282,35 +292,52 @@ def test_correlated_gaussian_requires_persisted_calibration(
         )
 
 
-def test_correlated_gaussian_rejects_incomplete_absolute_normalization():
-    """Absolute normalization must not be claimed without log|R_V|."""
-    config = {
-        "fit": {
-            "likelihood": {
-                "type": (
-                    "correlated_gaussian"
-                ),
-                "include_normalization": True,
-            },
-        },
-    }
+def test_correlated_gaussian_takes_the_fixed_factorization_by_default(
+    monkeypatch,
+):
+    """AD-047 fixes the nearest-neighbour factorization with 24 neighbours."""
+    _install_calibration(monkeypatch, _calibration())
 
-    with pytest.raises(
-        ValueError,
-        match="factorization.type='nearest_neighbor'",
-    ):
+    state = prepare_real_fit_likelihood_state(
+        _correlated_config(),
+        _image_products(),
+    )
+
+    assert state.metadata["vecchia_max_neighbors"] == 24
+    assert state.metadata["evidence_scope"] == "approximate_absolute"
+
+
+def test_a_factorization_of_another_order_is_rejected(
+    monkeypatch,
+):
+    """Higher orders serve only to check the approximation outside a fit."""
+    _install_calibration(monkeypatch, _calibration())
+
+    with pytest.raises(ValueError, match="fixes 24 nearest"):
         prepare_real_fit_likelihood_state(
-            config,
+            _correlated_config(
+                factorization={"type": "nearest_neighbor", "max_neighbors": 64}
+            ),
             _image_products(),
         )
 
+
+def test_a_correlated_likelihood_without_factorization_is_rejected(
+    monkeypatch,
+):
+    """The exact correlated likelihood is not normalized and not allowed."""
+    _install_calibration(monkeypatch, _calibration())
+
+    with pytest.raises(ValueError, match="'nearest_neighbor'"):
+        prepare_real_fit_likelihood_state(
+            _correlated_config(factorization=None),
+            _image_products(),
+        )
 
 
 @pytest.mark.parametrize(
     ("likelihood", "complete"),
     [
-        ({"type": "gaussian"}, True),
-        ({"type": "gaussian", "include_normalization": False}, False),
         ({"type": "cash"}, False),
         ({"type": "cash", "include_data_term": True}, True),
         ({"type": "poisson_gaussian"}, True),
@@ -335,8 +362,7 @@ def test_evidence_gate_rejects_incomplete_observation():
         {
             "fit": {
                 "likelihood": {
-                    "type": "gaussian",
-                    "include_normalization": False,
+                    "type": "cash",
                 },
             },
         },
@@ -351,8 +377,7 @@ def test_evidence_gate_rejects_incomplete_observation():
 
 
 _UNNORMALIZED_LIKELIHOOD = {
-    "type": "gaussian",
-    "include_normalization": False,
+    "type": "cash",
 }
 
 _REGISTERED_BACKENDS = (

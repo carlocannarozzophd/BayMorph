@@ -88,10 +88,11 @@ residuals and in the reduced chi-square, not in the posterior widths.
   (`validation/repeated_noise_recovery/`). Its summary is not yet recorded in
   a research note.
 - **Noise model.** On simulated coadds whose noise has a source Poisson term
-  and a correlated sky, the production noise model reports intervals up to
-  three times too narrow
-  ([noise-model bench](../research/NOISE_MODEL_BENCH_2026-10-01.md));
-  AD-047, accepted and being implemented, addresses it.
+  and a correlated sky, the independent-pixel noise model reported intervals
+  up to three times too narrow
+  ([noise-model bench](../research/NOISE_MODEL_BENCH_2026-10-01.md)); the
+  noise model of AD-047, which every fit now uses, brings the ratio of the
+  true to the reported width to between 0.90 and 1.16 on the bench.
 - **Real data.** No real-data fit is validated yet. The completed r-band fit
   of the production target is a demonstration of the workflow.
 

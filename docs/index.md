@@ -17,9 +17,9 @@ reproducible workflows.
 
     BayMorph is under active scientific development. The observation model
     of the real-data path is being revised where the first real fit measured
-    defects: the effective-PSF rendering of AD-046 is implemented, and the
-    new noise model of AD-047 is accepted and being implemented. No
-    real-data fit has yet been validated scientifically. The order of the
+    defects: the effective-PSF rendering of AD-046 and the noise model of
+    AD-047 are implemented. No real-data fit has yet been validated
+    scientifically. The order of the
     remaining work is stated in the
     [roadmap](https://github.com/carlocannarozzophd/BayMorph/blob/main/ROADMAP.md).
 

@@ -104,7 +104,10 @@ section, and a `method` under `preparation.background` or
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `fit.models` | list | `[single_sersic]` | Registered morphology models to fit, each in its own fit directory. |
-| `fit.likelihood.type` | string | `gaussian` | Image likelihood; see below. |
+| `fit.likelihood.type` | string | `correlated_gaussian` | Image likelihood; see below. |
+| `fit.likelihood.include_normalization` | boolean | `true` | Normalize the correlated Gaussian likelihood, which every fit requires. |
+| `fit.likelihood.factorization.type` | string | `nearest_neighbor` | Factorization of the sky correlation (AD-047). |
+| `fit.likelihood.factorization.max_neighbors` | integer | `24` | Neighbours of the factorization; AD-047 fixes 24 for fits. |
 | `fit.sampler.name` | `nautilus`, `dynesty`, `pocomc` | `nautilus` | Inference backend. |
 | `fit.comparison.enabled` | boolean | `false` | Compare models by Bayes factor; requires `fit.models` to be exactly `single_sersic` and `double_sersic`. |
 | `fit.comparison.metric` | string | `bayes_factor` | Comparison metric. |
@@ -116,8 +119,8 @@ section, and a `method` under `preparation.background` or
 
 | Type | Options | Note |
 | --- | --- | --- |
-| `gaussian` | `include_normalization` (default `true`) | Independent pixels with the prepared noise scale. |
-| `correlated_gaussian` | `include_normalization`, `factorization` (`type: nearest_neighbor`, `max_neighbors` 64 or 96), `effective_gain` (required) | Correlated noise of AD-047 through a nearest-neighbour factorization: the variance of each pixel is the prepared sky scale squared plus the source part of the model over the effective gain, and the stationary sky correlation is estimated on the whole sky region with one plane removed, no taper and lags up to 8. The estimator is fixed, so `calibration` options are rejected. A single-observation fit cannot yet use it (finding A1 of the deep audit). |
+| `correlated_gaussian` | `include_normalization` (default `true`), `factorization` (`type: nearest_neighbor`, `max_neighbors: 24`, the defaults), `effective_gain` (required) | The noise model of AD-047 and the default: the variance of each pixel is the prepared sky scale squared plus the source part of the model over the effective gain, and the stationary sky correlation, estimated on the whole sky region with one plane removed, no taper and lags up to 8, enters through a nearest-neighbour factorization with 24 neighbours. The estimator is fixed, so `calibration` options are rejected. |
+| `gaussian` | `include_normalization` | Independent pixels with the prepared noise scale. Rejected for every fit run from a configuration (AD-047); it remains for simulations and tests through the Python API. |
 | `cash` | `include_data_term`, `require_integer_data`, `integer_tolerance` | Poisson likelihood of images in counts. |
 | `poisson_gaussian` | `read_noise`, `tail_probability`, `minimum_terms`, `maximum_terms` | Marginalized Poisson-Gaussian likelihood of images in counts. |
 
