@@ -11,6 +11,13 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* The record of the validation of the morphology families of AD-048: a
+  status note under AD-046 on two limits of the effective-PSF rendering,
+  compact bright Sérsic components and sharp structure far from the centre;
+  a status note under AD-048 on the validated domain of each model and the
+  decisions to register the models with those limits stated; a section on the
+  generic cell rules in `docs/architecture/RENDERING.md` (§13.2); and the
+  families among the established capabilities of `ROADMAP.md`.
 * The `bulge_disk_spiral` model of AD-048, for single-observation fits: a
   Sérsic bulge and an exponential disc with two logarithmic spiral arms
   (`amplitude_spiral`, `winding_spiral` = cot ψ, `phase_spiral`,
