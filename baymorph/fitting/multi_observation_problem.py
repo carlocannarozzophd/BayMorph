@@ -224,40 +224,126 @@ class MultiObservationInferenceProblem(InferenceProblem):
                 ]
             )
 
-            model_image = np.asarray(
+            rendered[
+                observation
+            ] = self._validated_image(
+                observation,
                 render(
                     shape=expected_shape
                 ),
-                dtype=float,
             )
 
-            if model_image.shape != expected_shape:
-                raise ValueError(
-                    f"Rendered representation for observation "
-                    f"'{observation}' has an incompatible shape."
-                )
-
-            if not np.all(
-                np.isfinite(
-                    model_image
-                )
-            ):
-                raise ValueError(
-                    f"Rendered representation for observation "
-                    f"'{observation}' contains non-finite values."
-                )
-
-            rendered[
-                observation
-            ] = model_image
-
         return rendered
+
+    def render_predictions(
+        self,
+        theta: FloatArray,
+    ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
+        """Render every expected image and its source part (AD-047).
+
+        The source part excludes the residual background; a representation
+        without a residual background is its own source part.
+        """
+        representations = (
+            self.representation_factory.build_all(
+                self.routed_parameters(
+                    theta
+                )
+            )
+        )
+
+        models: dict[str, np.ndarray] = {}
+        sources: dict[str, np.ndarray] = {}
+
+        for observation, representation in representations.items():
+            expected_shape = (
+                self.likelihood.image_shapes[
+                    observation
+                ]
+            )
+            render_prediction = getattr(
+                representation,
+                "render_prediction",
+                None,
+            )
+
+            if callable(render_prediction):
+                model_image, source_image = render_prediction(
+                    shape=expected_shape
+                )
+            else:
+                render = getattr(
+                    representation,
+                    "render",
+                    None,
+                )
+
+                if not callable(render):
+                    raise TypeError(
+                        f"Representation for observation '{observation}' "
+                        "must expose a callable render(shape=...) method."
+                    )
+
+                model_image = render(shape=expected_shape)
+                source_image = model_image
+
+            models[observation] = self._validated_image(
+                observation,
+                model_image,
+            )
+            sources[observation] = self._validated_image(
+                observation,
+                source_image,
+            )
+
+        return models, sources
+
+    def _validated_image(
+        self,
+        observation: str,
+        image,
+    ) -> np.ndarray:
+        """Validate the shape and values of one rendered image."""
+        model_image = np.asarray(
+            image,
+            dtype=float,
+        )
+
+        if model_image.shape != self.likelihood.image_shapes[observation]:
+            raise ValueError(
+                f"Rendered representation for observation "
+                f"'{observation}' has an incompatible shape."
+            )
+
+        if not np.all(
+            np.isfinite(
+                model_image
+            )
+        ):
+            raise ValueError(
+                f"Rendered representation for observation "
+                f"'{observation}' contains non-finite values."
+            )
+
+        return model_image
 
     def log_likelihood(
         self,
         theta: FloatArray,
     ) -> float:
         """Evaluate the joint multi-observation log-likelihood."""
+        if self.likelihood.requires_source:
+            models, sources = self.render_predictions(
+                theta
+            )
+
+            return float(
+                self.likelihood(
+                    models,
+                    source_images=sources,
+                )
+            )
+
         return float(
             self.likelihood(
                 self.render_models(

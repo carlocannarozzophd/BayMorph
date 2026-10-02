@@ -1369,7 +1369,13 @@ def build_vecchia_factorization(
 class VecchiaCorrelatedGaussianImageLikelihood(
     ImageLikelihood
 ):
-    """Normalized fixed-``SRS`` Gaussian likelihood under Vecchia-``m``."""
+    """Normalized ``SRS`` Gaussian likelihood under Vecchia-``m``.
+
+    ``S`` is the fixed marginal scale ``noise``, or, with an
+    ``effective_gain`` ``g``, the scale of AD-047,
+    ``sqrt(noise**2 + max(m, 0) / g)``, computed at every evaluation from the
+    source part ``m`` of the model; ``R`` is factorized once.
+    """
 
     def __init__(
         self,
@@ -1385,6 +1391,7 @@ class VecchiaCorrelatedGaussianImageLikelihood(
         max_neighbors: int = 64,
         min_conditional_variance: float = 1.0e-12,
         include_normalization: bool = True,
+        effective_gain: float | None = None,
     ) -> None:
         super().__init__(
             data=data,
@@ -1395,6 +1402,22 @@ class VecchiaCorrelatedGaussianImageLikelihood(
             raise ValueError(
                 "Vecchia likelihood requires two-dimensional data."
             )
+
+        if effective_gain is not None:
+            if isinstance(effective_gain, bool) or not (
+                np.isfinite(float(effective_gain))
+                and float(effective_gain) > 0.0
+            ):
+                raise ValueError(
+                    "effective_gain must be a positive finite number."
+                )
+
+            if not include_normalization:
+                raise ValueError(
+                    "The source variance of AD-047 makes the log determinant "
+                    "of the covariance depend on the parameters, so its "
+                    "normalization cannot be disabled."
+                )
 
         self.noise_values = (
             self.prepare_fixed_array(
@@ -1474,6 +1497,25 @@ class VecchiaCorrelatedGaussianImageLikelihood(
             copy=False,
         )
 
+        self.effective_gain = (
+            None
+            if effective_gain is None
+            else float(effective_gain)
+        )
+        self.requires_source = self.effective_gain is not None
+        self._sky_variance = np.square(
+            self.noise_values
+        )
+        self._normalization_constant = -0.5 * (
+            (
+                self.n_valid_pixels
+                * np.log(
+                    2.0 * np.pi
+                )
+            )
+            + factorization.correlation_logdet
+        )
+
         if self.include_normalization:
             self._normalization = -0.5 * (
                 (
@@ -1514,11 +1556,45 @@ class VecchiaCorrelatedGaussianImageLikelihood(
             if self.include_normalization
             else "posterior_only"
         )
+        metadata[
+            "effective_gain"
+        ] = self.effective_gain
         return metadata
+
+    def marginal_scale(
+        self,
+        source: np.ndarray | None = None,
+    ) -> np.ndarray:
+        """Return the marginal scale ``S`` in the evaluated pixels.
+
+        Parameters
+        ----------
+        source : array-like, optional
+            Source part of the model, without the residual background;
+            required with an effective gain.
+        """
+        if self.effective_gain is None:
+            return self.noise_values
+
+        if source is None:
+            raise ValueError(
+                "The scale of AD-047 requires the source part of the model."
+            )
+
+        return np.sqrt(
+            self._sky_variance
+            + np.clip(
+                self.prepare_model(source),
+                0.0,
+                None,
+            )
+            / self.effective_gain
+        )
 
     def conditional_innovations(
         self,
         model: np.ndarray,
+        source: np.ndarray | None = None,
     ) -> np.ndarray:
         """Return unscaled conditional innovations."""
         model_values = (
@@ -1527,7 +1603,7 @@ class VecchiaCorrelatedGaussianImageLikelihood(
         standardized = (
             self.data_values
             - model_values
-        ) / self.noise_values
+        ) / self.marginal_scale(source)
         output = self._innovations(
             standardized
         )
@@ -1537,12 +1613,13 @@ class VecchiaCorrelatedGaussianImageLikelihood(
     def marginal_standardized_residual(
         self,
         model: np.ndarray,
+        source: np.ndarray | None = None,
     ) -> np.ndarray:
         """Return ``(data - model) / S`` on-grid, with NaN when masked."""
         standardized = (
             self.data_values
             - self.prepare_model(model)
-        ) / self.noise_values
+        ) / self.marginal_scale(source)
 
         output = np.full(
             self.image_shape,
@@ -1557,11 +1634,13 @@ class VecchiaCorrelatedGaussianImageLikelihood(
     def standardized_conditional_innovations(
         self,
         model: np.ndarray,
+        source: np.ndarray | None = None,
     ) -> np.ndarray:
         """Return conditional innovations divided by their standard deviations."""
         output = (
             self.conditional_innovations(
-                model
+                model,
+                source,
             ).copy()
         )
         output /= np.sqrt(
@@ -1573,10 +1652,12 @@ class VecchiaCorrelatedGaussianImageLikelihood(
     def quadratic_innovations(
         self,
         model: np.ndarray,
+        source: np.ndarray | None = None,
     ) -> np.ndarray:
         """Return per-pixel normalized conditional quadratic terms."""
         output = self._quadratic_terms(
-            self.prepare_model(model)
+            self.prepare_model(model),
+            self.marginal_scale(source),
         )
         output.setflags(write=False)
         return output
@@ -1584,10 +1665,12 @@ class VecchiaCorrelatedGaussianImageLikelihood(
     def quadratic_form(
         self,
         model: np.ndarray,
+        source: np.ndarray | None = None,
     ) -> float:
         """Return the Vecchia conditional quadratic form."""
         return self._quadratic(
-            self.prepare_model(model)
+            self.prepare_model(model),
+            self.marginal_scale(source),
         )
 
     def _innovations(
@@ -1606,11 +1689,12 @@ class VecchiaCorrelatedGaussianImageLikelihood(
     def _quadratic_terms(
         self,
         model_values: np.ndarray,
+        scale: np.ndarray,
     ) -> np.ndarray:
         standardized = (
             self.data_values
             - model_values
-        ) / self.noise_values
+        ) / scale
         innovations = self._innovations(
             standardized
         )
@@ -1636,11 +1720,13 @@ class VecchiaCorrelatedGaussianImageLikelihood(
     def _quadratic(
         self,
         model_values: np.ndarray,
+        scale: np.ndarray,
     ) -> float:
         quadratic = float(
             np.sum(
                 self._quadratic_terms(
-                    model_values
+                    model_values,
+                    scale,
                 ),
                 dtype=np.float64,
             )
@@ -1664,7 +1750,38 @@ class VecchiaCorrelatedGaussianImageLikelihood(
         return float(
             -0.5
             * self._quadratic(
-                model_values
+                model_values,
+                self.noise_values,
             )
             + self._normalization
+        )
+
+    def _log_likelihood_with_source(
+        self,
+        model_values: np.ndarray,
+        source_values: np.ndarray,
+    ) -> float:
+        scale = np.sqrt(
+            self._sky_variance
+            + np.clip(
+                source_values,
+                0.0,
+                None,
+            )
+            / self.effective_gain
+        )
+
+        return float(
+            -0.5
+            * self._quadratic(
+                model_values,
+                scale,
+            )
+            + self._normalization_constant
+            - np.sum(
+                np.log(
+                    scale
+                ),
+                dtype=np.float64,
+            )
         )

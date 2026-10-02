@@ -25,8 +25,14 @@ class ImageLikelihood(ABC):
     Notes
     -----
     Subclasses implement :meth:`_log_likelihood`, which receives the model
-    values corresponding only to the unmasked pixels.
+    values corresponding only to the unmasked pixels. A likelihood whose
+    covariance depends on the source part of the model, without the
+    residual background (AD-047), sets ``requires_source`` and implements
+    :meth:`_log_likelihood_with_source`.
     """
+
+    requires_source: bool = False
+    """Whether evaluation needs the source part of the model (AD-047)."""
 
     def __init__(
         self,
@@ -106,6 +112,7 @@ class ImageLikelihood(ABC):
     def __call__(
         self,
         model: np.ndarray,
+        source: np.ndarray | None = None,
     ) -> float:
         """Evaluate the log-likelihood of a model image.
 
@@ -114,6 +121,9 @@ class ImageLikelihood(ABC):
         model : array-like
             Model image evaluated on the same pixel grid as the observed
             image.
+        source : array-like, optional
+            Source part of the model, without the residual background.
+            Required when ``requires_source`` is true and ignored otherwise.
 
         Returns
         -------
@@ -122,13 +132,28 @@ class ImageLikelihood(ABC):
         """
         model_values = self.prepare_model(model)
 
+        if not self.requires_source:
+            return float(
+                self._log_likelihood(model_values)
+            )
+
+        if source is None:
+            raise ValueError(
+                "This likelihood requires the source part of the model, "
+                "without the residual background (AD-047)."
+            )
+
         return float(
-            self._log_likelihood(model_values)
+            self._log_likelihood_with_source(
+                model_values,
+                self.prepare_model(source),
+            )
         )
 
     def log_likelihood(
         self,
         model: np.ndarray,
+        source: np.ndarray | None = None,
     ) -> float:
         """Evaluate the log-likelihood of a model image.
 
@@ -140,13 +165,38 @@ class ImageLikelihood(ABC):
         model : array-like
             Model image evaluated on the same pixel grid as the observed
             image.
+        source : array-like, optional
+            Source part of the model, without the residual background.
 
         Returns
         -------
         float
             Log-likelihood value.
         """
-        return self(model)
+        return self(model, source=source)
+
+    def _log_likelihood_with_source(
+        self,
+        model_values: np.ndarray,
+        source_values: np.ndarray,
+    ) -> float:
+        """Evaluate a likelihood whose covariance depends on the source.
+
+        Parameters
+        ----------
+        model_values : ndarray
+            Model values, residual background included, in unmasked pixels.
+        source_values : ndarray
+            Source part of the model in the same pixels.
+
+        Returns
+        -------
+        float
+            Log-likelihood value.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not depend on the source."
+        )
 
     @abstractmethod
     def _log_likelihood(

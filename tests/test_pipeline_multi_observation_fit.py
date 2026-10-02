@@ -887,6 +887,7 @@ def test_multi_observation_uses_observation_specific_likelihood_state(
                 else None
             ),
             vecchia_factorization=None,
+            effective_gain=None,
         )
 
     monkeypatch.setattr(

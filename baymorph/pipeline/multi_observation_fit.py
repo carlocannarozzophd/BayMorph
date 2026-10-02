@@ -483,6 +483,11 @@ def _multi_observation_problem_signature(
                         likelihood_state.correlation_kernel
                     )
                 ),
+                "effective_gain": (
+                    None
+                    if likelihood_state.effective_gain is None
+                    else likelihood_state.effective_gain.value
+                ),
             },
         }
 
@@ -695,6 +700,7 @@ def _build_multi_observation_context(
             mask=products.fitting_mask,
             correlation_kernel=likelihood_state.correlation_kernel,
             vecchia_factorization=likelihood_state.vecchia_factorization,
+            effective_gain=likelihood_state.effective_gain,
         )
 
     likelihood = MultiObservationLikelihood(

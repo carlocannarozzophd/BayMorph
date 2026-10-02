@@ -8,6 +8,10 @@ from typing import Any
 
 import numpy as np
 
+from baymorph.core.effective_gain import (
+    EffectiveGain,
+    resolve_effective_gain,
+)
 from baymorph.likelihood.factory import normalize_likelihood_type
 from baymorph.likelihood.vecchia_gaussian import (
     VecchiaFactorization,
@@ -42,6 +46,9 @@ class RealFitLikelihoodState:
         Source-validated nearest-neighbour conditional factorization.
     metadata : dict, optional
         Scientific and numerical provenance of the likelihood state.
+    effective_gain : EffectiveGain, optional
+        Effective gain of the source Poisson variance (AD-047), resolved
+        from the declaration of the configuration.
     """
 
     likelihood_type: str
@@ -49,6 +56,7 @@ class RealFitLikelihoodState:
     correlation_kernel: np.ndarray | None = None
     vecchia_factorization: VecchiaFactorization | None = None
     metadata: dict[str, Any] | None = None
+    effective_gain: EffectiveGain | None = None
 
 
 def require_complete_likelihood_normalization(
@@ -153,6 +161,15 @@ def prepare_real_fit_likelihood_state(
         )
 
     if (
+        likelihood_type != "correlated_gaussian"
+        and "effective_gain" in likelihood_options
+    ):
+        raise ValueError(
+            "fit.likelihood.effective_gain belongs to the correlated "
+            "Gaussian likelihood of AD-047."
+        )
+
+    if (
         likelihood_type
         != "correlated_gaussian"
     ):
@@ -250,6 +267,13 @@ def prepare_real_fit_likelihood_state(
 
     reject_correlated_noise_calibration_settings(
         config
+    )
+
+    effective_gain = _resolve_observation_gain(
+        likelihood_options.get(
+            "effective_gain"
+        ),
+        image_products,
     )
 
     try:
@@ -388,6 +412,11 @@ def prepare_real_fit_likelihood_state(
         ),
         "marginal_model": (
             "prepared_sky_scale"
+            if effective_gain.value is None
+            else "prepared_sky_scale_with_source_variance"
+        ),
+        "effective_gain": (
+            effective_gain.metadata()
         ),
         "max_lag": (
             calibration.metadata.get(
@@ -487,6 +516,47 @@ def prepare_real_fit_likelihood_state(
         correlation_kernel=kernel,
         vecchia_factorization=vecchia_factorization,
         metadata=metadata,
+        effective_gain=effective_gain,
+    )
+
+
+def _resolve_observation_gain(
+    declaration: Any,
+    image_products,
+) -> EffectiveGain:
+    """Resolve the declared effective gain of one observation (AD-047).
+
+    The sky scale is the constant of the prepared noise map, when it is
+    constant, and the measured sky level the background the preparation
+    subtracted.
+    """
+    if declaration is None:
+        raise ValueError(
+            "The correlated Gaussian likelihood requires "
+            "fit.likelihood.effective_gain (AD-047): declare its source as "
+            "declared, sky_level, measured_sky or absent."
+        )
+
+    noise = np.asarray(
+        image_products.noise,
+        dtype=float,
+    )
+    scale = float(
+        noise.flat[0]
+    )
+
+    return resolve_effective_gain(
+        declaration,
+        sky_scale=(
+            scale
+            if np.all(noise == scale)
+            else None
+        ),
+        measured_sky_level=getattr(
+            image_products,
+            "background",
+            None,
+        ),
     )
 
 

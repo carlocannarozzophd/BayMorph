@@ -117,9 +117,25 @@ section, and a `method` under `preparation.background` or
 | Type | Options | Note |
 | --- | --- | --- |
 | `gaussian` | `include_normalization` (default `true`) | Independent pixels with the prepared noise scale. |
-| `correlated_gaussian` | `include_normalization`, `factorization` (`type: nearest_neighbor`, `max_neighbors` 64 or 96) | Correlated noise of AD-047 through a nearest-neighbour factorization: the prepared sky scale and the stationary sky correlation, estimated on the whole sky region with one plane removed, no taper and lags up to 8. The estimator is fixed, so `calibration` options are rejected. A single-observation fit cannot yet use it (finding A1 of the deep audit), and the source variance of AD-047 is not yet implemented. |
+| `correlated_gaussian` | `include_normalization`, `factorization` (`type: nearest_neighbor`, `max_neighbors` 64 or 96), `effective_gain` (required) | Correlated noise of AD-047 through a nearest-neighbour factorization: the variance of each pixel is the prepared sky scale squared plus the source part of the model over the effective gain, and the stationary sky correlation is estimated on the whole sky region with one plane removed, no taper and lags up to 8. The estimator is fixed, so `calibration` options are rejected. A single-observation fit cannot yet use it (finding A1 of the deep audit). |
 | `cash` | `include_data_term`, `require_integer_data`, `integer_tolerance` | Poisson likelihood of images in counts. |
 | `poisson_gaussian` | `read_noise`, `tail_probability`, `minimum_terms`, `maximum_terms` | Marginalized Poisson-Gaussian likelihood of images in counts. |
+
+`effective_gain` declares where the effective gain of the source Poisson
+variance comes from, in the units of the image; it has no default and is
+never fitted (AD-047):
+
+| `source` | Further key | Gain |
+| --- | --- | --- |
+| `declared` | `gain` | the declared gain |
+| `sky_level` | `sky_level` | the level of a sky subtracted before BayMorph, over the square of the prepared sky scale |
+| `measured_sky` | | the background level measured by the preparation, over the square of the prepared sky scale |
+| `absent` | | none: the source variance is not modelled |
+
+Both sky sources require the sky level to be at least ten times the prepared
+sky scale; a smaller ratio means that the level is not a sky or was already
+subtracted, and the gain must then be declared. In a joint fit each
+observation declares its own gain in its own `fit.likelihood`.
 
 Every fit requires a completely normalized likelihood and is rejected before
 any product is written otherwise: `include_normalization: false` or a Cash

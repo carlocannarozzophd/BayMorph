@@ -101,6 +101,7 @@ def _correlated_config(**likelihood):
             "likelihood": {
                 "type": "correlated_gaussian",
                 "include_normalization": False,
+                "effective_gain": {"source": "absent"},
                 **likelihood,
             },
         },
@@ -184,6 +185,60 @@ def test_correlated_gaussian_rejects_estimator_settings(
         )
 
 
+def test_correlated_gaussian_requires_a_declared_gain(
+    monkeypatch,
+):
+    """AD-047 gives the effective gain no default."""
+    _install_calibration(monkeypatch, _calibration())
+    config = _correlated_config()
+    del config["fit"]["likelihood"]["effective_gain"]
+
+    with pytest.raises(
+        ValueError,
+        match="requires fit.likelihood.effective_gain",
+    ):
+        prepare_real_fit_likelihood_state(config, _image_products())
+
+
+def test_correlated_gaussian_takes_the_gain_from_the_measured_sky(
+    monkeypatch,
+):
+    """The measured sky gives the gain as its level over its variance."""
+    _install_calibration(monkeypatch, _calibration())
+    products = _image_products()
+    products.background = 320.0
+    config = _correlated_config(effective_gain={"source": "measured_sky"})
+
+    state = prepare_real_fit_likelihood_state(config, products)
+
+    assert state.effective_gain.value == pytest.approx(320.0 / 2.0**2)
+    assert (
+        state.metadata["marginal_model"]
+        == "prepared_sky_scale_with_source_variance"
+    )
+    assert state.metadata["effective_gain"]["sky_level"] == 320.0
+
+    products.background = 0.5
+
+    with pytest.raises(ValueError, match="below the 10"):
+        prepare_real_fit_likelihood_state(config, products)
+
+
+def test_independent_gaussian_rejects_an_effective_gain():
+    """Only the correlated Gaussian of AD-047 models the source variance."""
+    config = {
+        "fit": {
+            "likelihood": {
+                "type": "gaussian",
+                "effective_gain": {"source": "absent"},
+            },
+        },
+    }
+
+    with pytest.raises(ValueError, match="belongs to the correlated"):
+        prepare_real_fit_likelihood_state(config, _image_products())
+
+
 def test_correlated_gaussian_requires_persisted_calibration(
     monkeypatch,
 ):
@@ -210,6 +265,9 @@ def test_correlated_gaussian_requires_persisted_calibration(
                     "correlated_gaussian"
                 ),
                 "include_normalization": False,
+                "effective_gain": {
+                    "source": "absent",
+                },
             },
         },
     }

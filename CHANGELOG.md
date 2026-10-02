@@ -11,6 +11,19 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* The source Poisson variance of AD-047, milestone 2 of its plan: with an
+  effective gain `g`, the nearest-neighbour correlated Gaussian likelihood
+  computes the scale `sqrt(s^2 + max(m, 0) / g)` at every evaluation from
+  the source part `m` of the model, which the single and joint inference
+  problems render apart from the residual background and hand to it; the
+  normalization includes the logarithm of that scale. The likelihood equals
+  the model N3 of the noise-model bench to 1e-12.
+  `fit.likelihood.effective_gain` declares the gain as `declared`,
+  `sky_level`, `measured_sky` or `absent`
+  (`baymorph/core/effective_gain.py`), with the guard of ten sky scales for
+  the two sky sources; the correlated likelihood requires it, the common
+  likelihood block of a joint fit refuses it, and the resolved gain is
+  recorded in the products and the checkpoint signatures.
 * References on every page of the Models section: each page of a model, a
   component, the PSFs and the residual background ends with the sources of
   its model and formulas, linked to their records in NASA ADS, and the text
@@ -217,6 +230,10 @@ and the project follows Semantic Versioning in spirit.
 
 ### Changed
 
+* Image likelihoods take an optional `source`, the source part of the model
+  without the residual background, which only a likelihood whose covariance
+  depends on it (`requires_source`) uses; `BackgroundAppliedModel` renders
+  both with `render_prediction`.
 * The sky correlation of the correlated Gaussian likelihood follows AD-047,
   milestone 1 of its plan: it is estimated on the whole sky region of the
   preparation with one plane removed, normalized by the number of pixel pairs

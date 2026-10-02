@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 
+from baymorph.core.effective_gain import EffectiveGain
 from baymorph.likelihood.base import ImageLikelihood
 from baymorph.likelihood.cash import CashImageLikelihood
 from baymorph.likelihood.correlated_gaussian import (
@@ -31,6 +32,7 @@ def make_likelihood(
     correlation_kernel: np.ndarray | None = None,
     correlation_logdet: float | None = None,
     vecchia_factorization: VecchiaFactorization | None = None,
+    effective_gain: EffectiveGain | None = None,
 ) -> ImageLikelihood:
     """Construct an image likelihood from configuration.
 
@@ -63,6 +65,11 @@ def make_likelihood(
         Precomputed, source-validated nearest-neighbour conditional Gaussian
         factorization. Required when ``factorization.type`` is
         ``"nearest_neighbor"``.
+    effective_gain : EffectiveGain, optional
+        Effective gain resolved by the pipeline from the
+        ``effective_gain`` block of ``config`` (AD-047). The block and the
+        resolved gain must be supplied together, to the nearest-neighbour
+        correlated Gaussian likelihood only.
 
     Returns
     -------
@@ -90,6 +97,41 @@ def make_likelihood(
         likelihood_type
     )
 
+    declared_gain = likelihood_config.pop(
+        "effective_gain",
+        None,
+    )
+
+    if (
+        declared_gain is not None
+        or effective_gain is not None
+    ):
+        if likelihood_type != "correlated_gaussian":
+            raise ValueError(
+                "effective_gain belongs to the correlated Gaussian "
+                "likelihood of AD-047."
+            )
+
+        if declared_gain is None or effective_gain is None:
+            raise ValueError(
+                "The effective_gain block of the configuration and the gain "
+                "resolved from it must be supplied together."
+            )
+
+        if not isinstance(effective_gain, EffectiveGain):
+            raise TypeError(
+                "effective_gain must be an EffectiveGain."
+            )
+
+        if (
+            not isinstance(declared_gain, Mapping)
+            or declared_gain.get("source") != effective_gain.source
+        ):
+            raise ValueError(
+                "The resolved effective gain does not match the source the "
+                "configuration declares."
+            )
+
     if likelihood_type == "gaussian":
         return _make_gaussian_likelihood(
             config=likelihood_config,
@@ -107,6 +149,11 @@ def make_likelihood(
             correlation_kernel=correlation_kernel,
             correlation_logdet=correlation_logdet,
             vecchia_factorization=vecchia_factorization,
+            effective_gain=(
+                None
+                if effective_gain is None
+                else effective_gain.value
+            ),
         )
 
     if likelihood_type == "cash":
@@ -182,6 +229,7 @@ def _make_correlated_gaussian_likelihood(
     correlation_kernel: np.ndarray | None,
     correlation_logdet: float | None,
     vecchia_factorization: VecchiaFactorization | None,
+    effective_gain: float | None = None,
 ) -> ImageLikelihood:
     """Construct a correlated Gaussian image likelihood."""
     if "calibration" in config:
@@ -229,6 +277,13 @@ def _make_correlated_gaussian_likelihood(
             correlation_logdet=correlation_logdet,
             vecchia_factorization=vecchia_factorization,
             include_normalization=include_normalization,
+            effective_gain=effective_gain,
+        )
+
+    if effective_gain is not None:
+        raise ValueError(
+            "The source variance of AD-047 requires "
+            "factorization.type='nearest_neighbor'."
         )
 
     if vecchia_factorization is not None:
@@ -284,6 +339,7 @@ def _make_vecchia_correlated_gaussian_likelihood(
     correlation_logdet: float | None,
     vecchia_factorization: VecchiaFactorization | None,
     include_normalization: bool,
+    effective_gain: float | None = None,
 ) -> VecchiaCorrelatedGaussianImageLikelihood:
     """Construct an explicitly configured nearest-neighbour likelihood."""
     if not isinstance(factorization_config, Mapping):
@@ -350,6 +406,7 @@ def _make_vecchia_correlated_gaussian_likelihood(
         max_neighbors=max_neighbors,
         min_conditional_variance=min_conditional_variance,
         include_normalization=include_normalization,
+        effective_gain=effective_gain,
     )
 
 

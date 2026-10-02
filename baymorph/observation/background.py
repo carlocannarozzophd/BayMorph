@@ -253,6 +253,30 @@ class BackgroundAppliedModel:
             )
         )
 
+    def render_prediction(
+        self,
+        shape: tuple[int, int],
+    ) -> tuple[FloatArray, FloatArray]:
+        """Render the source plus residual background, and the source alone.
+
+        The source part is what the source Poisson variance of AD-047
+        depends on; the residual background is an observation effect that
+        does not enter it.
+        """
+        source = np.asarray(
+            self.model.render(
+                shape
+            ),
+            dtype=float,
+        )
+
+        return (
+            self.background.apply(
+                source
+            ),
+            source,
+        )
+
     def render_components(
         self,
         shape: tuple[int, int],

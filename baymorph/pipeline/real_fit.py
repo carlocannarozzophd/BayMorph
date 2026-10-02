@@ -495,6 +495,11 @@ def _real_fit_problem_signature(
                     correlation_kernel_fit
                 )
             ),
+            "effective_gain": getattr(
+                problem.likelihood,
+                "effective_gain",
+                None,
+            ),
         },
         "baymorph_source": _baymorph_source_signature(),
         "runtime_versions": _checkpoint_runtime_versions(),
@@ -579,6 +584,7 @@ def _execute_single_model_fit(
         noise_fit=likelihood_state.noise,
         mask_fit=image_products.fitting_mask,
         correlation_kernel_fit=likelihood_state.correlation_kernel,
+        effective_gain=likelihood_state.effective_gain,
     )
 
     runtime_sampler_cfg = (
@@ -1620,6 +1626,7 @@ def _build_image_inference_problem(
     noise_fit,
     mask_fit,
     correlation_kernel_fit=None,
+    effective_gain=None,
 ):
     """Build one backend-neutral image inference problem."""
     likelihood = make_likelihood(
@@ -1628,6 +1635,7 @@ def _build_image_inference_problem(
         noise=noise_fit,
         mask=mask_fit,
         correlation_kernel=correlation_kernel_fit,
+        effective_gain=effective_gain,
     )
 
     return ImageInferenceProblem(

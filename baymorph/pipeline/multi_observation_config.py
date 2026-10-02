@@ -95,6 +95,13 @@ def resolve_multi_observation_observation_configs(
             "Multi-observation fit.likelihood",
         )
 
+        if "effective_gain" in global_likelihood:
+            raise ValueError(
+                "Multi-observation fit.likelihood cannot define "
+                "'effective_gain': AD-047 requires each observation to "
+                "declare its own gain in its own fit.likelihood."
+            )
+
     background_model = multi_observation_background_model(
         config
     )

@@ -161,8 +161,61 @@ class ImageInferenceProblem(InferenceProblem):
                 "render(shape=...) method."
             )
 
+        return self._observed_image(
+            render(shape=self.image_shape)
+        )
+
+    def render_prediction(
+        self,
+        theta: FloatArray,
+    ) -> tuple[FloatArray, FloatArray]:
+        """Render the expected image and its source part (AD-047).
+
+        The source part excludes the residual background; a model without a
+        residual background is its own source part.
+        """
+        model = self.model_factory(
+            **self.parameter_values(theta)
+        )
+
+        render_prediction = getattr(
+            model,
+            "render_prediction",
+            None,
+        )
+
+        if callable(render_prediction):
+            model_image, source_image = render_prediction(
+                shape=self.image_shape
+            )
+        else:
+            render = getattr(
+                model,
+                "render",
+                None,
+            )
+
+            if not callable(render):
+                raise TypeError(
+                    "model_factory must return an object with a callable "
+                    "render(shape=...) method."
+                )
+
+            model_image = render(shape=self.image_shape)
+            source_image = model_image
+
+        return (
+            self._observed_image(model_image),
+            self._observed_image(source_image),
+        )
+
+    def _observed_image(
+        self,
+        image,
+    ) -> FloatArray:
+        """Apply the optional PSF and validate one rendered image."""
         model_image = np.asarray(
-            render(shape=self.image_shape),
+            image,
             dtype=float,
         )
 
@@ -193,6 +246,18 @@ class ImageInferenceProblem(InferenceProblem):
         theta: FloatArray,
     ) -> float:
         """Evaluate the image log-likelihood."""
+        if self.likelihood.requires_source:
+            model_image, source_image = self.render_prediction(
+                theta
+            )
+
+            return float(
+                self.likelihood(
+                    model_image,
+                    source=source_image,
+                )
+            )
+
         return float(
             self.likelihood(
                 self.render_model(theta)

@@ -68,11 +68,25 @@ class MultiObservationLikelihood:
             for observation, likelihood in self._likelihoods.items()
         }
 
+    @property
+    def requires_source(self) -> bool:
+        """Whether some observation needs the source part (AD-047)."""
+        return any(
+            likelihood.requires_source
+            for likelihood in self._likelihoods.values()
+        )
+
     def __call__(
         self,
         model_images: Mapping[str, np.ndarray],
+        source_images: Mapping[str, np.ndarray] | None = None,
     ) -> float:
-        """Evaluate and sum all observation-specific likelihood factors."""
+        """Evaluate and sum all observation-specific likelihood factors.
+
+        ``source_images`` holds the source part of each model, without its
+        residual background; observations whose likelihood depends on it
+        (AD-047) require it.
+        """
         supplied = set(
             model_images
         )
@@ -86,6 +100,12 @@ class MultiObservationLikelihood:
                 "observations."
             )
 
+        if source_images is not None and set(source_images) != expected:
+            raise ValueError(
+                "Source images must define exactly the configured "
+                "observations."
+            )
+
         total = 0.0
 
         for observation, likelihood in self._likelihoods.items():
@@ -93,7 +113,12 @@ class MultiObservationLikelihood:
                 likelihood(
                     model_images[
                         observation
-                    ]
+                    ],
+                    source=(
+                        None
+                        if source_images is None
+                        else source_images[observation]
+                    ),
                 )
             )
 

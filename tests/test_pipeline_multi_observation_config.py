@@ -1255,3 +1255,22 @@ def test_joint_likelihood_rejects_estimator_settings():
         resolve_multi_observation_observation_configs(
             config,
         )
+
+
+def test_joint_likelihood_cannot_declare_a_common_gain():
+    """AD-047 requires each observation to declare its own gain."""
+    config = _multi_observation_config()
+    config["fit"]["likelihood"] = {
+        "type": "correlated_gaussian",
+        "effective_gain": {
+            "source": "measured_sky",
+        },
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="each observation",
+    ):
+        resolve_multi_observation_observation_configs(
+            config,
+        )
