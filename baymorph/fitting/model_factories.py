@@ -20,6 +20,8 @@ from baymorph.models import (
     CoreSersicComponent,
     DoubleSersicModel,
     ExponentialComponent,
+    FerrersBarComponent,
+    GaussianRingComponent,
     GeneralizedSersicComponent,
     PointSourceModel,
     SersicModel,
@@ -466,6 +468,200 @@ def make_bulge_broken_disk_psf_model(
     )
 
 
+def _bulge_and_disk(
+    *,
+    flux_bulge: float,
+    re_bulge: float,
+    n_bulge: float,
+    q_bulge: float,
+    theta_bulge: float,
+    flux_disk: float,
+    re_disk: float,
+    q_disk: float,
+    theta_disk: float,
+    x0: float,
+    y0: float,
+) -> dict[str, Any]:
+    """Return the Sérsic bulge and exponential disc of ``bulge_disk``."""
+    return {
+        "bulge": SersicModel(
+            flux=flux_bulge,
+            re=re_bulge,
+            n=n_bulge,
+            q=q_bulge,
+            theta=theta_bulge,
+            x0=x0,
+            y0=y0,
+        ),
+        "disk": ExponentialComponent(
+            flux=flux_disk,
+            re=re_disk,
+            q=q_disk,
+            theta=theta_disk,
+            x0=x0,
+            y0=y0,
+        ),
+    }
+
+
+def make_bulge_disk_bar_psf_model(
+    *,
+    flux_bulge: float,
+    re_bulge: float,
+    n_bulge: float,
+    q_bulge: float,
+    theta_bulge: float,
+    flux_disk: float,
+    re_disk: float,
+    q_disk: float,
+    theta_disk: float,
+    flux_bar: float,
+    a_bar: float,
+    alpha_bar: float,
+    c0_bar: float,
+    q_bar: float,
+    theta_bar: float,
+    x0: float,
+    y0: float,
+    psf,
+):
+    """Build a PSF-convolved bulge, disc and Ferrers bar (AD-048).
+
+    Parameters
+    ----------
+    flux_bulge, flux_disk, flux_bar : float
+        Total fluxes of the bulge, the disc and the bar.
+    re_bulge, n_bulge, q_bulge, theta_bulge : float
+        Effective radius, Sérsic index, axis ratio and position angle of the
+        bulge.
+    re_disk, q_disk, theta_disk : float
+        Half-light radius, axis ratio and position angle of the exponential
+        disc.
+    a_bar : float
+        Semi-major length of the bar, in pixels.
+    alpha_bar : float
+        Sharpness of the edge of the bar.
+    c0_bar : float
+        Isophote shape of the bar, positive for boxy isophotes.
+    q_bar, theta_bar : float
+        Axis ratio and position angle of the bar.
+    x0, y0 : float
+        Shared centre in pixel coordinates.
+    psf : object
+        Observation PSF.
+
+    Returns
+    -------
+    ConvolvedModel
+        PSF-convolved model without additive background.
+    """
+    components = _bulge_and_disk(
+        flux_bulge=flux_bulge,
+        re_bulge=re_bulge,
+        n_bulge=n_bulge,
+        q_bulge=q_bulge,
+        theta_bulge=theta_bulge,
+        flux_disk=flux_disk,
+        re_disk=re_disk,
+        q_disk=q_disk,
+        theta_disk=theta_disk,
+        x0=x0,
+        y0=y0,
+    )
+    components["bar"] = FerrersBarComponent(
+        flux=flux_bar,
+        a=a_bar,
+        alpha=alpha_bar,
+        c0=c0_bar,
+        q=q_bar,
+        theta=theta_bar,
+        x0=x0,
+        y0=y0,
+    )
+
+    return ConvolvedModel(
+        model=CompositeModel(components),
+        psf=psf,
+    )
+
+
+def make_bulge_disk_ring_psf_model(
+    *,
+    flux_bulge: float,
+    re_bulge: float,
+    n_bulge: float,
+    q_bulge: float,
+    theta_bulge: float,
+    flux_disk: float,
+    re_disk: float,
+    q_disk: float,
+    theta_disk: float,
+    flux_ring: float,
+    r_ring: float,
+    sigma_ring: float,
+    q_ring: float,
+    theta_ring: float,
+    x0: float,
+    y0: float,
+    psf,
+):
+    """Build a PSF-convolved bulge, disc and Gaussian ring (AD-048).
+
+    Parameters
+    ----------
+    flux_bulge, flux_disk, flux_ring : float
+        Total fluxes of the bulge, the disc and the ring.
+    re_bulge, n_bulge, q_bulge, theta_bulge : float
+        Effective radius, Sérsic index, axis ratio and position angle of the
+        bulge.
+    re_disk, q_disk, theta_disk : float
+        Half-light radius, axis ratio and position angle of the exponential
+        disc.
+    r_ring : float
+        Semi-major radius of the crest of the ring, in pixels.
+    sigma_ring : float
+        Width of the ring along its major axis, in pixels.
+    q_ring, theta_ring : float
+        Axis ratio and position angle of the ring.
+    x0, y0 : float
+        Shared centre in pixel coordinates.
+    psf : object
+        Observation PSF.
+
+    Returns
+    -------
+    ConvolvedModel
+        PSF-convolved model without additive background.
+    """
+    components = _bulge_and_disk(
+        flux_bulge=flux_bulge,
+        re_bulge=re_bulge,
+        n_bulge=n_bulge,
+        q_bulge=q_bulge,
+        theta_bulge=theta_bulge,
+        flux_disk=flux_disk,
+        re_disk=re_disk,
+        q_disk=q_disk,
+        theta_disk=theta_disk,
+        x0=x0,
+        y0=y0,
+    )
+    components["ring"] = GaussianRingComponent(
+        flux=flux_ring,
+        r=r_ring,
+        sigma=sigma_ring,
+        q=q_ring,
+        theta=theta_ring,
+        x0=x0,
+        y0=y0,
+    )
+
+    return ConvolvedModel(
+        model=CompositeModel(components),
+        psf=psf,
+    )
+
+
 _MODEL_FACTORIES = {
     "SingleSersicModelFactory": make_single_sersic_psf_model,
     "DoubleSersicModelFactory": make_double_sersic_psf_model,
@@ -474,6 +670,8 @@ _MODEL_FACTORIES = {
     "BoxySersicModelFactory": make_boxy_sersic_psf_model,
     "CoreSersicModelFactory": make_core_sersic_psf_model,
     "BulgeBrokenDiskModelFactory": make_bulge_broken_disk_psf_model,
+    "BulgeDiskBarModelFactory": make_bulge_disk_bar_psf_model,
+    "BulgeDiskRingModelFactory": make_bulge_disk_ring_psf_model,
 }
 
 
@@ -680,7 +878,9 @@ __all__ = [
     "ObservedModelFactory",
     "make_boxy_sersic_psf_model",
     "make_bulge_broken_disk_psf_model",
+    "make_bulge_disk_bar_psf_model",
     "make_bulge_disk_psf_model",
+    "make_bulge_disk_ring_psf_model",
     "make_core_sersic_psf_model",
     "make_double_sersic_psf_model",
     "make_sersic_point_source_psf_model",

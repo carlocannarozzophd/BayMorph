@@ -184,12 +184,24 @@ its fluxes, which must always be declared.
 | `boxy_sersic` | `flux`, `re`, `n`, `q`, `c0`, `theta`, `x0`, `y0` | as `single_sersic`, and `c0` −1–1 |
 | `core_sersic` | `flux`, `re`, `n`, `rb`, `gamma`, `alpha`, `q`, `theta`, `x0`, `y0` | as `single_sersic`, and `rb` 0.5–20, `gamma` 0–0.9, `alpha` 0.5–2 |
 | `bulge_broken_disk` | `flux_bulge`, `re_bulge`, `n_bulge`, `q_bulge`, `theta_bulge`, `flux_disk`, `h_in_disk`, `h_out_disk`, `rb_disk`, `wb_disk`, `q_disk`, `theta_disk`, `x0`, `y0` | the bulge as `bulge_disk`; `h_in_disk` and `h_out_disk` 2–80, `rb_disk` 5–300, `wb_disk` 0.5–20, `q_disk` 0.4–1, `theta_disk` −π/2–π/2, centre ±8 |
+| `bulge_disk_bar` | `flux_bulge`, `re_bulge`, `n_bulge`, `q_bulge`, `theta_bulge`, `flux_disk`, `re_disk`, `q_disk`, `theta_disk`, `flux_bar`, `a_bar`, `alpha_bar`, `c0_bar`, `q_bar`, `theta_bar`, `x0`, `y0` | the bulge and the disc as `bulge_disk`; `a_bar` 5–100, `alpha_bar` 2–5, `c0_bar` 0–3.5, `q_bar` 0.2–0.7, `theta_bar` −π/2–π/2, centre ±8 |
+| `bulge_disk_ring` | `flux_bulge`, `re_bulge`, `n_bulge`, `q_bulge`, `theta_bulge`, `flux_disk`, `re_disk`, `q_disk`, `theta_disk`, `flux_ring`, `r_ring`, `sigma_ring`, `q_ring`, `theta_ring`, `x0`, `y0` | the bulge and the disc as `bulge_disk`; `r_ring` 5–200, `sigma_ring` 2–20, `q_ring` 0.5–1, `theta_ring` −π/2–π/2, centre ±8 |
 
-The models of AD-048, `boxy_sersic`, `core_sersic` and `bulge_broken_disk`,
-are validated for single-observation fits within a rendering domain: `c0`
-−1–1, `n` up to 6, `re` at least 1, `rb` at least 0.5, `gamma` 0–0.9,
-`alpha` 0.5–2 and `wb_disk` at least 0.5. A prior whose support leaves it is
-rejected, and so is a joint multi-observation fit with any of these models.
+The models of AD-048 are validated for single-observation fits within a
+rendering domain:
+
+| Model | Validated domain |
+| --- | --- |
+| `boxy_sersic` | `c0` −1–1, `n` up to 6, `re` at least 1 |
+| `core_sersic` | `n` up to 6, `re` at least 1, `rb` at least 0.5, `gamma` 0–0.9, `alpha` 0.5–2 |
+| `bulge_broken_disk` | `wb_disk` at least 0.5 |
+| `bulge_disk_bar` | `a_bar` at least 5, `alpha_bar` at least 2, `c0_bar` 0–3.5, `q_bar` at least 0.2 |
+| `bulge_disk_ring` | `sigma_ring` at least 2, `q_ring` at least 0.5 |
+
+A prior whose support leaves the domain is rejected, and so is a joint
+multi-observation fit with any of these models. Within the domain, the
+rendering of a bright bar, or of a compact bright bulge, can still reach the
+noise of a very deep image; the page of each model states where.
 
 For `double_sersic` and `bulge_disk`, a prior declared under `q` or `theta`
 applies to both components (`q_bulge` and `q_disk`, `theta_bulge` and

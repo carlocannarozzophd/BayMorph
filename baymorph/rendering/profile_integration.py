@@ -32,6 +32,14 @@ total flux, ``FLUX_ATOL``, and the depth allows for it. The adaptive block
 about the centre widens until no cell of its outer ring differs from the
 rule used outside it by more than the tolerance, so the boundary of the
 block is itself checked.
+
+The test of agreement cannot see a part of a cell that no node samples at
+two successive levels. Where a profile ends at the edge of a finite support,
+a thin sliver of it inside a cell, or of empty plane beyond it, can escape
+every node, and the cell is accepted with that part missing. A component
+with such an edge declares, through ``edges``, the cells of a given size the
+edge may cross; those are split, whatever their agreement, until the
+component deems them small enough.
 """
 
 from __future__ import annotations
@@ -49,6 +57,7 @@ FloatArray = NDArray[np.float64]
 BoolArray = NDArray[np.bool_]
 Intensity = Callable[[FloatArray, FloatArray], FloatArray]
 NonSmoothCells = Callable[[FloatArray, FloatArray], BoolArray | None]
+EdgeCells = Callable[[FloatArray, FloatArray, float], BoolArray | None]
 
 RENDERERS = ("hybrid", "hybrid_cusp", "fixed", "adaptive", "point")
 DEFAULT_INTEGRATION_ORDER = 4
@@ -208,6 +217,7 @@ def refine_cells(
     rtol: float = DEFAULT_RTOL,
     atol: float = DEFAULT_ATOL,
     max_depth: int = DEFAULT_MAX_DEPTH,
+    edges: EdgeCells | None = None,
 ) -> FloatArray:
     """Return adaptive integrals of the unit cells centred at ``x`` and ``y``.
 
@@ -215,6 +225,11 @@ def refine_cells(
     A cell is split into four children; it is accepted when the sum of their
     estimates agrees with its own within ``max(atol, rtol * |value|)``, and
     otherwise each child is split in turn, down to ``max_depth`` levels.
+
+    ``edges``, when given, is called with the centres and the half-width of
+    the children of every level and returns the children that the edge of a
+    finite support may cross, or ``None`` once the children are small enough.
+    A cell with such a child is not accepted, whatever the agreement.
 
     Raises
     ------
@@ -244,6 +259,15 @@ def refine_cells(
             atol,
             rtol * np.abs(fine),
         )
+
+        if edges is not None:
+            crossed = edges(child_x, child_y, half)
+
+            if crossed is not None:
+                accepted &= ~np.asarray(crossed, dtype=bool).reshape(-1, 4).any(
+                    axis=1
+                )
+
         np.add.at(result, owner[accepted], fine[accepted])
 
         if np.all(accepted):
@@ -275,6 +299,7 @@ def _refine_mask(
     rtol: float,
     atol: float,
     max_depth: int,
+    edges: EdgeCells | None = None,
 ) -> FloatArray:
     """Return adaptive integrals of the cells of ``image`` within ``mask``."""
     rows, columns = np.nonzero(mask)
@@ -291,6 +316,7 @@ def _refine_mask(
         rtol=rtol,
         atol=atol,
         max_depth=max_depth,
+        edges=edges,
     )
 
 
@@ -307,6 +333,7 @@ def refine_about_centre(
     atol: float,
     max_depth: int,
     exclude: BoolArray | None = None,
+    edges: EdgeCells | None = None,
 ) -> FloatArray:
     """Replace the cells about ``centre`` by adaptive integrals, in place.
 
@@ -314,7 +341,8 @@ def refine_about_centre(
     contains the centre (Chebyshev distance). It widens by two cells while
     a cell of its outer ring inside the image differs from its value in
     ``image`` by more than the tolerance. Cells in ``exclude``, which the
-    caller integrates adaptively anyway, do not enter that test.
+    caller integrates adaptively anyway, do not enter that test. ``edges``
+    is passed to :func:`refine_cells`.
 
     Raises
     ------
@@ -351,6 +379,7 @@ def refine_about_centre(
                 rtol=rtol,
                 atol=atol,
                 max_depth=max_depth,
+                edges=edges,
             )
             ring = (distance[block] == width) & tested[block]
             initial = image[block]
@@ -383,6 +412,7 @@ def render_cells(
     renderer: str = "hybrid",
     centre: tuple[float, float],
     nonsmooth: NonSmoothCells | None = None,
+    edges: EdgeCells | None = None,
     integration_order: int = DEFAULT_INTEGRATION_ORDER,
     rtol: float = DEFAULT_RTOL,
     atol: float = DEFAULT_ATOL,
@@ -406,6 +436,11 @@ def render_cells(
         Function of the cell centres returning the cells, as a boolean
         array, on which the profile is not smooth and which the hybrid
         rules integrate adaptively.
+    edges : callable, optional
+        Function of the centres and the half-width of cells returning those
+        the edge of a finite support may cross, or ``None`` once they are
+        small enough; see :func:`refine_cells`. It applies wherever cells are
+        integrated adaptively.
     integration_order, rtol, atol, max_depth
         Gauss-Legendre order, tolerances and depth of adaptive integration.
 
@@ -433,6 +468,7 @@ def render_cells(
         rtol=rtol,
         atol=atol,
         max_depth=max_depth,
+        edges=edges,
     )
 
     if renderer == "point":

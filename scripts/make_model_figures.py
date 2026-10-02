@@ -41,7 +41,9 @@ from scipy.special import gammainc, gammaincinv  # noqa: E402
 
 from baymorph.fitting import (  # noqa: E402
     make_bulge_broken_disk_psf_model,
+    make_bulge_disk_bar_psf_model,
     make_bulge_disk_psf_model,
+    make_bulge_disk_ring_psf_model,
     make_double_sersic_psf_model,
     make_sersic_point_source_psf_model,
     make_single_sersic_psf_model,
@@ -49,6 +51,8 @@ from baymorph.fitting import (  # noqa: E402
 from baymorph.models import (  # noqa: E402
     BrokenExponentialComponent,
     CoreSersicComponent,
+    FerrersBarComponent,
+    GaussianRingComponent,
     GeneralizedSersicComponent,
     PointSourceModel,
     SersicModel,
@@ -133,9 +137,17 @@ DARK = Theme(
 
 THEMES = (LIGHT, DARK)
 
-# Compact components (bulge, point source) wear slot 2 and extended ones
-# (disc, Sérsic) slot 1 in every figure, so a colour keeps one meaning.
-ROLE_SLOT = {"bulge": 1, "point_source": 1, "disk": 0, "sersic": 0}
+# Compact components (bulge, point source) wear slot 2, extended ones (disc,
+# Sérsic) slot 1 and the structures of a disc (bar, ring) slot 3 in every
+# figure, so a colour keeps one meaning.
+ROLE_SLOT = {
+    "bulge": 1,
+    "point_source": 1,
+    "disk": 0,
+    "sersic": 0,
+    "bar": 2,
+    "ring": 2,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -563,7 +575,14 @@ def decomposition(theme: Theme, model, names, labels, title_total, rmax):
     norm = LogNorm(vmin=1e-4 * float(total.max()), vmax=float(total.max()))
     fig = plt.figure(figsize=(WIDTH, 2.2))
     grid = fig.add_gridspec(
-        1, 5, width_ratios=(1, 1, 1, 0.42, 1.55), wspace=0.08
+        1,
+        len(names) + 3,
+        # The images share three units of width, so the gap and the profile
+        # keep their width whatever the number of components.
+        width_ratios=(
+            (3.0 / (len(names) + 1),) * (len(names) + 1) + (0.42, 1.55)
+        ),
+        wspace=0.08,
     )
     panels = [(components[name], label) for name, label in zip(names, labels, strict=True)]
     panels.append((total, title_total))
@@ -571,7 +590,7 @@ def decomposition(theme: Theme, model, names, labels, title_total, rmax):
         ax = fig.add_subplot(grid[0, slot])
         show_image(ax, image, theme, norm)
         ax.set_title(label, fontsize=8.5)
-    ax = fig.add_subplot(grid[0, 4])
+    ax = fig.add_subplot(grid[0, len(names) + 2])
     for name, label in zip(names, labels, strict=True):
         colour = theme.series[ROLE_SLOT[name]]
         r, profile = radial_profile(components[name], 50.0, 50.0, rmax)
@@ -1027,6 +1046,126 @@ def bulge_broken_disk_decomposition(theme: Theme) -> plt.Figure:
     )
 
 
+def ferrers_bar_profiles(theme: Theme) -> plt.Figure:
+    """The edge of a Ferrers bar and the shape of its isophotes."""
+    fig = plt.figure(figsize=(WIDTH, 2.5))
+    grid = fig.add_gridspec(1, 3, width_ratios=(1.45, 1, 1), wspace=0.1)
+    ax = fig.add_subplot(grid[0, 0])
+    radius = np.linspace(0.0, 1.15, 600)
+    for alpha, colour in zip((0.5, 1.0, 2.0, 5.0), theme.series, strict=False):
+        bar = FerrersBarComponent(
+            flux=1.0, a=1.0, alpha=alpha, c0=0.0, q=1.0, theta=0.0, x0=0.0,
+            y0=0.0,
+        )
+        profile = bar.intensity(radius, np.zeros_like(radius))
+        ax.plot(
+            radius, profile / np.exp(bar.log_central_intensity), color=colour,
+            label=f"\u03b1 = {alpha:g}",
+        )
+    ax.set_xlim(0, 1.15)
+    ax.set_ylim(0, 1.05)
+    ax.set_xlabel("m / a")
+    ax.set_ylabel(r"$I(m) / I_0$")
+    ax.set_title("Edge of the bar", loc="left")
+    ax.legend(loc="lower left", handlelength=1.4)
+    plot_axes(ax)
+
+    shape = (81, 81)
+    parameters = dict(
+        flux=100.0, a=30.0, alpha=2.0, q=0.35, theta=np.deg2rad(30.0),
+        x0=40.0, y0=40.0,
+    )
+    yy, xx = np.indices(shape, dtype=float)
+    images = [
+        FerrersBarComponent(c0=c0, **parameters).render(shape)
+        for c0 in (0.0, 2.5)
+    ]
+    peak = max(float(image.max()) for image in images)
+    norm = LogNorm(vmin=1e-3 * peak, vmax=peak)
+    for slot, (image, c0) in enumerate(zip(images, (0.0, 2.5), strict=True)):
+        ax = fig.add_subplot(grid[0, slot + 1])
+        show_image(ax, image, theme, norm)
+        major, minor = major_minor_offsets(
+            xx, yy, x0=parameters["x0"], y0=parameters["y0"],
+            theta=parameters["theta"],
+        )
+        radius = generalized_radius(major, minor, q=parameters["q"], c0=c0)
+        ax.contour(
+            radius, levels=(10.0, 20.0, 29.0), colors=theme.series[2],
+            linewidths=0.9,
+        )
+        label = "ellipses" if c0 == 0.0 else "boxy"
+        ax.set_title(f"c0 = {c0:g}, {label}", fontsize=8.5)
+    return fig
+
+
+def bulge_disk_bar_decomposition(theme: Theme) -> plt.Figure:
+    """A Sérsic bulge, an exponential disc and a Ferrers bar."""
+    model = make_bulge_disk_bar_psf_model(
+        flux_bulge=20.0, re_bulge=3.0, n_bulge=3.0, q_bulge=0.9,
+        theta_bulge=np.deg2rad(40.0),
+        flux_disk=55.0, re_disk=18.0, q_disk=0.8, theta_disk=np.deg2rad(40.0),
+        flux_bar=25.0, a_bar=20.0, alpha_bar=2.0, c0_bar=1.5, q_bar=0.3,
+        theta_bar=np.deg2rad(100.0),
+        x0=50.0, y0=50.0, psf=GaussianPSF(fwhm=2.5),
+    )
+    return decomposition(
+        theme, model, ("bulge", "disk", "bar"),
+        ("bulge, n = 3", "disc", "bar"), "total", 48,
+    )
+
+
+def gaussian_ring_profiles(theme: Theme) -> plt.Figure:
+    """Gaussian rings of three widths and the same flux, and an inclined ring."""
+    fig = plt.figure(figsize=(WIDTH, 2.5))
+    grid = fig.add_gridspec(1, 2, width_ratios=(1.9, 1), wspace=0.1)
+    ax = fig.add_subplot(grid[0, 0])
+    radius = np.linspace(0.0, 45.0, 600)
+    for sigma, colour in zip((1.0, 3.0, 6.0), theme.series, strict=False):
+        ring = GaussianRingComponent(
+            flux=100.0, r=20.0, sigma=sigma, q=1.0, theta=0.0, x0=0.0, y0=0.0,
+        )
+        ax.plot(
+            radius, ring.intensity(radius, np.zeros_like(radius)), color=colour,
+            label=f"\u03c3 = {sigma:g} px",
+        )
+    ax.set_xlim(0, 45)
+    ax.set_ylim(bottom=0)
+    ax.set_xlabel("radius (pixels)")
+    ax.set_ylabel("intensity")
+    ax.set_title("Rings at r = 20 px with the same flux", loc="left")
+    ax.legend(loc="upper right", handlelength=1.4)
+    plot_axes(ax)
+
+    shape = (81, 81)
+    image = GaussianRingComponent(
+        flux=100.0, r=26.0, sigma=2.5, q=0.6, theta=np.deg2rad(30.0),
+        x0=40.0, y0=40.0,
+    ).render(shape)
+    ax = fig.add_subplot(grid[0, 1])
+    show_image(
+        ax, image, theme, LogNorm(vmin=1e-3 * image.max(), vmax=image.max())
+    )
+    ax.set_title("r = 26 px, \u03c3 = 2.5 px, q = 0.6", fontsize=8.5)
+    return fig
+
+
+def bulge_disk_ring_decomposition(theme: Theme) -> plt.Figure:
+    """A Sérsic bulge, an exponential disc and a Gaussian ring."""
+    model = make_bulge_disk_ring_psf_model(
+        flux_bulge=25.0, re_bulge=3.0, n_bulge=3.0, q_bulge=0.9,
+        theta_bulge=np.deg2rad(40.0),
+        flux_disk=60.0, re_disk=16.0, q_disk=0.8, theta_disk=np.deg2rad(40.0),
+        flux_ring=15.0, r_ring=26.0, sigma_ring=2.5, q_ring=0.8,
+        theta_ring=np.deg2rad(40.0),
+        x0=50.0, y0=50.0, psf=GaussianPSF(fwhm=2.5),
+    )
+    return decomposition(
+        theme, model, ("bulge", "disk", "ring"),
+        ("bulge, n = 3", "disc", "ring"), "total", 48,
+    )
+
+
 FIGURES: dict[str, Callable[[Theme], plt.Figure]] = {
     "forward_model": forward_model,
     "model_composition": model_composition,
@@ -1046,6 +1185,10 @@ FIGURES: dict[str, Callable[[Theme], plt.Figure]] = {
     "core_sersic_profiles": core_sersic_profiles,
     "broken_disk_profiles": broken_disk_profiles,
     "bulge_broken_disk_decomposition": bulge_broken_disk_decomposition,
+    "ferrers_bar_profiles": ferrers_bar_profiles,
+    "bulge_disk_bar_decomposition": bulge_disk_bar_decomposition,
+    "gaussian_ring_profiles": gaussian_ring_profiles,
+    "bulge_disk_ring_decomposition": bulge_disk_ring_decomposition,
 }
 
 

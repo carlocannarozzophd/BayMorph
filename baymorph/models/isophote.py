@@ -74,6 +74,33 @@ def generalized_radius(
     return (np.abs(major) ** c + np.abs(minor / q) ** c) ** (1.0 / c)
 
 
+def radius_reach(
+    half_side: float,
+    *,
+    q: float,
+    c0: float = 0.0,
+    theta: float = 0.0,
+) -> float:
+    """Return the largest change of ``m`` across a square of half-side ``half_side``.
+
+    For ``c0 >= -1`` the generalized radius is a norm of the offset, so
+    ``|m(p + d) - m(p)| <= m(d)``, and over a square of offsets ``d`` its
+    largest value lies at a corner. A point whose radius differs from
+    ``m_edge`` by more than the reach of ``half_side`` lies farther than
+    ``half_side`` px, along ``x`` or along ``y``, from every point of the
+    isophote ``m_edge``.
+    """
+    major, minor = major_minor_offsets(
+        np.array([half_side, half_side]),
+        np.array([half_side, -half_side]),
+        x0=0.0,
+        y0=0.0,
+        theta=theta,
+    )
+
+    return float(np.max(generalized_radius(major, minor, q=q, c0=c0)))
+
+
 def disc_azimuth(
     major: FloatArray,
     minor: FloatArray,

@@ -7,6 +7,8 @@ from baymorph.models.composite import CompositeModel
 from baymorph.models.core_sersic import CoreSersicComponent
 from baymorph.models.double_sersic import DoubleSersicModel
 from baymorph.models.exponential import ExponentialComponent
+from baymorph.models.ferrers_bar import FerrersBarComponent
+from baymorph.models.gaussian_ring import GaussianRingComponent
 from baymorph.models.generalized_sersic import GeneralizedSersicComponent
 from baymorph.models.labels import (
     parameter_labels,
@@ -32,6 +34,8 @@ __all__ = [
     "DecomposableMorphology",
     "DoubleSersicModel",
     "ExponentialComponent",
+    "FerrersBarComponent",
+    "GaussianRingComponent",
     "GeneralizedSersicComponent",
     "MorphologicalComponent",
     "PointSourceModel",

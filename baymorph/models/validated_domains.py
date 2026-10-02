@@ -7,7 +7,8 @@ validation rejects a prior whose support leaves that domain.
 
 A parameter without an entry is not restricted: larger radii, broader cores
 and lower Sérsic indices are smoother on the scale of a pixel than the
-validated cases. The four original models have no entry; their domain is the
+validated cases, and the radius of a ring does not set its sharpness, which
+its width does. The four original models have no entry; their domain is the
 one AD-046 states.
 """
 
@@ -32,6 +33,16 @@ VALIDATED_DOMAINS: dict[str, dict[str, Bounds]] = {
     },
     "bulge_broken_disk": {
         "wb_disk": (0.5, None),
+    },
+    "bulge_disk_bar": {
+        "a_bar": (5.0, None),
+        "alpha_bar": (2.0, None),
+        "c0_bar": (0.0, 3.5),
+        "q_bar": (0.2, None),
+    },
+    "bulge_disk_ring": {
+        "sigma_ring": (2.0, None),
+        "q_ring": (0.5, None),
     },
 }
 

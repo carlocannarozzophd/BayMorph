@@ -94,6 +94,14 @@ _BUILTIN_MODELS = {
         "factory_name": "BulgeBrokenDiskModelFactory",
         "geometry": None,
     },
+    "bulge_disk_bar": {
+        "factory_name": "BulgeDiskBarModelFactory",
+        "geometry": None,
+    },
+    "bulge_disk_ring": {
+        "factory_name": "BulgeDiskRingModelFactory",
+        "geometry": None,
+    },
 }
 
 

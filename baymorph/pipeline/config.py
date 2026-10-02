@@ -460,6 +460,149 @@ DEFAULT_CONFIG = {
                     "relative_to": "target_y",
                 },
             },
+            "bulge_disk_bar": {
+                "re_bulge": {
+                    "type": "uniform",
+                    "lower": 1.0,
+                    "upper": 30.0,
+                },
+                "n_bulge": {
+                    "type": "uniform",
+                    "lower": 1.5,
+                    "upper": 6.0,
+                },
+                "q_bulge": {
+                    "type": "uniform",
+                    "lower": 0.4,
+                    "upper": 1.0,
+                },
+                "theta_bulge": {
+                    "type": "uniform",
+                    "lower": "-pi/2",
+                    "upper": "pi/2",
+                },
+                "re_disk": {
+                    "type": "uniform",
+                    "lower": 10.0,
+                    "upper": 120.0,
+                },
+                "q_disk": {
+                    "type": "uniform",
+                    "lower": 0.4,
+                    "upper": 1.0,
+                },
+                "theta_disk": {
+                    "type": "uniform",
+                    "lower": "-pi/2",
+                    "upper": "pi/2",
+                },
+                "a_bar": {
+                    "type": "uniform",
+                    "lower": 5.0,
+                    "upper": 100.0,
+                },
+                "alpha_bar": {
+                    "type": "uniform",
+                    "lower": 2.0,
+                    "upper": 5.0,
+                },
+                "c0_bar": {
+                    "type": "uniform",
+                    "lower": 0.0,
+                    "upper": 3.5,
+                },
+                "q_bar": {
+                    "type": "uniform",
+                    "lower": 0.2,
+                    "upper": 0.7,
+                },
+                "theta_bar": {
+                    "type": "uniform",
+                    "lower": "-pi/2",
+                    "upper": "pi/2",
+                },
+                "x0": {
+                    "type": "uniform",
+                    "lower": -8.0,
+                    "upper": 8.0,
+                    "relative_to": "target_x",
+                },
+                "y0": {
+                    "type": "uniform",
+                    "lower": -8.0,
+                    "upper": 8.0,
+                    "relative_to": "target_y",
+                },
+            },
+            "bulge_disk_ring": {
+                "re_bulge": {
+                    "type": "uniform",
+                    "lower": 1.0,
+                    "upper": 30.0,
+                },
+                "n_bulge": {
+                    "type": "uniform",
+                    "lower": 1.5,
+                    "upper": 6.0,
+                },
+                "q_bulge": {
+                    "type": "uniform",
+                    "lower": 0.4,
+                    "upper": 1.0,
+                },
+                "theta_bulge": {
+                    "type": "uniform",
+                    "lower": "-pi/2",
+                    "upper": "pi/2",
+                },
+                "re_disk": {
+                    "type": "uniform",
+                    "lower": 10.0,
+                    "upper": 120.0,
+                },
+                "q_disk": {
+                    "type": "uniform",
+                    "lower": 0.4,
+                    "upper": 1.0,
+                },
+                "theta_disk": {
+                    "type": "uniform",
+                    "lower": "-pi/2",
+                    "upper": "pi/2",
+                },
+                "r_ring": {
+                    "type": "uniform",
+                    "lower": 5.0,
+                    "upper": 200.0,
+                },
+                "sigma_ring": {
+                    "type": "uniform",
+                    "lower": 2.0,
+                    "upper": 20.0,
+                },
+                "q_ring": {
+                    "type": "uniform",
+                    "lower": 0.5,
+                    "upper": 1.0,
+                },
+                "theta_ring": {
+                    "type": "uniform",
+                    "lower": "-pi/2",
+                    "upper": "pi/2",
+                },
+                "x0": {
+                    "type": "uniform",
+                    "lower": -8.0,
+                    "upper": 8.0,
+                    "relative_to": "target_x",
+                },
+                "y0": {
+                    "type": "uniform",
+                    "lower": -8.0,
+                    "upper": 8.0,
+                    "relative_to": "target_y",
+                },
+            },
         },
     },
     "diagnostics": {

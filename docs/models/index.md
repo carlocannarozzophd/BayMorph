@@ -33,7 +33,7 @@ measurement, and never change the meaning of a morphological parameter.
 | Part | Models | Page |
 | --- | --- | --- |
 | Morphological components | Sérsic, exponential disc, point source; the components of AD-048 | [Components](COMPONENTS.md) |
-| Morphology models | `single_sersic`, `double_sersic`, `sersic_point_source`, `bulge_disk`; `boxy_sersic`, `core_sersic`, `bulge_broken_disk` | one page each, below |
+| Morphology models | `single_sersic`, `double_sersic`, `sersic_point_source`, `bulge_disk`; `boxy_sersic`, `core_sersic`, `bulge_broken_disk`, `bulge_disk_bar`, `bulge_disk_ring` | one page each, below |
 | Point-spread function | Gaussian, empirical | [Point-Spread Functions](PSF.md) |
 | Residual background | constant, plane | [Residual Background](BACKGROUND.md) |
 
@@ -48,8 +48,10 @@ measurement, and never change the meaning of a morphological parameter.
 | [`boxy_sersic`](BOXY_SERSIC.md) | one Sérsic on generalized ellipses | 8 | boxy or discy isophotes |
 | [`core_sersic`](CORE_SERSIC.md) | one core-Sérsic | 10 | a resolved depleted core |
 | [`bulge_broken_disk`](BULGE_BROKEN_DISK.md) | Sérsic bulge and broken exponential disc, shared centre | 14 | a disc of type I, II or III |
+| [`bulge_disk_bar`](BULGE_DISK_BAR.md) | Sérsic bulge, exponential disc and Ferrers bar, shared centre | 17 | a barred disc galaxy |
+| [`bulge_disk_ring`](BULGE_DISK_RING.md) | Sérsic bulge, exponential disc and Gaussian ring, shared centre | 16 | a disc galaxy with a ring |
 
-The last three are families of AD-048, added as capabilities of the package
+The last five are families of AD-048, added as capabilities of the package
 for single-observation fits: a joint multi-observation fit rejects them
 before writing any output, and their priors must stay within the domain in
 which their rendering is validated.

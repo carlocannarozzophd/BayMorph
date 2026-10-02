@@ -11,6 +11,22 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* The `bulge_disk_bar` and `bulge_disk_ring` models of AD-048, for
+  single-observation fits: a Sérsic bulge and an exponential disc with a
+  Ferrers bar (`a_bar`, `alpha_bar`, `c0_bar`, `q_bar`, `theta_bar`) or with
+  a Gaussian ring (`r_ring`, `sigma_ring`, `q_ring`, `theta_ring`), with
+  their pages and figures in `docs/models/`. Their rendering is validated for
+  `alpha_bar` of at least 2 and `q_bar` of at least 0.2, and for `sigma_ring`
+  of at least 2 px and `q_ring` of at least 0.5; configuration validation,
+  now tested for every family, rejects priors beyond these domains. At high
+  signal-to-noise the edge of a bar outside the window of AD-046 is rendered
+  with an error comparable with the noise, as its page states
+  ([note](docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+* Adaptive integration in the generic cell rules splits the cells that the
+  edge of a finite support crosses, whatever its test of agreement says: a
+  sliver of light that no node samples was otherwise lost, up to 4.6e-5 of
+  the flux of a bar. Components without such an edge render bit for bit as
+  before.
 * The `bulge_broken_disk` model of AD-048, for single-observation fits: a
   Sérsic bulge with an exponential disc whose scale length changes at a
   break, of type I, II or III (`h_in_disk`, `h_out_disk`, `rb_disk`,

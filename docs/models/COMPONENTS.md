@@ -137,7 +137,10 @@ Sérsic profile, so every PSF renders them as it renders the Sérsic profile:
 - under an analytic PSF, Gauss-Legendre quadrature over the pixels;
 - under an empirical PSF, the effective-PSF rendering of AD-046;
 - in both cases, adaptive integration about the centre and on the cells a
-  component declares non-smooth.
+  component declares non-smooth;
+- for a component whose light ends at an edge, cells the edge crosses split
+  until they are small, since the test of agreement of adaptive integration
+  cannot see a sliver of light that no node samples.
 
 Their `flux` is the total flux over the whole plane, as for the Sérsic
 profile. Each is validated within a rendering domain recorded in
@@ -227,3 +230,73 @@ and the flux, axis ratio, position angle and centre of the Sérsic profile.
 
 **Python.** `baymorph.models.BrokenExponentialComponent(flux, h_in, h_out,
 rb, wb, q, theta, x0, y0)`.
+
+### Ferrers bar
+
+**Definition.** On generalized ellipses of radius $m$ and shape $c_0$, the
+Ferrers profile in the form of GALFIT (Peng et al. 2010) and Imfit (Erwin
+2015), with its central slope fixed to zero,
+
+$$
+I(m) = I_0 \left[1 - \left(\frac{m}{a}\right)^{2}\right]^{\alpha}
+\quad (m < a), \qquad I(m) = 0 \quad (m \ge a).
+$$
+
+The light ends at the semi-major length $a$; the slope at the edge is
+infinite for $\alpha < 1$, finite for $\alpha = 1$ and zero beyond. Boxy
+isophotes, $c_0 > 0$, describe bars (Athanassoula et al. 1990). The flux is
+analytic,
+
+$$
+F = \frac{K(c)\, q\, I_0\, a^{2}}{\alpha + 1}.
+$$
+
+The cells within two cells of the edge, and the axes inside the bar for
+isophotes that are not smooth there, are integrated adaptively; the cells
+the edge crosses are split until their side is $a/512$. A bar inside the
+image then holds its analytic flux within 1e-7.
+
+| Parameter | Meaning | Units | Domain |
+| --- | --- | --- | --- |
+| `a` | semi-major length, where the light ends | pixels | $a > 0$ |
+| `alpha` | sharpness of the edge | | $\alpha > 0$ |
+| `c0` | isophote shape | | $c_0 \ge -1$, convex isophotes |
+
+and the flux, axis ratio, position angle and centre of the Sérsic profile.
+
+**Python.** `baymorph.models.FerrersBarComponent(flux, a, alpha, c0, q,
+theta, x0, y0)`.
+
+### Gaussian ring
+
+**Definition.** On ellipses of elliptical radius $m$, the ring of Imfit
+(Erwin 2015),
+
+$$
+I(m) = A \exp\left[-\frac{(m - r)^{2}}{2\sigma^{2}}\right],
+$$
+
+whose crest lies at the semi-major radius $r$ and whose width along the
+major axis is $\sigma$. The flux is analytic,
+
+$$
+F = 2\pi q A \left\{\sigma^{2} e^{-r^{2}/(2\sigma^{2})}
++ \sqrt{\frac{\pi}{2}}\, r\sigma
+\left[1 + \operatorname{erf}\left(\frac{r}{\sqrt{2}\,\sigma}\right)
+\right]\right\},
+$$
+
+the circumference times the area of the Gaussian, $2\pi r q$ times
+$\sqrt{2\pi}\,\sigma A$, for a ring much wider than its width. On the minor
+axis the ring is $q\sigma$ wide; a ring narrower than one cell there is
+integrated adaptively within $7\sigma$ of its crest.
+
+| Parameter | Meaning | Units | Domain |
+| --- | --- | --- | --- |
+| `r` | semi-major radius of the crest | pixels | $r > 0$ |
+| `sigma` | width along the major axis | pixels | $\sigma > 0$ |
+
+and the flux, axis ratio, position angle and centre of the Sérsic profile.
+
+**Python.** `baymorph.models.GaussianRingComponent(flux, r, sigma, q, theta,
+x0, y0)`.

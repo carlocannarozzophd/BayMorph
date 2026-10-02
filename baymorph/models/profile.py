@@ -55,7 +55,9 @@ class ProfileComponent:
     that :meth:`scaled` can express the component on a finer grid, and
     implement :meth:`intensity`. A component whose profile has a kink or an
     edge away from its centre returns those cells from :meth:`nonsmooth_cells`
-    so that the hybrid rules integrate them adaptively.
+    so that the hybrid rules integrate them adaptively; one whose support
+    ends at an edge also returns, from :meth:`edge_cells`, the cells the edge
+    crosses at every level of that integration.
 
     ``flux`` is the total flux of the continuous profile over the whole
     plane, the analytic convention of the Sérsic profile.
@@ -108,6 +110,21 @@ class ProfileComponent:
         """
         return None
 
+    def edge_cells(
+        self,
+        x: FloatArray,
+        y: FloatArray,
+        half: float,
+    ) -> BoolArray | None:
+        """Return the cells of half-width ``half`` that an edge may cross.
+
+        A profile that ends at the edge of a finite support returns the
+        cells, centred at ``(x, y)``, that the edge may cross, until they are
+        small enough; adaptive integration splits them whatever its test of
+        agreement says. A profile without such an edge returns ``None``.
+        """
+        return None
+
     def render(
         self,
         shape: tuple[int, int],
@@ -140,6 +157,7 @@ class ProfileComponent:
             renderer=renderer,
             centre=self.centre(),
             nonsmooth=self.nonsmooth_cells,
+            edges=self.edge_cells,
             integration_order=integration_order,
             rtol=rtol,
             atol=atol,
