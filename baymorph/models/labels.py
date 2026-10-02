@@ -54,6 +54,28 @@ MODEL_PARAMETER_LABELS = {
         "x0": r"$x_0$",
         "y0": r"$y_0$",
     },
+    "boxy_sersic": {
+        "flux": r"$F$",
+        "re": r"$R_{e}$",
+        "n": r"$n$",
+        "q": r"$q$",
+        "c0": r"$c_0$",
+        "theta": r"$\theta$",
+        "x0": r"$x_0$",
+        "y0": r"$y_0$",
+    },
+    "core_sersic": {
+        "flux": r"$F$",
+        "re": r"$R_{e}$",
+        "n": r"$n$",
+        "rb": r"$R_{b}$",
+        "gamma": r"$\gamma$",
+        "alpha": r"$\alpha$",
+        "q": r"$q$",
+        "theta": r"$\theta$",
+        "x0": r"$x_0$",
+        "y0": r"$y_0$",
+    },
 }
 
 

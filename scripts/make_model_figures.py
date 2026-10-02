@@ -45,7 +45,16 @@ from baymorph.fitting import (  # noqa: E402
     make_sersic_point_source_psf_model,
     make_single_sersic_psf_model,
 )
-from baymorph.models import PointSourceModel, SersicModel  # noqa: E402
+from baymorph.models import (  # noqa: E402
+    CoreSersicComponent,
+    GeneralizedSersicComponent,
+    PointSourceModel,
+    SersicModel,
+)
+from baymorph.models.isophote import (  # noqa: E402
+    generalized_radius,
+    major_minor_offsets,
+)
 from baymorph.observation.background import (  # noqa: E402
     ConstantBackground,
     TiltedPlaneBackground,
@@ -880,6 +889,85 @@ def bulge_disk_tradeoff(theme: Theme) -> plt.Figure:
     return fig
 
 
+# ---------------------------------------------------------------------------
+# Families of AD-048
+# ---------------------------------------------------------------------------
+
+
+def boxy_sersic_isophotes(theme: Theme) -> plt.Figure:
+    """Discy, elliptical and boxy isophotes of one Sérsic profile."""
+    shape = (81, 81)
+    parameters = dict(
+        flux=100.0, re=10.0, n=2.0, q=0.7, theta=np.deg2rad(30.0),
+        x0=40.0, y0=40.0,
+    )
+    shapes = ((-0.6, "discy"), (0.0, "ellipses"), (0.6, "boxy"))
+    fig, axes = plt.subplots(1, 3, figsize=(WIDTH * 0.8, 2.6))
+    fig.subplots_adjust(wspace=0.08)
+    yy, xx = np.indices(shape, dtype=float)
+    images = [
+        GeneralizedSersicComponent(c0=c0, **parameters).render(shape)
+        for c0, _ in shapes
+    ]
+    peak = max(float(image.max()) for image in images)
+    norm = LogNorm(vmin=1e-3 * peak, vmax=peak)
+    for ax, image, (c0, label) in zip(axes, images, shapes, strict=True):
+        show_image(ax, image, theme, norm)
+        major, minor = major_minor_offsets(
+            xx, yy, x0=parameters["x0"], y0=parameters["y0"],
+            theta=parameters["theta"],
+        )
+        radius = generalized_radius(major, minor, q=parameters["q"], c0=c0)
+        ax.contour(
+            radius, levels=(5.0, 10.0, 20.0), colors=theme.series[1],
+            linewidths=0.9,
+        )
+        value = "0" if c0 == 0.0 else f"{c0:+.1f}".replace("-", "\u2212")
+        ax.set_title(f"c0 = {value}, {label}", fontsize=8.5)
+    return fig
+
+
+def core_sersic_profiles(theme: Theme) -> plt.Figure:
+    """The depleted core against the inward extrapolation of the Sérsic body."""
+    base = dict(
+        flux=100.0, re=20.0, n=4.0, rb=2.0, gamma=0.3, alpha=2.0, q=1.0,
+        theta=0.0, x0=0.0, y0=0.0,
+    )
+    radius = np.logspace(-2.0, 1.6, 400)
+    fig, (left, right) = plt.subplots(1, 2, figsize=(WIDTH, 2.9))
+    fig.subplots_adjust(wspace=0.32)
+
+    def shape(**changes):
+        component = CoreSersicComponent(**{**base, **changes})
+        profile = component.surface_brightness(radius) / np.exp(
+            component.log_intensity_scale
+        )
+        sersic = np.exp(
+            -component.bn * (radius / component.re) ** (1.0 / component.n)
+        )
+        return profile, sersic
+
+    for ax, key, values, title in (
+        (left, "gamma", (0.0, 0.3, 0.9), "Inner slope γ (α = 2)"),
+        (right, "alpha", (0.5, 1.0, 2.0), "Transition α (γ = 0.3)"),
+    ):
+        for value, colour in zip(values, theme.series, strict=False):
+            profile, sersic = shape(**{key: value})
+            ax.plot(radius / base["rb"], profile, color=colour,
+                    label=f"{'γ' if key == 'gamma' else 'α'} = {value:g}")
+        ax.plot(radius / base["rb"], sersic, color=theme.ink, linestyle="--",
+                linewidth=1.0, label="Sérsic body")
+        ax.axvline(1.0, color=theme.axis, linewidth=0.8)
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel(r"$R / R_b$")
+        ax.set_title(title, loc="left")
+        ax.legend(loc="lower left", handlelength=1.4)
+        plot_axes(ax)
+    left.set_ylabel(r"$I(R) / I'$")
+    return fig
+
+
 FIGURES: dict[str, Callable[[Theme], plt.Figure]] = {
     "forward_model": forward_model,
     "model_composition": model_composition,
@@ -895,6 +983,8 @@ FIGURES: dict[str, Callable[[Theme], plt.Figure]] = {
     "background_models": background_models,
     "sersic_degeneracy": sersic_degeneracy,
     "bulge_disk_tradeoff": bulge_disk_tradeoff,
+    "boxy_sersic_isophotes": boxy_sersic_isophotes,
+    "core_sersic_profiles": core_sersic_profiles,
 }
 
 

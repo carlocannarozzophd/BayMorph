@@ -5,7 +5,9 @@ from baymorph.fitting.dynesty import (
 )
 from baymorph.fitting.model_factories import (
     ObservedModelFactory,
+    make_boxy_sersic_psf_model,
     make_bulge_disk_psf_model,
+    make_core_sersic_psf_model,
     make_double_sersic_psf_model,
     make_sersic_point_source_psf_model,
     make_single_sersic_psf_model,
@@ -40,7 +42,9 @@ __all__ = [
     "PocoMCFitter",
     "Prior",
     "UniformPrior",
+    "make_boxy_sersic_psf_model",
     "make_bulge_disk_psf_model",
+    "make_core_sersic_psf_model",
     "make_double_sersic_psf_model",
     "make_sampler",
     "make_sersic_point_source_psf_model",

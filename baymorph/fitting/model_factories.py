@@ -15,8 +15,10 @@ from typing import Any
 
 from baymorph.models import (
     BulgeDiskModel,
+    CoreSersicComponent,
     DoubleSersicModel,
     ExponentialComponent,
+    GeneralizedSersicComponent,
     PointSourceModel,
     SersicModel,
     SersicPointSourceModel,
@@ -270,11 +272,131 @@ def make_bulge_disk_psf_model(
     )
 
 
+def make_boxy_sersic_psf_model(
+    *,
+    flux: float,
+    re: float,
+    n: float,
+    q: float,
+    c0: float,
+    theta: float,
+    x0: float,
+    y0: float,
+    psf,
+):
+    """Build a PSF-convolved Sérsic model on generalized ellipses (AD-048).
+
+    Parameters
+    ----------
+    flux : float
+        Total flux of the profile.
+    re : float
+        Semi-major radius of the half-light isophote, in pixels.
+    n : float
+        Sérsic index.
+    q : float
+        Axis ratio of the isophotes.
+    c0 : float
+        Isophote shape: positive for boxy, negative for discy isophotes.
+    theta : float
+        Position angle.
+    x0, y0 : float
+        Centre in pixel coordinates.
+    psf : object
+        Observation PSF.
+
+    Returns
+    -------
+    ConvolvedModel
+        PSF-convolved model without additive background.
+    """
+    galaxy = GeneralizedSersicComponent(
+        flux=flux,
+        re=re,
+        n=n,
+        q=q,
+        c0=c0,
+        theta=theta,
+        x0=x0,
+        y0=y0,
+    )
+
+    return ConvolvedModel(
+        model=galaxy,
+        psf=psf,
+    )
+
+
+def make_core_sersic_psf_model(
+    *,
+    flux: float,
+    re: float,
+    n: float,
+    rb: float,
+    gamma: float,
+    alpha: float,
+    q: float,
+    theta: float,
+    x0: float,
+    y0: float,
+    psf,
+):
+    """Build a PSF-convolved core-Sérsic model (AD-048).
+
+    Parameters
+    ----------
+    flux : float
+        Total flux of the profile.
+    re : float
+        Half-light radius of the outer Sérsic profile, in pixels.
+    n : float
+        Sérsic index of the outer profile.
+    rb : float
+        Break radius, in pixels.
+    gamma : float
+        Slope of the inner power law.
+    alpha : float
+        Sharpness of the transition.
+    q : float
+        Axis ratio.
+    theta : float
+        Position angle.
+    x0, y0 : float
+        Centre in pixel coordinates.
+    psf : object
+        Observation PSF.
+
+    Returns
+    -------
+    ConvolvedModel
+        PSF-convolved model without additive background.
+    """
+    galaxy = CoreSersicComponent(
+        flux=flux,
+        re=re,
+        n=n,
+        rb=rb,
+        gamma=gamma,
+        alpha=alpha,
+        q=q,
+        theta=theta,
+        x0=x0,
+        y0=y0,
+    )
+
+    return ConvolvedModel(
+        model=galaxy,
+        psf=psf,
+    )
+
+
 _MODEL_FACTORIES = {
     "SingleSersicModelFactory": make_single_sersic_psf_model,
     "DoubleSersicModelFactory": make_double_sersic_psf_model,
     "SersicPointSourceModelFactory": make_sersic_point_source_psf_model,
     "BulgeDiskModelFactory": make_bulge_disk_psf_model,
+    "BoxySersicModelFactory": make_boxy_sersic_psf_model,
+    "CoreSersicModelFactory": make_core_sersic_psf_model,
 }
 
 
@@ -479,7 +601,9 @@ class ObservedModelFactory:
 
 __all__ = [
     "ObservedModelFactory",
+    "make_boxy_sersic_psf_model",
     "make_bulge_disk_psf_model",
+    "make_core_sersic_psf_model",
     "make_double_sersic_psf_model",
     "make_sersic_point_source_psf_model",
     "make_single_sersic_psf_model",

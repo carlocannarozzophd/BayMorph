@@ -14,6 +14,8 @@ python -m pytest -q \
     --ignore=tests/test_multi_observation_dynesty.py \
     --ignore=tests/test_sersic_point_source_recovery.py \
     --ignore=tests/test_bulge_disk_recovery.py \
+    --ignore=tests/test_boxy_sersic_recovery.py \
+    --ignore=tests/test_core_sersic_recovery.py \
     --ignore=tests/test_empirical_psf_builder_benchmark.py \
     -k "not test_dynesty_generic_fit_runs \
         and not test_gaussian_mixture_reference_is_valid \

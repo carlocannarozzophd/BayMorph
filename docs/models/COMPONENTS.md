@@ -1,8 +1,10 @@
 # Morphological Components
 
-The morphology models are sums of three components: the Sérsic profile, the
-exponential disc and the unresolved point source. A component describes
-intrinsic light only; it owns no PSF, no noise and no prior.
+The four original morphology models are sums of three components: the
+Sérsic profile, the exponential disc and the unresolved point source. The
+families of AD-048 add components of their own, described at the end of
+this page. A component describes intrinsic light only; it owns no PSF, no
+noise and no prior.
 
 ## Sérsic profile
 
@@ -125,3 +127,75 @@ is lost, not redistributed.
 
 **Python.** `baymorph.models.PointSourceModel(flux, x0, y0)`; it has no
 `render()` method, because it needs a PSF to be rendered.
+
+## Components of AD-048
+
+The families of AD-048 render through generic cell rules
+(`baymorph/rendering/profile_integration.py`) with the renderer names of the
+Sérsic profile, so every PSF renders them as it renders the Sérsic profile:
+
+- under an analytic PSF, Gauss-Legendre quadrature over the pixels;
+- under an empirical PSF, the effective-PSF rendering of AD-046;
+- in both cases, adaptive integration about the centre and on the cells a
+  component declares non-smooth.
+
+Their `flux` is the total flux over the whole plane, as for the Sérsic
+profile. Each is validated within a rendering domain recorded in
+[Rendering of the Morphology Families](../research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md).
+
+### Generalized Sérsic profile
+
+**Definition.** The Sérsic profile of the generalized radius
+
+$$
+m = \left(|x'|^{c} + \left|\frac{y'}{q}\right|^{c}\right)^{1/c},
+\qquad c = 2 + c_0,
+$$
+
+with $c_0 > 0$ for boxy and $c_0 < 0$ for discy isophotes; $c_0 = 0$ gives
+the Sérsic profile. The area within $m$ is $K(c)\,q\,m^2$, with
+$K(c) = 4\,\Gamma(1 + 1/c)^2/\Gamma(1 + 2/c)$, so $R_e$ remains the
+semi-major radius of the half-light isophote and the flux normalization is
+analytic. Where $c$ is not an even integer, the radius is not smooth on the
+axes of the isophotes, and those cells are integrated adaptively. At
+$c_0 = -1$ it has a kink there, and the rendering is accurate to about
+1e-6 of the flux instead of 1e-8.
+
+| Parameter | Meaning | Units | Domain |
+| --- | --- | --- | --- |
+| `c0` | isophote shape | | $c_0 \ge -1$, convex isophotes |
+
+and the parameters of the Sérsic profile.
+
+**Python.** `baymorph.models.GeneralizedSersicComponent(flux, re, n, q, c0,
+theta, x0, y0)`.
+
+### Core-Sérsic profile
+
+**Definition.** On ellipses of elliptical radius $R$,
+
+$$
+I(R) = I' \left[1 + \left(\frac{R_b}{R}\right)^{\alpha}\right]^{\gamma/\alpha}
+\exp\left\{-b_n \left[\frac{R^{\alpha} + R_b^{\alpha}}{R_e^{\alpha}}
+\right]^{1/(\alpha n)}\right\}
+$$
+
+(Graham et al. 2003; Trujillo et al. 2004): a power law of slope $\gamma$
+within the break radius $R_b$, the Sérsic profile beyond it, and a
+transition that sharpens with $\alpha$. $I'$ follows from `flux` by a
+radial integral computed numerically in $\ln R$, with the power law added
+analytically below $10^{-10} R_b$; it agrees with an independent integral
+within 1e-9. The power-law cusp is integrated adaptively; it converges for
+the validated slopes, and a slope near 2, where the central flux diverges,
+raises an error instead.
+
+| Parameter | Meaning | Units | Domain |
+| --- | --- | --- | --- |
+| `rb` | break radius | pixels | $R_b > 0$ |
+| `gamma` | inner slope | | $\gamma < 2$ |
+| `alpha` | sharpness of the transition | | $\alpha > 0$ |
+
+and the parameters of the Sérsic profile.
+
+**Python.** `baymorph.models.CoreSersicComponent(flux, re, n, rb, gamma,
+alpha, q, theta, x0, y0)`.

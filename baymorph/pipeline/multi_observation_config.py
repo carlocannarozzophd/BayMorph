@@ -485,6 +485,13 @@ def build_multi_observation_parameter_layout(
         model_name
     )
 
+    if model_definition.geometry is None:
+        raise ValueError(
+            f"Model {model_name!r} has no geometry contract, so the "
+            "multi-observation workflow does not support it yet; fit it to "
+            "one observation at a time (AD-048)."
+        )
+
     multi_observation_config = (
         _multi_observation_fit_section(
             fit_config

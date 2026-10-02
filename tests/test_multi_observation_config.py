@@ -156,3 +156,18 @@ def test_parameter_frame_reports_canonical_path():
         multi_observation_parameter_frame(
             config
         )
+
+
+@pytest.mark.parametrize(
+    "model_name",
+    ["boxy_sersic", "core_sersic"],
+)
+def test_models_without_geometry_are_rejected_in_every_frame(model_name):
+    """The families of AD-048 are single-observation models for now."""
+    for frame in ("detector", "sky"):
+        config = _config()
+        config["fit"]["models"] = [model_name]
+        config["fit"]["multi_observation"]["parameter_frame"] = frame
+
+        with pytest.raises(ValueError, match="no geometry contract"):
+            build_multi_observation_parameter_layout(config)

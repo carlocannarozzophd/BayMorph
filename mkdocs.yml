@@ -77,6 +77,8 @@ nav:
   - Double Sérsic: models/DOUBLE_SERSIC.md
   - Sérsic plus Point Source: models/SERSIC_POINT_SOURCE.md
   - Bulge and Disc: models/BULGE_DISK.md
+  - Boxy or Discy Sérsic: models/BOXY_SERSIC.md
+  - Core-Sérsic: models/CORE_SERSIC.md
   - Point-Spread Functions: models/PSF.md
   - Residual Background: models/BACKGROUND.md
 

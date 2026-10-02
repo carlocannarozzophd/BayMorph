@@ -78,6 +78,18 @@ _BUILTIN_MODELS = {
             ),
         ),
     },
+    # The families of AD-048 have no geometry contract yet: the joint path
+    # rejects them before writing any output, because their further lengths
+    # and shape parameters would otherwise pass to every observation
+    # untransformed.
+    "boxy_sersic": {
+        "factory_name": "BoxySersicModelFactory",
+        "geometry": None,
+    },
+    "core_sersic": {
+        "factory_name": "CoreSersicModelFactory",
+        "geometry": None,
+    },
 }
 
 

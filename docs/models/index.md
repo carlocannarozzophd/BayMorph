@@ -32,8 +32,8 @@ measurement, and never change the meaning of a morphological parameter.
 
 | Part | Models | Page |
 | --- | --- | --- |
-| Morphological components | Sérsic, exponential disc, point source | [Components](COMPONENTS.md) |
-| Morphology models | `single_sersic`, `double_sersic`, `sersic_point_source`, `bulge_disk` | one page each, below |
+| Morphological components | Sérsic, exponential disc, point source; the components of AD-048 | [Components](COMPONENTS.md) |
+| Morphology models | `single_sersic`, `double_sersic`, `sersic_point_source`, `bulge_disk`; `boxy_sersic`, `core_sersic` | one page each, below |
 | Point-spread function | Gaussian, empirical | [Point-Spread Functions](PSF.md) |
 | Residual background | constant, plane | [Residual Background](BACKGROUND.md) |
 
@@ -45,6 +45,13 @@ measurement, and never change the meaning of a morphological parameter.
 | [`double_sersic`](DOUBLE_SERSIC.md) | two labelled Sérsic components, shared centre | 12 | a galaxy whose profile one Sérsic cannot describe |
 | [`sersic_point_source`](SERSIC_POINT_SOURCE.md) | Sérsic and unresolved source, shared centre | 8 | a galaxy with an unresolved nucleus |
 | [`bulge_disk`](BULGE_DISK.md) | Sérsic bulge and exponential disc, shared centre | 11 | a bulge and disc decomposition |
+| [`boxy_sersic`](BOXY_SERSIC.md) | one Sérsic on generalized ellipses | 8 | boxy or discy isophotes |
+| [`core_sersic`](CORE_SERSIC.md) | one core-Sérsic | 10 | a resolved depleted core |
+
+The last two are families of AD-048, added as capabilities of the package
+for single-observation fits: a joint multi-observation fit rejects them
+before writing any output, and their priors must stay within the domain in
+which their rendering is validated.
 
 A fit samples these parameters together with those of the residual
 background: one for a constant background, three for a plane.

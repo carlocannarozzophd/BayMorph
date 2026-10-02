@@ -11,6 +11,18 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* Two morphology models of AD-048 for single-observation fits:
+  * `boxy_sersic`, a Sérsic profile on generalized ellipses with the isophote
+    shape `c0`;
+  * `core_sersic`, the core-Sérsic profile of a depleted core with `rb`,
+    `gamma` and `alpha`.
+
+  Their rendering meets the criteria of AD-046 on the bench of the families
+  ([note](docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+  Configuration validation rejects priors beyond the domain in which it is
+  validated, and the multi-observation workflow rejects models without a
+  geometry contract, these two included. Each has a page with figures in
+  `docs/models/`.
 * A generic rendering for profile components other than the Sérsic profile
   (AD-048):
   * isophote coordinates on generalized ellipses (`baymorph/models/isophote.py`);

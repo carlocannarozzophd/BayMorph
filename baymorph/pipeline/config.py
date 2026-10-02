@@ -308,6 +308,94 @@ DEFAULT_CONFIG = {
                     "relative_to": "target_y",
                 },
             },
+            "boxy_sersic": {
+                "re": {
+                    "type": "uniform",
+                    "lower": 1.0,
+                    "upper": 120.0,
+                },
+                "n": {
+                    "type": "uniform",
+                    "lower": 0.5,
+                    "upper": 6.0,
+                },
+                "q": {
+                    "type": "uniform",
+                    "lower": 0.4,
+                    "upper": 1.0,
+                },
+                "c0": {
+                    "type": "uniform",
+                    "lower": -1.0,
+                    "upper": 1.0,
+                },
+                "theta": {
+                    "type": "uniform",
+                    "lower": "-pi/2",
+                    "upper": "pi/2",
+                },
+                "x0": {
+                    "type": "uniform",
+                    "lower": -8.0,
+                    "upper": 8.0,
+                    "relative_to": "target_x",
+                },
+                "y0": {
+                    "type": "uniform",
+                    "lower": -8.0,
+                    "upper": 8.0,
+                    "relative_to": "target_y",
+                },
+            },
+            "core_sersic": {
+                "re": {
+                    "type": "uniform",
+                    "lower": 1.0,
+                    "upper": 120.0,
+                },
+                "n": {
+                    "type": "uniform",
+                    "lower": 0.5,
+                    "upper": 6.0,
+                },
+                "rb": {
+                    "type": "uniform",
+                    "lower": 0.5,
+                    "upper": 20.0,
+                },
+                "gamma": {
+                    "type": "uniform",
+                    "lower": 0.0,
+                    "upper": 0.9,
+                },
+                "alpha": {
+                    "type": "uniform",
+                    "lower": 0.5,
+                    "upper": 2.0,
+                },
+                "q": {
+                    "type": "uniform",
+                    "lower": 0.4,
+                    "upper": 1.0,
+                },
+                "theta": {
+                    "type": "uniform",
+                    "lower": "-pi/2",
+                    "upper": "pi/2",
+                },
+                "x0": {
+                    "type": "uniform",
+                    "lower": -8.0,
+                    "upper": 8.0,
+                    "relative_to": "target_x",
+                },
+                "y0": {
+                    "type": "uniform",
+                    "lower": -8.0,
+                    "upper": 8.0,
+                    "relative_to": "target_y",
+                },
+            },
         },
     },
     "diagnostics": {
@@ -692,11 +780,55 @@ def validate_config(config: dict[str, Any]) -> None:
             )
 
 
+def _prior_support(prior) -> tuple[float, float]:
+    """Return the smallest and largest value a parsed prior can take."""
+    from baymorph.fitting.priors import FixedPrior, NormalPrior
+
+    if isinstance(prior, FixedPrior):
+        return prior.value, prior.value
+
+    if isinstance(prior, NormalPrior):
+        return -math.inf, math.inf
+
+    return float(prior.lower), float(prior.upper)
+
+
+def _require_validated_support(
+    prior,
+    bounds: tuple[float | None, float | None],
+    *,
+    model_name: str,
+    parameter_name: str,
+) -> None:
+    """Reject a prior whose support leaves the validated rendering domain."""
+    low, high = _prior_support(prior)
+    lower, upper = bounds
+
+    if (lower is not None and low < lower) or (
+        upper is not None and high > upper
+    ):
+        domain = (
+            f"[{'-inf' if lower is None else f'{lower:g}'}, "
+            f"{'inf' if upper is None else f'{upper:g}'}]"
+        )
+
+        raise ValueError(
+            f"The prior of fit.priors.{model_name}.{parameter_name} spans "
+            f"[{low:g}, {high:g}], beyond {domain}, the domain in which the "
+            f"rendering of {model_name!r} is validated (AD-048)."
+        )
+
+
 def validate_fit_priors(
     config: dict[str, Any],
 ) -> None:
-    """Validate that every sampled morphology parameter has a typed prior."""
+    """Validate that every sampled morphology parameter has a typed prior.
+
+    For the families of AD-048 the support of every prior must also lie in
+    the domain in which the rendering of the model is validated.
+    """
     from baymorph.models import get_model
+    from baymorph.models.validated_domains import validated_domain
     from baymorph.pipeline.prior_config import (
         parse_prior_config,
         prior_config_for_parameter,
@@ -741,6 +873,9 @@ def validate_fit_priors(
         model_definition = get_model(
             model_name
         )
+        domain = validated_domain(
+            model_name
+        )
 
         missing = []
 
@@ -759,10 +894,18 @@ def validate_fit_priors(
                 )
                 continue
 
-            parse_prior_config(
+            parsed = parse_prior_config(
                 prior,
                 references=references,
             )
+
+            if parameter_name in domain:
+                _require_validated_support(
+                    parsed,
+                    domain[parameter_name],
+                    model_name=model_name,
+                    parameter_name=parameter_name,
+                )
 
         if missing:
             names = ", ".join(
