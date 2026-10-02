@@ -11,6 +11,11 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* AD-048, six further morphology families as available single-observation
+  models, and the survey behind it
+  ([note](docs/research/MORPHOLOGY_FAMILIES_2026-10-02.md)): a catalogue of
+  families beyond the Sérsic profile, spiral arms included, and the reasons
+  why the production target needs none of them.
 * A Models section on the documentation site (`docs/models/`): the morphological
   components, the four morphology models, the PSFs and the residual background,
   each with its definition, parameters, priors, degeneracies, validation status

@@ -141,6 +141,8 @@ nav:
     - Residual Diagnostic: research/TARGET_R_RESIDUAL_DIAGNOSTIC_2026-09-20.md
   - Source Identification:
     - Computer-Vision Source Identification: research/CV_SOURCE_IDENTIFICATION_2026-10-01.md
+  - Morphology Families:
+    - Morphology Families Beyond the Sérsic Profile: research/MORPHOLOGY_FAMILIES_2026-10-02.md
 
 plugins:
   - search
