@@ -11,6 +11,10 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* The `bulge_broken_disk` model of AD-048, for single-observation fits: a
+  Sérsic bulge with an exponential disc whose scale length changes at a
+  break, of type I, II or III (`h_in_disk`, `h_out_disk`, `rb_disk`,
+  `wb_disk`), with its page and figures in `docs/models/`.
 * Two morphology models of AD-048 for single-observation fits:
   * `boxy_sersic`, a Sérsic profile on generalized ellipses with the isophote
     shape `c0`;

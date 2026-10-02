@@ -183,12 +183,13 @@ its fluxes, which must always be declared.
 | `bulge_disk` | `flux_bulge`, `re_bulge`, `n_bulge`, `q_bulge`, `theta_bulge`, `flux_disk`, `re_disk`, `q_disk`, `theta_disk`, `x0`, `y0` | `re_bulge` 1–30, `n_bulge` 1.5–6, `q_bulge` and `q_disk` 0.4–1, `theta_bulge` and `theta_disk` −π/2–π/2, `re_disk` 10–120, centre ±8 |
 | `boxy_sersic` | `flux`, `re`, `n`, `q`, `c0`, `theta`, `x0`, `y0` | as `single_sersic`, and `c0` −1–1 |
 | `core_sersic` | `flux`, `re`, `n`, `rb`, `gamma`, `alpha`, `q`, `theta`, `x0`, `y0` | as `single_sersic`, and `rb` 0.5–20, `gamma` 0–0.9, `alpha` 0.5–2 |
+| `bulge_broken_disk` | `flux_bulge`, `re_bulge`, `n_bulge`, `q_bulge`, `theta_bulge`, `flux_disk`, `h_in_disk`, `h_out_disk`, `rb_disk`, `wb_disk`, `q_disk`, `theta_disk`, `x0`, `y0` | the bulge as `bulge_disk`; `h_in_disk` and `h_out_disk` 2–80, `rb_disk` 5–300, `wb_disk` 0.5–20, `q_disk` 0.4–1, `theta_disk` −π/2–π/2, centre ±8 |
 
-The models of AD-048, `boxy_sersic` and `core_sersic`, are validated for
-single-observation fits within a rendering domain, `c0` −1–1, `n` up to 6,
-`re` at least 1, `rb` at least 0.5, `gamma` 0–0.9 and `alpha` 0.5–2; a
-prior whose support leaves it is rejected, and so is a joint
-multi-observation fit with either model.
+The models of AD-048, `boxy_sersic`, `core_sersic` and `bulge_broken_disk`,
+are validated for single-observation fits within a rendering domain: `c0`
+−1–1, `n` up to 6, `re` at least 1, `rb` at least 0.5, `gamma` 0–0.9,
+`alpha` 0.5–2 and `wb_disk` at least 0.5. A prior whose support leaves it is
+rejected, and so is a joint multi-observation fit with any of these models.
 
 For `double_sersic` and `bulge_disk`, a prior declared under `q` or `theta`
 applies to both components (`q_bulge` and `q_disk`, `theta_bulge` and

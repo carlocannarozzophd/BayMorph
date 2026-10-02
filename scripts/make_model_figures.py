@@ -40,12 +40,14 @@ from scipy.optimize import least_squares  # noqa: E402
 from scipy.special import gammainc, gammaincinv  # noqa: E402
 
 from baymorph.fitting import (  # noqa: E402
+    make_bulge_broken_disk_psf_model,
     make_bulge_disk_psf_model,
     make_double_sersic_psf_model,
     make_sersic_point_source_psf_model,
     make_single_sersic_psf_model,
 )
 from baymorph.models import (  # noqa: E402
+    BrokenExponentialComponent,
     CoreSersicComponent,
     GeneralizedSersicComponent,
     PointSourceModel,
@@ -968,6 +970,63 @@ def core_sersic_profiles(theme: Theme) -> plt.Figure:
     return fig
 
 
+def broken_disk_profiles(theme: Theme) -> plt.Figure:
+    """The three types of disc profile and the width of the break."""
+    radius = np.linspace(0.0, 40.0, 500)
+    base = dict(
+        flux=100.0, h_in=6.0, rb=15.0, wb=1.0, q=1.0, theta=0.0, x0=0.0,
+        y0=0.0,
+    )
+    fig, (left, right) = plt.subplots(1, 2, figsize=(WIDTH, 2.9))
+    fig.subplots_adjust(wspace=0.32)
+
+    def shape(**changes):
+        disk = BrokenExponentialComponent(**{**base, **changes})
+        return disk.surface_brightness(radius) / np.exp(
+            disk.log_central_intensity
+        )
+
+    for (label, h_out), colour in zip(
+        (("type I", 6.0), ("type II", 3.0), ("type III", 12.0)),
+        theme.series,
+        strict=False,
+    ):
+        left.plot(radius, shape(h_out=h_out), color=colour,
+                  label=f"{label}, h_out = {h_out:g} px")
+    for width, colour in zip((0.5, 2.0, 5.0), theme.series, strict=False):
+        right.plot(radius, shape(h_out=3.0, wb=width), color=colour,
+                   label=f"w_b = {width:g} px")
+    for ax, title in (
+        (left, "Disc types, h_in = 6 px"),
+        (right, "Width of the break, type II"),
+    ):
+        ax.axvline(base["rb"], color=theme.axis, linewidth=0.8)
+        ax.set_yscale("log")
+        ax.set_ylim(1e-5, 1.5)
+        ax.set_xlim(0, 40)
+        ax.set_xlabel("radius (pixels)")
+        ax.set_title(title, loc="left")
+        ax.legend(loc="lower left", handlelength=1.4)
+        plot_axes(ax)
+    left.set_ylabel(r"$I(r) / I_0$")
+    return fig
+
+
+def bulge_broken_disk_decomposition(theme: Theme) -> plt.Figure:
+    """A Sérsic bulge and a type II disc."""
+    model = make_bulge_broken_disk_psf_model(
+        flux_bulge=30.0, re_bulge=3.0, n_bulge=3.5, q_bulge=0.9,
+        theta_bulge=np.deg2rad(40.0),
+        flux_disk=70.0, h_in_disk=10.0, h_out_disk=4.0, rb_disk=22.0,
+        wb_disk=1.5, q_disk=0.6, theta_disk=np.deg2rad(40.0),
+        x0=50.0, y0=50.0, psf=GaussianPSF(fwhm=2.5),
+    )
+    return decomposition(
+        theme, model, ("bulge", "disk"), ("bulge, n = 3.5", "type II disc"),
+        "total, B/T = 0.3", 48,
+    )
+
+
 FIGURES: dict[str, Callable[[Theme], plt.Figure]] = {
     "forward_model": forward_model,
     "model_composition": model_composition,
@@ -985,6 +1044,8 @@ FIGURES: dict[str, Callable[[Theme], plt.Figure]] = {
     "bulge_disk_tradeoff": bulge_disk_tradeoff,
     "boxy_sersic_isophotes": boxy_sersic_isophotes,
     "core_sersic_profiles": core_sersic_profiles,
+    "broken_disk_profiles": broken_disk_profiles,
+    "bulge_broken_disk_decomposition": bulge_broken_disk_decomposition,
 }
 
 

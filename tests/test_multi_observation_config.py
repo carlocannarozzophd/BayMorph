@@ -160,7 +160,7 @@ def test_parameter_frame_reports_canonical_path():
 
 @pytest.mark.parametrize(
     "model_name",
-    ["boxy_sersic", "core_sersic"],
+    ["boxy_sersic", "core_sersic", "bulge_broken_disk"],
 )
 def test_models_without_geometry_are_rejected_in_every_frame(model_name):
     """The families of AD-048 are single-observation models for now."""

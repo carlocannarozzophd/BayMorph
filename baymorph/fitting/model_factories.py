@@ -14,7 +14,9 @@ from __future__ import annotations
 from typing import Any
 
 from baymorph.models import (
+    BrokenExponentialComponent,
     BulgeDiskModel,
+    CompositeModel,
     CoreSersicComponent,
     DoubleSersicModel,
     ExponentialComponent,
@@ -390,6 +392,80 @@ def make_core_sersic_psf_model(
     )
 
 
+def make_bulge_broken_disk_psf_model(
+    *,
+    flux_bulge: float,
+    re_bulge: float,
+    n_bulge: float,
+    q_bulge: float,
+    theta_bulge: float,
+    flux_disk: float,
+    h_in_disk: float,
+    h_out_disk: float,
+    rb_disk: float,
+    wb_disk: float,
+    q_disk: float,
+    theta_disk: float,
+    x0: float,
+    y0: float,
+    psf,
+):
+    """Build a PSF-convolved Sérsic bulge with a broken disc (AD-048).
+
+    Parameters
+    ----------
+    flux_bulge, flux_disk : float
+        Total fluxes of the bulge and of the disc.
+    re_bulge, n_bulge, q_bulge, theta_bulge : float
+        Effective radius, Sérsic index, axis ratio and position angle of the
+        bulge.
+    h_in_disk, h_out_disk : float
+        Scale lengths of the disc inside and outside the break, in pixels.
+    rb_disk, wb_disk : float
+        Break radius and width of the transition, in pixels.
+    q_disk, theta_disk : float
+        Axis ratio and position angle of the disc.
+    x0, y0 : float
+        Shared centre in pixel coordinates.
+    psf : object
+        Observation PSF.
+
+    Returns
+    -------
+    ConvolvedModel
+        PSF-convolved model without additive background.
+    """
+    morphology = CompositeModel(
+        {
+            "bulge": SersicModel(
+                flux=flux_bulge,
+                re=re_bulge,
+                n=n_bulge,
+                q=q_bulge,
+                theta=theta_bulge,
+                x0=x0,
+                y0=y0,
+            ),
+            "disk": BrokenExponentialComponent(
+                flux=flux_disk,
+                h_in=h_in_disk,
+                h_out=h_out_disk,
+                rb=rb_disk,
+                wb=wb_disk,
+                q=q_disk,
+                theta=theta_disk,
+                x0=x0,
+                y0=y0,
+            ),
+        }
+    )
+
+    return ConvolvedModel(
+        model=morphology,
+        psf=psf,
+    )
+
+
 _MODEL_FACTORIES = {
     "SingleSersicModelFactory": make_single_sersic_psf_model,
     "DoubleSersicModelFactory": make_double_sersic_psf_model,
@@ -397,6 +473,7 @@ _MODEL_FACTORIES = {
     "BulgeDiskModelFactory": make_bulge_disk_psf_model,
     "BoxySersicModelFactory": make_boxy_sersic_psf_model,
     "CoreSersicModelFactory": make_core_sersic_psf_model,
+    "BulgeBrokenDiskModelFactory": make_bulge_broken_disk_psf_model,
 }
 
 
@@ -602,6 +679,7 @@ class ObservedModelFactory:
 __all__ = [
     "ObservedModelFactory",
     "make_boxy_sersic_psf_model",
+    "make_bulge_broken_disk_psf_model",
     "make_bulge_disk_psf_model",
     "make_core_sersic_psf_model",
     "make_double_sersic_psf_model",

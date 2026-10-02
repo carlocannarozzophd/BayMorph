@@ -1,6 +1,7 @@
 """Morphological models for BayMorph."""
 
 from baymorph.models import builtin as _builtin  # noqa: F401
+from baymorph.models.broken_exponential import BrokenExponentialComponent
 from baymorph.models.bulge_disk import BulgeDiskModel
 from baymorph.models.composite import CompositeModel
 from baymorph.models.core_sersic import CoreSersicComponent
@@ -24,6 +25,7 @@ from baymorph.models.sersic import SersicModel
 from baymorph.models.sersic_point_source import SersicPointSourceModel
 
 __all__ = [
+    "BrokenExponentialComponent",
     "BulgeDiskModel",
     "CompositeModel",
     "CoreSersicComponent",

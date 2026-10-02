@@ -79,6 +79,7 @@ nav:
   - Bulge and Disc: models/BULGE_DISK.md
   - Boxy or Discy Sérsic: models/BOXY_SERSIC.md
   - Core-Sérsic: models/CORE_SERSIC.md
+  - Bulge and Broken Disc: models/BULGE_BROKEN_DISK.md
   - Point-Spread Functions: models/PSF.md
   - Residual Background: models/BACKGROUND.md
 

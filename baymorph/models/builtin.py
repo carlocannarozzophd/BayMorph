@@ -90,6 +90,10 @@ _BUILTIN_MODELS = {
         "factory_name": "CoreSersicModelFactory",
         "geometry": None,
     },
+    "bulge_broken_disk": {
+        "factory_name": "BulgeBrokenDiskModelFactory",
+        "geometry": None,
+    },
 }
 
 

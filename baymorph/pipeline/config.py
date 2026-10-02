@@ -396,6 +396,70 @@ DEFAULT_CONFIG = {
                     "relative_to": "target_y",
                 },
             },
+            "bulge_broken_disk": {
+                "re_bulge": {
+                    "type": "uniform",
+                    "lower": 1.0,
+                    "upper": 30.0,
+                },
+                "n_bulge": {
+                    "type": "uniform",
+                    "lower": 1.5,
+                    "upper": 6.0,
+                },
+                "q_bulge": {
+                    "type": "uniform",
+                    "lower": 0.4,
+                    "upper": 1.0,
+                },
+                "theta_bulge": {
+                    "type": "uniform",
+                    "lower": "-pi/2",
+                    "upper": "pi/2",
+                },
+                "h_in_disk": {
+                    "type": "uniform",
+                    "lower": 2.0,
+                    "upper": 80.0,
+                },
+                "h_out_disk": {
+                    "type": "uniform",
+                    "lower": 2.0,
+                    "upper": 80.0,
+                },
+                "rb_disk": {
+                    "type": "uniform",
+                    "lower": 5.0,
+                    "upper": 300.0,
+                },
+                "wb_disk": {
+                    "type": "uniform",
+                    "lower": 0.5,
+                    "upper": 20.0,
+                },
+                "q_disk": {
+                    "type": "uniform",
+                    "lower": 0.4,
+                    "upper": 1.0,
+                },
+                "theta_disk": {
+                    "type": "uniform",
+                    "lower": "-pi/2",
+                    "upper": "pi/2",
+                },
+                "x0": {
+                    "type": "uniform",
+                    "lower": -8.0,
+                    "upper": 8.0,
+                    "relative_to": "target_x",
+                },
+                "y0": {
+                    "type": "uniform",
+                    "lower": -8.0,
+                    "upper": 8.0,
+                    "relative_to": "target_y",
+                },
+            },
         },
     },
     "diagnostics": {

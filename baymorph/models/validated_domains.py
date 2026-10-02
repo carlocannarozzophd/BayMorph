@@ -30,6 +30,9 @@ VALIDATED_DOMAINS: dict[str, dict[str, Bounds]] = {
         "gamma": (0.0, 0.9),
         "alpha": (0.5, 2.0),
     },
+    "bulge_broken_disk": {
+        "wb_disk": (0.5, None),
+    },
 }
 
 

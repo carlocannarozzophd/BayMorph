@@ -199,3 +199,31 @@ and the parameters of the Sérsic profile.
 
 **Python.** `baymorph.models.CoreSersicComponent(flux, re, n, rb, gamma,
 alpha, q, theta, x0, y0)`.
+
+### Broken exponential disc
+
+**Definition.** On ellipses of elliptical radius $r$, the disc of Erwin,
+Pohlen & Beckman (2008),
+
+$$
+I(r) = I_0 \exp\left(-\frac{r}{h_{\mathrm{in}}}\right)
+\left[\frac{1 + e^{(r - r_b)/w_b}}{1 + e^{-r_b/w_b}}\right]^{
+w_b (1/h_{\mathrm{in}} - 1/h_{\mathrm{out}})},
+$$
+
+with the width $w_b$ of the break in place of their sharpness
+$\alpha = 1/w_b$, so that every parameter but the flux is a length. $I_0$
+follows from `flux` by a radial integral computed numerically and split at
+the break. With $h_{\mathrm{out}} = h_{\mathrm{in}}$ it is the exponential
+disc, which it reproduces within 2.3e-7 of the peak.
+
+| Parameter | Meaning | Units | Domain |
+| --- | --- | --- | --- |
+| `h_in`, `h_out` | scale lengths inside and outside the break | pixels | positive |
+| `rb` | break radius | pixels | positive |
+| `wb` | width of the break | pixels | positive |
+
+and the flux, axis ratio, position angle and centre of the Sérsic profile.
+
+**Python.** `baymorph.models.BrokenExponentialComponent(flux, h_in, h_out,
+rb, wb, q, theta, x0, y0)`.
