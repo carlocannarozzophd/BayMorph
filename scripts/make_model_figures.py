@@ -1,10 +1,12 @@
 """Generate the figures of the Models section of the documentation.
 
-Every figure is computed with BayMorph itself, so it shows what the code
-does, and is written twice to ``docs/models/figures/``: ``<name>-light.png``
-and ``<name>-dark.png``, for the two colour schemes of the documentation
-site. Run it from the repository root after a change to a model, a PSF, the
-background or the effective-PSF rendering::
+Most figures are computed with BayMorph itself, so they show what the code
+does. Two are diagrams of conventions, ``model_composition`` and
+``geometry``, and ``sersic_profiles`` evaluates the Sérsic equations with
+SciPy. Every figure is written twice to ``docs/models/figures/``:
+``<name>-light.png`` and ``<name>-dark.png``, for the two colour schemes of
+the documentation site. Run it from the repository root after a change to a
+model, a PSF, the background or the effective-PSF rendering::
 
     python scripts/make_model_figures.py
 """
