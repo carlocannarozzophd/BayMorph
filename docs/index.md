@@ -44,6 +44,15 @@ reproducible workflows.
 
     [Configuration](guide/CONFIGURATION.md)
 
+-   **Models**
+
+    ---
+
+    The morphology models and their components, the PSFs and the
+    residual background, with their parameters, priors and validation.
+
+    [Models](models/index.md)
+
 -   **Public API**
 
     ---

@@ -40,6 +40,7 @@ OPERATIONAL_PREFIXES = (
     "baymorph/",
     "configs/",
     "docs/guide/",
+    "docs/models/",
     "notebooks/",
     "tests/",
 )

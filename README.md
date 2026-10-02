@@ -191,6 +191,7 @@ Its sources are under [`docs/`](docs/index.md):
 | Document | Purpose |
 | --- | --- |
 | [Getting Started](docs/guide/QUICK_START.md) | Installation, quick start, command line, configuration, products and tutorials |
+| [Models](docs/models/index.md) | Morphology models and their components, PSFs and residual background, with their parameters and validation |
 | [Public API](docs/API.md) | Stable public interfaces and result objects |
 | [Architecture](docs/architecture/ARCHITECTURE.md) | Scientific contracts of observation, rendering, inference, pipeline and validation |
 | [Research notes](docs/research/index.md) | Measurements and formulations behind the decisions |

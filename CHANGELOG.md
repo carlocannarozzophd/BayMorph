@@ -11,6 +11,11 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* A Models section on the documentation site (`docs/models/`): the morphological
+  components, the four morphology models, the PSFs and the residual background,
+  each with its definition, parameters, priors, degeneracies, validation status
+  and figures that `scripts/make_model_figures.py` computes with BayMorph in a
+  light and a dark version. Tests keep the pages, models and figures in step.
 * A user guide on the documentation site (`docs/guide/`): installation, quick
   start, command line, configuration reference, preparation and products, and
   tutorials. `tests/test_documentation.py` keeps it in step with the default
