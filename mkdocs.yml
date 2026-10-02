@@ -129,6 +129,7 @@ nav:
     - Empirical PSF with Extended Wings: research/PSF_EXTENDED_WINGS_2026-10-01.md
     - AD-046 Proposal, Effective-PSF Rendering: research/PSF_RENDERING_PROPOSAL_2026-10-01.md
     - Cost of the Effective-PSF Rendering: research/EFFECTIVE_PSF_COST_2026-10-01.md
+    - Signal-to-Noise Limit of the Effective-PSF Rendering: research/RENDERING_SIGNAL_LIMIT_2026-10-02.md
   - Noise and Background:
     - Noise and Background Chain: research/NOISE_BACKGROUND_AUDIT_2026-10-01.md
     - A Noise Model for Any Image: research/NOISE_MODEL_BENCH_2026-10-01.md

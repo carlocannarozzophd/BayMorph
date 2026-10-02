@@ -64,6 +64,12 @@ residuals and in the reduced chi-square, not in the posterior widths.
   within 6e-9 of the total flux; with an empirical PSF, the effective-PSF
   rendering of AD-046 recovers every parameter of galaxies like the target
   within 0.09 statistical deviations of the truth.
+- **High signal-to-noise.** Under an empirical PSF the rendering error is a
+  fixed fraction of the profile, so it becomes comparable with the noise
+  above a peak signal-to-noise that depends on n and Rₑ: from 1.2e3 for
+  n = 6 and Rₑ = 1 px to about 2e4 for shallower profiles. For the profile
+  of the production target it is 3.3 times the peak signal-to-noise of the
+  target ([note](../research/RENDERING_SIGNAL_LIMIT_2026-10-02.md)).
 - **Calibration on simulations.** A repeated-noise campaign of fifty
   realizations on 2026-09-19 found the posteriors calibrated on simulated
   images with a Gaussian PSF and Gaussian noise

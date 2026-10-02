@@ -60,6 +60,11 @@ source.
 
 - **Rendering.** The point source is placed through the sub-pixel kernels of
   an empirical PSF (AD-046), or through a shifted Gaussian kernel.
+- **High signal-to-noise.** Under an empirical PSF the Sérsic component sets
+  the limit of the model, as for [`single_sersic`](SINGLE_SERSIC.md). The
+  placement of the point source, which interpolates the sub-pixel kernels,
+  reaches the noise only above a peak signal-to-noise of 1.8e4
+  ([note](../research/RENDERING_SIGNAL_LIMIT_2026-10-02.md)).
 - **Recovery.** A controlled test fits a simulated 21 x 21 px image with a
   Gaussian PSF and recovers the Sérsic flux, its radius and the point-source
   flux, with the other parameters fixed.

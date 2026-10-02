@@ -11,6 +11,13 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* A measurement of the signal-to-noise above which the effective-PSF
+  rendering of AD-046 leaves on a component an error comparable with the
+  noise ([note](docs/research/RENDERING_SIGNAL_LIMIT_2026-10-02.md),
+  `benchmarks/rendering_signal_limit.py`): from 1.2e3 for a Sérsic profile of
+  n = 6 and re = 1 px to 2.1e4, 3.3 times the peak signal-to-noise of the
+  production target for its profile, and above 1.8e4 for point sources. A
+  status note under AD-046 and the pages of the original models state it.
 * The record of the validation of the morphology families of AD-048: a
   status note under AD-046 on two limits of the effective-PSF rendering,
   compact bright Sérsic components and sharp structure far from the centre;

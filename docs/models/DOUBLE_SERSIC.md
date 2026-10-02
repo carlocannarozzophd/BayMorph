@@ -66,6 +66,11 @@ shape.
 
 - **Rendering.** The model renders as the exact sum of its two components,
   with the rendering of the single Sérsic.
+- **High signal-to-noise.** Under an empirical PSF the model is rendered
+  with an error comparable with the noise once one of its components passes
+  its own limit, usually the compact, steeper one: a component of n = 4 and
+  Rₑ of 2 to 5 px reaches it at a peak signal-to-noise of 7e3 to 1.6e4, one
+  of n = 6 and Rₑ = 1 px at 1.2e3 ([note](../research/RENDERING_SIGNAL_LIMIT_2026-10-02.md)).
 - **Model comparison.** With `fit.comparison.enabled`, BayMorph computes the
   Bayes factor of `double_sersic` over `single_sersic` on the same prepared
   data, mask and likelihood.
