@@ -67,9 +67,9 @@ Limitations, all explicit:
   independent pixels: it excludes the Poisson variance of the source, the
   correlation of the sky and any external variance map. Their effect on the
   intervals was measured by the
-  [noise-model bench](../research/NOISE_MODEL_BENCH_2026-10-01.md), and the
-  [proposed AD-047](../research/NOISE_MODEL_PROPOSAL_2026-10-02.md) replaces
-  this model.
+  [noise-model bench](../research/NOISE_MODEL_BENCH_2026-10-01.md), and
+  [AD-047](../research/NOISE_MODEL_PROPOSAL_2026-10-02.md), accepted and not
+  yet implemented, replaces this model.
 
 `baymorph.stats.truncated_gaussian_sigma` and `truncated_variance_ratio`
 expose the correction. The separate `estimate_noise_map` serves only the

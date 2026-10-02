@@ -117,7 +117,7 @@ section, and a `method` under `preparation.background` or
 | Type | Options | Note |
 | --- | --- | --- |
 | `gaussian` | `include_normalization` (default `true`) | Independent pixels with the prepared noise scale. |
-| `correlated_gaussian` | `include_normalization`, `factorization` (`type: nearest_neighbor`, `max_neighbors` 64 or 96), `calibration` | Correlated noise through a nearest-neighbour factorization; a single-observation fit cannot yet use it (finding A1 of the deep audit), and its noise calibration is revised by the proposed AD-047. |
+| `correlated_gaussian` | `include_normalization`, `factorization` (`type: nearest_neighbor`, `max_neighbors` 64 or 96), `calibration` | Correlated noise through a nearest-neighbour factorization; a single-observation fit cannot yet use it (finding A1 of the deep audit), and its noise calibration is revised by AD-047, accepted and not yet implemented. |
 | `cash` | `include_data_term`, `require_integer_data`, `integer_tolerance` | Poisson likelihood of images in counts. |
 | `poisson_gaussian` | `read_noise`, `tail_probability`, `minimum_terms`, `maximum_terms` | Marginalized Poisson-Gaussian likelihood of images in counts. |
 

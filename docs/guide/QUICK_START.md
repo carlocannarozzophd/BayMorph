@@ -8,8 +8,8 @@ listed in [Command-Line Interface](CLI.md), and every configuration key in
 !!! warning "Status of the real-data path"
 
     The observation model of the real-data path is under revision. The
-    effective-PSF rendering of AD-046 is implemented; the noise model is the
-    subject of the proposed AD-047. No real-data fit has yet been validated
+    effective-PSF rendering of AD-046 is implemented; the noise model of
+    AD-047 is accepted but not yet implemented. No real-data fit has yet been validated
     scientifically. The current priority is stated in the
     [roadmap](https://github.com/carlocannarozzophd/BayMorph/blob/main/ROADMAP.md).
 

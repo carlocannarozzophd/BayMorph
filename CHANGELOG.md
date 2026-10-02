@@ -100,9 +100,9 @@ and the project follows Semantic Versioning in spirit.
   start, command line, configuration reference, preparation and products, and
   tutorials. `tests/test_documentation.py` keeps it in step with the default
   configuration, the models and the command line.
-* The proposed AD-047, source variance and sky correlation in the noise model
-  ([note](docs/research/NOISE_MODEL_PROPOSAL_2026-10-02.md)); it enters
-  `DECISIONS.md` only once approved.
+* AD-047, source variance and sky correlation in the noise model, accepted on
+  2026-10-02 with three amendments and not yet implemented
+  ([proposal](docs/research/NOISE_MODEL_PROPOSAL_2026-10-02.md)).
 * A simulation bench of noise models (`benchmarks/noise_model_bench.py`): the
   production model reports intervals up to 3.0 times too narrow, a model with
   source variance and sky correlation within 0.90-1.16
