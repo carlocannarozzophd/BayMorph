@@ -40,6 +40,12 @@ every node, and the cell is accepted with that part missing. A component
 with such an edge declares, through ``edges``, the cells of a given size the
 edge may cross; those are split, whatever their agreement, until the
 component deems them small enough.
+
+An oscillating profile, such as the arms of a spiral, is smooth on the scale
+of a cell only where its wavelength spans enough cells. The hybrid rules
+integrate adaptively the cells where the local wavelength a component
+declares, through ``wavelength``, is shorter than the one their own rule
+resolves, ``RESOLVED_WAVELENGTHS``.
 """
 
 from __future__ import annotations
@@ -58,6 +64,7 @@ BoolArray = NDArray[np.bool_]
 Intensity = Callable[[FloatArray, FloatArray], FloatArray]
 NonSmoothCells = Callable[[FloatArray, FloatArray], BoolArray | None]
 EdgeCells = Callable[[FloatArray, FloatArray, float], BoolArray | None]
+Wavelength = Callable[[FloatArray, FloatArray], FloatArray | None]
 
 RENDERERS = ("hybrid", "hybrid_cusp", "fixed", "adaptive", "point")
 DEFAULT_INTEGRATION_ORDER = 4
@@ -71,6 +78,16 @@ MAX_CUSP_HALF_WIDTH = 4 * DEFAULT_CUSP_HALF_WIDTH
 
 STENCIL_REACH = 2
 """Cells on each side that the sixth-order filter of one cell reads."""
+
+RESOLVED_WAVELENGTHS = {"hybrid": 5.0, "hybrid_cusp": 40.0}
+"""Shortest wavelength, in cells, that the rule outside the adaptive cells
+integrates to within 1e-8 of the amplitude of an oscillation.
+
+The cell mean of a cosine of five cells is accurate to 3.5e-9 per axis by
+four-point Gauss-Legendre quadrature, and one of forty cells to 5.7e-9 by
+point samples corrected to sixth order, which need eight times more cells
+per wavelength.
+"""
 
 _CHILD_X = np.array([-0.5, 0.5, -0.5, 0.5])
 _CHILD_Y = np.array([-0.5, -0.5, 0.5, 0.5])
@@ -413,6 +430,7 @@ def render_cells(
     centre: tuple[float, float],
     nonsmooth: NonSmoothCells | None = None,
     edges: EdgeCells | None = None,
+    wavelength: Wavelength | None = None,
     integration_order: int = DEFAULT_INTEGRATION_ORDER,
     rtol: float = DEFAULT_RTOL,
     atol: float = DEFAULT_ATOL,
@@ -441,6 +459,11 @@ def render_cells(
         the edge of a finite support may cross, or ``None`` once they are
         small enough; see :func:`refine_cells`. It applies wherever cells are
         integrated adaptively.
+    wavelength : callable, optional
+        Function of the cell centres returning a lower bound of the local
+        wavelength of the profile, in cells. The hybrid rules integrate
+        adaptively the cells where it is shorter than their entry of
+        ``RESOLVED_WAVELENGTHS``.
     integration_order, rtol, atol, max_depth
         Gauss-Legendre order, tolerances and depth of adaptive integration.
 
@@ -514,22 +537,32 @@ def render_cells(
         max_half_width = MAX_CUSP_HALF_WIDTH
 
     mask = None
+    x, y = _axes(shape, origin)
 
     if nonsmooth is not None:
-        x, y = _axes(shape, origin)
         declared = nonsmooth(x, y)
 
         if declared is not None:
             mask = np.broadcast_to(np.asarray(declared, dtype=bool), shape)
 
-            if renderer == "hybrid_cusp":
-                # A corrected point sample reads the profile two cells away,
-                # so the cells near a declared one are not smooth either.
-                mask = binary_dilation(
-                    mask,
-                    structure=np.ones((3, 3), dtype=bool),
-                    iterations=STENCIL_REACH,
-                )
+    if wavelength is not None:
+        local = wavelength(x, y)
+
+        if local is not None:
+            short = np.broadcast_to(
+                np.asarray(local, dtype=float) < RESOLVED_WAVELENGTHS[renderer],
+                shape,
+            )
+            mask = short if mask is None else mask | short
+
+    if mask is not None and renderer == "hybrid_cusp":
+        # A corrected point sample reads the profile two cells away, so the
+        # cells near a declared one are not smooth either.
+        mask = binary_dilation(
+            mask,
+            structure=np.ones((3, 3), dtype=bool),
+            iterations=STENCIL_REACH,
+        )
 
     refine_about_centre(
         intensity,

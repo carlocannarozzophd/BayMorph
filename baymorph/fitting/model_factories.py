@@ -23,6 +23,7 @@ from baymorph.models import (
     FerrersBarComponent,
     GaussianRingComponent,
     GeneralizedSersicComponent,
+    LogSpiralDiskComponent,
     PointSourceModel,
     SersicModel,
     SersicPointSourceModel,
@@ -662,6 +663,88 @@ def make_bulge_disk_ring_psf_model(
     )
 
 
+def make_bulge_disk_spiral_psf_model(
+    *,
+    flux_bulge: float,
+    re_bulge: float,
+    n_bulge: float,
+    q_bulge: float,
+    theta_bulge: float,
+    flux_disk: float,
+    re_disk: float,
+    q_disk: float,
+    theta_disk: float,
+    amplitude_spiral: float,
+    winding_spiral: float,
+    phase_spiral: float,
+    r_in_spiral: float,
+    x0: float,
+    y0: float,
+    psf,
+):
+    """Build a PSF-convolved bulge and disc with two spiral arms (AD-048).
+
+    Parameters
+    ----------
+    flux_bulge, flux_disk : float
+        Total fluxes of the bulge and of the disc, arms included.
+    re_bulge, n_bulge, q_bulge, theta_bulge : float
+        Effective radius, Sérsic index, axis ratio and position angle of the
+        bulge.
+    re_disk, q_disk, theta_disk : float
+        Half-light radius, axis ratio and position angle of the exponential
+        disc.
+    amplitude_spiral : float
+        Relative amplitude of the arms, from 0 to 1.
+    winding_spiral : float
+        ``w = cot psi`` for the pitch angle ``psi``; positive for arms that
+        draw a Z on the detector, negative for an S.
+    phase_spiral : float
+        Azimuth of an arm at ``re_disk``, in the plane of the disc.
+    r_in_spiral : float
+        Radius over which the arms fade toward the centre, in pixels.
+    x0, y0 : float
+        Shared centre in pixel coordinates.
+    psf : object
+        Observation PSF.
+
+    Returns
+    -------
+    ConvolvedModel
+        PSF-convolved model without additive background.
+    """
+    morphology = CompositeModel(
+        {
+            "bulge": SersicModel(
+                flux=flux_bulge,
+                re=re_bulge,
+                n=n_bulge,
+                q=q_bulge,
+                theta=theta_bulge,
+                x0=x0,
+                y0=y0,
+            ),
+            "disk": LogSpiralDiskComponent(
+                flux=flux_disk,
+                re=re_disk,
+                q=q_disk,
+                theta=theta_disk,
+                amplitude=amplitude_spiral,
+                winding=winding_spiral,
+                phase=phase_spiral,
+                r_in=r_in_spiral,
+                x0=x0,
+                y0=y0,
+            ),
+        }
+    )
+
+    return ConvolvedModel(
+        model=morphology,
+        psf=psf,
+    )
+
+
 _MODEL_FACTORIES = {
     "SingleSersicModelFactory": make_single_sersic_psf_model,
     "DoubleSersicModelFactory": make_double_sersic_psf_model,
@@ -672,6 +755,7 @@ _MODEL_FACTORIES = {
     "BulgeBrokenDiskModelFactory": make_bulge_broken_disk_psf_model,
     "BulgeDiskBarModelFactory": make_bulge_disk_bar_psf_model,
     "BulgeDiskRingModelFactory": make_bulge_disk_ring_psf_model,
+    "BulgeDiskSpiralModelFactory": make_bulge_disk_spiral_psf_model,
 }
 
 
@@ -881,6 +965,7 @@ __all__ = [
     "make_bulge_disk_bar_psf_model",
     "make_bulge_disk_psf_model",
     "make_bulge_disk_ring_psf_model",
+    "make_bulge_disk_spiral_psf_model",
     "make_core_sersic_psf_model",
     "make_double_sersic_psf_model",
     "make_sersic_point_source_psf_model",

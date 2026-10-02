@@ -44,6 +44,12 @@ VALIDATED_DOMAINS: dict[str, dict[str, Bounds]] = {
         "sigma_ring": (2.0, None),
         "q_ring": (0.5, None),
     },
+    "bulge_disk_spiral": {
+        "re_disk": (10.0, None),
+        "q_disk": (0.4, None),
+        "winding_spiral": (-6.0, 6.0),
+        "r_in_spiral": (1.0, None),
+    },
 }
 
 

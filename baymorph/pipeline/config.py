@@ -603,6 +603,75 @@ DEFAULT_CONFIG = {
                     "relative_to": "target_y",
                 },
             },
+            "bulge_disk_spiral": {
+                "re_bulge": {
+                    "type": "uniform",
+                    "lower": 1.0,
+                    "upper": 30.0,
+                },
+                "n_bulge": {
+                    "type": "uniform",
+                    "lower": 1.5,
+                    "upper": 6.0,
+                },
+                "q_bulge": {
+                    "type": "uniform",
+                    "lower": 0.4,
+                    "upper": 1.0,
+                },
+                "theta_bulge": {
+                    "type": "uniform",
+                    "lower": "-pi/2",
+                    "upper": "pi/2",
+                },
+                "re_disk": {
+                    "type": "uniform",
+                    "lower": 10.0,
+                    "upper": 120.0,
+                },
+                "q_disk": {
+                    "type": "uniform",
+                    "lower": 0.4,
+                    "upper": 1.0,
+                },
+                "theta_disk": {
+                    "type": "uniform",
+                    "lower": "-pi/2",
+                    "upper": "pi/2",
+                },
+                "amplitude_spiral": {
+                    "type": "uniform",
+                    "lower": 0.0,
+                    "upper": 1.0,
+                },
+                "winding_spiral": {
+                    "type": "uniform",
+                    "lower": -6.0,
+                    "upper": 6.0,
+                },
+                "phase_spiral": {
+                    "type": "uniform",
+                    "lower": 0.0,
+                    "upper": "pi",
+                },
+                "r_in_spiral": {
+                    "type": "uniform",
+                    "lower": 1.0,
+                    "upper": 60.0,
+                },
+                "x0": {
+                    "type": "uniform",
+                    "lower": -8.0,
+                    "upper": 8.0,
+                    "relative_to": "target_x",
+                },
+                "y0": {
+                    "type": "uniform",
+                    "lower": -8.0,
+                    "upper": 8.0,
+                    "relative_to": "target_y",
+                },
+            },
         },
     },
     "diagnostics": {

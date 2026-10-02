@@ -1,0 +1,167 @@
+# Bulge, Disc and Spiral Arms (`bulge_disk_spiral`)
+
+A Sérsic bulge and an exponential disc with two logarithmic spiral arms
+([spiral disc](COMPONENTS.md#exponential-disc-with-spiral-arms)), sharing a
+centre. One of the families of AD-048: available for single-observation
+fits.
+
+## Definition
+
+$$
+I(\mathbf{x}) = I_{\mathrm{Sersic}}(\mathbf{x};\,F_b, R_{e,b}, n_b, q_b,
+\theta_b) + I_{\mathrm{disc}}(\mathbf{x};\,F_d, R_{e,d}, q_d, \theta_d,
+A_0, w, \varphi_0, r_{\mathrm{in}}),
+$$
+
+the bulge of [`bulge_disk`](BULGE_DISK.md) and its exponential disc
+$I_d$ modulated by two arms,
+
+$$
+I_{\mathrm{disc}}(R, \varphi) = I_d(R) \left\{1 + A(R) \cos\left[
+2(\varphi - \varphi_0) - 2 w \ln\left(\frac{R}{R_{e,d}}\right)\right]
+\right\},
+\qquad
+A(R) = A_0 \left[1 - e^{-(R/r_{\mathrm{in}})^{2}}\right],
+$$
+
+where $R$ and $\varphi$ are the radius and the azimuth in the plane of the
+disc, deprojected with $q_d$ and $\theta_d$. The crests of the arms follow
+$\varphi = \varphi_0 + w \ln(R/R_{e,d})$ modulo $\pi$: $w = \cot\psi$ for
+the pitch angle $\psi$, and $\varphi_0$ is the azimuth of an arm at
+$R_{e,d}$, where the arms are best measured, which keeps $\varphi_0$ and $w$
+nearly uncorrelated. The amplitude fades toward the centre, where the phase
+diverges, over the radius $r_{\mathrm{in}}$.
+
+The cosine integrates to zero over every ellipse, so the disc holds the
+flux $F_d$ exactly, and it is non-negative for $0 \le A_0 \le 1$. The model
+without arms, $A_0 = 0$, is [`bulge_disk`](BULGE_DISK.md), which it then
+reproduces bit for bit.
+
+**Sense of winding.** The azimuth runs from the major axis toward the
+$+$minor direction, which is counter-clockwise on the detector with $x$ to
+the right and $y$ up. For $w > 0$ the arms wind counter-clockwise outward
+and draw a Z; for $w < 0$ they draw an S. On an image displayed with $y$
+down, or on a detector with inverted parity, the two letters swap.
+
+## Parameters
+
+| Parameter | Meaning | Units | Default prior |
+| --- | --- | --- | --- |
+| `flux_bulge` | total flux of the bulge | image units | none: must be declared |
+| `re_bulge` | half-light radius of the bulge | pixels | uniform 1 to 30 |
+| `n_bulge` | Sérsic index of the bulge | | uniform 1.5 to 6 |
+| `q_bulge` | axis ratio of the bulge | | uniform 0.4 to 1 |
+| `theta_bulge` | position angle of the bulge | radians | uniform −π/2 to π/2 |
+| `flux_disk` | total flux of the disc, arms included | image units | none: must be declared |
+| `re_disk` | half-light radius of the disc | pixels | uniform 10 to 120 |
+| `q_disk` | axis ratio of the disc | | uniform 0.4 to 1 |
+| `theta_disk` | position angle of the disc | radians | uniform −π/2 to π/2 |
+| `amplitude_spiral` | relative amplitude $A_0$ of the arms | | uniform 0 to 1 |
+| `winding_spiral` | $w = \cot\psi$: positive for a Z, negative for an S | | uniform −6 to 6 |
+| `phase_spiral` | azimuth $\varphi_0$ of an arm at `re_disk`, in the plane of the disc | radians | uniform 0 to π |
+| `r_in_spiral` | radius over which the arms fade toward the centre | pixels | uniform 1 to 60 |
+| `x0`, `y0` | shared centre | pixels | uniform ±8 about the target seed |
+
+The default priors are generic and in pixels; they must be checked against
+the target and the image. `winding_spiral` must lie between −6 and 6, pitch
+angles of at least 9.5°, and `re_disk`, `q_disk` and `r_in_spiral` must be
+at least 10 px, 0.4 and 1 px: the domain in which the rendering of the arms
+is validated, which configuration validation enforces. The pitch angle
+$\psi = \operatorname{arccot} |w|$ is a derived quantity: under the uniform
+prior in $w$, half of the prior mass lies at pitch angles below 18.4°.
+
+![Images of three discs with two arms: arms that draw a Z, arms that draw an S, and tighter arms, with the crests drawn over them](figures/spiral_arms-light.png#gh-light-mode-only)
+![Images of three discs with two arms: arms that draw a Z, arms that draw an S, and tighter arms, with the crests drawn over them](figures/spiral_arms-dark.png#gh-dark-mode-only)
+
+*Face-on discs with R_e = 20 px, A₀ = 0.7, φ₀ = 0.4 and r_in = 4 px, shown with x to the right and y up. The lines are the crests φ = φ₀ + w ln(R/R_e) of the two arms.*
+
+![Images of the convolved bulge, the disc with its arms and their sum, with the radial profiles of the three](figures/bulge_disk_spiral_decomposition-light.png#gh-light-mode-only)
+![Images of the convolved bulge, the disc with its arms and their sum, with the radial profiles of the three](figures/bulge_disk_spiral_decomposition-dark.png#gh-dark-mode-only)
+
+*A bulge of 25 percent of the light (n = 3, Rₑ = 3 px) and a disc of 75 percent (Rₑ = 16 px, q = 0.8) with arms of A₀ = 0.6 and w = 2.5, after a Gaussian PSF of 2.5 px FWHM. Averaged over circles, the arms vanish from the profile of the disc.*
+
+## What it represents
+
+A spiral galaxy with a bulge and two arms, described as a density wave on
+its disc. The posterior of the pitch angle comes from a forward model with
+the PSF and the noise, jointly with the bulge and the disc. The pitch angle
+correlates with the mass of the central black hole (Seigar et al. 2008;
+Davis, Graham & Seigar 2017) and with the Hubble type (Kennicutt 1981).
+
+Real arms are not exact logarithmic spirals: their pitch varies from arm to
+arm (Lingard et al. 2021), and flocculent arms, dust lanes and star-forming
+regions, strongest in blue bands, leave residuals this model does not
+describe.
+
+## Known degeneracies
+
+- At low signal-to-noise `amplitude_spiral` and `winding_spiral` are
+  correlated: faint arms constrain their winding poorly.
+- `r_in_spiral` and `amplitude_spiral` both set the light of the arms in the
+  inner disc.
+- `phase_spiral` is periodic with period π. A posterior that straddles 0
+  and π is split between the two ends of its prior, and the summaries of
+  the package, which are not circular, then misreport it, as they would a
+  position angle near ±π/2.
+- The bulge and the inner disc share the light at small radii, as in
+  [`bulge_disk`](BULGE_DISK.md).
+
+## Validation
+
+- **Rendering.** On the bench of AD-048, with the criteria of AD-046, 182
+  cases under effective PSFs of 2.34 and 3.5 px FWHM, with windings up to
+  |w| = cot 5° = 11.43 and axis ratios of 0.6 and 0.4. Criterion 1 fails
+  only at the tightest winding, w = −11.43 with `re_disk` = 25 px at 2.34 px
+  FWHM, at 1.3e-2 of the peak against a limit of 1e-2. Within the validated
+  domain the largest pixel difference is 2.0e-3 of the peak and the largest
+  flux error 9.3e-6 ([note](../research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+- **Arms near the centre.** Their wavelength falls below a pixel near the
+  centre, and the rendering integrates adaptively the cells where it is too
+  short for the rule in use. The largest error of the pixel integrals,
+  8.2e-7 of the peak of the arms, lies just outside those cells, where the
+  arms curve on the scale of a pixel.
+- **Target-like cases.** At the signal-to-noise of the r-band target the disc
+  with its arms reaches by itself a chi-square of 0.11. With the compact
+  bulge of these cases, 30 percent of the flux, the total reaches 1.13 at
+  2.34 px FWHM: the limit of the production Sérsic profile found with
+  [`bulge_broken_disk`](BULGE_BROKEN_DISK.md).
+- **Flux.** The arms of a compact disc integrate to zero within 1e-8 of its
+  flux. With `amplitude_spiral` = 0 the model reproduces `bulge_disk` bit
+  for bit, under an analytic PSF and under the effective PSF.
+- **Sense of winding.** A test fixes that w > 0 winds counter-clockwise
+  outward on the detector, a Z, and w < 0 clockwise, an S.
+- **Recovery.** On a simulated spiral galaxy, the posterior of
+  `winding_spiral` and `phase_spiral` covers the true values
+  (`tests/test_bulge_disk_spiral_recovery.py`).
+- **Cost.** A rendering of 1013 × 1013 px with an effective PSF of 27 px
+  takes about 115 ms for w = 2 and 160 ms for w = 6 with
+  `r_in_spiral` = 1 px, against 55 ms for `bulge_disk`.
+- **Real data.** No fit on real data has been made with this model.
+
+## Configuration
+
+```yaml
+fit:
+  models:
+    - bulge_disk_spiral
+  priors:
+    bulge_disk_spiral:
+      flux_bulge:
+        type: uniform
+        lower: 1000.0
+        upper: 100000.0
+      flux_disk:
+        type: uniform
+        lower: 1000.0
+        upper: 200000.0
+```
+
+Priors not declared take the defaults above; the values here are an
+example, to be chosen for each image. A joint multi-observation fit rejects
+this model before writing any output (AD-048).
+
+## Python
+
+`baymorph.models.LogSpiralDiskComponent` is the disc with its arms;
+`baymorph.fitting.make_bulge_disk_spiral_psf_model` builds the
+PSF-convolved model a fit evaluates.

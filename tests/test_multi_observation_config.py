@@ -166,6 +166,7 @@ def test_parameter_frame_reports_canonical_path():
         "bulge_broken_disk",
         "bulge_disk_bar",
         "bulge_disk_ring",
+        "bulge_disk_spiral",
     ],
 )
 def test_models_without_geometry_are_rejected_in_every_frame(model_name):

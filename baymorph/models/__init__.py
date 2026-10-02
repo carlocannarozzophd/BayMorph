@@ -14,6 +14,7 @@ from baymorph.models.labels import (
     parameter_labels,
     parameter_names,
 )
+from baymorph.models.log_spiral import LogSpiralDiskComponent
 from baymorph.models.point_source import PointSourceModel
 from baymorph.models.protocols import (
     DecomposableMorphology,
@@ -37,6 +38,7 @@ __all__ = [
     "FerrersBarComponent",
     "GaussianRingComponent",
     "GeneralizedSersicComponent",
+    "LogSpiralDiskComponent",
     "MorphologicalComponent",
     "PointSourceModel",
     "SersicModel",

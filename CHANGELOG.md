@@ -11,6 +11,21 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* The `bulge_disk_spiral` model of AD-048, for single-observation fits: a
+  Sérsic bulge and an exponential disc with two logarithmic spiral arms
+  (`amplitude_spiral`, `winding_spiral` = cot ψ, `phase_spiral`,
+  `r_in_spiral`) that leave the flux of the disc unchanged; positive windings
+  draw a Z on the detector and negative ones an S. Its rendering is
+  validated for `winding_spiral` from −6 to 6, pitch angles of at least
+  9.5°, with `re_disk` of at least 10 px, `q_disk` of at least 0.4 and
+  `r_in_spiral` of at least 1 px
+  ([note](docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)), and it
+  has a page and figures in `docs/models/`.
+* The generic cell rules integrate adaptively the cells where an oscillating
+  component, such as spiral arms, has a wavelength shorter than their rule
+  resolves: five cells for the pixels under an analytic PSF, forty for the
+  finer cells of AD-046. Components that do not oscillate render bit for bit
+  as before.
 * The `bulge_disk_bar` and `bulge_disk_ring` models of AD-048, for
   single-observation fits: a Sérsic bulge and an exponential disc with a
   Ferrers bar (`a_bar`, `alpha_bar`, `c0_bar`, `q_bar`, `theta_bar`) or with

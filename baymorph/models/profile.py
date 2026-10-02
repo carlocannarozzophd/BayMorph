@@ -57,7 +57,8 @@ class ProfileComponent:
     edge away from its centre returns those cells from :meth:`nonsmooth_cells`
     so that the hybrid rules integrate them adaptively; one whose support
     ends at an edge also returns, from :meth:`edge_cells`, the cells the edge
-    crosses at every level of that integration.
+    crosses at every level of that integration. An oscillating profile
+    returns its local wavelength from :meth:`local_wavelength`.
 
     ``flux`` is the total flux of the continuous profile over the whole
     plane, the analytic convention of the Sérsic profile.
@@ -125,6 +126,19 @@ class ProfileComponent:
         """
         return None
 
+    def local_wavelength(
+        self,
+        x: FloatArray,
+        y: FloatArray,
+    ) -> FloatArray | None:
+        """Return a lower bound of the local wavelength at ``(x, y)``, in cells.
+
+        The hybrid rules integrate adaptively the cells where it is shorter
+        than their rule resolves. A profile that does not oscillate returns
+        ``None``.
+        """
+        return None
+
     def render(
         self,
         shape: tuple[int, int],
@@ -158,6 +172,7 @@ class ProfileComponent:
             centre=self.centre(),
             nonsmooth=self.nonsmooth_cells,
             edges=self.edge_cells,
+            wavelength=self.local_wavelength,
             integration_order=integration_order,
             rtol=rtol,
             atol=atol,

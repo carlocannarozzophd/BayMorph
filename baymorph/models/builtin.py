@@ -102,6 +102,10 @@ _BUILTIN_MODELS = {
         "factory_name": "BulgeDiskRingModelFactory",
         "geometry": None,
     },
+    "bulge_disk_spiral": {
+        "factory_name": "BulgeDiskSpiralModelFactory",
+        "geometry": None,
+    },
 }
 
 

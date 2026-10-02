@@ -44,6 +44,7 @@ from baymorph.fitting import (  # noqa: E402
     make_bulge_disk_bar_psf_model,
     make_bulge_disk_psf_model,
     make_bulge_disk_ring_psf_model,
+    make_bulge_disk_spiral_psf_model,
     make_double_sersic_psf_model,
     make_sersic_point_source_psf_model,
     make_single_sersic_psf_model,
@@ -54,6 +55,7 @@ from baymorph.models import (  # noqa: E402
     FerrersBarComponent,
     GaussianRingComponent,
     GeneralizedSersicComponent,
+    LogSpiralDiskComponent,
     PointSourceModel,
     SersicModel,
 )
@@ -1166,6 +1168,58 @@ def bulge_disk_ring_decomposition(theme: Theme) -> plt.Figure:
     )
 
 
+def spiral_arms(theme: Theme) -> plt.Figure:
+    """Arms that draw a Z, an S, and tighter arms, with their crests."""
+    shape = (101, 101)
+    base = dict(
+        flux=100.0, re=20.0, q=1.0, theta=0.0, amplitude=0.7, phase=0.4,
+        r_in=4.0, x0=50.0, y0=50.0,
+    )
+    panels = (
+        (2.0, "w = 2: a Z"),
+        (-2.0, "w = \u22122: an S"),
+        (6.0, "w = 6: \u03c8 = 9.5\u00b0"),
+    )
+    discs = [LogSpiralDiskComponent(winding=w, **base) for w, _ in panels]
+    images = [disc.render(shape) for disc in discs]
+    peak = max(float(image.max()) for image in images)
+    norm = LogNorm(vmin=3e-3 * peak, vmax=peak)
+    fig, axes = plt.subplots(1, 3, figsize=(WIDTH * 0.8, 2.6))
+    fig.subplots_adjust(wspace=0.08)
+    radius = np.linspace(base["r_in"], 48.0, 400)
+    for ax, disc, image, (winding, label) in zip(
+        axes, discs, images, panels, strict=True
+    ):
+        show_image(ax, image, theme, norm)
+        for arm in (0.0, np.pi):
+            azimuth = disc.phase + winding * np.log(radius / disc.re) + arm
+            ax.plot(
+                disc.x0 + radius * np.cos(azimuth),
+                disc.y0 + radius * np.sin(azimuth),
+                color=theme.series[2], linewidth=0.9,
+            )
+        ax.set_xlim(-0.5, shape[1] - 0.5)
+        ax.set_ylim(-0.5, shape[0] - 0.5)
+        ax.set_title(label, fontsize=8.5)
+    return fig
+
+
+def bulge_disk_spiral_decomposition(theme: Theme) -> plt.Figure:
+    """A Sérsic bulge and an exponential disc with two arms."""
+    model = make_bulge_disk_spiral_psf_model(
+        flux_bulge=25.0, re_bulge=3.0, n_bulge=3.0, q_bulge=0.9,
+        theta_bulge=np.deg2rad(40.0),
+        flux_disk=75.0, re_disk=16.0, q_disk=0.8, theta_disk=np.deg2rad(40.0),
+        amplitude_spiral=0.6, winding_spiral=2.5, phase_spiral=0.4,
+        r_in_spiral=4.0,
+        x0=50.0, y0=50.0, psf=GaussianPSF(fwhm=2.5),
+    )
+    return decomposition(
+        theme, model, ("bulge", "disk"), ("bulge, n = 3", "disc with arms"),
+        "total, B/T = 0.25", 48,
+    )
+
+
 FIGURES: dict[str, Callable[[Theme], plt.Figure]] = {
     "forward_model": forward_model,
     "model_composition": model_composition,
@@ -1189,6 +1243,8 @@ FIGURES: dict[str, Callable[[Theme], plt.Figure]] = {
     "bulge_disk_bar_decomposition": bulge_disk_bar_decomposition,
     "gaussian_ring_profiles": gaussian_ring_profiles,
     "bulge_disk_ring_decomposition": bulge_disk_ring_decomposition,
+    "spiral_arms": spiral_arms,
+    "bulge_disk_spiral_decomposition": bulge_disk_spiral_decomposition,
 }
 
 

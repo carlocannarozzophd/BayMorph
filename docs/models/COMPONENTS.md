@@ -140,7 +140,10 @@ Sérsic profile, so every PSF renders them as it renders the Sérsic profile:
   component declares non-smooth;
 - for a component whose light ends at an edge, cells the edge crosses split
   until they are small, since the test of agreement of adaptive integration
-  cannot see a sliver of light that no node samples.
+  cannot see a sliver of light that no node samples;
+- for an oscillating component, adaptive integration of the cells where its
+  wavelength is shorter than the rule in use resolves: five cells for the
+  pixels under an analytic PSF, forty for the finer cells of AD-046.
 
 Their `flux` is the total flux over the whole plane, as for the Sérsic
 profile. Each is validated within a rendering domain recorded in
@@ -300,3 +303,39 @@ and the flux, axis ratio, position angle and centre of the Sérsic profile.
 
 **Python.** `baymorph.models.GaussianRingComponent(flux, r, sigma, q, theta,
 x0, y0)`.
+
+### Exponential disc with spiral arms
+
+**Definition.** The exponential disc $I_d$ modulated by two logarithmic
+arms,
+
+$$
+I(R, \varphi) = I_d(R) \left\{1 + A(R) \cos\left[2(\varphi - \varphi_0)
+- 2 w \ln\left(\frac{R}{R_e}\right)\right]\right\},
+\qquad
+A(R) = A_0 \left[1 - e^{-(R/r_{\mathrm{in}})^{2}}\right],
+$$
+
+where $R$ and $\varphi$ are the radius and the azimuth in the plane of the
+disc, $w = \cot\psi$ for the pitch angle $\psi$, and $\varphi_0$ the
+azimuth of an arm at $R_e$. The cosine integrates to zero over every
+ellipse, so the flux is that of the disc, exactly. The disc is rendered by
+the production rules of the Sérsic profile, and only the zero-mean
+modulation by the generic rules. Its wavelength on the detector is at least
+$\pi q R / \sqrt{1 + w^2}$, so it falls below a cell near the centre; the
+cells where it is shorter than the rule resolves are integrated adaptively.
+For $w > 0$ the arms draw a Z on the detector, with $x$ to the right and $y$
+up, and for $w < 0$ an S.
+
+| Parameter | Meaning | Units | Domain |
+| --- | --- | --- | --- |
+| `amplitude` | relative amplitude $A_0$ | | $0 \le A_0 \le 1$ |
+| `winding` | $w = \cot\psi$ | | finite |
+| `phase` | azimuth of an arm at $R_e$ | radians | finite, period $\pi$ |
+| `r_in` | radius over which the arms fade toward the centre | pixels | $r_{\mathrm{in}} > 0$ |
+
+and the flux, half-light radius, axis ratio, position angle and centre of
+the exponential disc.
+
+**Python.** `baymorph.models.LogSpiralDiskComponent(flux, re, q, theta,
+amplitude, winding, phase, r_in, x0, y0)`.
