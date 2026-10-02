@@ -111,6 +111,7 @@ nav:
   - AD-046 Proposal, Effective-PSF Rendering: research/PSF_RENDERING_PROPOSAL_2026-10-01.md
   - Cost of the Effective-PSF Rendering: research/EFFECTIVE_PSF_COST_2026-10-01.md
   - Noise and Background Chain: research/NOISE_BACKGROUND_AUDIT_2026-10-01.md
+  - A Noise Model for Any Image: research/NOISE_MODEL_BENCH_2026-10-01.md
 
 plugins:
   - search
