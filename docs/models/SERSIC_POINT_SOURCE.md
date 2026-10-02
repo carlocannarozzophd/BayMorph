@@ -13,9 +13,10 @@ I_{\mathrm{Sersic}}(\mathbf{x};\, F_S, R_e, n, q, \theta, x_0, y_0)
 F_{PS}\,\delta(\mathbf{x} - \mathbf{x}_0).
 $$
 
-The Sérsic component is convolved with the PSF; the point source is the PSF
-itself, scaled by its flux and placed at the shared centre, and is never
-convolved twice.
+The Sérsic component ([Sérsic 1968][sersic1968]) is convolved with the PSF;
+the point source is the PSF itself, scaled by its flux and placed at the
+shared centre, as the PSF component of GALFIT
+([Peng et al. 2010][peng2010]), and is never convolved twice.
 
 ![Images of a Sérsic component, of an unresolved source and of their sum after the PSF, and their radial profiles](figures/sersic_point_source_decomposition-light.png#gh-light-mode-only)
 ![Images of a Sérsic component, of an unresolved source and of their sum after the PSF, and their radial profiles](figures/sersic_point_source_decomposition-dark.png#gh-dark-mode-only)
@@ -43,7 +44,8 @@ A galaxy with an unresolved central component, such as a compact nucleus or
 an active nucleus, whose light the PSF fully describes. The shared centre is
 a modelling assumption, not a property of either component. The point source
 has no size: a central component that the PSF resolves is not a point
-source.
+source. A bright active nucleus left out of a decomposition biases the
+bulge, as an omitted bar does ([Gadotti 2008][gadotti2008]).
 
 ## Known degeneracies
 
@@ -94,3 +96,13 @@ fit:
 `SersicModel` and a `PointSourceModel` with the same centre;
 `baymorph.fitting.make_sersic_point_source_psf_model` builds the observed
 model a fit evaluates.
+
+## References
+
+- [Gadotti D. A., 2008, MNRAS, 384, 420][gadotti2008]: the bias of an omitted active nucleus.
+- [Peng C. Y. et al., 2010, AJ, 139, 2097][peng2010]: an unresolved source modelled by the PSF itself.
+- [Sérsic J. L., 1968, Atlas de Galaxias Australes, Observatorio Astronómico, Córdoba][sersic1968]: the Sérsic profile.
+
+[gadotti2008]: https://ui.adsabs.harvard.edu/abs/2008MNRAS.384..420G/abstract
+[peng2010]: https://ui.adsabs.harvard.edu/abs/2010AJ....139.2097P/abstract
+[sersic1968]: https://ui.adsabs.harvard.edu/abs/1968adga.book.....S/abstract

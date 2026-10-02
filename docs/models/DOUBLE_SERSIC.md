@@ -40,7 +40,10 @@ parameters.
 
 ## What it represents
 
-Two general Sérsic components of one galaxy, sharing a centre. The names
+Two general Sérsic components of one galaxy, sharing a centre, fitted at
+once as GALFIT fits several components ([Peng et al. 2002][peng2002]);
+[Dullo & Graham (2014)][dullo-graham2014] caution against more Sérsic
+components than the structure of a galaxy warrants. The names
 `bulge` and `disk` are labels of the components, defined by their different
 default priors, a compact component of higher index and an extended one of
 lower index; the model does not impose a physical bulge and disc
@@ -106,3 +109,17 @@ The flux prior of `single_sersic` must be declared as well; see
 `baymorph.DoubleSersicModel(bulge, disk)` combines two `SersicModel`
 components; `baymorph.fitting.make_double_sersic_psf_model` builds the
 PSF-convolved model a fit evaluates.
+
+## References
+
+- [Dullo B. T., Graham A. W., 2014, MNRAS, 444, 2700][dullo-graham2014]: the caution against excessive multiple Sérsic components.
+- [Graham A. W., Driver S. P., 2005, PASA, 22, 118][graham-driver2005]: the total flux of each component.
+- [Peng C. Y. et al., 2002, AJ, 124, 266][peng2002]: the simultaneous fit of several components.
+- [Sérsic J. L., 1963, Boletín de la Asociación Argentina de Astronomía, 6, 41][sersic1963]: the Sérsic profile of each component.
+- [Sérsic J. L., 1968, Atlas de Galaxias Australes, Observatorio Astronómico, Córdoba][sersic1968]: the Sérsic profile of each component.
+
+[dullo-graham2014]: https://ui.adsabs.harvard.edu/abs/2014MNRAS.444.2700D/abstract
+[graham-driver2005]: https://ui.adsabs.harvard.edu/abs/2005PASA...22..118G/abstract
+[peng2002]: https://ui.adsabs.harvard.edu/abs/2002AJ....124..266P/abstract
+[sersic1963]: https://ui.adsabs.harvard.edu/abs/1963BAAA....6...41S/abstract
+[sersic1968]: https://ui.adsabs.harvard.edu/abs/1968adga.book.....S/abstract

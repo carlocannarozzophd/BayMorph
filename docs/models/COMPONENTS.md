@@ -19,15 +19,18 @@ y' &= -(x - x_0)\sin\theta + (y - y_0)\cos\theta,
 \end{aligned}
 $$
 
-and the surface brightness is
+and the surface brightness follows the law of Sérsic
+([1963][sersic1963], [1968][sersic1968]),
 
 $$
 I(R) = I_e \exp\left\{-b_n\left[\left(\frac{R}{R_e}\right)^{1/n} - 1\right]\right\}.
 $$
 
 $b_n$ makes $R_e$ the half-light radius: it solves
-$\gamma(2n, b_n) = \Gamma(2n)/2$ and is computed exactly as the inverse of
-the regularized incomplete gamma function, not from an approximation. It is
+$\gamma(2n, b_n) = \Gamma(2n)/2$ ([Ciotti 1991][ciotti1991];
+[Graham & Driver 2005][graham-driver2005]) and is computed exactly as the
+inverse of the regularized incomplete gamma function, not from an
+approximation. It is
 0.693 for $n = 0.5$, 1.678 for $n = 1$, 3.672 for $n = 2$ and 7.669 for
 $n = 4$.
 
@@ -42,7 +45,9 @@ $n = 4$.
 *Left: the profile for indices from 0.5 to 6; a higher index means a steeper core and more extended wings. Right: the light enclosed within R, which is one half at R = Rₑ for every index.*
 
 **Normalization.** The amplitude follows from the total flux of the
-continuous profile over the full plane,
+continuous profile over the full plane, that of
+[Graham & Driver (2005)][graham-driver2005] with the factor $q$ of
+elliptical isophotes,
 
 $$
 F = 2\pi q I_e R_e^2\, n\, e^{b_n} b_n^{-2n}\, \Gamma(2n),
@@ -83,7 +88,8 @@ a pixel is an integral of the profile, and the PSF decides which integral:
 
 ## Exponential disc
 
-**Definition.** The Sérsic profile with $n = 1$ fixed:
+**Definition.** The exponential disc of [Freeman (1970)][freeman1970], the
+Sérsic profile with $n = 1$ fixed:
 
 $$
 I(R) = I_e \exp\left[-b_1\left(\frac{R}{R_e} - 1\right)\right],
@@ -105,8 +111,10 @@ I(\mathbf{x}) = F\,\delta(\mathbf{x} - \mathbf{x}_0),
 $$
 
 so its expected image is the PSF itself, scaled by the flux and placed at
-the source position. It is never approximated by a narrow Sérsic or
-Gaussian profile, and it is never convolved twice.
+the source position, as the PSF component of GALFIT
+([Peng et al. 2010][peng2010]) models an unresolved source. It is never
+approximated by a narrow Sérsic or Gaussian profile, and it is never
+convolved twice.
 
 | Parameter | Meaning | Units | Domain |
 | --- | --- | --- | --- |
@@ -159,8 +167,12 @@ m = \left(|x'|^{c} + \left|\frac{y'}{q}\right|^{c}\right)^{1/c},
 $$
 
 with $c_0 > 0$ for boxy and $c_0 < 0$ for discy isophotes; $c_0 = 0$ gives
-the Sérsic profile. The area within $m$ is $K(c)\,q\,m^2$, with
-$K(c) = 4\,\Gamma(1 + 1/c)^2/\Gamma(1 + 2/c)$, so $R_e$ remains the
+the Sérsic profile. These are the generalized ellipses of
+[Athanassoula et al. (1990)][athanassoula1990], in the parametrization of
+GALFIT ([Peng et al. 2010][peng2010]) and Imfit ([Erwin 2015][erwin2015]).
+The area within $m$ is $K(c)\,q\,m^2$, with
+$K(c) = 4\,\Gamma(1 + 1/c)^2/\Gamma(1 + 2/c)$, which is $\pi$ over the
+area ratio $R(c)$ of [Peng et al. (2002)][peng2002], so $R_e$ remains the
 semi-major radius of the half-light isophote and the flux normalization is
 analytic. Where $c$ is not an even integer, the radius is not smooth on the
 axes of the isophotes, and those cells are integrated adaptively. At
@@ -186,8 +198,9 @@ I(R) = I' \left[1 + \left(\frac{R_b}{R}\right)^{\alpha}\right]^{\gamma/\alpha}
 \right]^{1/(\alpha n)}\right\}
 $$
 
-(Graham et al. 2003; Trujillo et al. 2004): a power law of slope $\gamma$
-within the break radius $R_b$, the Sérsic profile beyond it, and a
+([Graham et al. 2003][graham2003]; [Trujillo et al. 2004][trujillo2004]): a
+power law of slope $\gamma$ within the break radius $R_b$, the Sérsic
+profile beyond it, and a
 transition that sharpens with $\alpha$. $I'$ follows from `flux` by a
 radial integral computed numerically in $\ln R$, with the power law added
 analytically below $10^{-10} R_b$; it agrees with an independent integral
@@ -208,8 +221,8 @@ alpha, q, theta, x0, y0)`.
 
 ### Broken exponential disc
 
-**Definition.** On ellipses of elliptical radius $r$, the disc of Erwin,
-Pohlen & Beckman (2008),
+**Definition.** On ellipses of elliptical radius $r$, the disc of
+[Erwin, Pohlen & Beckman (2008)][erwin2008],
 
 $$
 I(r) = I_0 \exp\left(-\frac{r}{h_{\mathrm{in}}}\right)
@@ -237,8 +250,9 @@ rb, wb, q, theta, x0, y0)`.
 ### Ferrers bar
 
 **Definition.** On generalized ellipses of radius $m$ and shape $c_0$, the
-Ferrers profile in the form of GALFIT (Peng et al. 2010) and Imfit (Erwin
-2015), with its central slope fixed to zero,
+Ferrers profile, named after the ellipsoids of
+[Ferrers (1877)][ferrers1877], in the form of GALFIT
+([Peng et al. 2010][peng2010]) with its central slope fixed to zero,
 
 $$
 I(m) = I_0 \left[1 - \left(\frac{m}{a}\right)^{2}\right]^{\alpha}
@@ -247,8 +261,8 @@ $$
 
 The light ends at the semi-major length $a$; the slope at the edge is
 infinite for $\alpha < 1$, finite for $\alpha = 1$ and zero beyond. Boxy
-isophotes, $c_0 > 0$, describe bars (Athanassoula et al. 1990). The flux is
-analytic,
+isophotes, $c_0 > 0$, describe bars
+([Athanassoula et al. 1990][athanassoula1990]). The flux is analytic,
 
 $$
 F = \frac{K(c)\, q\, I_0\, a^{2}}{\alpha + 1}.
@@ -273,7 +287,7 @@ theta, x0, y0)`.
 ### Gaussian ring
 
 **Definition.** On ellipses of elliptical radius $m$, the ring of Imfit
-(Erwin 2015),
+([Erwin 2015][erwin2015]),
 
 $$
 I(m) = A \exp\left[-\frac{(m - r)^{2}}{2\sigma^{2}}\right],
@@ -327,6 +341,14 @@ cells where it is shorter than the rule resolves are integrated adaptively.
 For $w > 0$ the arms draw a Z on the detector, with $x$ to the right and $y$
 up, and for $w < 0$ an S.
 
+The modulation is the logarithmic-spiral mode with two arms that the
+two-dimensional Fourier analyses of
+[Puerari & Dottori (1992)][puerari-dottori1992] and
+[Davis et al. (2012)][davis2012] measure on images of spiral galaxies.
+GALFIT ([Peng et al. 2010][peng2010]) draws logarithmic arms differently,
+by rotating the coordinates of a component. The fading of the arms toward
+the centre, $A(R)$, is a choice of BayMorph.
+
 | Parameter | Meaning | Units | Domain |
 | --- | --- | --- | --- |
 | `amplitude` | relative amplitude $A_0$ | | $0 \le A_0 \le 1$ |
@@ -339,3 +361,37 @@ the exponential disc.
 
 **Python.** `baymorph.models.LogSpiralDiskComponent(flux, re, q, theta,
 amplitude, winding, phase, r_in, x0, y0)`.
+
+## References
+
+- [Athanassoula E. et al., 1990, MNRAS, 245, 130][athanassoula1990]: generalized ellipses and the boxy isophotes of bars.
+- [Ciotti L., 1991, A&A, 249, 99][ciotti1991]: the equation that defines $b_n$.
+- [Davis B. L. et al., 2012, ApJS, 199, 33][davis2012]: logarithmic-spiral modes and the pitch angle.
+- [Erwin P., 2015, ApJ, 799, 226][erwin2015]: the parametrization $c = 2 + c_0$ and the Gaussian ring.
+- [Erwin P., Pohlen M., Beckman J. E., 2008, AJ, 135, 20][erwin2008]: the broken exponential disc.
+- [Ferrers N. M., 1877, Q. J. Pure Appl. Math., 14, 1][ferrers1877]: the ellipsoids after which the Ferrers profile is named.
+- [Freeman K. C., 1970, ApJ, 160, 811][freeman1970]: the exponential disc.
+- [Graham A. W., Driver S. P., 2005, PASA, 22, 118][graham-driver2005]: $b_n$ and the total flux of the Sérsic profile.
+- [Graham A. W. et al., 2003, AJ, 125, 2951][graham2003]: the core-Sérsic profile.
+- [Peng C. Y. et al., 2002, AJ, 124, 266][peng2002]: the area of generalized ellipses.
+- [Peng C. Y. et al., 2010, AJ, 139, 2097][peng2010]: the parametrization $c = 2 + c_0$, the Ferrers profile of bars and the PSF component of unresolved sources.
+- [Puerari I., Dottori H. A., 1992, A&AS, 93, 469][puerari-dottori1992]: logarithmic-spiral modes of spiral galaxies.
+- [Sérsic J. L., 1963, Boletín de la Asociación Argentina de Astronomía, 6, 41][sersic1963]: the Sérsic profile.
+- [Sérsic J. L., 1968, Atlas de Galaxias Australes, Observatorio Astronómico, Córdoba][sersic1968]: the Sérsic profile.
+- [Trujillo I. et al., 2004, AJ, 127, 1917][trujillo2004]: the core-Sérsic profile.
+
+[athanassoula1990]: https://ui.adsabs.harvard.edu/abs/1990MNRAS.245..130A/abstract
+[ciotti1991]: https://ui.adsabs.harvard.edu/abs/1991A%26A...249...99C/abstract
+[davis2012]: https://ui.adsabs.harvard.edu/abs/2012ApJS..199...33D/abstract
+[erwin2015]: https://ui.adsabs.harvard.edu/abs/2015ApJ...799..226E/abstract
+[erwin2008]: https://ui.adsabs.harvard.edu/abs/2008AJ....135...20E/abstract
+[ferrers1877]: https://ui.adsabs.harvard.edu/abs/1877QJPAM..14....1F/abstract
+[freeman1970]: https://ui.adsabs.harvard.edu/abs/1970ApJ...160..811F/abstract
+[graham-driver2005]: https://ui.adsabs.harvard.edu/abs/2005PASA...22..118G/abstract
+[graham2003]: https://ui.adsabs.harvard.edu/abs/2003AJ....125.2951G/abstract
+[peng2002]: https://ui.adsabs.harvard.edu/abs/2002AJ....124..266P/abstract
+[peng2010]: https://ui.adsabs.harvard.edu/abs/2010AJ....139.2097P/abstract
+[puerari-dottori1992]: https://ui.adsabs.harvard.edu/abs/1992A%26AS...93..469P/abstract
+[sersic1963]: https://ui.adsabs.harvard.edu/abs/1963BAAA....6...41S/abstract
+[sersic1968]: https://ui.adsabs.harvard.edu/abs/1968adga.book.....S/abstract
+[trujillo2004]: https://ui.adsabs.harvard.edu/abs/2004AJ....127.1917T/abstract

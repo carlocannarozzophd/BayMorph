@@ -13,7 +13,7 @@ I(\mathbf{x}) = I_{\mathrm{Sersic}}(\mathbf{x};\,F_b, R_{e,b}, n_b, q_b,
 h_{\mathrm{out}}, r_b, w_b, q_d, \theta_d),
 $$
 
-with the disc of Erwin, Pohlen & Beckman (2008),
+with the disc of [Erwin, Pohlen & Beckman (2008)][erwin2008],
 
 $$
 I_{\mathrm{disc}}(r) = I_0 \exp\left(-\frac{r}{h_{\mathrm{in}}}\right)
@@ -25,10 +25,11 @@ an exponential of scale length $h_{\mathrm{in}}$ inside the break radius
 $r_b$ and of $h_{\mathrm{out}}$ outside it, joined over a width $w_b$. Erwin,
 Pohlen & Beckman write the sharpness $\alpha = 1/w_b$; BayMorph uses the
 width, so that every disc parameter but the flux is a length. The disc is a
-down-bending type II for $h_{\mathrm{out}} < h_{\mathrm{in}}$ (Freeman 1970),
-an up-bending type III for $h_{\mathrm{out}} > h_{\mathrm{in}}$ (Erwin,
-Beckman & Pohlen 2005), and a single exponential, type I, for
-$h_{\mathrm{out}} = h_{\mathrm{in}}$.
+down-bending type II for $h_{\mathrm{out}} < h_{\mathrm{in}}$
+([Freeman 1970][freeman1970]), an up-bending type III for
+$h_{\mathrm{out}} > h_{\mathrm{in}}$
+([Erwin, Beckman & Pohlen 2005][erwin2005]), and a single exponential,
+type I, for $h_{\mathrm{out}} = h_{\mathrm{in}}$.
 
 ## Parameters
 
@@ -65,7 +66,8 @@ break whose rendering is validated, which configuration validation enforces.
 ## What it represents
 
 A bulge and a disc whose outer profile departs from a single exponential.
-Among the late-type spirals of Pohlen & Trujillo (2006), about 10 percent
+Among the late-type spirals of
+[Pohlen & Trujillo (2006)][pohlen-trujillo2006], about 10 percent
 have type I profiles, 60 percent type II and 30 percent type III, and the
 fraction of up-bending profiles rises toward earlier types. Up-bending
 profiles are also found in early-type barred discs (Erwin, Beckman & Pohlen
@@ -134,3 +136,17 @@ this model before writing any output (AD-048).
 `baymorph.models.BrokenExponentialComponent` is the disc;
 `baymorph.fitting.make_bulge_broken_disk_psf_model` builds the PSF-convolved
 model a fit evaluates.
+
+## References
+
+- [Erwin P., Beckman J. E., Pohlen M., 2005, ApJ, 626, L81][erwin2005]: the type III profile.
+- [Erwin P., Pohlen M., Beckman J. E., 2008, AJ, 135, 20][erwin2008]: the broken exponential disc.
+- [Freeman K. C., 1970, ApJ, 160, 811][freeman1970]: the exponential disc and the type II profile.
+- [Pohlen M., Trujillo I., 2006, A&A, 454, 759][pohlen-trujillo2006]: the frequency of the three types.
+- [Sérsic J. L., 1968, Atlas de Galaxias Australes, Observatorio Astronómico, Córdoba][sersic1968]: the Sérsic profile of the bulge.
+
+[erwin2005]: https://ui.adsabs.harvard.edu/abs/2005ApJ...626L..81E/abstract
+[erwin2008]: https://ui.adsabs.harvard.edu/abs/2008AJ....135...20E/abstract
+[freeman1970]: https://ui.adsabs.harvard.edu/abs/1970ApJ...160..811F/abstract
+[pohlen-trujillo2006]: https://ui.adsabs.harvard.edu/abs/2006A%26A...454..759P/abstract
+[sersic1968]: https://ui.adsabs.harvard.edu/abs/1968adga.book.....S/abstract

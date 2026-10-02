@@ -32,6 +32,14 @@ $R_{e,d}$, where the arms are best measured, which keeps $\varphi_0$ and $w$
 nearly uncorrelated. The amplitude fades toward the centre, where the phase
 diverges, over the radius $r_{\mathrm{in}}$.
 
+The arms are the logarithmic-spiral mode with two arms that the
+two-dimensional Fourier analyses of
+[Puerari & Dottori (1992)][puerari-dottori1992] and
+[Davis et al. (2012)][davis2012] measure on images of spiral galaxies.
+GALFIT ([Peng et al. 2010][peng2010]) draws logarithmic arms differently,
+by rotating the coordinates of a component. The fading $A(R)$ toward the
+centre is a choice of BayMorph.
+
 The cosine integrates to zero over every ellipse, so the disc holds the
 flux $F_d$ exactly, and it is non-negative for $0 \le A_0 \le 1$. The model
 without arms, $A_0 = 0$, is [`bulge_disk`](BULGE_DISK.md), which it then
@@ -85,13 +93,15 @@ prior in $w$, half of the prior mass lies at pitch angles below 18.4°.
 A spiral galaxy with a bulge and two arms, described as a density wave on
 its disc. The posterior of the pitch angle comes from a forward model with
 the PSF and the noise, jointly with the bulge and the disc. The pitch angle
-correlates with the mass of the central black hole (Seigar et al. 2008;
-Davis, Graham & Seigar 2017) and with the Hubble type (Kennicutt 1981).
+correlates with the mass of the central black hole
+([Seigar et al. 2008][seigar2008];
+[Davis, Graham & Seigar 2017][davis2017]) and with the Hubble type
+([Kennicutt 1981][kennicutt1981]).
 
 Real arms are not exact logarithmic spirals: their pitch varies from arm to
-arm (Lingard et al. 2021), and flocculent arms, dust lanes and star-forming
-regions, strongest in blue bands, leave residuals this model does not
-describe.
+arm ([Lingard et al. 2021][lingard2021]), and flocculent arms, dust lanes and
+star-forming regions, strongest in blue bands, leave residuals this model
+does not describe.
 
 ## Known degeneracies
 
@@ -165,3 +175,25 @@ this model before writing any output (AD-048).
 `baymorph.models.LogSpiralDiskComponent` is the disc with its arms;
 `baymorph.fitting.make_bulge_disk_spiral_psf_model` builds the
 PSF-convolved model a fit evaluates.
+
+## References
+
+- [Davis B. L., Graham A. W., Seigar M. S., 2017, MNRAS, 471, 2187][davis2017]: the pitch angle and the black-hole mass.
+- [Davis B. L. et al., 2012, ApJS, 199, 33][davis2012]: logarithmic-spiral modes and the pitch angle.
+- [Freeman K. C., 1970, ApJ, 160, 811][freeman1970]: the exponential disc.
+- [Kennicutt R. C., 1981, AJ, 86, 1847][kennicutt1981]: the pitch angle along the Hubble sequence.
+- [Lingard T. et al., 2021, MNRAS, 504, 3364][lingard2021]: the variation of pitch between arms.
+- [Peng C. Y. et al., 2010, AJ, 139, 2097][peng2010]: logarithmic arms by a rotation of coordinates.
+- [Puerari I., Dottori H. A., 1992, A&AS, 93, 469][puerari-dottori1992]: logarithmic-spiral modes of spiral galaxies.
+- [Seigar M. S. et al., 2008, ApJ, 678, L93][seigar2008]: the pitch angle and the black-hole mass.
+- [Sérsic J. L., 1968, Atlas de Galaxias Australes, Observatorio Astronómico, Córdoba][sersic1968]: the Sérsic profile of the bulge.
+
+[davis2017]: https://ui.adsabs.harvard.edu/abs/2017MNRAS.471.2187D/abstract
+[davis2012]: https://ui.adsabs.harvard.edu/abs/2012ApJS..199...33D/abstract
+[freeman1970]: https://ui.adsabs.harvard.edu/abs/1970ApJ...160..811F/abstract
+[kennicutt1981]: https://ui.adsabs.harvard.edu/abs/1981AJ.....86.1847K/abstract
+[lingard2021]: https://ui.adsabs.harvard.edu/abs/2021MNRAS.504.3364L/abstract
+[peng2010]: https://ui.adsabs.harvard.edu/abs/2010AJ....139.2097P/abstract
+[puerari-dottori1992]: https://ui.adsabs.harvard.edu/abs/1992A%26AS...93..469P/abstract
+[seigar2008]: https://ui.adsabs.harvard.edu/abs/2008ApJ...678L..93S/abstract
+[sersic1968]: https://ui.adsabs.harvard.edu/abs/1968adga.book.....S/abstract

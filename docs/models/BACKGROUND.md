@@ -30,7 +30,9 @@ y_{\mathrm{ref}} = \frac{n_y - 1}{2},
 $$
 
 where $n_x$ and $n_y$ are the sides of the cutout, so that `background_level`
-is the level at its geometric centre.
+is the level at its geometric centre. It is the sky of GALFIT
+([Peng et al. 2010][peng2010]): a level at a reference point and two
+gradients.
 
 | Parameter | Meaning | Units | Default prior |
 | --- | --- | --- | --- |
@@ -77,3 +79,9 @@ background leaves.
 
 `baymorph.observation.background.ConstantBackground(level)` and
 `TiltedPlaneBackground(level, gradient_x, gradient_y)`.
+
+## References
+
+- [Peng C. Y. et al., 2010, AJ, 139, 2097][peng2010]: the tilted-plane sky.
+
+[peng2010]: https://ui.adsabs.harvard.edu/abs/2010AJ....139.2097P/abstract

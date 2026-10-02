@@ -23,10 +23,12 @@ I_{\mathrm{bar}}(m) = I_0 \left[1 - \left(\frac{m}{a}\right)^{2}
 $$
 
 on generalized ellipses $m = (|x'|^{c} + |y'/q_{\mathrm{bar}}|^{c})^{1/c}$,
-$c = 2 + c_0$. This is the Ferrers profile of GALFIT (Peng et al. 2010) and
-Imfit (Erwin 2015) with its central slope fixed to zero. Boxy isophotes,
-$c_0 > 0$, describe the rectangular isophotes of bars (Athanassoula et al.
-1990). The flux of the bar is $F_{\mathrm{bar}} = K(c)\, q_{\mathrm{bar}}
+$c = 2 + c_0$. This is the Ferrers profile of GALFIT
+([Peng et al. 2010][peng2010]) with its central slope fixed to zero, named
+after the ellipsoids of [Ferrers (1877)][ferrers1877]. Boxy isophotes,
+$c_0 > 0$, describe the rectangular isophotes of bars
+([Athanassoula et al. 1990][athanassoula1990]). The flux of the bar is
+$F_{\mathrm{bar}} = K(c)\, q_{\mathrm{bar}}
 I_0\, a^2/(\alpha + 1)$, with $K(c)$ the area factor of the generalized
 ellipse.
 
@@ -73,9 +75,11 @@ rendering of AD-046, is not.
 
 A barred disc galaxy with a bulge. Ferrers profiles describe bars, and
 lenses with a flat profile, in multicomponent decompositions of S0 and
-early-type spiral galaxies (Laurikainen, Salo & Buta 2005). A bar left out of
-a decomposition can make the bulge-to-total ratio about twice too large,
-because the bulge absorbs the light of the bar (Gadotti 2008).
+early-type spiral galaxies
+([Laurikainen, Salo & Buta 2005][laurikainen2005]). A bar left out of a
+decomposition can make the bulge-to-total ratio about twice too large,
+because the bulge absorbs the light of the bar
+([Gadotti 2008][gadotti2008]).
 
 ## Known degeneracies
 
@@ -149,3 +153,21 @@ this model before writing any output (AD-048).
 `baymorph.models.FerrersBarComponent` is the bar;
 `baymorph.fitting.make_bulge_disk_bar_psf_model` builds the PSF-convolved
 model a fit evaluates.
+
+## References
+
+- [Athanassoula E. et al., 1990, MNRAS, 245, 130][athanassoula1990]: the boxy isophotes of bars.
+- [Ferrers N. M., 1877, Q. J. Pure Appl. Math., 14, 1][ferrers1877]: the ellipsoids after which the Ferrers profile is named.
+- [Freeman K. C., 1970, ApJ, 160, 811][freeman1970]: the exponential disc.
+- [Gadotti D. A., 2008, MNRAS, 384, 420][gadotti2008]: the bias of an omitted bar.
+- [Laurikainen E., Salo H., Buta R., 2005, MNRAS, 362, 1319][laurikainen2005]: Ferrers bars in decompositions of S0 galaxies.
+- [Peng C. Y. et al., 2010, AJ, 139, 2097][peng2010]: the Ferrers profile of bars.
+- [Sérsic J. L., 1968, Atlas de Galaxias Australes, Observatorio Astronómico, Córdoba][sersic1968]: the Sérsic profile of the bulge.
+
+[athanassoula1990]: https://ui.adsabs.harvard.edu/abs/1990MNRAS.245..130A/abstract
+[ferrers1877]: https://ui.adsabs.harvard.edu/abs/1877QJPAM..14....1F/abstract
+[freeman1970]: https://ui.adsabs.harvard.edu/abs/1970ApJ...160..811F/abstract
+[gadotti2008]: https://ui.adsabs.harvard.edu/abs/2008MNRAS.384..420G/abstract
+[laurikainen2005]: https://ui.adsabs.harvard.edu/abs/2005MNRAS.362.1319L/abstract
+[peng2010]: https://ui.adsabs.harvard.edu/abs/2010AJ....139.2097P/abstract
+[sersic1968]: https://ui.adsabs.harvard.edu/abs/1968adga.book.....S/abstract

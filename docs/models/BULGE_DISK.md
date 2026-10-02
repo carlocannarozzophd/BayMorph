@@ -1,7 +1,11 @@
 # Bulge and Disc (`bulge_disk`)
 
 A Sérsic bulge and an [exponential disc](COMPONENTS.md#exponential-disc)
-with a shared centre: the classical bulge and disc decomposition.
+with a shared centre: the classical bulge and disc decomposition. The disc
+is the exponential of [Freeman (1970)][freeman1970]; the bulge is a Sérsic
+profile ([Sérsic 1968][sersic1968]) of free index, as in the decompositions
+of [Andredakis, Peletier & Balcells (1995)][andredakis1995], who found the
+index of bulges to fall from early to late types.
 
 ## Definition
 
@@ -101,3 +105,13 @@ fit:
 and an `ExponentialComponent` disc;
 `baymorph.fitting.make_bulge_disk_psf_model` builds the PSF-convolved model a
 fit evaluates.
+
+## References
+
+- [Andredakis Y. C., Peletier R. F., Balcells M., 1995, MNRAS, 275, 874][andredakis1995]: Sérsic bulges of free index with an exponential disc.
+- [Freeman K. C., 1970, ApJ, 160, 811][freeman1970]: the exponential disc.
+- [Sérsic J. L., 1968, Atlas de Galaxias Australes, Observatorio Astronómico, Córdoba][sersic1968]: the Sérsic profile of the bulge.
+
+[andredakis1995]: https://ui.adsabs.harvard.edu/abs/1995MNRAS.275..874A/abstract
+[freeman1970]: https://ui.adsabs.harvard.edu/abs/1970ApJ...160..811F/abstract
+[sersic1968]: https://ui.adsabs.harvard.edu/abs/1968adga.book.....S/abstract

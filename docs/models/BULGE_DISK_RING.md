@@ -14,7 +14,7 @@ I(\mathbf{x}) = I_{\mathrm{Sersic}}(\mathbf{x};\,F_b, R_{e,b}, n_b, q_b,
 $$
 
 the bulge and the disc of [`bulge_disk`](BULGE_DISK.md) and the ring of
-Imfit (Erwin 2015),
+Imfit ([Erwin 2015][erwin2015]),
 
 $$
 I_{\mathrm{ring}}(m) = A \exp\left[-\frac{(m - r)^{2}}{2\sigma^{2}}\right],
@@ -143,3 +143,13 @@ this model before writing any output (AD-048).
 `baymorph.models.GaussianRingComponent` is the ring;
 `baymorph.fitting.make_bulge_disk_ring_psf_model` builds the PSF-convolved
 model a fit evaluates.
+
+## References
+
+- [Erwin P., 2015, ApJ, 799, 226][erwin2015]: the Gaussian ring.
+- [Freeman K. C., 1970, ApJ, 160, 811][freeman1970]: the exponential disc.
+- [Sérsic J. L., 1968, Atlas de Galaxias Australes, Observatorio Astronómico, Córdoba][sersic1968]: the Sérsic profile of the bulge.
+
+[erwin2015]: https://ui.adsabs.harvard.edu/abs/2015ApJ...799..226E/abstract
+[freeman1970]: https://ui.adsabs.harvard.edu/abs/1970ApJ...160..811F/abstract
+[sersic1968]: https://ui.adsabs.harvard.edu/abs/1968adga.book.....S/abstract

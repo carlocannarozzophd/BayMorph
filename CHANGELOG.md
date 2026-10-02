@@ -11,6 +11,17 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* References on every page of the Models section: each page of a model, a
+  component, the PSFs and the residual background ends with the sources of
+  its model and formulas, linked to their records in NASA ADS, and the text
+  cites them where each formula appears; forms that are BayMorph's own, such
+  as the fading of the spiral arms toward the centre, are stated as such.
+  Each bibcode was checked on 2026-10-02 against the ADS or NED record of
+  its title. A test keeps every citation listed and every link a well-formed
+  ADS record. Two figures complete the pages: the boxy and discy Sérsic
+  profile along the diagonal of its isophotes, and a core-Sérsic galaxy
+  against its Sérsic body with the light the core lacks; the single-Sérsic
+  page shows the Sérsic profiles as well.
 * A measurement of the signal-to-noise above which the effective-PSF
   rendering of AD-046 leaves on a component an error comparable with the
   noise ([note](docs/research/RENDERING_SIGNAL_LIMIT_2026-10-02.md),
@@ -310,6 +321,12 @@ and the project follows Semantic Versioning in spirit.
 
 ### Fixed
 
+* Two attributions of the components, in the pages and the docstrings: the
+  Ferrers profile was credited to Imfit (Erwin 2015), whose paper does not
+  describe it, and is now credited to GALFIT (Peng et al. 2010); the
+  convention `c = 2 + c0` of generalized ellipses was credited to Peng et al.
+  (2002), whose GALFIT uses the exponent `c` itself, and is now credited to
+  GALFIT (Peng et al. 2010) and Imfit.
 * Source detection no longer falls back silently to a background that ignores
   the detection mask: preparation detects without a background, and the
   observation advisor raises instead.

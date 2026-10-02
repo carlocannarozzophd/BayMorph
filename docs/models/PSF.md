@@ -45,7 +45,9 @@ a substitute for an empirical PSF of a real image.
 
 **Definition.** A kernel built from the stars of the image, following
 AD-046. Because it is made of detector pixels, it samples the *effective*
-PSF, the optical PSF convolved with the pixel response. The product holds
+PSF, the optical PSF convolved with the pixel response, as defined by
+[Anderson & King (2000)][anderson-king2000]; the builder below is that of
+AD-046, not theirs. The product holds
 the native kernel and the effective PSF at the eleven sub-pixel phases of
 each axis; every phase is non-negative with unit sum, and the zero phase
 equals the native kernel.
@@ -82,8 +84,9 @@ product built before AD-046, is rejected.
 bias of `n` and `re` within 1 percent, and the rendering recovers every
 parameter of galaxies like the target within 0.09 statistical deviations.
 The validated domain is a circular PSF constant across the field, with a
-Moffat core of 2.2 to 3.5 px FWHM with or without a halo, stars at least
-50 px apart, no light beyond 64 px, and profiles with an effective radius of
+Moffat core ([Moffat 1969][moffat1969]) of 2.2 to 3.5 px FWHM with or
+without a halo, stars at least 50 px apart, no light beyond 64 px, and
+profiles with an effective radius of
 at least 1 px and an index up to 6. The extended wings leave a
 field-to-field uncertainty of about 1 percent in `re`, which a fit with one
 kernel cannot average away and must state as a systematic uncertainty. See
@@ -95,3 +98,11 @@ the field is not modelled. Real PSFs may extend further than 64 px, and real
 fields are more crowded than the validated ones.
 
 **Python.** `baymorph.EmpiricalPSF(kernel_array, subpixel_kernels=...)`.
+
+## References
+
+- [Anderson J., King I. R., 2000, PASP, 112, 1360][anderson-king2000]: the effective PSF.
+- [Moffat A. F. J., 1969, A&A, 3, 455][moffat1969]: the Moffat profile of the validated domain.
+
+[anderson-king2000]: https://ui.adsabs.harvard.edu/abs/2000PASP..112.1360A/abstract
+[moffat1969]: https://ui.adsabs.harvard.edu/abs/1969A%26A.....3..455M/abstract

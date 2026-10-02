@@ -37,7 +37,7 @@ from matplotlib.patches import (  # noqa: E402
     Rectangle,
 )
 from scipy.optimize import least_squares  # noqa: E402
-from scipy.special import gammainc, gammaincinv  # noqa: E402
+from scipy.special import gammainc, gammaincinv, gammaln  # noqa: E402
 
 from baymorph.fitting import (  # noqa: E402
     make_bulge_broken_disk_psf_model,
@@ -45,6 +45,7 @@ from baymorph.fitting import (  # noqa: E402
     make_bulge_disk_psf_model,
     make_bulge_disk_ring_psf_model,
     make_bulge_disk_spiral_psf_model,
+    make_core_sersic_psf_model,
     make_double_sersic_psf_model,
     make_sersic_point_source_psf_model,
     make_single_sersic_psf_model,
@@ -950,6 +951,56 @@ def boxy_sersic_isophotes(theme: Theme) -> plt.Figure:
     return fig
 
 
+def boxy_sersic_profiles(theme: Theme) -> plt.Figure:
+    """The light along the axes and along the diagonal of the isophotes."""
+    parameters = dict(
+        flux=100.0, re=10.0, n=2.0, q=0.7, theta=0.0, x0=0.0, y0=0.0,
+    )
+    distance = np.linspace(0.0, 30.0, 300)
+    q = parameters["q"]
+    # Along the major axis the generalized radius is |x'| for every c0; along
+    # the direction y' = q x' it depends on c0.
+    diagonal = np.array((1.0, q)) / np.hypot(1.0, q)
+    fig, (left, right) = plt.subplots(1, 2, figsize=(WIDTH, 2.9))
+    fig.subplots_adjust(wspace=0.32)
+
+    def scaled(component, x, y):
+        # Each profile in units of its own central intensity, which at a
+        # fixed flux falls as the area factor K(c) grows.
+        return component.intensity(x, y) / np.exp(component.log_central_intensity)
+
+    ellipse = GeneralizedSersicComponent(c0=0.0, **parameters)
+    reference = scaled(ellipse, diagonal[0] * distance, diagonal[1] * distance)
+    for (c0, label), colour in zip(
+        ((-0.6, "discy"), (0.0, "ellipses"), (0.6, "boxy")),
+        theme.series,
+        strict=False,
+    ):
+        component = GeneralizedSersicComponent(c0=c0, **parameters)
+        along = scaled(component, diagonal[0] * distance, diagonal[1] * distance)
+        value = "0" if c0 == 0.0 else f"{c0:+.1f}".replace("-", "\u2212")
+        left.plot(distance, along, color=colour, label=f"c0 = {value}, {label}")
+        right.plot(distance, along / reference, color=colour,
+                   label=f"c0 = {value}, {label}")
+    major = scaled(ellipse, distance, 0.0 * distance)
+    left.plot(distance, major, color=theme.ink, linestyle="--", linewidth=1.0,
+              label="major axis, every c0")
+    left.set_yscale("log")
+    left.set_ylim(1e-4, 1.5)
+    left.set_ylabel(r"$I / I_0$")
+    left.set_title("Along the diagonal y\u2032 = q x\u2032", loc="left")
+    left.legend(loc="lower left", handlelength=1.4)
+    right.axhline(1.0, color=theme.axis, linewidth=0.8, zorder=1)
+    right.set_ylabel("ratio to ellipses")
+    right.set_title("Diagonal, relative to c0 = 0", loc="left")
+    right.legend(loc="upper left", handlelength=1.4)
+    for ax in (left, right):
+        ax.set_xlim(0, 30)
+        ax.set_xlabel("distance from the centre (pixels)")
+        plot_axes(ax)
+    return fig
+
+
 def core_sersic_profiles(theme: Theme) -> plt.Figure:
     """The depleted core against the inward extrapolation of the Sérsic body."""
     base = dict(
@@ -988,6 +1039,67 @@ def core_sersic_profiles(theme: Theme) -> plt.Figure:
         ax.legend(loc="lower left", handlelength=1.4)
         plot_axes(ax)
     left.set_ylabel(r"$I(R) / I'$")
+    return fig
+
+
+def core_sersic_deficit(theme: Theme) -> plt.Figure:
+    """A core-Sérsic galaxy, its Sérsic body and the light the core lacks."""
+    shape = (101, 101)
+    psf = GaussianPSF(fwhm=2.5)
+    parameters = dict(
+        re=20.0, n=4.0, q=0.8, theta=np.deg2rad(30.0), x0=50.0, y0=50.0,
+    )
+    core = dict(flux=100.0, rb=4.0, gamma=0.1, alpha=2.0)
+    component = CoreSersicComponent(**core, **parameters)
+    # Beyond the break the profile is the Sérsic law with central intensity
+    # I', whose flux over the plane is 2 pi q I' re^2 n b^-2n Gamma(2n).
+    body_flux = float(
+        2.0 * np.pi * parameters["q"] * np.exp(component.log_intensity_scale)
+        * parameters["re"] ** 2 * parameters["n"]
+        * component.bn ** (-2.0 * parameters["n"])
+        * np.exp(gammaln(2.0 * parameters["n"]))
+    )
+    observed = make_core_sersic_psf_model(**core, **parameters, psf=psf).render(
+        shape
+    )
+    body = make_single_sersic_psf_model(
+        flux=body_flux, **parameters, psf=psf
+    ).render(shape)
+    deficit = body - observed
+    norm = LogNorm(vmin=1e-4 * float(body.max()), vmax=float(body.max()))
+    fig = plt.figure(figsize=(WIDTH, 2.2))
+    grid = fig.add_gridspec(
+        1, 5, width_ratios=(1.0, 1.0, 1.0, 0.42, 1.55), wspace=0.08
+    )
+    lacking = 100.0 * (body_flux - core["flux"]) / body_flux
+    for slot, (image, label) in enumerate(
+        (
+            (observed, "core-Sérsic"),
+            (body, "Sérsic body"),
+            (deficit, f"deficit, {lacking:.1f} %"),
+        )
+    ):
+        ax = fig.add_subplot(grid[0, slot])
+        show_image(ax, image, theme, norm)
+        ax.set_title(label, fontsize=8.5)
+    ax = fig.add_subplot(grid[0, 4])
+    rmax = 30
+    for image, colour, style, label in (
+        (observed, theme.series[0], "-", "core-Sérsic"),
+        (body, theme.ink, "--", "Sérsic body"),
+        (deficit, theme.series[1], "-", "deficit"),
+    ):
+        r, profile = radial_profile(image, 50.0, 50.0, rmax)
+        ax.plot(r, profile, color=colour, linestyle=style, label=label)
+    r, profile = radial_profile(body, 50.0, 50.0, rmax)
+    ax.axvline(core["rb"], color=theme.axis, linewidth=0.8, zorder=1)
+    ax.set_yscale("log")
+    ax.set_ylim(1e-4 * float(profile.max()), 2.0 * float(profile.max()))
+    ax.set_xlim(0, rmax)
+    ax.set_xlabel("radius (pixels)")
+    ax.set_ylabel("mean intensity")
+    ax.legend(loc="upper right", handlelength=1.4)
+    plot_axes(ax)
     return fig
 
 
@@ -1236,7 +1348,9 @@ FIGURES: dict[str, Callable[[Theme], plt.Figure]] = {
     "sersic_degeneracy": sersic_degeneracy,
     "bulge_disk_tradeoff": bulge_disk_tradeoff,
     "boxy_sersic_isophotes": boxy_sersic_isophotes,
+    "boxy_sersic_profiles": boxy_sersic_profiles,
     "core_sersic_profiles": core_sersic_profiles,
+    "core_sersic_deficit": core_sersic_deficit,
     "broken_disk_profiles": broken_disk_profiles,
     "bulge_broken_disk_decomposition": bulge_broken_disk_decomposition,
     "ferrers_bar_profiles": ferrers_bar_profiles,

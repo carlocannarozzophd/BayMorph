@@ -5,7 +5,8 @@ morphology of the galaxy, and the observation effects that turn it into the
 expected image of the detector. Each page gives the definition, the
 parameters with their units, domains and default priors, what the model
 represents and what it does not, its known degeneracies, its validation
-status, and how to select it.
+status, how to select it, and the references its model and formulas come
+from, each linked to its record in NASA ADS.
 
 ## From a model to an expected image
 

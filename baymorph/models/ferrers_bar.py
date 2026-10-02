@@ -1,7 +1,7 @@
 r"""Ferrers bar on generalized ellipses (AD-048).
 
 The surface brightness of the Ferrers profile, in the form of GALFIT (Peng et
-al. 2010) and Imfit (Erwin 2015) with its central slope fixed to zero, is
+al. 2010, eq. 12) with its central slope fixed to zero, is
 
 .. math::
 

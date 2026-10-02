@@ -2,7 +2,8 @@
 
 A Sérsic profile whose centre is depleted: inside a break radius the light
 follows a shallow power law instead of the inward extrapolation of the
-Sérsic profile (Graham et al. 2003; Trujillo et al. 2004). One of the
+Sérsic profile ([Graham et al. 2003][graham2003];
+[Trujillo et al. 2004][trujillo2004]). One of the
 families of AD-048: available for single-observation fits.
 
 ## Definition
@@ -39,12 +40,13 @@ $I'$ follows from it by a radial integral computed numerically.
 The default priors are generic and in pixels; they must be checked against
 the target and the image.
 
-- **`alpha`.** Baes (2026) finds that the deprojected density of a
+- **`alpha`.** [Baes (2026)][baes2026] finds that the deprojected density of a
   core-Sérsic profile is monotonic only for `alpha` up to a critical value,
   which equals 2 when `gamma = 0` and is never below 2. The default bound
   of 2 is therefore physically admissible for every core.
-- **`gamma`.** Depleted cores have inner slopes of 0.3 or less (Dullo &
-  Graham 2012). The bound of 0.9 is the validated domain of the rendering:
+- **`gamma`.** Depleted cores have inner slopes of 0.3 or less
+  ([Dullo & Graham 2012][dullo-graham2012]). The bound of 0.9 is the
+  validated domain of the rendering:
   steeper cusps, up to the limit of 2 at which the central flux diverges,
   are not resolved by the cell rules, which then raise an error.
 
@@ -58,10 +60,16 @@ the target and the image.
 The partially depleted core of a luminous early-type galaxy, the light
 deficit that binary black holes are thought to scour, together with its
 Sérsic body. Every elliptical brighter than M_V = −21.66 in the Virgo sample
-of Kormendy et al. (2009) has such a core.
+of [Kormendy et al. (2009)][kormendy2009] has such a core.
 
-Cores measure 0.02 to 0.5 kpc (Dullo 2019). A break radius smaller than the
-core of the PSF is not resolved: its posterior then follows the prior, and
+![Images of a convolved core-Sérsic galaxy, of its Sérsic body and of the light the core lacks, with the radial profiles of the three](figures/core_sersic_deficit-light.png#gh-light-mode-only)
+![Images of a convolved core-Sérsic galaxy, of its Sérsic body and of the light the core lacks, with the radial profiles of the three](figures/core_sersic_deficit-dark.png#gh-dark-mode-only)
+
+*A core-Sérsic galaxy (n = 4, Rₑ = 20 px, R_b = 4 px, γ = 0.1, α = 2, q = 0.8) and its Sérsic body, the Sérsic profile it follows beyond the break, after a Gaussian PSF of 2.5 px FWHM. The core lacks 14 percent of the light of the body, within a few break radii; the vertical line marks the break radius.*
+
+Cores measure 0.02 to 0.5 kpc ([Dullo 2019][dullo2019]). A break radius
+smaller than the core of the PSF is not resolved: its posterior then
+follows the prior, and
 an evidence comparison with `single_sersic` depends on that prior.
 
 ## Known degeneracies
@@ -117,3 +125,19 @@ this model before writing any output (AD-048).
 `baymorph.models.CoreSersicComponent` is the intrinsic profile;
 `baymorph.fitting.make_core_sersic_psf_model` builds the PSF-convolved
 model a fit evaluates.
+
+## References
+
+- [Baes M., 2026, A&A, 709, A24][baes2026]: the physical limit on α.
+- [Dullo B. T., 2019, ApJ, 886, 80][dullo2019]: the sizes of depleted cores.
+- [Dullo B. T., Graham A. W., 2012, ApJ, 755, 163][dullo-graham2012]: the inner slopes of depleted cores.
+- [Graham A. W. et al., 2003, AJ, 125, 2951][graham2003]: the core-Sérsic profile.
+- [Kormendy J. et al., 2009, ApJS, 182, 216][kormendy2009]: the cores of Virgo ellipticals.
+- [Trujillo I. et al., 2004, AJ, 127, 1917][trujillo2004]: the core-Sérsic profile.
+
+[baes2026]: https://ui.adsabs.harvard.edu/abs/2026A%26A...709A..24B/abstract
+[dullo2019]: https://ui.adsabs.harvard.edu/abs/2019ApJ...886...80D/abstract
+[dullo-graham2012]: https://ui.adsabs.harvard.edu/abs/2012ApJ...755..163D/abstract
+[graham2003]: https://ui.adsabs.harvard.edu/abs/2003AJ....125.2951G/abstract
+[kormendy2009]: https://ui.adsabs.harvard.edu/abs/2009ApJS..182..216K/abstract
+[trujillo2004]: https://ui.adsabs.harvard.edu/abs/2004AJ....127.1917T/abstract

@@ -8,11 +8,13 @@ The surface brightness is the Sérsic law of the generalized radius
     \qquad
     m = \left(|x'|^{c} + |y'/q|^{c}\right)^{1/c}, \quad c = 2 + c_0,
 
-with ``c0 > 0`` for boxy and ``c0 < 0`` for discy isophotes (Peng et al.
-2002). The area within ``m`` is ``K(c) q m**2``, so the fraction of light
-within an isophote depends on ``m`` alone: ``re`` is the semi-major radius
-of the isophote that holds half the light for every ``c0``, and the total
-flux is
+with ``c0 > 0`` for boxy and ``c0 < 0`` for discy isophotes, the convention
+of GALFIT (Peng et al. 2010) and Imfit (Erwin 2015) for the generalized
+ellipses of Athanassoula et al. (1990). The area within ``m`` is
+``K(c) q m**2``, ``pi`` over the area ratio of Peng et al. (2002), so the
+fraction of light within an isophote depends on ``m`` alone: ``re`` is the
+semi-major radius of the isophote that holds half the light for every
+``c0``, and the total flux is
 
 .. math::
 

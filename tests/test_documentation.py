@@ -7,6 +7,7 @@ import importlib.util
 import re
 import sys
 from pathlib import Path
+from urllib.parse import unquote
 
 from baymorph.cli import _build_parser
 from baymorph.models import get_model, registered_models
@@ -154,3 +155,61 @@ def test_model_figures_are_generated_referenced_and_themed() -> None:
 
     assert present == generated
     assert referenced == generated
+
+
+REFERENCE_USE = re.compile(r"\]\[([a-z0-9-]+)\]")
+
+REFERENCE_DEFINITION = re.compile(r"^\[([a-z0-9-]+)\]: (\S+)$", re.MULTILINE)
+
+ADS_ABSTRACT = re.compile(r"https://ui\.adsabs\.harvard\.edu/abs/([^/]+)/abstract")
+
+BIBCODE_LENGTH = 19
+
+
+def test_model_pages_cite_their_sources_with_ads_links() -> None:
+    problems = []
+    sources: dict[str, str] = {}
+
+    for page in sorted(MODELS_DIRECTORY.glob("*.md")):
+        if page.name == "index.md":
+            continue
+
+        text = page.read_text(encoding="utf-8")
+        body, heading, references = text.partition("\n## References\n")
+
+        if not heading:
+            problems.append(f"{page.name}: no References section")
+            continue
+
+        definitions = dict(REFERENCE_DEFINITION.findall(references))
+        listed = set(REFERENCE_USE.findall(references))
+        cited = set(REFERENCE_USE.findall(body))
+
+        if not definitions:
+            problems.append(f"{page.name}: no references")
+
+        problems.extend(
+            f"{page.name}: [{label}] is not listed"
+            for label in sorted(cited - listed)
+        )
+        problems.extend(
+            f"{page.name}: [{label}] has no link"
+            for label in sorted(listed - set(definitions))
+        )
+        problems.extend(
+            f"{page.name}: [{label}] is never listed"
+            for label in sorted(set(definitions) - listed)
+        )
+
+        for label, url in definitions.items():
+            match = ADS_ABSTRACT.fullmatch(url)
+
+            if match is None or len(unquote(match.group(1))) != BIBCODE_LENGTH:
+                problems.append(f"{page.name}: [{label}] is not an ADS record: {url}")
+
+            if sources.setdefault(label, url) != url:
+                problems.append(
+                    f"{page.name}: [{label}] links {url}, elsewhere {sources[label]}"
+                )
+
+    assert problems == []
