@@ -10,6 +10,8 @@ from numpy.typing import NDArray
 from scipy.integrate import quad
 from scipy.special import gammainc, gammaln
 
+from baymorph.rendering.cell_means import sixth_order_cell_means
+
 if TYPE_CHECKING:
     from baymorph.models.sersic import SersicModel
 
@@ -1009,16 +1011,8 @@ def _render_corrected_point_samples(
         origin=(origin[0] - 2.0, origin[1] - 2.0),
         integration_order=1,
     )
-    weights = np.array([-17.0, 308.0, 5178.0, 308.0, -17.0]) / 5760.0
-    rows = sum(
-        weight * samples[offset:offset + shape[0]]
-        for offset, weight in enumerate(weights)
-    )
 
-    return sum(
-        weight * rows[:, offset:offset + shape[1]]
-        for offset, weight in enumerate(weights)
-    )
+    return sixth_order_cell_means(samples, shape)
 
 
 def render_sersic_cusp_hybrid(

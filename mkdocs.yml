@@ -143,6 +143,7 @@ nav:
     - Computer-Vision Source Identification: research/CV_SOURCE_IDENTIFICATION_2026-10-01.md
   - Morphology Families:
     - Morphology Families Beyond the Sérsic Profile: research/MORPHOLOGY_FAMILIES_2026-10-02.md
+    - Rendering of the Morphology Families: research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md
 
 plugins:
   - search

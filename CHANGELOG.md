@@ -11,6 +11,18 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* A generic rendering for profile components other than the Sérsic profile
+  (AD-048):
+  * isophote coordinates on generalized ellipses (`baymorph/models/isophote.py`);
+  * a base class of profile components (`baymorph/models/profile.py`);
+  * generic cell rules (`baymorph/rendering/profile_integration.py`), with the
+    renderer names of the Sérsic profile, so components render under analytic
+    PSFs and under the effective-PSF rendering of AD-046.
+
+  The sixth-order rule of the fine cells is now shared with the Sérsic
+  profile, which renders bit for bit as before. A bench measures the families
+  against brute-force references, with its design and criteria fixed before
+  the runs ([note](docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
 * AD-048, six further morphology families as available single-observation
   models, and the survey behind it
   ([note](docs/research/MORPHOLOGY_FAMILIES_2026-10-02.md)): a catalogue of
