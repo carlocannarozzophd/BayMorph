@@ -84,6 +84,31 @@ axis, through which the forward model renders the profile, with
 sub-pixel kernels and is rejected for fits. [Public API](../API.md)
 describes the builder.
 
+## Noise products
+
+The noise model of AD-047 needs two products for each observation, which
+`fit()`, or the fit stage of `baymorph run`, builds before the sampler
+starts and writes beside the preparation products:
+
+| Product | Content |
+| --- | --- |
+| `image_preparation/correlated_gaussian_noise.npz` | The stationary correlation of the sky up to lag 8, estimated on the sky region with one plane removed and without a taper, with its metadata: the number of sky pixels, the smallest number of pixel pairs at a lag, the smallest value of its spectrum, the correlation along each axis up to lag 16, whose lags 9 to 16 are a diagnostic of the truncation, and the fingerprints of the preparation products it was estimated from. |
+| `image_preparation/correlated_gaussian_vecchia/m24/` | The nearest-neighbour factorization of that correlation on the likelihood support, with 24 neighbours, and its `manifest.json`. |
+
+Both are immutable: a later fit of the same preparation reuses them. A sky
+region with fewer than 1000 pixel pairs at some lag up to 16, or a
+correlation whose spectrum is not strictly positive, stops the fit instead
+of being repaired. Products of the schemas before AD-047 are rejected, with
+a message that asks for a new output namespace. On small cutouts the
+estimate of the correlation is noisy, and its uncertainty is not
+propagated; the packaged simulated example is 201 x 201 px for that
+reason.
+
+The effective gain is resolved from the source that
+`fit.likelihood.effective_gain` declares ([Configuration](CONFIGURATION.md)).
+`fit_summary.json` records it, with the estimator of the correlation and the
+paths of both products, under `likelihood`.
+
 ## Fit products
 
 Each model of `fit.models` has its own directory `fits/<model>/`:
@@ -93,7 +118,7 @@ Each model of `fit.models` has its own directory `fits/<model>/`:
 | `posterior.npz` | Weighted posterior samples, the statistical source of truth. |
 | `best_parameters.json` | Best-fitting parameters. |
 | `fit_summary.json`, `fit_summary.txt` | Evidence, goodness of fit, sampler configuration and provenance. |
-| `best_model_image.npy`, `residual.npy`, `norm_residual.npy`, `noise.npy` | Model image, residual, normalized residual and noise of the fit. |
+| `best_model_image.npy`, `residual.npy`, `norm_residual.npy`, `noise.npy` | Model image; residual; residual divided by the scale of the noise model at the best sample, which includes the source variance when a gain is declared, a marginal standardization that is not whitened; and the prepared sky scale. |
 | `config_resolved.yaml` | Resolved configuration of the fit. |
 | `corner.<format>`, `data_model_residual.<format>`, `radial_profile.<format>` | Diagnostics, as `diagnostics` configures. |
 | `COMPLETE.json` | Completion marker, written last, after every product validates. |

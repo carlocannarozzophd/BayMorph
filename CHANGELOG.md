@@ -233,6 +233,26 @@ and the project follows Semantic Versioning in spirit.
 
 ### Changed
 
+* The architecture documents follow AD-047, milestone 4 of its plan.
+  `docs/architecture/OBSERVATION_MODEL.md` §22.9 defines the noise model:
+  its marginal scale, the estimator of the sky correlation, the
+  nearest-neighbour factorization and the normalized log-likelihood, the
+  declared effective gain, the fixed inputs whose uncertainty is not
+  propagated, the residual diagnostics, the limitations and the weight map
+  still to come; §11 and §22 no longer call the independent Gaussian the
+  current likelihood, and §22.3 adds the case of a covariance whose inputs
+  are fixed but whose value follows the predicted source image.
+  `INFERENCE.md` §14 states that the normalization of such a covariance
+  enters every evaluation, and §15 no longer writes the likelihood of a
+  masked image as a sum over pixels, which holds only for independent
+  pixels. The contracts of `BAYMORPH_CORE_CONTRACT.md`, with the cost of a
+  complete evaluation under AD-047, and the fixed quantities of
+  `PIPELINE.md` follow the decision. The public API documentation describes
+  the standardized residual and the chi-square of the fit products and the
+  `requires_source` contract of likelihoods; the guide to preparation and
+  products describes the sky correlation and factorization products; and
+  the observed-fit tutorial, with its packaged copy, no longer says that
+  its noise lacks the galaxy's Poisson noise.
 * Every fit run from a configuration uses the noise model of AD-047,
   milestone 3 of its plan. The single path passes the nearest-neighbour
   factorization to its likelihood, which closes finding A1 of the deep audit;

@@ -192,9 +192,12 @@ functions are available from `baymorph.stats`.
 #### Noise scale and truth markers
 
 The prepared noise scale of AD-040 and AD-041, with the functions of
-`baymorph.stats` that expose its truncation correction, and the truth
-markers that `baymorph.plotting.corner_plot` draws for simulated runs,
-are described in [Preparation and Products](guide/PREPARATION_AND_PRODUCTS.md).
+`baymorph.stats` that expose its truncation correction, the products of the
+noise model of AD-047, and the truth markers that
+`baymorph.plotting.corner_plot` draws for simulated runs, are described in
+[Preparation and Products](guide/PREPARATION_AND_PRODUCTS.md). The noise
+model itself is defined in
+[Observation Model](architecture/OBSERVATION_MODEL.md), §22.9.
 
 ### PosteriorSamples
 
@@ -251,6 +254,15 @@ across inference algorithms.
 - residual products;
 - goodness-of-fit statistics;
 - diagnostic data.
+
+Under the noise model of AD-047, `norm_residual` is the residual divided by
+the scale of the noise model at the best sample, which includes the source
+Poisson variance when a gain is declared; it is a marginal standardization,
+not a whitening. `chi2` is the conditional quadratic form of the likelihood,
+and `noise` is the prepared sky scale alone. The residual maps of
+`diagnostics` draw `norm_residual`, and
+`plot_log_data_model_residual(data, model, norm_residual=fit.norm_residual)`
+draws it in a notebook.
 
 ## Inference backend neutrality
 
@@ -528,6 +540,12 @@ Relevant extension points include:
 
 New abstractions should be introduced only when multiple concrete scientific
 use cases justify them.
+
+A likelihood whose covariance depends on the source part of the prediction,
+as the noise model of AD-047 does, sets `requires_source` and is evaluated
+as `likelihood(model, source=source)`, where `source` is the prediction
+without the residual background. The inference problems render both with
+`render_prediction` and pass the source only to such a likelihood.
 
 Extensions must preserve the separation between:
 
