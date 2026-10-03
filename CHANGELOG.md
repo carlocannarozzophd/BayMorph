@@ -11,6 +11,15 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* `benchmarks/noise_model_cost.py`, which reproduces through the path of a
+  fit the cost of the noise model of AD-047 recorded in the status note on
+  its milestone 3, with a test that the problem it times is the problem of
+  a fit. On the synthetic problem of the production size a complete
+  evaluation takes 87.6 ms, against 68.1 ms with independent pixels, and the
+  factorization 60 s. The likelihood alone takes 23.3 ms against 5.2 ms: the
+  likelihood of the noise model adds about 18 ms per evaluation, where the
+  bench of the decision measured 10.5 ms for its own implementation of the
+  model.
 * An end-to-end test of the noise model of AD-047 through the runner, on a
   simulated image (`tests/test_noise_model_workflow.py`, about a minute,
   excluded from `scripts/test_fast.sh`).
