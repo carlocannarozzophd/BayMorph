@@ -134,6 +134,7 @@ nav:
     - Noise and Background Chain: research/NOISE_BACKGROUND_AUDIT_2026-10-01.md
     - A Noise Model for Any Image: research/NOISE_MODEL_BENCH_2026-10-01.md
     - AD-047 Proposal, Noise Model: research/NOISE_MODEL_PROPOSAL_2026-10-02.md
+    - The Background of a Fit: research/BACKGROUND_BENCH_2026-10-03.md
   - Inference and Evidence:
     - pocoMC-Dynesty Initial Validation: research/pocomc_dynesty_initial_validation.md
     - Structure-Informed Evidence Estimation: research/STRUCTURE_INFORMED_EVIDENCE_2026-09-29.md
