@@ -192,17 +192,8 @@ def _single_observation_plot_products(
         dtype=bool,
     )
 
-    noise = getattr(
-        fit,
-        "noise",
-        None,
-    )
-
-    if noise is None:
-        noise = image_products.noise
-
-    noise = np.asarray(
-        noise,
+    norm_residual = np.asarray(
+        fit.norm_residual,
         dtype=float,
     )
 
@@ -214,8 +205,8 @@ def _single_observation_plot_products(
             fit.best_model_image,
         ),
         (
-            "noise",
-            noise,
+            "norm_residual",
+            norm_residual,
         ),
         (
             "fitting_mask",
@@ -244,7 +235,7 @@ def _single_observation_plot_products(
     return {
         "original_cutout": original_cutout,
         "prepared_cutout": prepared_cutout,
-        "noise": noise,
+        "norm_residual": norm_residual,
         "segmentation": segmentation,
         "contaminant_mask": fitting_mask,
         "target_mask": target_mask,
@@ -286,8 +277,8 @@ def _run_single_observation_residual_maps(
                 "prepared_cutout"
             ],
             model=fit.best_model_image,
-            noise=plot_products[
-                "noise"
+            norm_residual=plot_products[
+                "norm_residual"
             ],
             segmentation=plot_products[
                 "segmentation"
@@ -422,7 +413,7 @@ def _run_multi_observation_residual_maps(
                 original_cutout=image_products.cutout,
                 prepared_cutout=image_products.prepared_data,
                 model=observation_fit.best_model_image,
-                noise=observation_fit.noise,
+                norm_residual=observation_fit.norm_residual,
                 segmentation=image_products.segmentation,
                 psf=_psf_to_image(
                     psf,
@@ -470,7 +461,10 @@ def run_residual_map_diagnostics(
     Single-observation analyses use exactly the image footprint employed by
     the likelihood. Multi-observation analyses generate the established
     diagnostic independently on every native observation grid while using
-    model products from the single joint posterior fit.
+    model products from the single joint posterior fit. The normalized
+    residual panel draws the ``norm_residual`` of the fit products, which
+    the likelihood standardizes by the scale of its noise model at the best
+    sample (AD-047), not by the prepared sky scale alone.
 
     Parameters
     ----------

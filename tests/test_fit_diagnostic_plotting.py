@@ -49,9 +49,7 @@ def test_fit_maps_overlay_excluded_pixels_on_residual_panels():
         original_cutout=prepared,
         prepared_cutout=prepared,
         model=model,
-        noise=np.ones(
-            shape,
-        ),
+        norm_residual=prepared - model,
         contaminant_mask=mask,
         target_mask=np.zeros(
             shape,
@@ -158,9 +156,7 @@ def test_masked_residuals_do_not_set_display_scale():
         original_cutout=prepared,
         prepared_cutout=prepared,
         model=model,
-        noise=np.ones(
-            shape,
-        ),
+        norm_residual=prepared - model,
         contaminant_mask=mask,
         target_mask=np.zeros(
             shape,
@@ -204,6 +200,92 @@ def test_masked_residuals_do_not_set_display_scale():
 
     plt.close(
         fig
+    )
+
+
+def test_fit_maps_draw_the_given_standardized_residual():
+    """The normalized panel must draw the fit's standardized residual.
+
+    Under AD-047 the scale of the noise model exceeds the prepared sky scale
+    where the source is bright, so the panel must not divide by a noise map.
+    """
+    shape = (
+        5,
+        5,
+    )
+
+    model = np.full(
+        shape,
+        10.0,
+    )
+
+    prepared = model + 1.0
+
+    norm_residual = np.linspace(
+        -2.0,
+        2.0,
+        25,
+    ).reshape(
+        shape
+    )
+    norm_residual[
+        0,
+        0,
+    ] = np.nan
+
+    fig, axes = plot_pipeline_fit_maps(
+        original_cutout=prepared,
+        prepared_cutout=prepared,
+        model=model,
+        norm_residual=norm_residual,
+        psf=np.ones(
+            (
+                3,
+                3,
+            )
+        ),
+    )
+
+    drawn = np.ma.filled(
+        np.ma.asarray(
+            axes[
+                1,
+                3,
+            ].images[
+                0
+            ].get_array(),
+            dtype=float,
+        ),
+        np.nan,
+    )
+
+    np.testing.assert_array_equal(
+        drawn,
+        norm_residual,
+    )
+
+    plt.close(
+        fig
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="shape of the prepared cutout",
+    ):
+        plot_pipeline_fit_maps(
+            original_cutout=prepared,
+            prepared_cutout=prepared,
+            model=model,
+            norm_residual=np.zeros(
+                (
+                    4,
+                    5,
+                )
+            ),
+        )
+
+    plt.close(
+        "all"
     )
 
 

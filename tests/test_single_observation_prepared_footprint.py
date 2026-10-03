@@ -192,8 +192,9 @@ def test_residual_products_use_complete_prepared_footprint() -> None:
             shape,
             dtype=float,
         ),
-        norm_residual=np.zeros(
+        norm_residual=np.full(
             shape,
+            3.0,
             dtype=float,
         ),
         chi2=1.0,
@@ -237,10 +238,12 @@ def test_residual_products_use_complete_prepared_footprint() -> None:
 
     np.testing.assert_array_equal(
         plot_products[
-            "noise"
+            "norm_residual"
         ],
-        fit.noise,
+        fit.norm_residual,
     )
+
+    assert "noise" not in plot_products
 
     assert (
         plot_products[

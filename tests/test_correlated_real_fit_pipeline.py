@@ -9,6 +9,10 @@ import pytest
 from baymorph.fitting import Parameter, ParameterSet
 from baymorph.fitting.priors import UniformPrior
 from baymorph.likelihood import CorrelatedGaussianImageLikelihood
+from baymorph.likelihood.vecchia_gaussian import (
+    VecchiaCorrelatedGaussianImageLikelihood,
+    build_vecchia_factorization,
+)
 from baymorph.pipeline.config import resolve_config
 from baymorph.pipeline.real_fit import (
     _build_image_inference_problem,
@@ -155,6 +159,137 @@ def test_correlated_fit_statistics_use_mahalanobis_quadratic():
                 mask
             ]
         )
+    )
+
+
+def test_noise_model_fit_statistics_use_the_scale_of_ad047():
+    """Residuals are standardized by sqrt(s^2 + max(m, 0) / g), not by s."""
+    rng = np.random.default_rng(
+        47
+    )
+
+    shape = (
+        6,
+        7,
+    )
+
+    yy, xx = np.indices(
+        shape
+    )
+
+    source = 40.0 * np.exp(
+        -0.5
+        * (
+            (xx - 3.0) ** 2
+            + (yy - 2.5) ** 2
+        )
+        / 1.5**2
+    )
+    source[
+        0,
+        0,
+    ] = -0.5
+
+    background = 0.3
+    model = source + background
+    sky_scale = 1.2
+    gain = 2.0
+
+    data = model + rng.normal(
+        0.0,
+        sky_scale,
+        shape,
+    )
+
+    noise = np.full(
+        shape,
+        sky_scale,
+    )
+
+    mask = np.zeros(
+        shape,
+        dtype=bool,
+    )
+    mask[
+        5,
+        6,
+    ] = True
+
+    kernel = np.array(
+        [
+            [0.01, 0.04, 0.01],
+            [0.08, 1.00, 0.08],
+            [0.01, 0.04, 0.01],
+        ]
+    )
+
+    likelihood = VecchiaCorrelatedGaussianImageLikelihood(
+        data=data,
+        noise=noise,
+        correlation_kernel=kernel,
+        mask=mask,
+        factorization=build_vecchia_factorization(
+            mask,
+            kernel,
+            max_neighbors=24,
+        ),
+        max_neighbors=24,
+        effective_gain=gain,
+    )
+
+    stats = _compute_fit_statistics(
+        data=data,
+        model_image=model,
+        noise=noise,
+        mask=mask,
+        n_parameters=3,
+        likelihood=likelihood,
+        source_image=source,
+    )
+
+    scale = np.sqrt(
+        sky_scale**2
+        + np.clip(
+            source,
+            0.0,
+            None,
+        )
+        / gain
+    )
+
+    np.testing.assert_allclose(
+        stats["norm_residual"][
+            ~mask
+        ],
+        (
+            (data - model)
+            / scale
+        )[
+            ~mask
+        ],
+        rtol=1.0e-12,
+    )
+
+    assert np.isnan(
+        stats["norm_residual"][
+            5,
+            6,
+        ]
+    )
+
+    assert scale.max() > 3.0 * sky_scale
+
+    assert stats["chi2"] == pytest.approx(
+        likelihood.quadratic_form(
+            model,
+            source,
+        ),
+        rel=1.0e-12,
+    )
+
+    assert stats["ndof"] == (
+        likelihood.n_valid_pixels
+        - 3
     )
 
 

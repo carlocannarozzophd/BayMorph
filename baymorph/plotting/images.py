@@ -183,6 +183,8 @@ def plot_log_data_model_residual(
     title: str = "",
     cmap: str = BAYMORPH_IMAGE_CMAP,
     show: bool = False,
+    *,
+    norm_residual=None,
 ):
     """Plot data, model, residual, and optionally residual divided by noise.
 
@@ -200,6 +202,11 @@ def plot_log_data_model_residual(
         Matplotlib colormap used for data and model panels.
     show : bool, default=False
         If True, call :func:`matplotlib.pyplot.show`.
+    norm_residual : array-like, optional
+        Standardized residual drawn in the normalized residual panel instead
+        of the residual divided by ``noise``, such as the ``norm_residual``
+        of fit products, which the likelihood standardizes by the scale of
+        its noise model (AD-047). Pass either ``noise`` or ``norm_residual``.
 
     Returns
     -------
@@ -222,7 +229,22 @@ def plot_log_data_model_residual(
 
     residual = data - model
 
-    if noise is not None:
+    if noise is not None and norm_residual is not None:
+        raise ValueError(
+            "Pass either noise or norm_residual, not both."
+        )
+
+    if norm_residual is not None:
+        norm_residual = np.asarray(
+            norm_residual,
+            dtype=float,
+        )
+
+        if norm_residual.shape != residual.shape:
+            raise ValueError(
+                "norm_residual must have the shape of the data."
+            )
+    elif noise is not None:
         noise = np.asarray(
             noise,
             dtype=float,
@@ -237,8 +259,6 @@ def plot_log_data_model_residual(
         valid_noise = np.isfinite(noise) & (noise > 0)
 
         norm_residual[valid_noise] = residual[valid_noise] / noise[valid_noise]
-    else:
-        norm_residual = None
 
     vmin, vmax = _log_limits(
         data,
@@ -535,7 +555,7 @@ def plot_pipeline_fit_maps(
     original_cutout,
     prepared_cutout,
     model,
-    noise,
+    norm_residual,
     segmentation=None,
     psf=None,
     contaminant_mask=None,
@@ -547,7 +567,12 @@ def plot_pipeline_fit_maps(
     cmap: str = BAYMORPH_IMAGE_CMAP,
     show: bool = False,
 ):
-    """Plot the final BayMorph 8-panel fit diagnostic report."""
+    """Plot the final BayMorph 8-panel fit diagnostic report.
+
+    ``norm_residual`` is drawn as given: the ``norm_residual`` of the fit
+    products, which the likelihood standardizes by the scale of its noise
+    model (AD-047), with NaN outside the likelihood support.
+    """
     del segmentation
 
     set_plot_style()
@@ -555,7 +580,7 @@ def plot_pipeline_fit_maps(
     original_cutout = np.asarray(original_cutout, dtype=float)
     prepared_cutout = np.asarray(prepared_cutout, dtype=float)
     model = np.asarray(model, dtype=float)
-    noise = np.asarray(noise, dtype=float)
+    norm_residual = np.asarray(norm_residual, dtype=float)
 
     if original_image is None:
         original_image = original_cutout
@@ -571,18 +596,10 @@ def plot_pipeline_fit_maps(
 
     residual = prepared_cutout - model
 
-    norm_residual = np.full_like(
-        residual,
-        np.nan,
-        dtype=float,
-    )
-
-    valid_noise = (
-        np.isfinite(noise)
-        & (noise > 0)
-    )
-
-    norm_residual[valid_noise] = residual[valid_noise] / noise[valid_noise]
+    if norm_residual.shape != residual.shape:
+        raise ValueError(
+            "norm_residual must have the shape of the prepared cutout."
+        )
 
     mask_overlay = _contaminant_mask_rgba(
         contaminant_mask,

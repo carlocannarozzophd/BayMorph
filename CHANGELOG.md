@@ -369,6 +369,19 @@ and the project follows Semantic Versioning in spirit.
 
 ### Fixed
 
+* The residual maps of `diagnostics`, single and joint, and the residual
+  figure of the observed-fit tutorial divided the residual by the prepared
+  sky scale alone, while the likelihood of AD-047 standardizes it by the
+  scale of its noise model, which adds the source Poisson variance. On the
+  best model of the earlier r-band fit, with the gain of 44.4 that AD-047
+  gives that image, the scale reaches 5.8 times the sky scale at the centre
+  of the galaxy, so the maps would have overstated the central residuals by
+  up to that factor. They now draw the `norm_residual` of the fit products,
+  computed by the likelihood: `plot_pipeline_fit_maps` takes it in place of
+  a noise map, and `plot_log_data_model_residual` accepts it as
+  `norm_residual`. The saved products are unchanged: `norm_residual.npy`
+  and the chi-square already followed the likelihood, and `noise.npy`
+  remains the prepared sky scale.
 * The status note on milestone 1 of AD-047 attributed to the r-band target a
   sky region of about 11 600 pixels, the size of the region of the packaged
   simulated example; the region of the target holds 477 362 pixels. The note

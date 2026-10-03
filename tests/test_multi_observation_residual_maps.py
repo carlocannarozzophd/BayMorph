@@ -193,7 +193,7 @@ def test_multi_observation_residual_maps_use_native_products_and_paths(
                 1.5,
                 dtype=float,
             ),
-            noise=np.full(
+            norm_residual=np.full(
                 (7, 9),
                 0.2,
                 dtype=float,
@@ -205,7 +205,7 @@ def test_multi_observation_residual_maps_use_native_products_and_paths(
                 1.7,
                 dtype=float,
             ),
-            noise=np.full(
+            norm_residual=np.full(
                 (11, 13),
                 0.3,
                 dtype=float,
@@ -285,20 +285,25 @@ def test_multi_observation_residual_maps_use_native_products_and_paths(
 
     np.testing.assert_allclose(
         calls[0][
-            "noise"
+            "norm_residual"
         ],
         observation_fits[
             "image_A"
-        ].noise,
+        ].norm_residual,
     )
 
     np.testing.assert_allclose(
         calls[1][
-            "noise"
+            "norm_residual"
         ],
         observation_fits[
             "repeat_02"
-        ].noise,
+        ].norm_residual,
+    )
+
+    assert all(
+        "noise" not in call
+        for call in calls
     )
 
     assert calls[0][
