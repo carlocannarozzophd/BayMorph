@@ -29,16 +29,21 @@ measurement, and never change the meaning of a morphological parameter.
 ![Four images: an intrinsic Sérsic galaxy, the same galaxy convolved with the PSF, plus a residual background plane, and with noise added](figures/forward_model-light.png#gh-light-mode-only)
 ![Four images: an intrinsic Sérsic galaxy, the same galaxy convolved with the PSF, plus a residual background plane, and with noise added](figures/forward_model-dark.png#gh-dark-mode-only)
 
-*From left to right: the intrinsic profile, its convolution with a Gaussian PSF of 5 px FWHM, the residual background added, and an observation with noise. The colour scale is logarithmic and shared by the four panels.*
+*In order, from (1) to (4): the intrinsic profile, its convolution with a Gaussian PSF of 5 px FWHM, the residual background added, and an observation with noise. The colour scale is logarithmic and shared by the four panels.*
 
 | Part | Models | Page |
 | --- | --- | --- |
-| Morphological components | Sérsic, exponential disc, point source; the components of AD-048 | [Components](COMPONENTS.md) |
-| Morphology models | `single_sersic`, `double_sersic`, `sersic_point_source`, `bulge_disk`; `boxy_sersic`, `core_sersic`, `bulge_broken_disk`, `bulge_disk_bar`, `bulge_disk_ring`, `bulge_disk_spiral` | one page each, below |
+| Morphological components | Sérsic, exponential disc, point source, and the components of the other models | [Components](COMPONENTS.md) |
+| Galaxy models | `single_sersic`, `double_sersic`, `sersic_point_source`, `bulge_disk`; `boxy_sersic`, `core_sersic`, `bulge_broken_disk`, `bulge_disk_bar`, `bulge_disk_ring`, `bulge_disk_spiral` | one page each, below |
 | Point-spread function | Gaussian, empirical | [Point-Spread Functions](PSF.md) |
-| Residual background | constant, plane | [Residual Background](BACKGROUND.md) |
+| Noise | correlated Gaussian; experimental Poisson likelihoods | [Noise Models](NOISE.md) |
+| Sky and residual background | sky subtraction; constant, plane | [Sky and Background](BACKGROUND.md) |
 
-## The morphology models
+A new model of any kind gets its own page in the matching group, with the
+same structure: definition, parameters, what it represents, degeneracies,
+validation, configuration and references.
+
+## The galaxy models
 
 | Model | Components | Sampled morphology parameters | Use |
 | --- | --- | --- | --- |
@@ -53,10 +58,9 @@ measurement, and never change the meaning of a morphological parameter.
 | [`bulge_disk_ring`](BULGE_DISK_RING.md) | Sérsic bulge, exponential disc and Gaussian ring, shared centre | 16 | a disc galaxy with a ring |
 | [`bulge_disk_spiral`](BULGE_DISK_SPIRAL.md) | Sérsic bulge and exponential disc with two spiral arms, shared centre | 15 | a two-armed spiral galaxy |
 
-The last six are families of AD-048, added as capabilities of the package
-for single-observation fits: a joint multi-observation fit rejects them
-before writing any output, and their priors must stay within the domain in
-which their rendering is validated.
+The last six are available for fits of a single image: a joint fit of
+several images does not accept them, and their priors must stay within the
+domain in which their rendering is validated, which each page states.
 
 A fit samples these parameters together with those of the residual
 background: one for a constant background, three for a plane.
@@ -83,20 +87,14 @@ These conventions hold for every model.
   undefined for a round component, `q = 1`.
 - **Flux.** `flux` is the total flux of the continuous component over the
   full plane, in the units of the image. A finite image holds only the part
-  of it that falls inside the image. This is the implementation, as the
-  status note under AD-028 records; the reconciliation of AD-028 with it is
-  an open decision.
+  of it that falls inside the image.
 
 ## Choosing models
 
 The models to fit are listed in `fit.models`; each is fitted in its own fit
 directory. Every flux needs a declared prior, and the other parameters have
 the default priors of the
-[Configuration Reference](../guide/CONFIGURATION.md#priors).
+[Configuration reference](../reference/CONFIGURATION.md#priors).
 `fit.comparison.enabled` computes the Bayes factor of `double_sersic` over
 `single_sersic` when both are fitted. BayMorph ranks models; it never
 selects one for the user.
-
-The scientific contract that these models implement, including the
-distinction between a component and a probabilistic model, is in
-[Morphological Components](../architecture/MORPHOLOGICAL_COMPONENTS.md).

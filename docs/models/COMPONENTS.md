@@ -1,8 +1,8 @@
 # Morphological Components
 
-The four original morphology models are sums of three components: the
-Sérsic profile, the exponential disc and the unresolved point source. The
-families of AD-048 add components of their own, described at the end of
+The four Sérsic-based morphology models are sums of three components:
+the Sérsic profile, the exponential disc and the unresolved point source.
+The six other models add components of their own, described at the end of
 this page. A component describes intrinsic light only; it owns no PSF, no
 noise and no prior.
 
@@ -76,12 +76,11 @@ a pixel is an integral of the profile, and the PSF decides which integral:
   from the centre and semi-analytic pixel integrals about the cusp; it was
   measured accurate to 6e-9 of the total flux;
 - with an empirical PSF, which already contains the pixel response, the
-  profile follows the effective-PSF rendering of AD-046: within a smooth
+  profile follows the effective-PSF rendering: within a smooth
   window about the centre it is integrated over cells eleven times finer and
   convolved with the sub-pixel kernels of the PSF, and outside it it is
   sampled at pixel centres and convolved with the native kernel. See
-  [Point-Spread Functions](PSF.md) and
-  [Rendering](../architecture/RENDERING.md), §13.1.
+  [Point-Spread Functions](PSF.md).
 
 **Python.** `baymorph.SersicModel(flux, re, n, q, theta, x0, y0)`; its
 `render(shape)` integrates the profile over the pixels of a grid.
@@ -122,28 +121,29 @@ convolved twice.
 | `x0`, `y0` | position | pixels of the cutout | finite |
 
 **Rendering.** With an empirical PSF the source is placed by interpolating
-between the sub-pixel kernels of the PSF (AD-046). With a Gaussian PSF the
+between the sub-pixel kernels of the PSF. With a Gaussian PSF the
 normalized kernel is shifted by cubic-spline interpolation; the negative
 ringing this introduces is clipped only while it stays below 1 percent of
 the flux, and an error is raised beyond. Flux that falls outside the image
 is lost, not redistributed.
 
-![Three small images of the same point source rendered through a Gaussian PSF, with its centre 0, 0.25 and 0.5 pixel from a pixel centre](figures/point_source_placement-light.png#gh-light-mode-only)
-![Three small images of the same point source rendered through a Gaussian PSF, with its centre 0, 0.25 and 0.5 pixel from a pixel centre](figures/point_source_placement-dark.png#gh-dark-mode-only)
+![Three small images of the same point source rendered through a Gaussian PSF, with its centre 0, 0.25 and 0.5 pixel from a pixel centre, and the central row of each](figures/point_source_placement-light.png#gh-light-mode-only)
+![Three small images of the same point source rendered through a Gaussian PSF, with its centre 0, 0.25 and 0.5 pixel from a pixel centre, and the central row of each](figures/point_source_placement-dark.png#gh-dark-mode-only)
 
-*A point source through a Gaussian PSF of 2.5 px FWHM, offset from a pixel centre by 0, 0.25 and 0.5 px: the light is shared among pixels according to the true position, marked by the dot.*
+*A point source through a Gaussian PSF of 2.5 px FWHM, offset from a pixel centre by 0, 0.25 and 0.5 px: the light is shared among pixels according to the true position, marked by the dot. The last panel shows the row y = 5 of each image.*
 
 **Python.** `baymorph.models.PointSourceModel(flux, x0, y0)`; it has no
 `render()` method, because it needs a PSF to be rendered.
 
-## Components of AD-048
+## Components of the other models
 
-The families of AD-048 render through generic cell rules
-(`baymorph/rendering/profile_integration.py`) with the renderer names of the
-Sérsic profile, so every PSF renders them as it renders the Sérsic profile:
+The components of `boxy_sersic`, `core_sersic`, `bulge_broken_disk`,
+`bulge_disk_bar`, `bulge_disk_ring` and `bulge_disk_spiral` are rendered by
+the same rules as the Sérsic profile, so every PSF renders them as it
+renders the Sérsic profile:
 
 - under an analytic PSF, Gauss-Legendre quadrature over the pixels;
-- under an empirical PSF, the effective-PSF rendering of AD-046;
+- under an empirical PSF, the effective-PSF rendering;
 - in both cases, adaptive integration about the centre and on the cells a
   component declares non-smooth;
 - for a component whose light ends at an edge, cells the edge crosses split
@@ -151,11 +151,13 @@ Sérsic profile, so every PSF renders them as it renders the Sérsic profile:
   cannot see a sliver of light that no node samples;
 - for an oscillating component, adaptive integration of the cells where its
   wavelength is shorter than the rule in use resolves: five cells for the
-  pixels under an analytic PSF, forty for the finer cells of AD-046.
+  pixels under an analytic PSF, forty for the finer cells of the
+  effective-PSF rendering.
 
 Their `flux` is the total flux over the whole plane, as for the Sérsic
-profile. Each is validated within a rendering domain recorded in
-[Rendering of the Morphology Families](../research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md).
+profile. Each is validated within a rendering domain, which the page of
+each model states and the configuration enforces
+([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
 
 ### Generalized Sérsic profile
 

@@ -1,4 +1,4 @@
-"""Keep the user guide synchronized with the configuration and the CLI."""
+"""Keep the documentation synchronized with the configuration and the CLI."""
 
 from __future__ import annotations
 
@@ -16,9 +16,11 @@ from baymorph.pipeline.config import DEFAULT_CONFIG
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-GUIDE_DIRECTORY = PROJECT_ROOT / "docs" / "guide"
+REFERENCE_DIRECTORY = PROJECT_ROOT / "docs" / "reference"
 
 MODELS_DIRECTORY = PROJECT_ROOT / "docs" / "models"
+
+THEORY_DIRECTORY = PROJECT_ROOT / "docs" / "theory"
 
 # The model priors are checked by model and parameter below; the background
 # priors are documented by parameter.
@@ -42,7 +44,7 @@ def _leaf_paths(node, prefix: str = ""):
 
 
 def test_configuration_reference_lists_every_default_key() -> None:
-    text = (GUIDE_DIRECTORY / "CONFIGURATION.md").read_text(encoding="utf-8")
+    text = (REFERENCE_DIRECTORY / "CONFIGURATION.md").read_text(encoding="utf-8")
 
     missing = [
         path
@@ -54,7 +56,7 @@ def test_configuration_reference_lists_every_default_key() -> None:
 
 
 def test_configuration_reference_lists_every_model_parameter() -> None:
-    text = (GUIDE_DIRECTORY / "CONFIGURATION.md").read_text(encoding="utf-8")
+    text = (REFERENCE_DIRECTORY / "CONFIGURATION.md").read_text(encoding="utf-8")
 
     missing = [
         f"{model}.{parameter}"
@@ -67,7 +69,7 @@ def test_configuration_reference_lists_every_model_parameter() -> None:
 
 
 def test_cli_page_lists_every_command_and_option() -> None:
-    text = (GUIDE_DIRECTORY / "CLI.md").read_text(encoding="utf-8")
+    text = (REFERENCE_DIRECTORY / "CLI.md").read_text(encoding="utf-8")
     parser = _build_parser()
 
     subparsers = next(
@@ -157,6 +159,28 @@ def test_model_figures_are_generated_referenced_and_themed() -> None:
     assert referenced == generated
 
 
+def test_theory_figures_are_generated_referenced_and_themed() -> None:
+    referenced = set()
+
+    for page in sorted(THEORY_DIRECTORY.glob("*.md")):
+        text = page.read_text(encoding="utf-8")
+
+        for name, variant, mode in FIGURE_REFERENCE.findall(text):
+            assert variant == mode, f"{page.name}: {name}-{variant} in {mode} mode"
+            referenced.add(f"{name}-{variant}.png")
+
+    script = _figure_script()
+    generated = {
+        f"{name}-{theme.name}.png"
+        for name in script.THEORY_FIGURES
+        for theme in script.THEMES
+    }
+    present = {path.name for path in (THEORY_DIRECTORY / "figures").glob("*.png")}
+
+    assert present == generated
+    assert referenced == generated
+
+
 REFERENCE_USE = re.compile(r"\]\[([a-z0-9-]+)\]")
 
 REFERENCE_DEFINITION = re.compile(r"^\[([a-z0-9-]+)\]: (\S+)$", re.MULTILINE)
@@ -166,11 +190,16 @@ ADS_ABSTRACT = re.compile(r"https://ui\.adsabs\.harvard\.edu/abs/([^/]+)/abstrac
 BIBCODE_LENGTH = 19
 
 
-def test_model_pages_cite_their_sources_with_ads_links() -> None:
+def test_model_and_theory_pages_cite_their_sources_with_ads_links() -> None:
     problems = []
     sources: dict[str, str] = {}
 
-    for page in sorted(MODELS_DIRECTORY.glob("*.md")):
+    pages = (
+        *sorted(MODELS_DIRECTORY.glob("*.md")),
+        *sorted(THEORY_DIRECTORY.glob("*.md")),
+    )
+
+    for page in pages:
         if page.name == "index.md":
             continue
 

@@ -3,8 +3,8 @@
 A Sérsic profile whose centre is depleted: inside a break radius the light
 follows a shallow power law instead of the inward extrapolation of the
 Sérsic profile ([Graham et al. 2003][graham2003];
-[Trujillo et al. 2004][trujillo2004]). One of the
-families of AD-048: available for single-observation fits.
+[Trujillo et al. 2004][trujillo2004]). Available for fits of a single
+image.
 
 ## Definition
 
@@ -83,20 +83,16 @@ an evidence comparison with `single_sersic` depends on that prior.
 
 ## Validation
 
-- **Rendering.** On the bench of AD-048, with the criteria of AD-046, the
-  model meets every criterion on 102 cases with rb from 0.5 to 5 px, gamma
-  from 0 to 0.9, alpha from 0.5 to 2 and n of 4 and 6, under effective PSFs
-  of 2.34 and 3.5 px FWHM. The largest pixel difference is 5.4e-4 of the
-  peak, and the target-like chi-square at most 0.053
-  ([note](../research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+- **Rendering.** Tested on 102 cases with `rb` from 0.5 to 5 px, `gamma`
+  from 0 to 0.9, `alpha` from 0.5 to 2 and `n` of 4 and 6, under PSFs of
+  2.3 and 3.5 px FWHM: the largest pixel error is 5e-4 of the peak
+  ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
 - **Flux.** The normalization agrees with an independent radial integral
   within 1e-9.
 - **Recovery.** On a simulated image whose core is resolved, the posterior
-  of `rb` and `gamma` covers the true values
-  (`tests/test_core_sersic_recovery.py`).
-- **Cost.** A rendering of 1013 × 1013 px with an effective PSF of 27 px
-  takes 74 ms, against 40 ms for `single_sersic`.
-- **Real data.** No fit on real data has been made with this model.
+  of `rb` and `gamma` covers the true values.
+- **Cost.** About twice the cost of `single_sersic`.
+- **Real data.** Not yet used on real images.
 
 ## Configuration
 
@@ -117,8 +113,8 @@ fit:
 ```
 
 Priors not declared take the defaults above; the values here are an
-example, to be chosen for each image. A joint multi-observation fit rejects
-this model before writing any output (AD-048).
+example, to be chosen for each image. A joint fit of several images does not
+accept this model.
 
 ## Python
 

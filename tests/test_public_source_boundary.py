@@ -41,13 +41,15 @@ OPERATIONAL_PREFIXES = (
     "configs/",
     "docs/guide/",
     "docs/models/",
+    "docs/reference/",
+    "docs/theory/",
     "notebooks/",
     "tests/",
 )
 
 OPERATIONAL_DOCUMENTS = {
     "README.md",
-    "docs/API.md",
+    "docs/DEVELOPERS.md",
     "docs/index.md",
     "docs/architecture/MULTI_OBSERVATION_PUBLIC_WORKFLOW.md",
     "docs/architecture/PRODUCTION_WORKFLOW.md",

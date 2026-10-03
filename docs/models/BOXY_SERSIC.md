@@ -2,8 +2,8 @@
 
 A [Sérsic profile](COMPONENTS.md#sersic-profile) whose isophotes are
 generalized ellipses, boxy or discy instead of elliptical
-([generalized Sérsic](COMPONENTS.md#generalized-sersic-profile)). One of the
-families of AD-048: available for single-observation fits.
+([generalized Sérsic](COMPONENTS.md#generalized-sersic-profile)).
+Available for fits of a single image.
 
 ## Definition
 
@@ -47,10 +47,10 @@ The default priors are generic and in pixels; they must be checked against
 the target and the image. `c0` must lie in the domain where the rendering is
 validated, which configuration validation enforces.
 
-![Three images of one Sérsic profile with discy, elliptical and boxy isophotes, with three isophotes drawn on each](figures/boxy_sersic_isophotes-light.png#gh-light-mode-only)
-![Three images of one Sérsic profile with discy, elliptical and boxy isophotes, with three isophotes drawn on each](figures/boxy_sersic_isophotes-dark.png#gh-dark-mode-only)
+![Three images of one Sérsic profile with discy, elliptical and boxy isophotes, with three isophotes drawn on each, and the outer isophote of each drawn together](figures/boxy_sersic_isophotes-light.png#gh-light-mode-only)
+![Three images of one Sérsic profile with discy, elliptical and boxy isophotes, with three isophotes drawn on each, and the outer isophote of each drawn together](figures/boxy_sersic_isophotes-dark.png#gh-dark-mode-only)
 
-*One Sérsic profile (n = 2, Rₑ = 10 px, q = 0.7, θ = 30°) with c0 = −0.6, 0 and +0.6, before any PSF. The contours are the isophotes m = 5, 10 and 20 px.*
+*One Sérsic profile (n = 2, Rₑ = 10 px, q = 0.7, θ = 30°) with c0 = −0.6, 0 and +0.6, before any PSF. The contours are the isophotes m = 5, 10 and 20 px; the last panel draws the isophote m = 20 px of the three together.*
 
 ![Two plots against the distance from the centre: the surface brightness along the diagonal of the isophotes for discy, elliptical and boxy isophotes with the major-axis profile, and their ratio to the elliptical case](figures/boxy_sersic_profiles-light.png#gh-light-mode-only)
 ![Two plots against the distance from the centre: the surface brightness along the diagonal of the isophotes for discy, elliptical and boxy isophotes with the major-axis profile, and their ratio to the elliptical case](figures/boxy_sersic_profiles-dark.png#gh-dark-mode-only)
@@ -79,19 +79,15 @@ model with two components.
 
 ## Validation
 
-- **Rendering.** On the bench of AD-048, with the criteria of AD-046, the
-  model meets every criterion on 92 cases with c0 from −1 to 1, n from 1 to
-  6 and re from 1 to 20 px, under effective PSFs of 2.34 and 3.5 px FWHM.
-  The largest pixel difference is 6.9e-4 of the peak, and the target-like
-  chi-square at most 0.12
-  ([note](../research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
-- **Flux.** A compact profile holds its analytic flux within 1e-8, and
-  within 3e-6 at c0 = −1, where the radius has a kink on the axes.
-- **Recovery.** On a simulated image with a Gaussian PSF, the posterior of
-  `c0` and `n` covers the true values (`tests/test_boxy_sersic_recovery.py`).
-- **Cost.** A rendering of 1013 × 1013 px with an effective PSF of 27 px
-  takes 103 ms, against 40 ms for `single_sersic`.
-- **Real data.** No fit on real data has been made with this model.
+- **Rendering.** Tested on 92 cases with `c0` from −1 to 1, `n` from 1 to 6
+  and `re` from 1 to 20 px, under PSFs of 2.3 and 3.5 px FWHM: the largest
+  pixel error is 7e-4 of the peak ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+- **Flux.** The rendered flux agrees with the analytic flux within 1e-8, and
+  within 3e-6 at `c0` = −1, where the radius has a kink on the axes.
+- **Recovery.** On a simulated image, the posterior of `c0` and `n` covers
+  the true values.
+- **Cost.** About two and a half times the cost of `single_sersic`.
+- **Real data.** Not yet used on real images.
 
 ## Configuration
 
@@ -112,8 +108,8 @@ fit:
 ```
 
 Priors not declared take the defaults above; the values here are an
-example, to be chosen for each image. A joint multi-observation fit rejects
-this model before writing any output (AD-048).
+example, to be chosen for each image. A joint fit of several images does not
+accept this model.
 
 ## Python
 

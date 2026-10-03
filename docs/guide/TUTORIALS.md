@@ -11,13 +11,9 @@ unexecuted.
 | [`02B_Observed_Fit.ipynb`](https://github.com/carlocannarozzophd/BayMorph/blob/main/notebooks/02B_Observed_Fit.ipynb) | Runs the whole pipeline on the configuration written by 02A: preparation, empirical PSF, fit and diagnostics. Every cell can be run again: completed products are reused, and an interrupted fit resumes from its checkpoint. |
 
 The observed-image notebooks need a FITS image of your own: BayMorph
-distributes no data. The YAML written by 02A is the contract between the two
-notebooks; a changed declaration is a different scientific problem and
-belongs in a new output namespace.
+distributes no data. The YAML written by 02A is what 02B runs: if you change
+a declaration after 02B has run, write it under a new analysis name, so that
+the earlier results are kept.
 
-The multi-observation tutorial is being rebuilt against the current public
-API and is not yet distributed. Until then, the joint workflow is described
-in [Multi-Observation Workflow](../architecture/MULTI_OBSERVATION_PUBLIC_WORKFLOW.md).
-
-The notebooks under `validation/` in the repository are research
-demonstrations of the validation campaigns, not tutorials.
+A notebook for several observations is being rebuilt; until then,
+[Several Observations](MULTI_OBSERVATION.md) shows the joint workflow.

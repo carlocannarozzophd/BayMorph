@@ -242,6 +242,22 @@ and the project follows Semantic Versioning in spirit.
 
 ### Changed
 
+* The documentation site is rewritten for users. A User Guide gives one
+  page to each stage of an analysis, the runner, the configuration, the
+  image and its cutout, the masks, the sky and the noise, the PSF, the fit,
+  the results, the plots, several observations and simulations, each with
+  the code to run it and to inspect what it produced, run on simulated
+  images; a Theory section explains Bayesian inference, nested sampling
+  and hierarchical models; the Models section adds the pages Noise Models
+  and Sky and Background; and a Reference section holds the command line,
+  the configuration, the output files and the Python API. The
+  architecture, the research notes and the decisions are no longer built
+  into the site: they stay in the repository, linked from the page For
+  Developers, and the model pages no longer cite decision numbers. The
+  figures of the Models and Theory sections follow the plotting style of
+  `baymorph.plotting.style`, with at most two panels per row and the
+  colours and light and dark versions of before;
+  `scripts/make_model_figures.py` makes them.
 * The architecture documents follow AD-047, milestone 4 of its plan.
   `docs/architecture/OBSERVATION_MODEL.md` §22.9 defines the noise model:
   its marginal scale, the estimator of the sky correlation, the

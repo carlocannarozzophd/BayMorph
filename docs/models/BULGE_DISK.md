@@ -71,11 +71,11 @@ represented.
 
 - **Rendering.** The model renders as the exact sum of the Sérsic bulge and
   the exponential disc.
-- **High signal-to-noise.** Under an empirical PSF the model is rendered
+- **Very deep images.** Under an empirical PSF the model is rendered
   with an error comparable with the noise once one of its components passes
   its own limit. A bulge of n = 4 and Rₑ of 2 to 5 px reaches it at a peak
   signal-to-noise of 7e3 to 1.6e4, and an exponential disc of Rₑ = 10 px at
-  6e3 ([note](../research/RENDERING_SIGNAL_LIMIT_2026-10-02.md)).
+  6e3 ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/RENDERING_SIGNAL_LIMIT_2026-10-02.md)).
 - **Recovery.** A controlled test recovers the posterior of the two fluxes of
   a simulated 25 x 25 px image with a Gaussian PSF, with the structural
   parameters fixed; the full structural recovery has not been validated.

@@ -2,8 +2,7 @@
 
 A Sérsic bulge, an exponential disc and an elliptical ring with a Gaussian
 radial profile ([Gaussian ring](COMPONENTS.md#gaussian-ring)), sharing a
-centre. One of the families of AD-048: available for single-observation
-fits.
+centre. Available for fits of a single image.
 
 ## Definition
 
@@ -89,28 +88,19 @@ decompositions.
 
 ## Validation
 
-- **Rendering.** On the bench of AD-048, with the criteria of AD-046, 70
-  cases under effective PSFs of 2.34 and 3.5 px FWHM. Rings of σ = 1 px
-  fail criterion 1 far from the centre, at r = 25 px, when q is 0.5 or
-  less: they are half a pixel wide or less across their crest on the minor
-  axis, and outside the window of AD-046 the profile is sampled at pixel
-  centres. Every ring of σ = 2 or 5 px meets every criterion of the grid,
-  with a largest difference of 1.5e-4 of the peak against a limit of 1e-2
-  ([note](../research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
-- **Target-like cases.** At the signal-to-noise of the r-band target the
-  ring alone reaches a chi-square of 0.03 to 0.04. With the compact bulge of
-  these cases, 30 percent of the flux, the total reaches 1.04 at 2.34 px
-  FWHM: the limit of the production Sérsic profile found with
+- **Rendering.** Tested on 70 cases under PSFs of 2.3 and 3.5 px FWHM.
+  Every ring of `sigma_ring` = 2 px or more is rendered within 1.5e-4 of the
+  peak. Rings of 1 px far from the centre and seen at `q_ring` = 0.5 or
+  less, half a pixel wide across their crest, are not rendered accurately:
+  hence the domain above ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+- **Deep images.** The error of the ring stays far below the noise; a
+  compact bright bulge sets the limit, as in
   [`bulge_broken_disk`](BULGE_BROKEN_DISK.md).
-- **Flux.** A ring inside the image holds its analytic flux within 1e-8,
-  and its pixel integrals agree with adaptive integration within 6e-8 of
-  the peak.
+- **Flux.** A ring inside the image holds its analytic flux within 1e-8.
 - **Recovery.** On a simulated galaxy with a ring, the posterior of `r_ring`
-  and `sigma_ring` covers the true values
-  (`tests/test_bulge_disk_ring_recovery.py`).
-- **Cost.** A rendering of 1013 × 1013 px with an effective PSF of 27 px
-  takes 67 ms, against 54 ms for `bulge_disk`.
-- **Real data.** No fit on real data has been made with this model.
+  and `sigma_ring` covers the true values.
+- **Cost.** About a quarter more than `bulge_disk`.
+- **Real data.** Not yet used on real images.
 
 ## Configuration
 
@@ -135,8 +125,8 @@ fit:
 ```
 
 Priors not declared take the defaults above; the values here are an
-example, to be chosen for each image. A joint multi-observation fit rejects
-this model before writing any output (AD-048).
+example, to be chosen for each image. A joint fit of several images does not
+accept this model.
 
 ## Python
 

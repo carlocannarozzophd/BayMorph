@@ -2,8 +2,7 @@
 
 A Sérsic bulge and an exponential disc with two logarithmic spiral arms
 ([spiral disc](COMPONENTS.md#exponential-disc-with-spiral-arms)), sharing a
-centre. One of the families of AD-048: available for single-observation
-fits.
+centre. Available for fits of a single image.
 
 ## Definition
 
@@ -78,10 +77,10 @@ is validated, which configuration validation enforces. The pitch angle
 $\psi = \operatorname{arccot} |w|$ is a derived quantity: under the uniform
 prior in $w$, half of the prior mass lies at pitch angles below 18.4°.
 
-![Images of three discs with two arms: arms that draw a Z, arms that draw an S, and tighter arms, with the crests drawn over them](figures/spiral_arms-light.png#gh-light-mode-only)
-![Images of three discs with two arms: arms that draw a Z, arms that draw an S, and tighter arms, with the crests drawn over them](figures/spiral_arms-dark.png#gh-dark-mode-only)
+![Images of three discs with two arms: arms that draw a Z, arms that draw an S, and tighter arms, with the crests drawn over them, and a plot of the pitch angle against the winding](figures/spiral_arms-light.png#gh-light-mode-only)
+![Images of three discs with two arms: arms that draw a Z, arms that draw an S, and tighter arms, with the crests drawn over them, and a plot of the pitch angle against the winding](figures/spiral_arms-dark.png#gh-dark-mode-only)
 
-*Face-on discs with R_e = 20 px, A₀ = 0.7, φ₀ = 0.4 and r_in = 4 px, shown with x to the right and y up. The lines are the crests φ = φ₀ + w ln(R/R_e) of the two arms.*
+*Face-on discs with R_e = 20 px, A₀ = 0.7, φ₀ = 0.4 and r_in = 4 px, shown with x to the right and y up. The lines are the crests φ = φ₀ + w ln(R/R_e) of the two arms. The last panel gives the pitch angle of the arms, ψ = arctan(1/|w|), against the winding.*
 
 ![Images of the convolved bulge, the disc with its arms and their sum, with the radial profiles of the three](figures/bulge_disk_spiral_decomposition-light.png#gh-light-mode-only)
 ![Images of the convolved bulge, the disc with its arms and their sum, with the radial profiles of the three](figures/bulge_disk_spiral_decomposition-dark.png#gh-dark-mode-only)
@@ -118,35 +117,24 @@ does not describe.
 
 ## Validation
 
-- **Rendering.** On the bench of AD-048, with the criteria of AD-046, 182
-  cases under effective PSFs of 2.34 and 3.5 px FWHM, with windings up to
-  |w| = cot 5° = 11.43 and axis ratios of 0.6 and 0.4. Criterion 1 fails
-  only at the tightest winding, w = −11.43 with `re_disk` = 25 px at 2.34 px
-  FWHM, at 1.3e-2 of the peak against a limit of 1e-2. Within the validated
-  domain the largest pixel difference is 2.0e-3 of the peak and the largest
-  flux error 9.3e-6 ([note](../research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
-- **Arms near the centre.** Their wavelength falls below a pixel near the
-  centre, and the rendering integrates adaptively the cells where it is too
-  short for the rule in use. The largest error of the pixel integrals,
-  8.2e-7 of the peak of the arms, lies just outside those cells, where the
-  arms curve on the scale of a pixel.
-- **Target-like cases.** At the signal-to-noise of the r-band target the disc
-  with its arms reaches by itself a chi-square of 0.11. With the compact
-  bulge of these cases, 30 percent of the flux, the total reaches 1.13 at
-  2.34 px FWHM: the limit of the production Sérsic profile found with
+- **Rendering.** Tested on 182 cases under PSFs of 2.3 and 3.5 px FWHM,
+  with windings up to |w| = 11.4, a pitch angle of 5°, and axis ratios of
+  0.6 and 0.4. Within the domain above the largest pixel error is 2.0e-3 of
+  the peak and the largest flux error 9.3e-6 ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+- **Arms near the centre.** Where the arms wind faster than a pixel, near
+  the centre, the rendering integrates them adaptively; the largest error
+  there is 8e-7 of the peak of the arms.
+- **Deep images.** The disc with its arms stays below the noise; a compact
+  bright bulge sets the limit, as in
   [`bulge_broken_disk`](BULGE_BROKEN_DISK.md).
-- **Flux.** The arms of a compact disc integrate to zero within 1e-8 of its
-  flux. With `amplitude_spiral` = 0 the model reproduces `bulge_disk` bit
-  for bit, under an analytic PSF and under the effective PSF.
-- **Sense of winding.** A test fixes that w > 0 winds counter-clockwise
-  outward on the detector, a Z, and w < 0 clockwise, an S.
+- **Flux.** The arms integrate to zero within 1e-8 of the flux of the disc,
+  and with `amplitude_spiral` = 0 the model is exactly `bulge_disk`.
+- **Sense of winding.** w > 0 winds counter-clockwise outward on the
+  detector, drawing a Z; w < 0 winds clockwise, drawing an S.
 - **Recovery.** On a simulated spiral galaxy, the posterior of
-  `winding_spiral` and `phase_spiral` covers the true values
-  (`tests/test_bulge_disk_spiral_recovery.py`).
-- **Cost.** A rendering of 1013 × 1013 px with an effective PSF of 27 px
-  takes about 115 ms for w = 2 and 160 ms for w = 6 with
-  `r_in_spiral` = 1 px, against 55 ms for `bulge_disk`.
-- **Real data.** No fit on real data has been made with this model.
+  `winding_spiral` and `phase_spiral` covers the true values.
+- **Cost.** Two to three times the cost of `bulge_disk`.
+- **Real data.** Not yet used on real images.
 
 ## Configuration
 
@@ -167,8 +155,8 @@ fit:
 ```
 
 Priors not declared take the defaults above; the values here are an
-example, to be chosen for each image. A joint multi-observation fit rejects
-this model before writing any output (AD-048).
+example, to be chosen for each image. A joint fit of several images does not
+accept this model.
 
 ## Python
 

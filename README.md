@@ -14,7 +14,7 @@
   <a href="https://carlocannarozzophd.github.io/BayMorph/">Documentation</a> ·
   <a href="#installation">Installation</a> ·
   <a href="#quick-start">Quick Start</a> ·
-  <a href="docs/API.md">API</a> ·
+  <a href="docs/reference/API.md">API</a> ·
   <a href="ROADMAP.md">Roadmap</a>
 </p>
 
@@ -179,9 +179,10 @@ result = runner.run(diagnostics=True)
 ~~~
 
 The [quick start](docs/guide/QUICK_START.md) explains each step, the
-[command-line reference](docs/guide/CLI.md) lists every option, and the
-[configuration reference](docs/guide/CONFIGURATION.md) every key, including
-the sampler settings, which keep the native names of each backend.
+[user guide](docs/guide/index.md) shows every stage on its own, the
+[command-line reference](docs/reference/CLI.md) lists every option, and the
+[configuration reference](docs/reference/CONFIGURATION.md) every key,
+including the sampler settings, which keep the native names of each backend.
 
 ## Documentation
 
@@ -190,9 +191,17 @@ Its sources are under [`docs/`](docs/index.md):
 
 | Document | Purpose |
 | --- | --- |
-| [Getting Started](docs/guide/QUICK_START.md) | Installation, quick start, command line, configuration, products and tutorials |
-| [Models](docs/models/index.md) | Morphology models and their components, PSFs and residual background, with their parameters and validation |
-| [Public API](docs/API.md) | Stable public interfaces and result objects |
+| [Getting Started](docs/guide/QUICK_START.md) | Installation, a first fit and the tutorial notebooks |
+| [User Guide](docs/guide/index.md) | Every stage of an analysis, with the code to run and inspect it |
+| [Models](docs/models/index.md) | The galaxy models and their components, the PSFs, the noise models, the sky and the residual background |
+| [Theory](docs/theory/BAYESIAN_INFERENCE.md) | Bayesian inference, nested sampling and hierarchical models |
+| [Reference](docs/reference/CONFIGURATION.md) | The command line, every configuration key, the output files and the Python API |
+
+The site documents how to use BayMorph. The development documents are read
+in the repository:
+
+| Document | Purpose |
+| --- | --- |
 | [Architecture](docs/architecture/ARCHITECTURE.md) | Scientific contracts of observation, rendering, inference, pipeline and validation |
 | [Research notes](docs/research/index.md) | Measurements and formulations behind the decisions |
 | [Decisions](DECISIONS.md) | Accepted architectural decision records |

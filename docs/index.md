@@ -1,29 +1,48 @@
-# BayMorph Documentation
+# BayMorph
 
 <p align="center">
-  <strong>Bayesian inference for astronomical morphology.</strong>
+  <strong>Bayesian inference for galaxy morphology.</strong>
 </p>
 
-BayMorph is an open-source Python framework for Bayesian inference of galaxy
-morphology from one or more observations of the same object. It connects
-interpretable morphology models, explicit observation operators,
-backend-neutral Bayesian inference, validated numerical rendering and
-reproducible workflows.
+BayMorph fits models of galaxy morphology, such as a Sérsic profile or a
+bulge and a disc, to astronomical images, and returns the full posterior
+distribution of their parameters together with the Bayesian evidence. It
+fits one image or several images of the same galaxy at once, and runs from
+a single configuration file, from the command line or from Python.
 
-> **Galaxy morphology is fundamentally an inference problem, not merely an
-> optimization problem.**
+```python
+from baymorph import BayMorphRunner
+
+fit = BayMorphRunner("configs/galaxy.yaml").run(diagnostics=True)
+print(fit.posterior.summary("re"))
+```
 
 !!! warning "Status"
 
-    BayMorph is under active scientific development. The observation model
-    of the real-data path is being revised where the first real fit measured
-    defects: the effective-PSF rendering of AD-046 and the noise model of
-    AD-047 are implemented. No real-data fit has yet been validated
-    scientifically. The order of the
-    remaining work is stated in the
+    BayMorph is under active scientific development. No fit of a real image
+    has yet been validated scientifically; the order of the remaining work is
+    stated in the
     [roadmap](https://github.com/carlocannarozzophd/BayMorph/blob/main/ROADMAP.md).
 
-## Start here
+![Four images: an intrinsic Sérsic galaxy, the same galaxy convolved with the PSF, plus a residual background plane, and with noise added](models/figures/forward_model-light.png#gh-light-mode-only)
+![Four images: an intrinsic Sérsic galaxy, the same galaxy convolved with the PSF, plus a residual background plane, and with noise added](models/figures/forward_model-dark.png#gh-dark-mode-only)
+
+*How BayMorph sees a galaxy: the intrinsic profile, blurred by the PSF, on
+top of the residual background, and observed with noise. The fit runs this
+chain backwards.*
+
+## What it does
+
+- **Prepares the image**: cuts out the target, masks the other sources,
+  subtracts the sky and measures the noise.
+- **Builds the PSF** from the stars of the same image.
+- **Fits the model** with a nested sampler, Nautilus by default, with a
+  likelihood that describes the noise of the sky, the Poisson noise of the
+  galaxy and the correlation of neighbouring pixels.
+- **Reports** the posterior of every parameter, the evidence for comparing
+  models, and diagnostic figures of the residuals and the radial profile.
+
+## Where to start
 
 <div class="grid cards" markdown>
 
@@ -31,117 +50,57 @@ reproducible workflows.
 
     ---
 
-    Installation, a first analysis, the command line, and the tutorial
-    notebooks.
+    Install BayMorph and run a first fit in a few minutes.
 
-    [Quick start](guide/QUICK_START.md)
+    [Quick Start](guide/QUICK_START.md)
 
--   **Configuration Reference**
+-   **User Guide**
 
     ---
 
-    Every section and key of an analysis configuration, with its default and
-    what a change invalidates.
+    Every step of an analysis, with the code to run it and to look at what
+    it produced.
 
-    [Configuration](guide/CONFIGURATION.md)
+    [User Guide](guide/index.md)
 
 -   **Models**
 
     ---
 
-    The morphology models and their components, the PSFs and the
-    residual background, with their parameters, priors and validation.
+    The galaxy models and their components, the PSF, the noise and the sky,
+    with their parameters and default priors.
 
     [Models](models/index.md)
 
--   **Public API**
+-   **Theory**
 
     ---
 
-    The stable Python interfaces, the canonical result objects and the
-    stability policy.
+    Bayesian inference, nested sampling and hierarchical models for several
+    observations.
 
-    [Public API](API.md)
+    [Theory](theory/BAYESIAN_INFERENCE.md)
 
--   **Architecture**
-
-    ---
-
-    The scientific contracts: observation model, rendering, inference,
-    pipeline and validation.
-
-    [Architecture overview](architecture/ARCHITECTURE.md)
-
--   **Research Notes**
+-   **Reference**
 
     ---
 
-    The measurements and formulations behind the architecture, grouped by
-    workstream with their status.
+    Every command, every configuration key, every output file.
 
-    [Research overview](research/index.md)
-
--   **Decisions**
-
-    ---
-
-    The accepted architectural decision records, AD-001 onwards.
-
-    [DECISIONS.md](https://github.com/carlocannarozzophd/BayMorph/blob/main/DECISIONS.md)
+    [Configuration](reference/CONFIGURATION.md)
 
 </div>
 
-## Scientific architecture
-
-BayMorph is observation-centred:
-
-    Physical object
-          |
-          v
-    Observation-specific intrinsic representation
-          |
-          v
-    Observation operator
-          |
-          v
-    Expected detector measurement
-          |
-          v
-    Likelihood
-          |
-          v
-    Inference problem
-          |
-          v
-    Numerical backend
-          |
-          v
-    InferenceResult
-
-Single-observation inference is the one-observation case of the architecture
-used for several observations of the same object. Inference backends evaluate
-the probabilistic problem but do not define it.
-
-## Inference backends
-
-Nautilus is the default backend; Dynesty, with static or dynamic nested
-sampling, and pocoMC are supported alternatives. Their numerical options keep
-the names and meaning of the upstream libraries. Every backend returns the
-backend-neutral `InferenceResult`, whose weighted posterior samples are the
-statistical source of truth.
-
 ## Scope
 
-BayMorph covers galaxy morphology from astronomical images, single- and
-multi-observation Bayesian inference with conditional independence across
-observations stated explicitly, and the validation of both. It does not
-cover stellar populations, spectral-energy-distribution fitting, dust,
-radiative transfer, residual covariance between observations, or
-survey-level population inference.
+BayMorph covers the morphology of galaxies in images, fitted to one image or
+jointly to several. It does not model stellar populations, spectral energy
+distributions, dust or radiative transfer, and it does not infer the
+properties of galaxy populations.
 
-## Project links
+## Links
 
-- [Repository](https://github.com/carlocannarozzophd/BayMorph)
+- [Source code on GitHub](https://github.com/carlocannarozzophd/BayMorph)
 - [Roadmap](https://github.com/carlocannarozzophd/BayMorph/blob/main/ROADMAP.md)
 - [Changelog](https://github.com/carlocannarozzophd/BayMorph/blob/main/CHANGELOG.md)
-- [Contributing](https://github.com/carlocannarozzophd/BayMorph/blob/main/CONTRIBUTING.md)
+- [For developers](DEVELOPERS.md)

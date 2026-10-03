@@ -5,7 +5,7 @@ validates it, and writes the resolved configuration into the run directory as
 `config_resolved.yaml`. This page lists every section and key of a
 single-observation configuration. The joint configuration of several
 observations is described in
-[Multi-Observation Workflow](../architecture/MULTI_OBSERVATION_PUBLIC_WORKFLOW.md).
+[Several Observations](../guide/MULTI_OBSERVATION.md).
 
 Three keys are required: `object.name`, `data.image_path` and `outputs.root`.
 Unknown entries in the `fit` section are rejected. An unknown top-level
@@ -53,7 +53,7 @@ replaced by `data.mask_path`.
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `outputs.root` | path | required | Root of the run directories, relative to the working directory. |
-| `outputs.overwrite` | boolean | `false` | Allow the products of an existing run to be rebuilt. With `false`, completed preparation and PSF products are reused (AD-042) and a completed fit raises `FileExistsError`. |
+| `outputs.overwrite` | boolean | `false` | Allow the products of an existing run to be rebuilt. With `false`, completed preparation and PSF products are reused and a completed fit raises `FileExistsError`. |
 
 ## `preparation`
 
@@ -62,7 +62,7 @@ replaced by `data.mask_path`.
 | `preparation.detection.n_sigma` | number | 3.0 | Detection threshold above the background, in units of its noise. |
 | `preparation.detection.n_levels` | integer | 32 | Deblending levels of the segmentation. |
 | `preparation.detection.n_pixels` | integer | 20 | Minimum number of connected pixels of a source. |
-| `preparation.masking.negative_threshold_sigma` | number or `null` | 5.0 | Pixels below `−k` times the noise scale after background subtraction leave the likelihood support (AD-043); `null` disables the criterion. |
+| `preparation.masking.negative_threshold_sigma` | number or `null` | 5.0 | Pixels below `−k` times the noise scale after background subtraction leave the likelihood support; `null` disables the criterion. |
 | `preparation.background.box_size` | integer | 30 | Inert: kept only because the section enters the preparation identity. |
 | `preparation.background.filter_size` | integer | 3 | Inert, as above. |
 | `preparation.noise` | mapping | `{}` | Reserved; a `method` entry is rejected. |
@@ -94,7 +94,7 @@ section, and a `method` under `preparation.background` or
 | `psf.empirical.candidate_selection.max_half_size` | integer | 30 | Largest stamp half-size. |
 | `psf.empirical.candidate_selection.isolation_margin` | integer | 2 | Extra margin, in pixels, of the isolation check. |
 | `psf.empirical.construction.centroid_tolerance_pixels` | number | 0.05 | Tolerance, in pixels, of the validation of the kernel centroid. |
-| `psf.empirical.construction.sky_inner_radius` | number | 80.0 | Inner radius, in pixels, of the ring where the sky of each star is measured (AD-046). |
+| `psf.empirical.construction.sky_inner_radius` | number | 80.0 | Inner radius, in pixels, of the ring where the sky of each star is measured. |
 | `psf.empirical.construction.sky_outer_radius` | number | 160.0 | Outer radius of that ring. |
 | `psf.empirical.construction.mask_growth_pixels` | integer | 5 | Growth of the masks of other detected sources. |
 | `psf.empirical.construction.support_half_size` | integer | 64 | Half-size of the kernel, which continues the stars' measured wings. It must satisfy `support_half_size < sky_inner_radius < sky_outer_radius`. |
@@ -106,12 +106,12 @@ section, and a `method` under `preparation.background` or
 | `fit.models` | list | `[single_sersic]` | Registered morphology models to fit, each in its own fit directory. |
 | `fit.likelihood.type` | string | `correlated_gaussian` | Image likelihood; see below. |
 | `fit.likelihood.include_normalization` | boolean | `true` | Normalize the correlated Gaussian likelihood, which every fit requires. |
-| `fit.likelihood.factorization.type` | string | `nearest_neighbor` | Factorization of the sky correlation (AD-047). |
-| `fit.likelihood.factorization.max_neighbors` | integer | `24` | Neighbours of the factorization; AD-047 fixes 24 for fits. |
+| `fit.likelihood.factorization.type` | string | `nearest_neighbor` | Factorization of the sky correlation. |
+| `fit.likelihood.factorization.max_neighbors` | integer | `24` | Neighbours of the factorization; fits use 24. |
 | `fit.sampler.name` | `nautilus`, `dynesty`, `pocomc` | `nautilus` | Inference backend. |
 | `fit.comparison.enabled` | boolean | `false` | Compare models by Bayes factor; requires `fit.models` to be exactly `single_sersic` and `double_sersic`. |
 | `fit.comparison.metric` | string | `bayes_factor` | Comparison metric. |
-| `fit.background.model` | `constant` or `plane` | `constant` | Residual background fitted with the morphology (AD-031). |
+| `fit.background.model` | `constant` or `plane` | `constant` | Residual background fitted with the morphology. |
 | `fit.background.priors` | mapping | | Priors of the background parameters. |
 | `fit.priors` | mapping | | Priors of the morphology parameters, by model. |
 
@@ -119,14 +119,14 @@ section, and a `method` under `preparation.background` or
 
 | Type | Options | Note |
 | --- | --- | --- |
-| `correlated_gaussian` | `include_normalization` (default `true`), `factorization` (`type: nearest_neighbor`, `max_neighbors: 24`, the defaults), `effective_gain` (required) | The noise model of AD-047 and the default: the variance of each pixel is the prepared sky scale squared plus the source part of the model over the effective gain, and the stationary sky correlation, estimated on the whole sky region with one plane removed, no taper and lags up to 8, enters through a nearest-neighbour factorization with 24 neighbours. The estimator is fixed, so `calibration` options are rejected. |
-| `gaussian` | `include_normalization` | Independent pixels with the prepared noise scale. Rejected for every fit run from a configuration (AD-047); it remains for simulations and tests through the Python API. |
+| `correlated_gaussian` | `include_normalization` (default `true`), `factorization` (`type: nearest_neighbor`, `max_neighbors: 24`, the defaults), `effective_gain` (required) | The noise model of BayMorph and the default: the variance of each pixel is the prepared sky scale squared plus the source part of the model over the effective gain, and the stationary sky correlation, estimated on the whole sky region with one plane removed, no taper and lags up to 8, enters through a nearest-neighbour factorization with 24 neighbours. The estimator is fixed, so `calibration` options are rejected. |
+| `gaussian` | `include_normalization` | Independent pixels with the prepared noise scale. Rejected for every fit run from a configuration; it remains for simulations and tests through the Python API. |
 | `cash` | `include_data_term`, `require_integer_data`, `integer_tolerance` | Poisson likelihood of images in counts. |
 | `poisson_gaussian` | `read_noise`, `tail_probability`, `minimum_terms`, `maximum_terms` | Marginalized Poisson-Gaussian likelihood of images in counts. |
 
 `effective_gain` declares where the effective gain of the source Poisson
 variance comes from, in the units of the image; it has no default and is
-never fitted (AD-047):
+never fitted:
 
 | `source` | Further key | Gain |
 | --- | --- | --- |
@@ -207,8 +207,9 @@ its fluxes, which must always be declared.
 | `bulge_disk_ring` | `flux_bulge`, `re_bulge`, `n_bulge`, `q_bulge`, `theta_bulge`, `flux_disk`, `re_disk`, `q_disk`, `theta_disk`, `flux_ring`, `r_ring`, `sigma_ring`, `q_ring`, `theta_ring`, `x0`, `y0` | the bulge and the disc as `bulge_disk`; `r_ring` 5–200, `sigma_ring` 2–20, `q_ring` 0.5–1, `theta_ring` −π/2–π/2, centre ±8 |
 | `bulge_disk_spiral` | `flux_bulge`, `re_bulge`, `n_bulge`, `q_bulge`, `theta_bulge`, `flux_disk`, `re_disk`, `q_disk`, `theta_disk`, `amplitude_spiral`, `winding_spiral`, `phase_spiral`, `r_in_spiral`, `x0`, `y0` | the bulge and the disc as `bulge_disk`; `amplitude_spiral` 0–1, `winding_spiral` −6–6, `phase_spiral` 0–π, `r_in_spiral` 1–60, centre ±8 |
 
-The models of AD-048 are validated for single-observation fits within a
-rendering domain:
+The models `boxy_sersic`, `core_sersic`, `bulge_broken_disk`,
+`bulge_disk_bar`, `bulge_disk_ring` and `bulge_disk_spiral` are validated for
+single-observation fits within a rendering domain:
 
 | Model | Validated domain |
 | --- | --- |
@@ -238,7 +239,7 @@ The background priors are declared under `fit.background.priors`:
 | `fit.background.priors.background_gradient_y` | uniform −0.1 to 0.1 per pixel, used by `plane` |
 
 A `sky` prior under `fit.priors.<model>` is rejected: the residual background
-belongs to `fit.background` (AD-044).
+belongs to `fit.background`.
 
 ## `diagnostics`
 

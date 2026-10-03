@@ -16,7 +16,7 @@ $$
 ![Images of the two Sérsic components and of their sum after the PSF, and their radial profiles](figures/double_sersic_decomposition-light.png#gh-light-mode-only)
 ![Images of the two Sérsic components and of their sum after the PSF, and their radial profiles](figures/double_sersic_decomposition-dark.png#gh-dark-mode-only)
 
-*The two labelled components, a compact one of index 4 and an extended one of index 1, and their sum after a Gaussian PSF of 2.5 px FWHM; right, the mean intensity in circular annuli.*
+*The two labelled components, a compact one of index 4 and an extended one of index 1, and their sum after a Gaussian PSF of 2.5 px FWHM; the last panel gives the mean intensity in circular annuli.*
 
 ## Parameters
 
@@ -60,7 +60,7 @@ shape.
 - The split of the flux between the components is correlated with their
   radii and indices, and the posterior is far from Gaussian: a mixture of
   Student-t distributions about its modes matches it poorly
-  ([model-informed evidence](../research/STRUCTURE_INFORMED_EVIDENCE_2026-09-29.md)).
+  ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/STRUCTURE_INFORMED_EVIDENCE_2026-09-29.md)).
   Its evidence therefore relies on a nested sampler such as Nautilus.
 - Each component inherits the degeneracies of the
   [single Sérsic](SINGLE_SERSIC.md#known-degeneracies).
@@ -69,11 +69,11 @@ shape.
 
 - **Rendering.** The model renders as the exact sum of its two components,
   with the rendering of the single Sérsic.
-- **High signal-to-noise.** Under an empirical PSF the model is rendered
+- **Very deep images.** Under an empirical PSF the model is rendered
   with an error comparable with the noise once one of its components passes
   its own limit, usually the compact, steeper one: a component of n = 4 and
   Rₑ of 2 to 5 px reaches it at a peak signal-to-noise of 7e3 to 1.6e4, one
-  of n = 6 and Rₑ = 1 px at 1.2e3 ([note](../research/RENDERING_SIGNAL_LIMIT_2026-10-02.md)).
+  of n = 6 and Rₑ = 1 px at 1.2e3 ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/RENDERING_SIGNAL_LIMIT_2026-10-02.md)).
 - **Model comparison.** With `fit.comparison.enabled`, BayMorph computes the
   Bayes factor of `double_sersic` over `single_sersic` on the same prepared
   data, mask and likelihood.

@@ -1,8 +1,8 @@
 # Bulge, Disc and Bar (`bulge_disk_bar`)
 
 A Sérsic bulge, an exponential disc and a Ferrers bar
-([Ferrers bar](COMPONENTS.md#ferrers-bar)), sharing a centre. One of the
-families of AD-048: available for single-observation fits.
+([Ferrers bar](COMPONENTS.md#ferrers-bar)), sharing a centre. Available for
+fits of a single image.
 
 ## Definition
 
@@ -59,12 +59,12 @@ least 2, `c0_bar` between 0 and 3.5 and `q_bar` at least 0.2: the domain in
 which the rendering of the bar is validated, which configuration validation
 enforces. Flatter or thinner bars are integrated accurately over pixels, but
 their edge, sampled at pixel centres outside the window of the effective-PSF
-rendering of AD-046, is not.
+rendering, is not.
 
-![A plot of the profile of a Ferrers bar against radius for four sharpnesses of its edge, and images of an elliptical and a boxy bar with their isophotes](figures/ferrers_bar_profiles-light.png#gh-light-mode-only)
-![A plot of the profile of a Ferrers bar against radius for four sharpnesses of its edge, and images of an elliptical and a boxy bar with their isophotes](figures/ferrers_bar_profiles-dark.png#gh-dark-mode-only)
+![Images of an elliptical and a boxy bar with their isophotes, and a plot of the profile of a Ferrers bar against radius for four sharpnesses of its edge](figures/ferrers_bar_profiles-light.png#gh-light-mode-only)
+![Images of an elliptical and a boxy bar with their isophotes, and a plot of the profile of a Ferrers bar against radius for four sharpnesses of its edge](figures/ferrers_bar_profiles-dark.png#gh-dark-mode-only)
 
-*Left: the profile of the bar along its major axis for four values of α; the slope at the edge is infinite for α < 1. Right: bars with a = 30 px, α = 2 and q = 0.35, on ellipses and on boxy isophotes, with their isophotes at m = 10, 20 and 29 px.*
+*Top: bars with a = 30 px, α = 2 and q = 0.35, on ellipses and on boxy isophotes, with their isophotes at m = 10, 20 and 29 px. Bottom: the profile of the bar along its major axis for four values of α; the slope at the edge is infinite for α < 1.*
 
 ![Images of the convolved bulge, disc, bar and their sum, with the radial profiles of the four](figures/bulge_disk_bar_decomposition-light.png#gh-light-mode-only)
 ![Images of the convolved bulge, disc, bar and their sum, with the radial profiles of the four](figures/bulge_disk_bar_decomposition-dark.png#gh-dark-mode-only)
@@ -94,33 +94,21 @@ because the bulge absorbs the light of the bar
 
 ## Validation
 
-- **Rendering.** On the bench of AD-048, with the criteria of AD-046, 230
-  cases under effective PSFs of 2.34 and 3.5 px FWHM. Bars of a = 5 px lie
-  within the window of AD-046 and meet criterion 1 at every α and `q_bar`.
-  Longer bars have their edge, at least in part, sampled at pixel centres
-  outside the window: criterion 1 fails for α = 0.5 at a = 10 and 25 px, for
-  α = 1 at a = 10 px with `q_bar` of 0.2 or less, and for α = 2 at
-  `q_bar` = 0.1. Within the validated domain
-  the largest pixel difference is 2.2e-3 of the peak and the largest flux
-  error 8.7e-4, against limits of 1e-2 and 1e-3 ([note](../research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
-- **Bright bars.** At the signal-to-noise of the r-band target, the bar of
-  the target-like cases (a = 20 px, α = 2, c₀ = 2, q = 0.3, 20 percent of
-  the flux) reaches by itself a chi-square of 2.1 to 2.5 at 2.34 px FWHM and
-  0.55 to 0.72 at 3.5 px. The error lies at the tips of the bar, more than
-  14 px from the centre, where the effective-PSF rendering of AD-046 samples
-  the profile at pixel centres. The chi-square grows with the square of the
-  flux, so at 2.34 px FWHM the bar reaches 1 at about 7e5 counts, a peak
-  signal-to-noise of the bar near 1500: a brighter bar is rendered with an
-  error comparable with the noise. The compact bulge of the same cases adds
-  the limit found with [`bulge_broken_disk`](BULGE_BROKEN_DISK.md).
-- **Flux.** A bar inside the image holds its analytic flux within 1e-7 for
-  every α, its edge included, and its pixel integrals agree with adaptive
-  integration within 9e-8 of the peak.
+- **Rendering.** Tested on 230 cases under PSFs of 2.3 and 3.5 px FWHM.
+  Within the domain above, the largest pixel error is 2.2e-3 of the peak and
+  the largest flux error 8.7e-4. Bars with a softer edge, `alpha_bar` below
+  2, or thinner than `q_bar` = 0.2 are not rendered accurately at their edge
+  ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+- **Very bright bars.** The tips of the bar, more than 14 px from the
+  centre, are rendered from samples at pixel centres. Under a PSF of
+  2.3 px FWHM a bar whose own peak signal-to-noise exceeds about 1500 is
+  therefore rendered with an error comparable with the noise.
+- **Flux.** A bar inside the image holds its analytic flux within 1e-7, its
+  edge included.
 - **Recovery.** On a simulated barred galaxy, the posterior of `a_bar` and
-  `q_bar` covers the true values (`tests/test_bulge_disk_bar_recovery.py`).
-- **Cost.** A rendering of 1013 × 1013 px with an effective PSF of 27 px
-  takes 130 ms, against 54 ms for `bulge_disk`.
-- **Real data.** No fit on real data has been made with this model.
+  `q_bar` covers the true values.
+- **Cost.** About two and a half times the cost of `bulge_disk`.
+- **Real data.** Not yet used on real images.
 
 ## Configuration
 
@@ -145,8 +133,8 @@ fit:
 ```
 
 Priors not declared take the defaults above; the values here are an
-example, to be chosen for each image. A joint multi-observation fit rejects
-this model before writing any output (AD-048).
+example, to be chosen for each image. A joint fit of several images does not
+accept this model.
 
 ## Python
 

@@ -31,35 +31,21 @@ baymorph --help
 
 | Extra | Installs | Use |
 | --- | --- | --- |
-| `interactive` | anywidget, IPython, ipywidgets, Plotly | interactive inspection tools in notebooks |
+| `interactive` | anywidget, IPython, ipywidgets, Plotly | interactive tools in notebooks, such as clicking on the target |
 | `dev` | pytest, Jupyter, ipykernel, Black, Ruff, scikit-learn, build, Twine | development and tests |
 
-## Development installation
-
 ```bash
-git clone https://github.com/carlocannarozzophd/BayMorph.git
-cd BayMorph
-
-python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+python -m pip install "baymorph[interactive] @ git+https://github.com/carlocannarozzophd/BayMorph.git@main"
 ```
 
-The quality gates for contributors are described in
-[`CONTRIBUTING.md`](https://github.com/carlocannarozzophd/BayMorph/blob/main/CONTRIBUTING.md).
+The [tutorial notebooks](TUTORIALS.md) also need Jupyter, for example
+`python -m pip install jupyterlab`.
 
-## Build this documentation locally
+## Data
 
-```bash
-python -m pip install -r requirements-docs.txt
-python -m mkdocs serve
-```
+BayMorph distributes no observational data: you supply your own FITS images
+and choose where BayMorph writes its results. The packaged example simulates
+its own image.
 
-`python -m mkdocs build --strict` builds the site and fails on any warning.
-
-## What the distribution contains
-
-The package contains software, generic example configurations, tutorial
-notebooks and tests. It contains no observational data and no generated
-results such as run directories, posteriors, benchmark tables or figures.
-Users supply their own FITS images and choose where BayMorph writes its
-products.
+To install BayMorph from a clone of the repository, for development, see
+[For Developers](../DEVELOPERS.md).

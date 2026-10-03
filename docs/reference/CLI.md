@@ -59,12 +59,13 @@ together.
 | `--overwrite` | Write `outputs.overwrite: true`, which allows products of existing runs to be replaced. | off |
 
 The generated file is a starting point to review, not a finished analysis:
-see [Quick Start](QUICK_START.md) for the defaults that are not scaled to the
-units of the image. The likelihood is the noise model of AD-047. When the sky
-of the image, measured after three-sigma clipping, is at least ten times its
-scale, the file declares `effective_gain` with `source: measured_sky`;
-otherwise it leaves the gain undeclared, the command says so, and the fit
-refuses to start until `fit.likelihood.effective_gain` is declared.
+[Writing a Configuration](../guide/CONFIGURING.md) lists the choices that are
+yours, such as the defaults that are not scaled to the units of the image.
+When the sky of the image, measured after three-sigma clipping, is at least
+ten times its noise, the file declares `effective_gain` with
+`source: measured_sky`; otherwise it leaves the gain undeclared, the command
+says so, and the fit refuses to start until `fit.likelihood.effective_gain`
+is declared (see [Sky and Noise](../guide/SKY_AND_NOISE.md)).
 
 ## `baymorph run`
 
@@ -74,9 +75,9 @@ baymorph run [--no-diagnostics] config_path
 
 Executes the configured workflow, as `BayMorphRunner(config_path).run()`
 does: simulation when the configuration has a `simulation` section, image
-preparation, empirical-PSF construction when the PSF is empirical, the sky
-correlation and its nearest-neighbour factorization (AD-047), fitting and
-diagnostics.
+preparation, empirical-PSF construction when the PSF is empirical, the
+measurement of the sky correlation for the noise model, fitting and
+diagnostics. See [The Runner](../guide/RUNNER.md).
 
 | Option | Meaning |
 | --- | --- |

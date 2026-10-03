@@ -1,12 +1,47 @@
-# Residual Background
+# Sky and Background
 
-Preparation subtracts a constant sky from the image: the median of the
-clipped sky region. Whatever background remains is a residual, inferred with
-the morphology as an observation effect (AD-031). It is not part of the
-galaxy, and the morphology models never contain it. `fit.background.model`
-selects one of two forms.
+The sky is handled in two steps. Preparation measures the sky around the
+galaxy and subtracts it as a constant; the fit then infers what is left,
+the *residual background*, together with the galaxy. The residual
+background belongs to the observation: it is not part of the galaxy, and no
+morphology model contains it.
 
-## Constant (`constant`)
+## The sky in preparation
+
+`prepare_image()` measures the elliptical radial profile of the target,
+the median of the pixels in elliptical annuli, with the other sources
+masked, and finds its *plateau*: the radius beyond which the profile stops
+falling and stays flat within the noise. Everything beyond the plateau
+radius plus 5 pixels, minus the masked sources, is the *sky region*. There
+BayMorph
+
+1. clips the outliers and subtracts the median of what remains from the
+   cutout, as a constant;
+2. measures the noise scale of the sky, about a plane fitted to the sky
+   region, so that a gradient is not mistaken for noise; the scale corrects
+   for the truncation of the clipping;
+3. reports the gradient of that plane, with its significance, as a
+   diagnostic (`image.sky_gradient`).
+
+![Two panels: a galaxy with a masked neighbour and the sky region shaded beyond an ellipse, and its radial profile falling to a flat sky level, with the plateau radius marked and the sky region shaded](figures/sky_region-light.png#gh-light-mode-only)
+![Two panels: a galaxy with a masked neighbour and the sky region shaded beyond an ellipse, and its radial profile falling to a flat sky level, with the plateau radius marked and the sky region shaded](figures/sky_region-dark.png#gh-dark-mode-only)
+
+*A simulated galaxy on a sky of 100 image units, prepared with the functions of BayMorph. Left: the plateau ellipse (solid), the inner edge of the sky region 5 px beyond it (dashed), the sky region (shaded) and a masked neighbour. Right: the radial profile, which reaches the sky level at the plateau radius.*
+
+The faint outskirts of a galaxy are where the sky matters: Sérsic fits are
+reliable when the effective surface brightness of the galaxy is above that
+of the sky ([Häussler et al. 2007][haussler2007]). A sky estimated too close
+to a galaxy contains part of its light, and subtracting it makes the
+profile fall faster, which lowers the fitted flux, radius and index. The
+residual background absorbs a constant error of the subtracted level, but
+not light of the galaxy that falls off with radius, so the cutout must
+reach well into the sky: see [Image and Cutout](../guide/IMAGE.md).
+
+## The residual background
+
+`fit.background.model` selects one of two forms.
+
+### Constant (`constant`)
 
 $$
 B(x, y) = b.
@@ -19,7 +54,7 @@ $$
 The default prior is not scaled to the image: choose it from the noise and
 the units of each image.
 
-## Plane (`plane`)
+### Plane (`plane`)
 
 $$
 B(x, y) = b + g_x\,(x - x_{\mathrm{ref}}) + g_y\,(y - y_{\mathrm{ref}}),
@@ -45,28 +80,24 @@ gradients.
 
 *A constant background and a plane with the same level b at the centre of the cutout; the arrow shows the direction of the gradient.*
 
-**When to use it.** Preparation measures the noise scale about a plane
-fitted to the sky region and reports the fitted gradient and its
-significance (AD-041). A significant gradient indicates that a plane is
-warranted; the choice remains the user's, and BayMorph never makes it.
+**When to use a plane.** When the sky gradient that preparation reports is
+significant at several sigma. The choice remains yours: BayMorph reports the
+gradient and never switches the model.
 
 ## In joint fits
 
-The background family is declared once, in the joint `fit.background`
+The background model is declared once, in the joint `fit.background`
 section, and its parameters are declared under
 `fit.multi_observation.parameters` with `independent` coupling, because each
-observation has its own residual background (AD-044).
+image has its own residual background.
 
 ## Known degeneracies and limits
 
 - The background is anticorrelated with the flux, the radius and the index
   of the galaxy, which add light far from the centre as it does.
-- The sky region can contain the outer light of the galaxy. On the first
-  real target, the target still contributed about 0.15 of the noise scale
-  beyond the plateau radius
-  ([noise and background chain](../research/NOISE_BACKGROUND_AUDIT_2026-10-01.md)),
-  which biases the subtracted sky and therefore the residual background. The
-  background is the next step of the revision of the observation model.
+- The sky region may still contain faint light of the galaxy, which biases
+  the subtracted sky; how much, and how best to correct it, is being
+  measured.
 - Structure of the sky beyond a plane is not modelled.
 
 ## Validation
@@ -82,6 +113,8 @@ background leaves.
 
 ## References
 
+- [Häussler B. et al., 2007, ApJS, 172, 615][haussler2007]: the reliability of Sérsic fits against the brightness of the sky.
 - [Peng C. Y. et al., 2010, AJ, 139, 2097][peng2010]: the tilted-plane sky.
 
+[haussler2007]: https://ui.adsabs.harvard.edu/abs/2007ApJS..172..615H/abstract
 [peng2010]: https://ui.adsabs.harvard.edu/abs/2010AJ....139.2097P/abstract

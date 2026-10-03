@@ -1,47 +1,83 @@
 # Quick Start
 
-BayMorph analyses are defined by YAML configuration files and run either
-from the command line or from Python. Every option of the command line is
-listed in [Command-Line Interface](CLI.md), and every configuration key in
-[Configuration Reference](CONFIGURATION.md).
+This page runs a first fit in a few minutes: first on a simulated galaxy
+packaged with BayMorph, then on an image of your own.
 
-!!! warning "Status of the real-data path"
-
-    The observation model of the real-data path is under revision. The
-    effective-PSF rendering of AD-046 and the noise model of AD-047 are
-    implemented. No real-data fit has yet been validated scientifically. The current priority is stated in the
-    [roadmap](https://github.com/carlocannarozzophd/BayMorph/blob/main/ROADMAP.md).
-
-## Create a workspace
+## 1. Create a project
 
 ```bash
 baymorph init my_analysis
 cd my_analysis
 ```
 
-The workspace contains `configs/` with the example configuration,
-`notebooks/` with the tutorial notebooks, and empty `data/` and `runs/`
-directories. It is a convenience: BayMorph also runs in any directory.
+The project has four directories: `configs/`, with an example
+configuration, `notebooks/`, with the tutorial notebooks, and empty
+`data/` and `runs/`. BayMorph also runs in any other directory; the
+project is only a convenient layout.
 
-## Run the simulated example
+## 2. Fit a simulated galaxy
 
 ```bash
 baymorph run configs/simulated_galaxy.yaml
 ```
 
-The example simulates a 201 x 201 px image of one Sérsic galaxy with a
-Gaussian PSF and white Gaussian noise, prepares it, estimates the correlation
-of its sky and the nearest-neighbour factorization of the noise model of
-AD-047, fits a single Sérsic model with Nautilus and writes the diagnostics.
-Its noise has no Poisson term from the source, so the configuration declares
-the source variance absent. Its products are written under
-`runs/simulated_galaxy/`; [Preparation and Products](PREPARATION_AND_PRODUCTS.md)
-describes them.
+The example makes a 201 x 201 px image of one Sérsic galaxy, with a
+Gaussian PSF and Gaussian noise, and fits it with a single Sérsic model. It
+takes about a minute and a half on a laptop. The runner prints one line per
+step:
 
-## Fit an observed image
+```text
+✓ Synthetic observation generated
+✓ Image preparation completed
+✓ Ready: correlated-noise calibration
+✓ Ready: nearest-neighbour factorization
+...
+Completed Nautilus fit: single_sersic
+✓ Corner plots generated
+✓ Residual maps generated
+✓ Radial profiles generated
+BayMorph analysis completed.
+```
 
-Generate a configuration from a FITS image. A target seed and a flux prior
-are required, because BayMorph does not derive either from the image:
+## 3. Look at the results
+
+Everything is in `runs/simulated_galaxy/`. The fit of the model is in
+`fits/single_sersic/`:
+
+| File | Content |
+| --- | --- |
+| `fit_summary.txt` | the evidence, the goodness of fit and the best parameters |
+| `corner.pdf` | the posterior of every parameter, with the true values marked |
+| `data_model_residual.pdf` | the image, the model and the residuals |
+| `radial_profile.pdf` | the radial profile of the image and of the model |
+| `posterior.npz` | the weighted posterior samples |
+
+`fit_summary.txt` reports, among other things, the statistics and the best
+parameters; your numbers may differ in the last digits:
+
+```text
+Fit statistics
+chi2 = 40071.934
+ndof = 40368
+reduced_chi2 = 0.99266583
+logZ = -85483.241
+
+Best-fit parameters
+flux = 20004.168
+re = 6.0102793
+n = 2.0188553
+q = 0.75213613
+```
+
+The simulated galaxy has `flux` 20000, `re` 6 px, `n` 2 and `q` 0.75, and a
+reduced chi-square close to 1 says that the model describes the image down
+to the noise.
+
+## 4. Fit your own image
+
+Copy a FITS image into `data/` and write a configuration for it. Tell
+BayMorph where the galaxy is and give a prior range for its flux, in the
+units of the image:
 
 ```bash
 baymorph config data/galaxy.fits \
@@ -52,56 +88,36 @@ baymorph config data/galaxy.fits \
   --output configs/galaxy.yaml
 ```
 
-Review the file before running it. Its priors are in the units of the image,
-and two defaults are not scaled to them: the prior of the residual
-background, `fit.background.priors.background_level`, uniform between −50
-and 50, and the brightest peak accepted for a PSF star,
-`psf.empirical.candidate_selection.max_peak`, 80000. Then run it:
+Open `configs/galaxy.yaml` and review it before running: the priors, the
+residual background and the brightest star accepted for the PSF are in the
+units of your image, and [Writing a Configuration](CONFIGURING.md) lists
+what to check. Then:
 
 ```bash
 baymorph run configs/galaxy.yaml
 ```
 
-The run prepares the image, selects the PSF stars, builds the empirical PSF,
-fits the model and writes the diagnostics. `--no-diagnostics` skips the
+BayMorph cuts out the galaxy, masks the other sources, subtracts the sky,
+builds the PSF from the stars of the image, fits the model and draws the
 diagnostics.
 
-## The same workflow from Python
+## 5. The same from Python
 
 ```python
 from baymorph import BayMorphRunner
 
-runner = BayMorphRunner("configs/simulated_galaxy.yaml")
-result = runner.run(diagnostics=True)
-```
-
-`run()` executes the stages in order. They can also be run one at a time:
-
-```python
 runner = BayMorphRunner("configs/galaxy.yaml")
+fit = runner.run(diagnostics=True)
 
-runner.prepare_image()
-runner.select_psf_candidates()
-runner.build_psf()
-result = runner.fit()
-runner.diagnostics()
+for name in fit.posterior.parameter_names:
+    print(name, fit.posterior.summary(name))
 ```
 
-`simulate()` comes first, and only for a configuration with a `simulation`
-section. `select_psf_candidates()` and `build_psf()` apply only to an
-empirical PSF and raise an error for an analytic one, such as `gaussian`.
+## Next steps
 
-## Repeating and resuming a workflow
-
-Image preparation, PSF candidate selection and PSF construction reuse a
-completed product of the same output namespace instead of rebuilding it
-(AD-042), after checking that its inputs still match the configuration. An
-interrupted workflow therefore continues by running it again.
-
-A completed fit is not reused: when its completion marker exists and
-`outputs.overwrite` is false, `fit()` raises `FileExistsError`. A fit
-interrupted before completion resumes only from a signed checkpoint, which
-Nautilus (`fit.sampler.init.filepath`) and pocoMC
-(`fit.sampler.run.resume_state_path`) support; both accept `auto`. Dynesty
-has no checkpoint. A checkpoint whose signature does not match the current
-problem is refused.
+- The [User Guide](index.md) shows each step on its own: the cutout, the
+  masks, the sky and the noise, the PSF, the fit and the results.
+- The [Models](../models/index.md) section describes every model you can
+  fit.
+- The [tutorial notebooks](TUTORIALS.md) walk through a simulated and an
+  observed galaxy.

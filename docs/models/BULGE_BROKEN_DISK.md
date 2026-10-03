@@ -2,8 +2,7 @@
 
 A Sérsic bulge and an exponential disc whose scale length changes at a break
 radius ([broken exponential disc](COMPONENTS.md#broken-exponential-disc)),
-sharing a centre. One of the families of AD-048: available for
-single-observation fits.
+sharing a centre. Available for fits of a single image.
 
 ## Definition
 
@@ -87,27 +86,20 @@ where the disc is faint.
 
 ## Validation
 
-- **Rendering.** On the bench of AD-048, with the criteria of AD-046, the
-  disc meets every criterion on 96 cases of types II and III, with `wb`
-  from 0.5 to 5 px, under effective PSFs of 2.34 and 3.5 px FWHM. The
-  largest pixel difference is 3.0e-5 of the peak, and the disc alone reaches
-  a target-like chi-square of at most 0.09
-  ([note](../research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
-- **Compact bright bulges.** With a bulge of Rₑ = 5 px holding 40 percent of
-  the flux of the r-band target, the target-like chi-square reaches 1.85 at
-  2.34 px FWHM. The excess comes from the bulge: the production Sérsic
-  profile, rendered by the convention of AD-046 as in
-  [`bulge_disk`](BULGE_DISK.md). Its rendering error becomes comparable with
-  the noise above a peak signal-to-noise of about 1.5e4.
+- **Rendering.** The disc was tested on 96 cases of types II and III, with
+  `wb_disk` from 0.5 to 5 px, under PSFs of 2.3 and 3.5 px FWHM: the largest
+  pixel error is 3e-5 of the peak ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+- **Compact bright bulges.** The bulge is rendered as in
+  [`bulge_disk`](BULGE_DISK.md): a compact bright bulge is rendered with an
+  error comparable with the noise above a peak signal-to-noise of about
+  1.5e4.
 - **Flux.** A compact disc holds its analytic flux within 1e-8. With
-  `h_out_disk = h_in_disk` the disc reproduces the exponential disc within
-  2.3e-7 of the peak.
+  `h_out_disk` equal to `h_in_disk` the disc reproduces the exponential disc
+  within 2.3e-7 of the peak.
 - **Recovery.** On a simulated type II disc with a bulge, the posterior of
-  `h_out_disk` and `rb_disk` covers the true values
-  (`tests/test_bulge_broken_disk_recovery.py`).
-- **Cost.** A rendering of 1013 × 1013 px with an effective PSF of 27 px
-  takes 64 ms, against 51 ms for `bulge_disk`.
-- **Real data.** No fit on real data has been made with this model.
+  `h_out_disk` and `rb_disk` covers the true values.
+- **Cost.** About a quarter more than `bulge_disk`.
+- **Real data.** Not yet used on real images.
 
 ## Configuration
 
@@ -128,8 +120,8 @@ fit:
 ```
 
 Priors not declared take the defaults above; the values here are an
-example, to be chosen for each image. A joint multi-observation fit rejects
-this model before writing any output (AD-048).
+example, to be chosen for each image. A joint fit of several images does not
+accept this model.
 
 ## Python
 
