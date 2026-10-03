@@ -212,7 +212,7 @@ To build the site locally:
 
 ~~~bash
 python -m pip install -r requirements-docs.txt
-python -m mkdocs serve
+python -m zensical serve
 ~~~
 
 ## Development status

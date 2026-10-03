@@ -12,16 +12,11 @@ edit_uri: edit/main/docs/
 docs_dir: docs
 site_dir: site
 
-# The architecture, the research notes and the archive are development
-# documents: they stay in the repository and are read on GitHub, linked from
-# the page For Developers, and are not built into the user site.
-exclude_docs: |
-  /archive/
-  /architecture/
-  /research/
+# The site is built by Zensical, which reads this MkDocs-format file.
 
 theme:
   name: material
+  variant: modern
   language: en
 
   features:
@@ -122,6 +117,16 @@ nav:
 
 plugins:
   - search
+
+  # The architecture, the research notes and the archive are development
+  # documents: they stay in the repository and are read on GitHub, linked
+  # from the page For Developers, and are not built into the user site.
+  # Zensical does not support exclude_docs and excludes them here.
+  - exclude:
+      glob:
+        - archive/*
+        - architecture/*
+        - research/*
 
 markdown_extensions:
   - admonition

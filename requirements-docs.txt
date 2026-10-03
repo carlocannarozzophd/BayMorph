@@ -1,1 +1,3 @@
-mkdocs-material>=9.6,<10
+# Zensical is before its 1.0 release: upgrade it deliberately and rebuild
+# the site with --strict.
+zensical==0.0.67

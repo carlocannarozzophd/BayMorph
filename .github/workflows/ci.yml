@@ -84,4 +84,4 @@ jobs:
           python -m pip install -r requirements-docs.txt
 
       - name: Build documentation
-        run: python -m mkdocs build --strict
+        run: python -m zensical build --strict

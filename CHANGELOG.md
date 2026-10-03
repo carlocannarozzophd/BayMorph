@@ -258,6 +258,16 @@ and the project follows Semantic Versioning in spirit.
   `baymorph.plotting.style`, with at most two panels per row and the
   colours and light and dark versions of before;
   `scripts/make_model_figures.py` makes them.
+* The documentation site is built by Zensical 0.0.67 instead of MkDocs and
+  Material for MkDocs: MkDocs has had no maintainer since August 2024, its
+  version 2.0 drops the plugins and the themes of Material, and Material is
+  in maintenance only since November 2025. Zensical, by the authors of
+  Material, reads `mkdocs.yml` and builds the same pages, in its modern
+  variant. It does not support `exclude_docs`: its `exclude` plugin keeps
+  the architecture, the research notes and the archive out of the site.
+  `python -m zensical build --strict` is the documentation gate, locally
+  and in the continuous integration, and also fails on a link to an anchor
+  that does not exist; `requirements-docs.txt` pins the version.
 * The architecture documents follow AD-047, milestone 4 of its plan.
   `docs/architecture/OBSERVATION_MODEL.md` §22.9 defines the noise model:
   its marginal scale, the estimator of the sky correlation, the
