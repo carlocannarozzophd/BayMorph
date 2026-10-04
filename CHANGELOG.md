@@ -11,6 +11,15 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* A simulation bench of the background of a fit
+  (`benchmarks/background_bench.py`), pre-registered with two amendments
+  before its gate of 450 realizations: on a flat sky the production
+  detection masks peaks of the noise over the wings of the galaxy and biases
+  flux, re and n low by 0.6 to 1.9 of their scatter, a bias that masking only
+  the true contaminants removes; on a sky with a large-scale field no
+  treatment tested keeps the estimates unbiased with calibrated intervals,
+  and the halo of a bright star and a sky subtracted on a mesh bias them by
+  several scatters ([note](docs/research/BACKGROUND_BENCH_2026-10-03.md)).
 * `benchmarks/noise_model_cost.py`, which reproduces through the path of a
   fit the cost of the noise model of AD-047 recorded in the status note on
   its milestone 3, with a test that the problem it times is the problem of
