@@ -1,8 +1,11 @@
-# BayMorph
+---
+title: BayMorph
+---
 
-<p align="center">
-  <strong>Bayesian inference for galaxy morphology.</strong>
-</p>
+<h1 align="center">
+  <img alt="BayMorph" src="assets/logo/baymorph-lockup-light.png#gh-light-mode-only" width="640">
+  <img alt="BayMorph" src="assets/logo/baymorph-lockup-dark.png#gh-dark-mode-only" width="640">
+</h1>
 
 BayMorph fits models of galaxy morphology, such as a Sérsic profile or a
 bulge and a disc, to astronomical images, and returns the full posterior

@@ -1,0 +1,67 @@
+/* The colours of the BayMorph logo: navy for the header, petrol (light scheme)
+   and cyan (dark scheme) for links and accents. Both pass WCAG AA contrast on
+   their backgrounds. */
+
+:root,
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #0B2A4A;
+  --md-primary-fg-color--light: #1A4470;
+  --md-primary-fg-color--dark: #071F3A;
+  --md-primary-bg-color: #F2F7F8;
+  --md-primary-bg-color--light: #F2F7F8B3;
+  --md-accent-fg-color: #02587B;
+  --md-accent-fg-color--transparent: #02587B1A;
+  --md-accent-bg-color: #FFFFFF;
+  --md-accent-bg-color--light: #FFFFFFB3;
+  --md-typeset-a-color: #02587B;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #0B2A4A;
+  --md-primary-fg-color--light: #1A4470;
+  --md-primary-fg-color--dark: #071F3A;
+  --md-primary-bg-color: #F2F7F8;
+  --md-primary-bg-color--light: #F2F7F8B3;
+  --md-accent-fg-color: #0699B4;
+  --md-accent-fg-color--transparent: #0699B41A;
+  --md-typeset-a-color: #0699B4;
+}
+
+/* The header and the navigation tabs in the navy of the logo, in both schemes. */
+.md-header,
+.md-tabs {
+  background-color: var(--md-primary-fg-color);
+}
+
+.md-header__title,
+.md-header__topic,
+.md-header__button,
+.md-header .md-icon,
+.md-header .md-source,
+.md-tabs__link {
+  color: var(--md-primary-bg-color);
+}
+
+.md-tabs__link--active,
+.md-tabs__link:hover {
+  color: #FFFFFF;
+}
+
+/* The search button on the navy header: a light label on a faint light field. */
+.md-header .md-search__button {
+  background-color: #FFFFFF1A;
+  color: var(--md-primary-bg-color);
+}
+
+.md-header .md-search__button svg {
+  color: var(--md-primary-bg-color);
+}
+
+.md-header .md-search__button::before {
+  background-color: var(--md-primary-bg-color);
+}
+
+.md-header .md-search__button::after {
+  background-color: #FFFFFF26;
+  color: var(--md-primary-bg-color);
+}

@@ -11,6 +11,10 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* The BayMorph logo (`docs/assets/logo/`). Its lockup heads the README and
+  the home page of the documentation, with dark and light versions; the site
+  uses its tile as logo and favicon and takes its colours
+  (`docs/stylesheets/brand.css`).
 * A simulation bench of the background of a fit
   (`benchmarks/background_bench.py`), pre-registered with two amendments
   before its gate of 450 realizations: on a flat sky the production

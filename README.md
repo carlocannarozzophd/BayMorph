@@ -1,8 +1,9 @@
-# BayMorph
-
-<p align="center">
-  <strong>Bayesian inference for astronomical morphology.</strong>
-</p>
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo/baymorph-lockup-dark.png">
+    <img alt="BayMorph" src="docs/assets/logo/baymorph-lockup-light.png" width="640">
+  </picture>
+</h1>
 
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/python-%E2%89%A53.11-green">
