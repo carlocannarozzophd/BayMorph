@@ -27,7 +27,19 @@ BayMorph reads the header through conventions for the instruments and
 pipelines it knows, and through the FITS standard otherwise. Each quantity,
 such as the pixel scale, the gain, the zeropoint or the FWHM, carries the
 keyword it comes from and how certain it is, and BayMorph never infers a
-unit from a value.
+unit from a value. The conventions cover ESO products and the VST-Tube
+pipeline, SWarp coadds, SDSS frames, the coadds of the Legacy Surveys, HST
+and JWST images, DECam images of the NOIRLab Community Pipeline, hscPipe
+images that record `FLUXMAG0`, and Pan-STARRS stacks. Where a quantity
+follows from others, such as the AB zeropoint of HST from `PHOTFLAM` and
+`PHOTPLAM`, BayMorph derives it only for the products its documentation
+covers, here the drizzled images in electrons per second.
+
+BayMorph fits pixel values that are linear in flux. It refuses an image
+whose header declares another encoding, such as a Pan-STARRS stack, whose
+values are compressed through `asinh` (`BSOFTEN` and `BOFFSET`); the FITS
+cutouts of the PS1 image cutout service, and the cutouts that astrocut
+linearizes, are linear and load as usual.
 
 Every pixel must be finite. BayMorph refuses an image with NaN or infinite
 pixels instead of guessing a value for them: fill them before, and list them

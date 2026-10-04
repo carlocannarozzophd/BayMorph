@@ -6,6 +6,8 @@ from pathlib import Path
 import numpy as np
 from astropy.io import fits
 
+from baymorph.core.header_metadata import ensure_linear_pixels, read_header
+
 SCIENCE_EXTENSION_NAMES = ("SCI", "IMAGE")
 """Extension names that hold the science image, in order of preference."""
 
@@ -66,15 +68,17 @@ class ImageData:
         Raises
         ------
         ValueError
-            If the selected HDU holds no two-dimensional image, or if no HDU
-            is selected and the file offers no image or several.
+            If the selected HDU holds no two-dimensional image, if no HDU is
+            selected and the file offers no image or several, or if the
+            header declares pixel values that are not linear in flux, such as
+            a Pan-STARRS stack compressed through ``BSOFTEN`` and
+            ``BOFFSET`` (AD-049).
         """
         filename = Path(filename)
 
         with fits.open(filename) as hdul:
             index = select_image_hdu(hdul, hdu)
             selected = hdul[index]
-            data = selected.data.astype(float)
             header = selected.header.copy()
             name = None
             primary_header = None
@@ -82,6 +86,12 @@ class ImageData:
             if index > 0:
                 name = str(selected.name).strip() or None
                 primary_header = hdul[0].header.copy()
+
+            ensure_linear_pixels(
+                read_header(header, primary_header=primary_header),
+                image=f"the image in HDU {index} of {filename}",
+            )
+            data = selected.data.astype(float)
 
         return cls(
             data=data,

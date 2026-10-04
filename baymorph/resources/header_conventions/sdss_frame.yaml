@@ -1,0 +1,24 @@
+# Corrected frames of the SDSS imaging pipeline (frame files), whose primary
+# HDU holds the image in nanomaggies with the sky already subtracted. The gain
+# is not in the header: the data model tabulates it by camera column and
+# filter, so this convention does not read one.
+name: sdss_frame
+title: SDSS corrected frames
+priority: 50
+references:
+  - "SDSS data model, frame: https://data.sdss.org/datamodel/files/BOSS_PHOTOOBJ/frames/RERUN/RUN/CAMCOL/frame.html"
+  - "SDSS DR12, measures of flux and magnitude: https://www.sdss4.org/dr12/algorithms/magnitudes/"
+match:
+  - keyword: NMGY
+    present: true
+quantities:
+  zeropoint:
+    value: 22.5
+    unit: mag
+    note: "The image is in nanomaggies (NMGY, the conversion from counts, is
+      already applied), and a flux of f nanomaggies has m = 22.5 - 2.5
+      log10(f)."
+  photometric_system:
+    value: AB
+    note: "A nanomaggy is close to 3.631e-6 Jy, but the SDSS calibration has
+      percent-level offsets from AB."

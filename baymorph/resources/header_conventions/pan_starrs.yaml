@@ -1,0 +1,24 @@
+# Stacks of the Pan-STARRS1 surveys, whose stored pixel values are
+# compressed through asinh. BayMorph refuses them until a documented
+# linearization is implemented (AD-049); the FITS cutouts of the PS1 image
+# cutout service are linear.
+name: pan_starrs
+title: Pan-STARRS1 stacks
+priority: 50
+references:
+  - "PS1 image cutout service: https://outerspace.stsci.edu/display/PANSTARRS/PS1+Image+Cutout+Service"
+  - "PS1 stack images: https://outerspace.stsci.edu/display/PANSTARRS/PS1+Stack+images"
+match:
+  - keyword: BSOFTEN
+    present: true
+quantities:
+  pixel_encoding:
+    keywords: [BSOFTEN]
+    value: asinh
+    requires:
+      - keyword: BOFFSET
+        present: true
+    note: "The presence of BSOFTEN and BOFFSET marks stored values v compressed
+      through asinh, whose flux is BOFFSET + BSOFTEN (10^(0.4 v) - 10^(-0.4
+      v)). The FITS cutouts of the PS1 image cutout service are already
+      linear."

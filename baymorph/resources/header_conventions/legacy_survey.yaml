@@ -1,0 +1,19 @@
+# Coadds of the DESI Legacy Imaging Surveys, in nanomaggies with the sky
+# already subtracted. The match on LEGPIPEV, the version card of the
+# legacypipe pipeline, is a prediction of the header bench (AD-049).
+name: legacy_survey
+title: Coadds of the Legacy Surveys
+priority: 50
+references:
+  - "Legacy Surveys DR10, description: https://www.legacysurvey.org/dr10/description/"
+  - "Legacy Surveys DR10, files: https://www.legacysurvey.org/dr10/files/"
+match:
+  - keyword: LEGPIPEV
+    present: true
+quantities:
+  zeropoint:
+    value: 22.5
+    unit: mag
+    note: "The coadds are in nanomaggies per pixel, and m = 22.5 - 2.5
+      log10(flux). The optical bands are on the AB system and the WISE bands
+      on the Vega system, so this convention states no photometric system."

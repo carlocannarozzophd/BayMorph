@@ -1,0 +1,32 @@
+# Images of the James Webb Space Telescope calibrated by the JWST pipeline,
+# in MJy/sr, whose SCI extension carries the mean pixel area PIXAR_SR.
+name: jwst
+title: James Webb Space Telescope images
+priority: 50
+references:
+  - "JWST user documentation, NIRCam absolute flux calibration and zeropoints: https://jwst-docs.stsci.edu/jwst-near-infrared-camera/nircam-performance/nircam-absolute-flux-calibration-and-zeropoints"
+  - "JWST pipeline documentation, the photom step: https://jwst-pipeline.readthedocs.io/en/latest/jwst/photom/main.html"
+match:
+  - keyword: TELESCOP
+    equals: JWST
+quantities:
+  zeropoint:
+    formula: "-2.5 * log10(1e6 * PIXAR_SR / 3631)"
+    unit: mag
+    requires:
+      - keyword: BUNIT
+        equals: MJy/sr
+      - keyword: FILENAME
+        contains: _i2d
+    note: "PIXAR_SR is the mean pixel area in steradians. For an image in
+      MJy/sr the documentation gives ZP_AB = -6.10 - 2.5 log10(PIXAR_SR),
+      where -6.10 rounds -2.5 log10(1e6 / 3631). The mean area holds for the
+      resampled i2d products; cal images vary in pixel area."
+  photometric_system:
+    value: AB
+    requires:
+      - keyword: BUNIT
+        equals: MJy/sr
+      - keyword: FILENAME
+        contains: _i2d
+    note: "The zeropoint derived from PIXAR_SR is on the AB system."

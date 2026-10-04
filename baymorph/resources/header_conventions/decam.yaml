@@ -1,0 +1,30 @@
+# Images of the Dark Energy Camera processed by the NOIRLab Community
+# Pipeline. An InstCal file holds one image extension per detector, so
+# data.hdu must name the detector. The amplifier gains are not read: the
+# pipeline flat-fields with dome and star flats, after which they are not the
+# gain of the image.
+name: decam
+title: DECam images of the NOIRLab Community Pipeline
+priority: 25
+references:
+  - "NOIRLab, the DECam Community Pipeline: https://noirlab.edu/science/data-services/data-reduction-software/csdc-mso-pipelines/pl206"
+  - "F. Valdes (NOIRLab), Astro Data Lab help desk, on the zeropoint and the amplifier gains of the Community Pipeline: https://datalab.noirlab.edu/help/index.php?qa=918&qa_1=which-amplifers-gain-value-do-i-use-for-decam-photometry"
+match:
+  - keyword: INSTRUME
+    equals: DECam
+quantities:
+  zeropoint:
+    keywords: [MAGZERO]
+    unit: mag
+    requires:
+      - keyword: BUNIT
+        equals: adu
+    note: "The pipeline gives MAGZERO for pixel values in ADU, m = MAGZERO -
+      2.5 log10(ADU), and MAGZPT for ADU per second; its reference catalogue
+      is Pan-STARRS north of declination -30 and Gaia or USNO-B1 south of
+      it."
+  saturation:
+    keywords: [SATURATA, SATURATB]
+    note: "SATURATA and SATURATB are the saturation levels of the two
+      amplifiers of the detector in ADU, before the calibration of the
+      image."

@@ -1,0 +1,20 @@
+# Images of hscPipe, the pipeline of the Hyper Suprime-Cam, and of the LSST
+# science pipelines it derives from, in the versions that record FLUXMAG0,
+# the flux of a zero-magnitude source in the units of the image.
+name: hscpipe
+title: Images of hscPipe that record FLUXMAG0
+priority: 50
+references:
+  - "hscPipe 7 manual, magnitude zeropoint: https://hsc.mtk.nao.ac.jp/pipedoc/pipedoc_7_e/tips_e/mag_zeropoint.html"
+  - "hscPipe 7 manual, coadding images: https://hsc.mtk.nao.ac.jp/pipedoc/pipedoc_7_e/tutorial_e/coadd.html"
+match:
+  - keyword: FLUXMAG0
+    present: true
+quantities:
+  zeropoint:
+    formula: "2.5 * log10(FLUXMAG0)"
+    unit: mag
+    note: "hscPipe 6 and earlier record FLUXMAG0 in the first HDU. From
+      hscPipe 7 the zeropoint sits in a later HDU, and the manual gives 27.0
+      mag per ADU for coadds, off by a few percent through the aperture
+      correction; the header records neither."

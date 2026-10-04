@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import math
 
 import pytest
+import yaml
 from astropy.io import fits
 
 from baymorph.core.header_metadata import (
@@ -12,6 +14,8 @@ from baymorph.core.header_metadata import (
     QUANTITIES,
     STATUSES,
     USABLE_STATUSES,
+    Formula,
+    ensure_linear_pixels,
     load_header_conventions,
     normalize_declared_unit,
     read_header,
@@ -79,7 +83,21 @@ def test_every_distributed_convention_loads_and_cites_its_sources() -> None:
 
     assert names == sorted(names)
     assert len(names) == len(set(names))
-    assert {"generic", "eso_phase3", "eso_raw", "swarp", "vst_tube"} <= set(names)
+    assert {
+        "astrocut",
+        "decam",
+        "eso_phase3",
+        "eso_raw",
+        "generic",
+        "hscpipe",
+        "hst",
+        "jwst",
+        "legacy_survey",
+        "pan_starrs",
+        "sdss_frame",
+        "swarp",
+        "vst_tube",
+    } <= set(names)
 
     for convention in conventions:
         assert convention.references
@@ -424,3 +442,368 @@ def test_no_header_reads_as_missing() -> None:
 
     assert reading.conventions == ("generic",)
     assert all(item.status == "missing" for item in reading.quantities.values())
+
+
+# The conventions of the first wave that state values or derive them through
+# formulas (AD-049, milestone 2).
+
+
+def _hst_headers(
+    bunit: str = "ELECTRONS/S",
+    filename: str = "j8xi01010_drz.fits",
+) -> tuple[fits.Header, fits.Header]:
+    """Return the primary and SCI headers of a synthetic HST product."""
+    primary = fits.Header()
+    primary["TELESCOP"] = "HST"
+    primary["INSTRUME"] = "ACS"
+    primary["FILENAME"] = filename
+    primary["EXPTIME"] = 2000.0
+    image = fits.Header()
+    image["BUNIT"] = bunit
+    image["PHOTFLAM"] = 7.0e-20
+    image["PHOTPLAM"] = 8045.0
+    _wcs_cards(image, 0.05)
+    return primary, image
+
+
+def _ps1_header() -> fits.Header:
+    """Return a synthetic header of an asinh-compressed Pan-STARRS stack."""
+    header = fits.Header()
+    header["BSOFTEN"] = 87.3959
+    header["BOFFSET"] = 2.65496
+    header["EXPTIME"] = 1260.0
+    _wcs_cards(header, 0.25)
+    return header
+
+
+def test_the_hst_zeropoint_is_derived_for_count_rates_of_drizzled_products() -> None:
+    primary, image = _hst_headers()
+
+    reading = read_header(image, primary_header=primary)
+    zeropoint = reading["zeropoint"]
+
+    assert reading.conventions[0] == "hst"
+    assert zeropoint.status == "derived"
+    assert zeropoint.value == pytest.approx(
+        -2.5 * math.log10(7.0e-20) - 5.0 * math.log10(8045.0) - 2.408,
+        rel=1e-12,
+    )
+    assert zeropoint.unit == "mag"
+    assert zeropoint.keyword == "PHOTFLAM, PHOTPLAM"
+    assert zeropoint.source == "image"
+    assert zeropoint.convention == "hst"
+    assert zeropoint.raw_value is None
+    assert reading.value("photometric_system") == "AB"
+
+
+@pytest.mark.parametrize(
+    ("bunit", "filename", "observed"),
+    [
+        ("ELECTRONS", "j8xi01abq_flt.fits", "BUNIT = 'ELECTRONS'"),
+        ("ELECTRONS/S", "ibxl01abq_flt.fits", "FILENAME = 'ibxl01abq_flt.fits'"),
+    ],
+)
+def test_the_hst_zeropoint_is_ambiguous_outside_the_documented_products(
+    bunit, filename, observed
+) -> None:
+    primary, image = _hst_headers(bunit=bunit, filename=filename)
+
+    reading = read_header(image, primary_header=primary)
+    zeropoint = reading["zeropoint"]
+
+    assert zeropoint.status == "ambiguous"
+    assert zeropoint.value is None
+    assert observed in zeropoint.note
+    assert reading["photometric_system"].status == "ambiguous"
+
+
+def test_the_jwst_zeropoint_agrees_with_the_documented_example() -> None:
+    primary = fits.Header()
+    primary["TELESCOP"] = "JWST"
+    primary["INSTRUME"] = "NIRCAM"
+    primary["FILENAME"] = "jw01234-o001_t001_nircam_clear-f200w_i2d.fits"
+    image = fits.Header()
+    image["BUNIT"] = "MJy/sr"
+    image["PIXAR_SR"] = 2.29e-14
+
+    reading = read_header(image, primary_header=primary)
+    zeropoint = reading["zeropoint"]
+
+    # The documentation gives ZP_AB = 28.0 for PIXAR_SR = 2.29e-14, through
+    # the constant -6.10 that the formula carries unrounded.
+    assert zeropoint.status == "derived"
+    assert zeropoint.value == pytest.approx(28.0, abs=1e-3)
+    assert zeropoint.value == pytest.approx(
+        -6.10 - 2.5 * math.log10(2.29e-14), abs=1e-4
+    )
+    assert reading.value("photometric_system") == "AB"
+
+
+def test_an_sdss_frame_states_its_zeropoint_and_reads_no_gain() -> None:
+    header = fits.Header()
+    header["NMGY"] = 0.0048
+    header["NMGYIVAR"] = 1.0e6
+    header["FILTER"] = "r"
+    _wcs_cards(header, 0.396)
+
+    reading = read_header(header)
+
+    assert reading.conventions == ("sdss_frame", "generic")
+    assert reading["zeropoint"].status == "convention"
+    assert reading["zeropoint"].value == pytest.approx(22.5)
+    assert reading["zeropoint"].unit == "mag"
+    assert reading["zeropoint"].keyword is None
+    assert reading.value("photometric_system") == "AB"
+    assert reading["gain"].status == "missing"
+
+    # The fields that BayMorph always read keep header values only.
+    metadata = ObservationMetadata.from_header(header, image_shape=(100, 100))
+    assert metadata.zeropoint is None
+
+
+def test_a_legacy_survey_coadd_states_its_zeropoint_but_no_system() -> None:
+    header = fits.Header()
+    header["LEGPIPEV"] = "DR10.1.3"
+    header["BUNIT"] = "nanomaggy"
+    _wcs_cards(header, 0.262)
+
+    reading = read_header(header)
+
+    assert reading.value("zeropoint") == pytest.approx(22.5)
+    assert reading["photometric_system"].status == "missing"
+    assert reading.value("image_unit") == "nanomaggy"
+
+
+@pytest.mark.parametrize(
+    ("bunit", "status"),
+    [("adu", "convention"), (None, "ambiguous"), ("electron/s", "ambiguous")],
+)
+def test_the_decam_zeropoint_holds_only_for_an_image_in_adu(bunit, status) -> None:
+    primary = fits.Header()
+    primary["INSTRUME"] = "DECam"
+    primary["MAGZERO"] = 31.6
+    image = fits.Header()
+    image["SATURATA"] = 44000.0
+    image["SATURATB"] = 42000.0
+
+    if bunit is not None:
+        image["BUNIT"] = bunit
+
+    reading = read_header(image, primary_header=primary)
+    zeropoint = reading["zeropoint"]
+
+    assert zeropoint.status == status
+    assert zeropoint.raw_value == pytest.approx(31.6)
+    assert zeropoint.source == "primary"
+    assert (zeropoint.value is None) == (status == "ambiguous")
+    assert reading["saturation"].status == "conflicting"
+
+
+def test_the_hscpipe_zeropoint_is_derived_from_fluxmag0() -> None:
+    primary = fits.Header()
+    primary["FLUXMAG0"] = 10.0 ** (0.4 * 27.0)
+
+    reading = read_header(fits.Header(), primary_header=primary)
+    zeropoint = reading["zeropoint"]
+
+    assert zeropoint.status == "derived"
+    assert zeropoint.value == pytest.approx(27.0, abs=1e-12)
+    assert zeropoint.source == "primary"
+
+
+@pytest.mark.parametrize(
+    ("fluxmag0", "note"),
+    [(-5.0, "not defined"), ("bright", "not a finite number")],
+)
+def test_a_formula_undefined_for_the_header_is_ambiguous(fluxmag0, note) -> None:
+    header = fits.Header()
+    header["FLUXMAG0"] = fluxmag0
+
+    zeropoint = read_header(header)["zeropoint"]
+
+    assert zeropoint.status == "ambiguous"
+    assert zeropoint.value is None
+    assert note in zeropoint.note
+
+
+def test_a_pan_starrs_stack_declares_asinh_pixels_and_is_refused() -> None:
+    reading = read_header(_ps1_header())
+    encoding = reading["pixel_encoding"]
+
+    assert encoding.status == "convention"
+    assert encoding.value == "asinh"
+    assert encoding.keyword == "BSOFTEN"
+
+    with pytest.raises(ValueError, match="asinh encoding"):
+        ensure_linear_pixels(reading, image="the stack")
+
+
+def test_a_compression_without_boffset_is_not_established_and_refused() -> None:
+    header = _ps1_header()
+    del header["BOFFSET"]
+
+    reading = read_header(header)
+
+    assert reading["pixel_encoding"].status == "ambiguous"
+    assert "the header has no BOFFSET" in reading["pixel_encoding"].note
+
+    with pytest.raises(ValueError, match="does not establish the encoding"):
+        ensure_linear_pixels(reading, image="the stack")
+
+
+def test_an_astrocut_cutout_is_linear_despite_the_compression_keywords() -> None:
+    header = _ps1_header()
+    header["HISTORY"] = (
+        "Pixel values converted from asinh-scaled flux to linear flux using the "
+        "BSOFTEN/BOFFSET keywords."
+    )
+
+    reading = read_header(header)
+
+    assert reading.conventions[:2] == ("astrocut", "pan_starrs")
+    assert reading["pixel_encoding"].status == "convention"
+    assert reading.value("pixel_encoding") == "linear"
+    ensure_linear_pixels(reading, image="the cutout")
+
+
+def test_an_image_without_an_encoding_is_taken_as_linear() -> None:
+    reading = read_header(_generic_header())
+
+    assert reading["pixel_encoding"].status == "missing"
+    ensure_linear_pixels(reading, image="the image")
+
+
+def test_a_formula_evaluates_only_where_it_is_defined() -> None:
+    formula = Formula.parse("2.5 * log10(F) + sqrt(G) - X ** 0.5")
+
+    assert formula.keywords == ("F", "G", "X")
+    assert formula.evaluate({"F": 100.0, "G": 4.0, "X": 9.0}) == pytest.approx(4.0)
+    assert formula.evaluate({"F": -1.0, "G": 4.0, "X": 9.0}) is None
+    assert formula.evaluate({"F": 100.0, "G": 4.0, "X": -9.0}) is None
+    assert Formula.parse("1 / X").evaluate({"X": 0.0}) is None
+    assert Formula.parse("exp(X)").evaluate({"X": 1.0e6}) is None
+    assert Formula.parse("-ln(X)").evaluate({"X": math.e}) == pytest.approx(-1.0)
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("__import__('os').system('true')", "may use only"),
+        ("PHOTFLAM.real", "may use only"),
+        ("log10(PHOTFLAM, 2)", "may use only"),
+        ("sin(PHOTFLAM)", "may use only"),
+        ("PHOTFLAM if PHOTFLAM else 1", "may use only"),
+        ("'a' + PHOTFLAM", "only numbers"),
+        ("True + PHOTFLAM", "only numbers"),
+        ("log10 * 2", "as a value"),
+        ("2.5 * 10", "reads no keyword"),
+        ("2.5 *", "not an expression"),
+        ("", "non-empty"),
+    ],
+)
+def test_malformed_formulas_are_rejected(text, message) -> None:
+    with pytest.raises(ValueError, match=message):
+        Formula.parse(text)
+
+
+def test_a_formula_nested_too_deeply_is_rejected() -> None:
+    with pytest.raises(ValueError, match="nested too deeply"):
+        Formula.parse("+".join(["1"] * 20000) + "+X")
+
+
+@pytest.mark.parametrize(
+    ("quantity", "spec", "message"),
+    [
+        (
+            "zeropoint",
+            {"formula": "2.5 * log10(F)", "keywords": ["F"], "unit": "mag"},
+            "neither keywords nor",
+        ),
+        ("zeropoint", {"formula": "2.5 * log10(F)"}, "needs its unit"),
+        ("filter", {"formula": "F"}, "only a number"),
+        ("zeropoint", {"formula": "import os", "unit": "mag"}, "not an expression"),
+        ("zeropoint", {"value": 22.5}, "needs its unit"),
+        ("zeropoint", {"value": "22.5", "unit": "mag"}, "finite number"),
+        ("n_combined", {"value": 2.5}, "finite integer"),
+        ("photometric_system", {"value": ""}, "non-empty string"),
+        ("photometric_system", {"value": "AB", "unit": "mag"}, "takes no unit"),
+        (
+            "psf_fwhm",
+            {"value": 1.0, "unit_from_comment": True, "units": ["arcsec"]},
+            "not from the header",
+        ),
+        (
+            "zeropoint",
+            {"value": 22.5, "unit": "mag", "requires": {"keyword": "B"}},
+            "list of rules",
+        ),
+        (
+            "zeropoint",
+            {"value": 22.5, "unit": "mag", "requires": [{"keyword": "B"}]},
+            "exactly one",
+        ),
+    ],
+)
+def test_malformed_values_formulas_and_requirements_are_rejected(
+    tmp_path, quantity, spec, message
+) -> None:
+    path = tmp_path / "convention.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "name": "a",
+                "title": "x",
+                "priority": 1,
+                "references": ["a"],
+                "match": "always",
+                "quantities": {quantity: spec},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=message):
+        load_header_conventions([path])
+
+
+def test_a_user_convention_derives_a_quantity_under_its_requirements(
+    tmp_path,
+) -> None:
+    path = tmp_path / "camera.yaml"
+    path.write_text(
+        "\n".join(
+            [
+                "name: example_camera",
+                "title: Example camera",
+                "priority: 50",
+                "references:",
+                "  - Example camera manual, section 4.",
+                "match:",
+                "  - keyword: INSTRUME",
+                "    equals: example camera",
+                "quantities:",
+                "  zeropoint:",
+                '    formula: "ZPRATE + 2.5 * log10(EXPTIME)"',
+                "    unit: mag",
+                "    requires:",
+                "      - keyword: BUNIT",
+                "        equals: ADU",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    header = _generic_header()
+    header["ZPRATE"] = 25.0
+    conventions = load_header_conventions([path])
+
+    zeropoint = read_header(header, conventions=conventions)["zeropoint"]
+
+    assert zeropoint.status == "derived"
+    assert zeropoint.value == pytest.approx(25.0 + 2.5 * math.log10(300.0))
+    assert zeropoint.keyword == "ZPRATE, EXPTIME"
+
+    header["BUNIT"] = "ADU/s"
+    zeropoint = read_header(header, conventions=conventions)["zeropoint"]
+
+    assert zeropoint.status == "ambiguous"
+    assert "BUNIT is 'ADU'" in zeropoint.note

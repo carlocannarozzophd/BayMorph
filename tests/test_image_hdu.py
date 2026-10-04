@@ -254,3 +254,49 @@ def test_the_config_maker_omits_the_default_hdu(tmp_path) -> None:
     )
 
     assert "hdu" not in config["data"]
+
+
+def _compressed_stack_header() -> fits.Header:
+    """Return a header with the asinh compression keywords of Pan-STARRS."""
+    header = _wcs_header()
+    header["BSOFTEN"] = 87.3959
+    header["BOFFSET"] = 2.65496
+    return header
+
+
+def test_an_asinh_compressed_stack_is_refused_at_loading(tmp_path) -> None:
+    path = tmp_path / "stack.fits"
+    fits.PrimaryHDU(data=_image(), header=_compressed_stack_header()).writeto(path)
+
+    with pytest.raises(ValueError, match="asinh encoding of the pixel values"):
+        ImageData.from_fits(path)
+
+    with pytest.raises(ValueError, match="cutout service are already linear"):
+        Observation.from_fits(path)
+
+
+def test_a_compressed_stack_in_a_tile_compressed_extension_is_refused(
+    tmp_path,
+) -> None:
+    path = tmp_path / "stack.fits.fz"
+    _write_extensions(
+        path,
+        [fits.CompImageHDU(data=_image(), header=_compressed_stack_header())],
+    )
+
+    with pytest.raises(ValueError, match="HDU 1 of"):
+        ImageData.from_fits(path)
+
+
+def test_a_cutout_linearized_by_astrocut_is_loaded(tmp_path) -> None:
+    path = tmp_path / "cutout.fits"
+    header = _compressed_stack_header()
+    header["HISTORY"] = (
+        "Pixel values converted from asinh-scaled flux to linear flux using the "
+        "BSOFTEN/BOFFSET keywords."
+    )
+    fits.PrimaryHDU(data=_image(), header=header).writeto(path)
+
+    image = ImageData.from_fits(path)
+
+    assert np.array_equal(image.data, fits.getdata(path).astype(float))

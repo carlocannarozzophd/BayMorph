@@ -11,6 +11,19 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* The header conventions of the first wave of AD-049, milestone 2: SDSS
+  frames, the coadds of the Legacy Surveys, HST and JWST images, DECam
+  images of the NOIRLab Community Pipeline, hscPipe images that record
+  `FLUXMAG0`, Pan-STARRS stacks and the cutouts that astrocut linearizes,
+  each written from the documentation it cites. A convention may now state
+  a value, such as the zeropoint 22.5 of images in nanomaggies, or derive
+  one through a formula over header keywords, such as the AB zeropoint of
+  HST from `PHOTFLAM` and `PHOTPLAM`, and may require conditions on the
+  header for its reading to hold: the zeropoints of HST and JWST are derived
+  only for the drizzled images in electrons per second and the `i2d`
+  mosaics in MJy/sr that their documentation covers. The predictions of the
+  header bench for these conventions are added to the proposal of AD-049
+  before any real header is read; the bench itself is not yet run.
 * BayMorph reads the header of a FITS image through conventions, milestone 1
   of AD-049 (`baymorph/core/header_metadata.py`). Each quantity carries its
   keyword, its convention and a status, and no unit is inferred from a
@@ -271,6 +284,12 @@ and the project follows Semantic Versioning in spirit.
 
 ### Changed
 
+* BayMorph refuses, when it loads a FITS image, an image whose header
+  declares pixel values that are not linear in flux, as AD-049 decides: a
+  Pan-STARRS stack, whose values are compressed through `asinh` with
+  `BSOFTEN` and `BOFFSET`, was read as if it were linear. The FITS cutouts
+  of the PS1 image cutout service and the cutouts that astrocut linearizes
+  are linear and load as before.
 * The documentation site is rewritten for users. A User Guide gives one
   page to each stage of an analysis, the runner, the configuration, the
   image and its cutout, the masks, the sky and the noise, the PSF, the fit,

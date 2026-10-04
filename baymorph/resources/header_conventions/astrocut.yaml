@@ -1,0 +1,18 @@
+# Cutouts written by astrocut, the cutout tool of MAST. It converts the
+# asinh-compressed values of a Pan-STARRS stack to linear flux and records
+# the conversion in a HISTORY card, while it keeps BSOFTEN and BOFFSET in the
+# header.
+name: astrocut
+title: Cutouts linearized by astrocut
+priority: 60
+references:
+  - "astrocut, FITSCutout._linearize_asinh_flux and the HISTORY card it writes: https://github.com/spacetelescope/astrocut/blob/main/astrocut/fits_cutout.py"
+  - "astrocut pull request 200, scaling fix for PS1 stack images: https://github.com/spacetelescope/astrocut/pull/200"
+match:
+  - keyword: HISTORY
+    contains: converted from asinh-scaled flux to linear flux
+quantities:
+  pixel_encoding:
+    value: linear
+    note: "astrocut converted the asinh-compressed values of the stack to
+      linear flux; BSOFTEN and BOFFSET describe the compression it undid."

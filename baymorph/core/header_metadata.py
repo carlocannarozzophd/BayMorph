@@ -6,13 +6,20 @@ reads, and the documentation it rests on. The conventions distributed with
 BayMorph live in ``baymorph/resources/header_conventions``; a user may add
 files of the same form.
 
+A convention reads a quantity from keywords, states its value as a constant
+of the convention, or derives it from keywords through a formula, and it may
+require conditions on the header, such as the unit of the image, for its
+reading to hold.
+
 Every quantity of a reading carries its provenance, the keyword and the
 convention, and one status:
 
 - ``explicit``: the header itself declares the value and, for a number, its
   unit;
-- ``convention``: a matched convention documents the meaning and unit;
-- ``derived``: computed from other header content, such as the WCS;
+- ``convention``: a matched convention documents the meaning and unit, or
+  states the value;
+- ``derived``: computed from other header content, such as the WCS or the
+  keywords of a formula;
 - ``ambiguous``: present, but its unit or meaning is not established;
 - ``conflicting``: present under several keywords with different values;
 - ``missing``: absent.
@@ -23,10 +30,12 @@ usable value; the others keep the raw header value for inspection only.
 
 from __future__ import annotations
 
+import ast
 import math
+import operator
 import warnings
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
@@ -55,6 +64,9 @@ USABLE_STATUSES = frozenset({"explicit", "convention", "derived"})
 
 IMAGE_UNIT = "image"
 """Unit of a quantity expressed in the units of the image pixels (BUNIT)."""
+
+LINEAR_ENCODING = "linear"
+"""Encoding of pixel values that are linear in flux, the only one fitted."""
 
 
 @dataclass(frozen=True)
@@ -140,6 +152,12 @@ QUANTITIES: dict[str, QuantityDefinition] = {
         QuantityDefinition(
             "combine_type", "string", "Method that combined the exposures."
         ),
+        QuantityDefinition(
+            "pixel_encoding",
+            "string",
+            "Encoding of the pixel values: linear in flux, or a documented "
+            "compression such as asinh.",
+        ),
     )
 }
 """Quantities that conventions may read, by name."""
@@ -154,7 +172,31 @@ _UNIT_TOKENS: dict[str, frozenset[str]] = {
 }
 
 _SPEC_KEYS = frozenset(
-    {"keywords", "unit", "unit_keywords", "unit_from_comment", "units", "note"}
+    {
+        "keywords",
+        "value",
+        "formula",
+        "requires",
+        "unit",
+        "unit_keywords",
+        "unit_from_comment",
+        "units",
+        "note",
+    }
+)
+_FORMULA_FUNCTIONS: Mapping[str, Callable[[float], float]] = MappingProxyType(
+    {"log10": math.log10, "ln": math.log, "exp": math.exp, "sqrt": math.sqrt}
+)
+_FORMULA_OPERATORS: Mapping[type, Callable[[float, float], float]] = (
+    MappingProxyType(
+        {
+            ast.Add: operator.add,
+            ast.Sub: operator.sub,
+            ast.Mult: operator.mul,
+            ast.Div: operator.truediv,
+            ast.Pow: operator.pow,
+        }
+    )
 )
 _CONVENTION_KEYS = frozenset(
     {"name", "title", "priority", "references", "match", "quantities"}
@@ -166,8 +208,164 @@ _RELATIVE_AGREEMENT = 1e-9
 
 
 @dataclass(frozen=True)
+class Formula:
+    """An arithmetic expression over header keywords.
+
+    The expression may use numbers, header keywords as names, the operators
+    ``+``, ``-``, ``*``, ``/`` and ``**``, parentheses, and the functions
+    ``log10``, ``ln``, ``exp`` and ``sqrt``. A keyword can enter an
+    expression only when its name is a valid identifier.
+
+    Parameters
+    ----------
+    text : str
+        The expression as the convention writes it.
+    keywords : tuple of str
+        Keywords the expression reads, in order of first appearance.
+    """
+
+    text: str
+    keywords: tuple[str, ...]
+    tree: ast.Expression = field(repr=False, compare=False)
+
+    @classmethod
+    def parse(cls, text: Any) -> Formula:
+        """Parse and validate an expression.
+
+        Parameters
+        ----------
+        text : str
+            The expression.
+
+        Returns
+        -------
+        Formula
+            The validated expression.
+
+        Raises
+        ------
+        ValueError
+            If the expression is empty, reads no keyword, or uses anything
+            beyond numbers, keywords, the arithmetic operators and the
+            allowed functions.
+        """
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError("a formula must be a non-empty expression")
+
+        keywords: list[str] = []
+
+        try:
+            tree = ast.parse(text.strip(), mode="eval")
+            _check_formula_node(tree.body, keywords, text)
+        except SyntaxError as error:
+            raise ValueError(
+                f"formula {text!r} is not an expression: {error.msg}"
+            ) from None
+        except RecursionError:
+            raise ValueError(f"formula {text[:40]!r}... is nested too deeply") from None
+
+        if not keywords:
+            raise ValueError(
+                f"formula {text!r} reads no keyword; state a constant as a value"
+            )
+
+        return cls(text=text.strip(), keywords=tuple(keywords), tree=tree)
+
+    def evaluate(self, values: Mapping[str, float]) -> float | None:
+        """Return the value of the expression, or None where it is undefined.
+
+        Parameters
+        ----------
+        values : mapping of str to float
+            Value of every keyword of the expression.
+
+        Returns
+        -------
+        float or None
+            The finite real value, or None when the expression is undefined
+            for these values, such as the logarithm of a negative number.
+        """
+        try:
+            result = _evaluate_formula_node(self.tree.body, values)
+        except (ArithmeticError, TypeError, ValueError):
+            return None
+
+        if isinstance(result, complex) or not math.isfinite(result):
+            return None
+
+        return float(result)
+
+
+def _check_formula_node(node: ast.AST, keywords: list[str], text: str) -> None:
+    """Accept only the nodes a formula may use, collecting its keywords."""
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, bool) or not isinstance(node.value, (int, float)):
+            raise ValueError(f"formula {text!r} may hold only numbers as constants")
+        return
+
+    if isinstance(node, ast.Name):
+        if node.id in _FORMULA_FUNCTIONS:
+            raise ValueError(f"formula {text!r} uses the function {node.id} as a value")
+        if node.id not in keywords:
+            keywords.append(node.id)
+        return
+
+    if isinstance(node, ast.BinOp) and type(node.op) in _FORMULA_OPERATORS:
+        _check_formula_node(node.left, keywords, text)
+        _check_formula_node(node.right, keywords, text)
+        return
+
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+        _check_formula_node(node.operand, keywords, text)
+        return
+
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in _FORMULA_FUNCTIONS
+        and len(node.args) == 1
+        and not node.keywords
+    ):
+        _check_formula_node(node.args[0], keywords, text)
+        return
+
+    raise ValueError(
+        f"formula {text!r} may use only numbers, keywords, the operators "
+        "+ - * / **, parentheses and the functions "
+        + ", ".join(_FORMULA_FUNCTIONS)
+    )
+
+
+def _evaluate_formula_node(node: ast.AST, values: Mapping[str, float]) -> float:
+    """Evaluate a validated formula node."""
+    if isinstance(node, ast.Constant):
+        return float(node.value)
+
+    if isinstance(node, ast.Name):
+        return values[node.id]
+
+    if isinstance(node, ast.BinOp):
+        return _FORMULA_OPERATORS[type(node.op)](
+            _evaluate_formula_node(node.left, values),
+            _evaluate_formula_node(node.right, values),
+        )
+
+    if isinstance(node, ast.UnaryOp):
+        operand = _evaluate_formula_node(node.operand, values)
+        return -operand if isinstance(node.op, ast.USub) else operand
+
+    return _FORMULA_FUNCTIONS[node.func.id](
+        _evaluate_formula_node(node.args[0], values)
+    )
+
+
+@dataclass(frozen=True)
 class QuantitySpec:
     """How one convention reads one quantity.
+
+    A quantity is read from ``keywords``, stated by ``value``, or derived by
+    ``formula``. A value given with keywords applies only when one of them
+    is present: they are the evidence the convention relies on.
 
     Parameters
     ----------
@@ -185,14 +383,24 @@ class QuantitySpec:
         ``unit_from_comment``.
     note : str, optional
         What the documentation says about the keyword.
+    value : object, optional
+        Value that the convention states.
+    formula : Formula, optional
+        Expression that derives the value from header keywords.
+    requires : tuple of MatchRule
+        Rules that the header must satisfy for the reading to hold, such as
+        the unit of the image. When one fails, the quantity is ambiguous.
     """
 
-    keywords: tuple[str, ...]
+    keywords: tuple[str, ...] = ()
     unit: str | None = None
     unit_keywords: tuple[str, ...] = ()
     unit_from_comment: bool = False
     units: tuple[str, ...] = ()
     note: str | None = None
+    value: Any = None
+    formula: Formula | None = None
+    requires: tuple[MatchRule, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -229,6 +437,34 @@ class MatchRule:
             return text.startswith(self.startswith.strip().lower())
 
         return self.contains.strip().lower() in text
+
+    def describe(self) -> str:
+        """Describe the rule in words, for the notes of a reading."""
+        if self.keyword_prefix is not None:
+            return f"a keyword starts with {self.keyword_prefix!r}"
+
+        if self.present:
+            return f"{self.keyword} is present"
+
+        if self.equals is not None:
+            return f"{self.keyword} is {self.equals!r}"
+
+        if self.startswith is not None:
+            return f"{self.keyword} starts with {self.startswith!r}"
+
+        return f"{self.keyword} contains {self.contains!r}"
+
+    def observe(self, lookup: _HeaderLookup) -> str:
+        """Describe what the header holds for the keyword of the rule."""
+        if self.keyword is None:
+            return f"no keyword starts with {self.keyword_prefix!r}"
+
+        found = lookup.find(self.keyword)
+
+        if found is None:
+            return f"the header has no {self.keyword}"
+
+        return f"the header has {self.keyword} = {found.value!r}"
 
 
 @dataclass(frozen=True)
@@ -286,15 +522,17 @@ class HeaderQuantity:
     unit : str, optional
         Unit of the value. ``"image"`` means the units of the image pixels.
     keyword : str, optional
-        Keyword the value was read from.
-    source : {"image", "primary"}, optional
+        Keyword the value was read from; for a derived value, the keywords
+        of its formula, separated by commas.
+    source : {"image", "primary", "image, primary"}, optional
         Header that holds the keyword: the header of the image HDU, or the
-        primary header inherited by an image stored in an extension.
+        primary header inherited by an image stored in an extension; both
+        when the keywords of a formula come from both.
     convention : str, optional
         Convention that read the value.
     raw_value : object or None
         The value as written in the header, kept for inspection whatever the
-        status.
+        status. None for a value that a convention states or derives.
     note : str, optional
         Explanation of the status.
     candidates : tuple of (str, object)
@@ -511,26 +749,90 @@ def read_header(
     )
 
 
+def ensure_linear_pixels(reading: HeaderReading, *, image: str) -> None:
+    """Refuse an image whose pixel values are not linear in flux (AD-049).
+
+    An image whose header declares no encoding is taken as linear, as
+    BayMorph always has.
+
+    Parameters
+    ----------
+    reading : HeaderReading
+        Reading of the header of the image.
+    image : str
+        Description of the image for the error message.
+
+    Raises
+    ------
+    ValueError
+        If the reading states an encoding other than linear, or cannot
+        establish the encoding its convention reads.
+    """
+    quantity = reading["pixel_encoding"]
+
+    if quantity.status == "missing":
+        return
+
+    if quantity.usable and quantity.value == LINEAR_ENCODING:
+        return
+
+    declared = (
+        f"declares the {quantity.value} encoding"
+        if quantity.usable
+        else "does not establish the encoding"
+    )
+
+    raise ValueError(
+        f"BayMorph refuses {image}: its header {declared} of the pixel values "
+        f"({quantity.keyword or 'no keyword'}, convention "
+        f"{quantity.convention}), and BayMorph fits only pixel values linear "
+        "in flux until a documented linearization is implemented (AD-049)."
+        + ("" if quantity.note is None else f" {quantity.note}")
+    )
+
+
 def _read_quantity(
     definition: QuantityDefinition,
     conventions: Sequence[HeaderConvention],
     lookup: _HeaderLookup,
 ) -> HeaderQuantity:
-    """Read one quantity through the first convention that finds it."""
+    """Read one quantity through the first convention that finds it.
+
+    A convention finds a quantity when the header holds one of its keywords,
+    or every keyword of its formula; a value it states without keywords is
+    found as soon as the convention matches. The convention that finds the
+    quantity decides it, and its requirements decide whether the reading
+    holds.
+    """
     for convention in conventions:
         spec = convention.quantities.get(definition.name)
 
         if spec is None:
             continue
 
+        names = spec.keywords if spec.formula is None else spec.formula.keywords
         found = [
             card
-            for card in (lookup.find(keyword) for keyword in spec.keywords)
+            for card in (lookup.find(keyword) for keyword in names)
             if card is not None and not _is_blank(card.value)
         ]
 
-        if not found:
+        if names and not found:
             continue
+
+        if spec.formula is not None and len(found) < len(names):
+            continue
+
+        unmet = next((rule for rule in spec.requires if not rule.matches(lookup)), None)
+
+        if unmet is not None:
+            return _resolve_unmet(definition, spec, found, convention, unmet, lookup)
+
+        if spec.formula is not None:
+            return _resolve_formula(definition, spec, found, convention)
+
+        if spec.value is not None:
+            return _resolve_value(definition, spec, found, convention)
 
         if definition.kind == "string":
             return _resolve_string(definition, spec, found, convention)
@@ -538,6 +840,136 @@ def _read_quantity(
         return _resolve_number(definition, spec, found, convention, lookup)
 
     return HeaderQuantity(name=definition.name, status="missing")
+
+
+def _resolve_unmet(
+    definition: QuantityDefinition,
+    spec: QuantitySpec,
+    found: Sequence[_Found],
+    convention: HeaderConvention,
+    rule: MatchRule,
+    lookup: _HeaderLookup,
+) -> HeaderQuantity:
+    """Report a quantity whose convention does not hold for this header."""
+    raw_value = None
+
+    if found and spec.formula is None and spec.value is None:
+        raw_value = found[0].value
+
+        if definition.kind == "string":
+            raw_value = str(raw_value).strip()
+        else:
+            number = _finite_number(raw_value, definition.kind)
+            raw_value = raw_value if number is None else number
+
+    return HeaderQuantity(
+        name=definition.name,
+        status="ambiguous",
+        keyword=_keywords_of(found, spec),
+        source=_sources_of(found, spec),
+        convention=convention.name,
+        raw_value=raw_value,
+        note=_join_notes(
+            spec.note,
+            f"The convention reads it only when {rule.describe()}, and "
+            f"{rule.observe(lookup)}.",
+        ),
+        candidates=tuple((card.keyword, card.value) for card in found),
+    )
+
+
+def _resolve_value(
+    definition: QuantityDefinition,
+    spec: QuantitySpec,
+    found: Sequence[_Found],
+    convention: HeaderConvention,
+) -> HeaderQuantity:
+    """Resolve a quantity whose value the convention states."""
+    return HeaderQuantity(
+        name=definition.name,
+        status="convention",
+        value=spec.value,
+        unit=spec.unit,
+        keyword=_keywords_of(found, spec),
+        source=_sources_of(found, spec),
+        convention=convention.name,
+        note=spec.note,
+        candidates=tuple((card.keyword, card.value) for card in found),
+    )
+
+
+def _resolve_formula(
+    definition: QuantityDefinition,
+    spec: QuantitySpec,
+    found: Sequence[_Found],
+    convention: HeaderConvention,
+) -> HeaderQuantity:
+    """Derive a number through the formula of a convention."""
+    formula = spec.formula
+    common = {
+        "name": definition.name,
+        "keyword": _keywords_of(found, spec),
+        "source": _sources_of(found, spec),
+        "convention": convention.name,
+        "candidates": tuple((card.keyword, card.value) for card in found),
+    }
+    values = {}
+
+    for card in found:
+        number = _finite_number(card.value, "number")
+
+        if number is None:
+            return HeaderQuantity(
+                status="ambiguous",
+                note=_join_notes(spec.note, f"{card.keyword} is not a finite number."),
+                **common,
+            )
+
+        values[card.keyword] = number
+
+    result = formula.evaluate(values)
+
+    if result is None:
+        return HeaderQuantity(
+            status="ambiguous",
+            note=_join_notes(
+                spec.note,
+                f"The formula {formula.text} is not defined for these values.",
+            ),
+            **common,
+        )
+
+    return HeaderQuantity(
+        status="derived",
+        value=result,
+        unit=spec.unit,
+        note=_join_notes(spec.note, f"Derived as {formula.text}."),
+        **common,
+    )
+
+
+def _keywords_of(found: Sequence[_Found], spec: QuantitySpec) -> str | None:
+    """Return the keyword a value rests on, or those of its formula."""
+    if not found:
+        return None
+
+    if spec.formula is not None:
+        return ", ".join(card.keyword for card in found)
+
+    return found[0].keyword
+
+
+def _sources_of(found: Sequence[_Found], spec: QuantitySpec) -> str | None:
+    """Return the header that holds the keywords a value rests on."""
+    if not found:
+        return None
+
+    if spec.formula is None:
+        return found[0].source
+
+    sources = {card.source for card in found}
+
+    return ", ".join(source for source in ("image", "primary") if source in sources)
 
 
 def _resolve_string(
@@ -962,7 +1394,11 @@ def _parse_convention(document: Any, *, source: str) -> HeaderConvention:
                 f"{quantity!r}; known: {', '.join(sorted(QUANTITIES))}."
             )
 
-        specs[quantity] = _parse_spec(spec, source=f"{source}: {quantity}")
+        specs[quantity] = _parse_spec(
+            spec,
+            definition=QUANTITIES[quantity],
+            source=f"{source}: {quantity}",
+        )
 
     return HeaderConvention(
         name=name.strip(),
@@ -986,48 +1422,50 @@ def _parse_rules(match: Any, *, source: str) -> tuple[MatchRule, ...] | None:
             "non-empty list of rules."
         )
 
-    rules = []
+    return tuple(_parse_rule(rule, source=source) for rule in match)
 
-    for rule in match:
-        if not isinstance(rule, Mapping) or set(rule) - _RULE_KEYS:
-            raise ValueError(f"Header convention {source}: malformed rule {rule!r}.")
 
-        if "keyword_prefix" in rule:
-            if set(rule) != {"keyword_prefix"}:
-                raise ValueError(
-                    f"Header convention {source}: a keyword_prefix rule takes "
-                    "no other field."
-                )
-            rules.append(MatchRule(keyword_prefix=str(rule["keyword_prefix"])))
-            continue
+def _parse_rule(rule: Any, *, source: str) -> MatchRule:
+    """Validate one rule on a header, of a match or of a requirement."""
+    if not isinstance(rule, Mapping) or set(rule) - _RULE_KEYS:
+        raise ValueError(f"Header convention {source}: malformed rule {rule!r}.")
 
-        tests = set(rule) & {"present", "equals", "startswith", "contains"}
-
-        if "keyword" not in rule or len(tests) != 1:
+    if "keyword_prefix" in rule:
+        if set(rule) != {"keyword_prefix"}:
             raise ValueError(
-                f"Header convention {source}: a rule needs a keyword and exactly "
-                "one of present, equals, startswith or contains."
+                f"Header convention {source}: a keyword_prefix rule takes "
+                "no other field."
             )
+        return MatchRule(keyword_prefix=str(rule["keyword_prefix"]))
 
-        if "present" in rule and rule["present"] is not True:
-            raise ValueError(
-                f"Header convention {source}: present must be true when given."
-            )
+    tests = set(rule) & {"present", "equals", "startswith", "contains"}
 
-        rules.append(
-            MatchRule(
-                keyword=str(rule["keyword"]),
-                present="present" in rule,
-                equals=_optional_text(rule.get("equals")),
-                startswith=_optional_text(rule.get("startswith")),
-                contains=_optional_text(rule.get("contains")),
-            )
+    if "keyword" not in rule or len(tests) != 1:
+        raise ValueError(
+            f"Header convention {source}: a rule needs a keyword and exactly "
+            "one of present, equals, startswith or contains."
         )
 
-    return tuple(rules)
+    if "present" in rule and rule["present"] is not True:
+        raise ValueError(
+            f"Header convention {source}: present must be true when given."
+        )
+
+    return MatchRule(
+        keyword=str(rule["keyword"]),
+        present="present" in rule,
+        equals=_optional_text(rule.get("equals")),
+        startswith=_optional_text(rule.get("startswith")),
+        contains=_optional_text(rule.get("contains")),
+    )
 
 
-def _parse_spec(spec: Any, *, source: str) -> QuantitySpec:
+def _parse_spec(
+    spec: Any,
+    *,
+    definition: QuantityDefinition,
+    source: str,
+) -> QuantitySpec:
     """Validate how a convention reads one quantity."""
     if not isinstance(spec, Mapping) or set(spec) - _SPEC_KEYS:
         raise ValueError(
@@ -1035,11 +1473,19 @@ def _parse_spec(spec: Any, *, source: str) -> QuantitySpec:
             f"{sorted(set(spec) - _SPEC_KEYS) if isinstance(spec, Mapping) else spec}."
         )
 
-    keywords = spec.get("keywords")
+    keywords = spec.get("keywords", [])
+    has_value = "value" in spec
+    formula_text = spec.get("formula")
+
+    if formula_text is not None and (keywords or has_value):
+        raise ValueError(
+            f"Header convention {source}: a formula takes neither keywords nor "
+            "a value."
+        )
 
     if (
         not isinstance(keywords, list)
-        or not keywords
+        or (not keywords and not has_value and formula_text is None)
         or not all(isinstance(item, str) and item.strip() for item in keywords)
     ):
         raise ValueError(f"Header convention {source}: keywords must be listed.")
@@ -1067,14 +1513,92 @@ def _parse_spec(spec: Any, *, source: str) -> QuantitySpec:
             "convention or declared by the header, not both."
         )
 
+    if declares and (has_value or formula_text is not None):
+        raise ValueError(
+            f"Header convention {source}: a stated or derived value takes its "
+            "unit from the convention, not from the header."
+        )
+
+    unit = _optional_text(spec.get("unit"))
+    value = None
+    formula = None
+
+    if has_value:
+        value = _parse_value(spec["value"], definition, unit, source)
+
+    if formula_text is not None:
+        if definition.kind != "number":
+            raise ValueError(
+                f"Header convention {source}: only a number can be derived by "
+                "a formula."
+            )
+
+        if unit is None:
+            raise ValueError(
+                f"Header convention {source}: a derived number needs its unit."
+            )
+
+        try:
+            formula = Formula.parse(formula_text)
+        except ValueError as error:
+            raise ValueError(f"Header convention {source}: {error}.") from None
+
+    requires = spec.get("requires", [])
+
+    if not isinstance(requires, list):
+        raise ValueError(
+            f"Header convention {source}: requires must be a list of rules."
+        )
+
     return QuantitySpec(
         keywords=tuple(item.strip() for item in keywords),
-        unit=_optional_text(spec.get("unit")),
+        unit=unit,
         unit_keywords=tuple(str(item) for item in spec.get("unit_keywords", ())),
         unit_from_comment=bool(spec.get("unit_from_comment", False)),
         units=units,
         note=_optional_text(spec.get("note")),
+        value=value,
+        formula=formula,
+        requires=tuple(_parse_rule(rule, source=source) for rule in requires),
     )
+
+
+def _parse_value(
+    value: Any,
+    definition: QuantityDefinition,
+    unit: str | None,
+    source: str,
+) -> str | float | int:
+    """Validate a value that a convention states."""
+    if definition.kind == "string":
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(
+                f"Header convention {source}: the value must be a non-empty "
+                "string."
+            )
+
+        if unit is not None:
+            raise ValueError(f"Header convention {source}: a string takes no unit.")
+
+        return value.strip()
+
+    number = (
+        None if isinstance(value, str) else _finite_number(value, definition.kind)
+    )
+
+    if number is None:
+        raise ValueError(
+            f"Header convention {source}: the value must be a finite "
+            + ("integer." if definition.kind == "integer" else "number.")
+        )
+
+    if definition.kind == "number" and unit is None:
+        raise ValueError(
+            f"Header convention {source}: a number that the convention states "
+            "needs its unit."
+        )
+
+    return number
 
 
 def _optional_text(value: Any) -> str | None:
@@ -1145,14 +1669,17 @@ def _format_value(value: Any) -> str:
 __all__ = [
     "DERIVED_QUANTITIES",
     "IMAGE_UNIT",
+    "LINEAR_ENCODING",
     "QUANTITIES",
     "STATUSES",
     "USABLE_STATUSES",
+    "Formula",
     "HeaderConvention",
     "HeaderQuantity",
     "HeaderReading",
     "QuantityDefinition",
     "QuantitySpec",
+    "ensure_linear_pixels",
     "load_header_conventions",
     "normalize_declared_unit",
     "read_celestial_wcs",

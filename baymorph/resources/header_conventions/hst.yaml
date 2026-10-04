@@ -1,0 +1,33 @@
+# Images of the Hubble Space Telescope calibrated by the STScI pipelines. The
+# SCI extensions carry the inverse sensitivity PHOTFLAM and the pivot
+# wavelength PHOTPLAM, and the primary header the file name and the telescope.
+name: hst
+title: Hubble Space Telescope images
+priority: 50
+references:
+  - "STScI, ACS zeropoints: https://www.stsci.edu/hst/instrumentation/acs/data-analysis/zeropoints"
+match:
+  - keyword: TELESCOP
+    equals: HST
+quantities:
+  zeropoint:
+    formula: "-2.5 * log10(PHOTFLAM) - 5 * log10(PHOTPLAM) - 2.408"
+    unit: mag
+    requires:
+      - keyword: BUNIT
+        equals: ELECTRONS/S
+      - keyword: FILENAME
+        contains: _dr
+    note: "PHOTFLAM is the inverse sensitivity in erg cm-2 A-1 per electron
+      and PHOTPLAM the pivot wavelength in A. The AB zeropoint applies to
+      count rates in electrons per second of distortion-corrected products
+      (drz, drc); flt and flc images need the pixel area map first."
+  photometric_system:
+    value: AB
+    requires:
+      - keyword: BUNIT
+        equals: ELECTRONS/S
+      - keyword: FILENAME
+        contains: _dr
+    note: "The zeropoint derived from PHOTFLAM and PHOTPLAM is on the AB
+      system."
