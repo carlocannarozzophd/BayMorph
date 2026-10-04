@@ -376,7 +376,10 @@ def _validate_products_against_current_sources(
 ) -> None:
     """Verify cutout and mask semantics against immutable current sources."""
     if observation is None:
-        observation = Observation.from_fits(config["data"]["image_path"])
+        observation = Observation.from_fits(
+            config["data"]["image_path"],
+            hdu=config["data"].get("hdu"),
+        )
 
     source = _as_finite_image(
         observation.image.data,
@@ -1135,7 +1138,10 @@ def prepare_real_image_from_config(
 
     make_output_tree(resolved)
 
-    observation = Observation.from_fits(resolved["data"]["image_path"])
+    observation = Observation.from_fits(
+        resolved["data"]["image_path"],
+        hdu=resolved["data"].get("hdu"),
+    )
 
     resolved = resolve_runtime_config(
         resolved,

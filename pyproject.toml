@@ -92,6 +92,7 @@ include = ["baymorph*"]
 [tool.setuptools.package-data]
 "baymorph.resources" = [
     "configs/*.yaml",
+    "header_conventions/*.yaml",
     "notebooks/*.ipynb",
 ]
 

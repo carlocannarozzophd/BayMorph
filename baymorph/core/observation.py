@@ -13,16 +13,20 @@ PSF construction, fitting, diagnostics, or configuration resolution.
 
 from __future__ import annotations
 
-import warnings
+import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 from astropy.io import fits
-from astropy.wcs import FITSFixedWarning, WCS
-from astropy.wcs.utils import proj_plane_pixel_scales
+from astropy.wcs import WCS
 
+from baymorph.core.header_metadata import (
+    HeaderReading,
+    read_celestial_wcs,
+    read_header,
+    read_pixel_scales,
+)
 from baymorph.core.image import ImageData
 
 
@@ -68,6 +72,12 @@ class ObservationMetadata:
         Background estimate recorded in the FITS header.
     wcs : astropy.wcs.WCS, optional
         Valid two-dimensional celestial WCS.
+    header_reading : HeaderReading, optional
+        Every quantity read from the header through the conventions of
+        AD-049, with its provenance and status. The fields above keep the
+        header values that BayMorph has always read, whatever their status;
+        only the reading says whether a value may be used without a
+        declaration of the user.
     """
 
     width: int
@@ -96,6 +106,7 @@ class ObservationMetadata:
     background_header: float | None = None
 
     wcs: WCS | None = None
+    header_reading: HeaderReading | None = None
 
     @classmethod
     def from_header(
@@ -103,6 +114,7 @@ class ObservationMetadata:
         header: fits.Header | None,
         *,
         image_shape: tuple[int, int] | None = None,
+        primary_header: fits.Header | None = None,
     ) -> ObservationMetadata:
         """Construct normalized metadata from a FITS header.
 
@@ -121,6 +133,9 @@ class ObservationMetadata:
             Image shape as ``(ny, nx)``. This provides a reliable fallback for
             dimensions when an image has no FITS header or when its dimension
             keywords are invalid.
+        primary_header : astropy.io.fits.Header, optional
+            Primary header of a file whose image is stored in an extension.
+            Its keywords are inherited where the image header lacks them.
 
         Returns
         -------
@@ -141,18 +156,14 @@ class ObservationMetadata:
         center_x = (width - 1) / 2.0
         center_y = (height - 1) / 2.0
 
-        celestial_wcs = _read_celestial_wcs(header)
-        scale_x, scale_y, scale_mean = _read_pixel_scales(celestial_wcs)
+        celestial_wcs = read_celestial_wcs(header)
+        scale_x, scale_y, scale_mean = read_pixel_scales(celestial_wcs)
+        reading = read_header(header, primary_header=primary_header)
 
-        seeing_fwhm = _optional_finite_float(
-            header,
-            "FWHM",
-        )
+        psf_fwhm = reading["psf_fwhm"]
         seeing_fwhm_unit = (
-            _read_seeing_fwhm_unit(
-                header
-            )
-            if seeing_fwhm is not None
+            psf_fwhm.unit
+            if psf_fwhm.usable and psf_fwhm.unit in {"arcsec", "pixels"}
             else None
         )
 
@@ -164,28 +175,20 @@ class ObservationMetadata:
             pixel_scale=scale_mean,
             pixel_scale_x=scale_x,
             pixel_scale_y=scale_y,
-            gain=_optional_finite_float(header, "GAIN"),
-            saturation=_first_finite_float(
-                header,
-                ("SATLEVEL", "SATURATE"),
-            ),
-            seeing_fwhm=seeing_fwhm,
+            gain=_header_number(reading, "gain"),
+            saturation=_header_number(reading, "saturation"),
+            seeing_fwhm=_header_number(reading, "psf_fwhm"),
             seeing_fwhm_unit=seeing_fwhm_unit,
-            zeropoint=_optional_finite_float(header, "PHOTZP"),
-            filter_name=_optional_clean_string(header, "FILTER"),
-            telescope=_optional_clean_string(header, "TELESCOP"),
-            instrument=_optional_clean_string(header, "INSTRUME"),
-            bunit=_optional_clean_string(header, "BUNIT"),
-            exposure_time=_optional_finite_float(header, "EXPTIME"),
-            total_exposure_time=_optional_finite_float(
-                header,
-                "TEXPTIME",
-            ),
-            background_header=_optional_finite_float(
-                header,
-                "BKGMED",
-            ),
+            zeropoint=_header_number(reading, "zeropoint"),
+            filter_name=_header_text(reading, "filter"),
+            telescope=_header_text(reading, "telescope"),
+            instrument=_header_text(reading, "instrument"),
+            bunit=_header_text(reading, "image_unit"),
+            exposure_time=_header_number(reading, "exposure_time"),
+            total_exposure_time=_header_number(reading, "total_exposure_time"),
+            background_header=_header_number(reading, "header_background"),
             wcs=celestial_wcs,
+            header_reading=reading,
         )
 
     @classmethod
@@ -208,6 +211,7 @@ class ObservationMetadata:
         return cls.from_header(
             image.header,
             image_shape=image.shape,
+            primary_header=image.primary_header,
         )
 
 
@@ -328,10 +332,12 @@ class Observation:
     def from_fits(
         cls,
         filename: str | Path,
+        hdu: int | str | None = None,
     ) -> Observation:
         """Load an astronomical observation from a FITS file.
 
-        The primary HDU is loaded through :meth:`ImageData.from_fits`.
+        The image HDU is selected and loaded through
+        :meth:`ImageData.from_fits`.
         Observational metadata are then extracted from the copied FITS header
         and validated against the loaded image-array shape.
 
@@ -343,13 +349,17 @@ class Observation:
         ----------
         filename : str or pathlib.Path
             Path to the FITS file.
+        hdu : int or str, optional
+            Index or ``EXTNAME`` of the HDU that holds the image, the
+            ``data.hdu`` of a configuration. See :meth:`ImageData.from_fits`
+            for the default.
 
         Returns
         -------
         Observation
             Observation containing the image and normalized metadata.
         """
-        image = ImageData.from_fits(filename)
+        image = ImageData.from_fits(filename, hdu=hdu)
 
         return cls.from_image(image)
 
@@ -439,216 +449,23 @@ def _optional_positive_int(
     return value
 
 
-def _normalize_seeing_fwhm_unit(
-    value: Any,
-) -> str | None:
-    """Normalize one explicit FITS FWHM-unit declaration."""
-    if value is None:
+def _header_number(reading: HeaderReading, name: str) -> float | None:
+    """Return the finite number that the header holds for a quantity."""
+    value = reading[name].raw_value
+
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
 
-    normalized = "".join(
-        character.lower()
-        if character.isalpha()
-        else " "
-        for character in str(
-            value
-        )
-    )
+    value = float(value)
 
-    tokens = set(
-        normalized.split()
-    )
-    recognized = set()
+    return value if math.isfinite(value) else None
 
-    if tokens & {
-        "arcsec",
-        "arcsecond",
-        "arcseconds",
-        "asec",
-    }:
-        recognized.add(
-            "arcsec"
-        )
 
-    if tokens & {
-        "pix",
-        "pixel",
-        "pixels",
-    }:
-        recognized.add(
-            "pixels"
-        )
+def _header_text(reading: HeaderReading, name: str) -> str | None:
+    """Return the non-empty string that the header holds for a quantity."""
+    value = reading[name].raw_value
 
-    if len(
-        recognized
-    ) != 1:
+    if not isinstance(value, str) or not value.strip():
         return None
 
-    return recognized.pop()
-
-
-def _read_seeing_fwhm_unit(
-    header: fits.Header | None,
-) -> str | None:
-    """Read an explicit FWHM unit without numerical inference."""
-    if header is None:
-        return None
-
-    declarations = set()
-
-    for keyword in (
-        "FWHMUNIT",
-        "SEEUNIT",
-    ):
-        unit = _normalize_seeing_fwhm_unit(
-            header.get(
-                keyword
-            )
-        )
-
-        if unit is not None:
-            declarations.add(
-                unit
-            )
-
-    if "FWHM" in header:
-        try:
-            comment = header.comments[
-                "FWHM"
-            ]
-        except (
-            KeyError,
-            TypeError,
-        ):
-            comment = None
-
-        comment_unit = _normalize_seeing_fwhm_unit(
-            comment
-        )
-
-        if comment_unit is not None:
-            declarations.add(
-                comment_unit
-            )
-
-    if len(
-        declarations
-    ) != 1:
-        return None
-
-    return declarations.pop()
-
-
-def _optional_finite_float(
-    header: fits.Header | None,
-    keyword: str,
-) -> float | None:
-    """Read an optional finite floating-point FITS keyword."""
-    if header is None or keyword not in header:
-        return None
-
-    value: Any = header[keyword]
-
-    try:
-        result = float(value)
-    except (TypeError, ValueError, OverflowError):
-        return None
-
-    if not np.isfinite(result):
-        return None
-
-    return result
-
-
-def _first_finite_float(
-    header: fits.Header | None,
-    keywords: tuple[str, ...],
-) -> float | None:
-    """Return the first valid floating-point keyword in priority order."""
-    for keyword in keywords:
-        value = _optional_finite_float(header, keyword)
-
-        if value is not None:
-            return value
-
-    return None
-
-
-def _optional_clean_string(
-    header: fits.Header | None,
-    keyword: str,
-) -> str | None:
-    """Read an optional, non-empty string FITS keyword."""
-    if header is None or keyword not in header:
-        return None
-
-    value = str(header[keyword]).strip()
-
-    if not value:
-        return None
-
-    return value
-
-
-def _read_celestial_wcs(
-    header: fits.Header | None,
-) -> WCS | None:
-    """Construct a valid two-dimensional celestial WCS when possible."""
-    if header is None:
-        return None
-
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter(
-                "ignore",
-                category=FITSFixedWarning,
-            )
-            wcs = WCS(header)
-    except Exception:
-        return None
-
-    if not wcs.has_celestial:
-        return None
-
-    try:
-        celestial = wcs.celestial
-    except Exception:
-        return None
-
-    if celestial.pixel_n_dim != 2 or celestial.world_n_dim != 2:
-        return None
-
-    return celestial
-
-
-def _read_pixel_scales(
-    wcs: WCS | None,
-) -> tuple[float | None, float | None, float | None]:
-    """Return projected celestial scales in arcseconds per pixel."""
-    if wcs is None:
-        return None, None, None
-
-    try:
-        scales_deg = np.asarray(
-            proj_plane_pixel_scales(wcs),
-            dtype=float,
-        )
-    except Exception:
-        return None, None, None
-
-    if scales_deg.shape != (2,):
-        return None, None, None
-
-    scales_arcsec = np.abs(scales_deg) * 3600.0
-
-    if not np.all(np.isfinite(scales_arcsec)):
-        return None, None, None
-
-    if np.any(scales_arcsec <= 0.0):
-        return None, None, None
-
-    scale_x = float(scales_arcsec[0])
-    scale_y = float(scales_arcsec[1])
-    scale_mean = float(np.mean(scales_arcsec))
-
-    return scale_x, scale_y, scale_mean
+    return value.strip()

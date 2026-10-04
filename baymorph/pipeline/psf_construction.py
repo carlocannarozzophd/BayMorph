@@ -1103,7 +1103,8 @@ def run_psf_construction_from_config(
         resolved = config
 
     observation = Observation.from_fits(
-        resolved["data"]["image_path"]
+        resolved["data"]["image_path"],
+        hdu=resolved["data"].get("hdu"),
     )
     image = observation.image
 

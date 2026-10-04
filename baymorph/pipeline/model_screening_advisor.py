@@ -103,7 +103,7 @@ class SingleObservationModelAdvisor(ObservationAdvisor):
         ``psf_fwhm_pixels`` directly or declare whether the header value is
         expressed in ``"arcsec"`` or ``"pixels"``.
         """
-        observation = Observation.from_fits(self.fits_path)
+        observation = Observation.from_fits(self.fits_path, hdu=self.hdu)
         data = np.asarray(
             observation.image.data,
             dtype=float,

@@ -174,7 +174,10 @@ def run_psf_candidate_selection_from_config(
 
     make_output_tree(resolved)
 
-    image = ImageData.from_fits(resolved["data"]["image_path"])
+    image = ImageData.from_fits(
+        resolved["data"]["image_path"],
+        hdu=resolved["data"].get("hdu"),
+    )
 
     detection_cfg = resolved["preparation"]["detection"]
 

@@ -545,7 +545,7 @@ def test_run_real_fit_passes_prepared_likelihood_state(
 
     monkeypatch.setattr(
         "baymorph.pipeline.real_fit.Observation.from_fits",
-        lambda path: None,
+        lambda path, hdu=None: None,
     )
 
     monkeypatch.setattr(

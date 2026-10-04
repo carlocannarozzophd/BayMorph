@@ -1,0 +1,18 @@
+# Raw frames of ESO instruments, which carry hierarchical detector keywords.
+name: eso_raw
+title: ESO raw frames
+priority: 10
+references:
+  - "ESO NGC Optical Detector Control Software User Manual, VLT-MAN-ESO-13660-4086, issue 9: https://www.eso.org/sci/facilities/develop/detectors/controllers/ngc/software/VLT-MAN-ESO-13660-4086_9_Optical_DCS_User_Manual.pdf"
+match:
+  - keyword_prefix: "ESO DET"
+quantities:
+  read_noise:
+    keywords: ["ESO DET OUT1 RON"]
+    unit: electron
+    note: "ESO DET OUT1 RON is the readout noise of the first output in electrons."
+  gain:
+    keywords: ["ESO DET OUT1 GAIN", "ESO DET OUT1 CONAD"]
+    note: "The ESO detector manual warns that GAIN and CONAD have been confused by different control software, so the direction of the conversion is not established."
+  filter:
+    keywords: ["ESO INS FILT1 NAME"]

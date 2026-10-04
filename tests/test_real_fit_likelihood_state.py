@@ -442,7 +442,7 @@ def test_real_fit_rejects_incomplete_normalization_before_outputs(
     )
     monkeypatch.setattr(
         "baymorph.pipeline.real_fit.Observation.from_fits",
-        lambda path: None,
+        lambda path, hdu=None: None,
     )
     monkeypatch.setattr(
         real_fit,

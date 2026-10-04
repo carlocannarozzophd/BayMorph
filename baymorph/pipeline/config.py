@@ -68,6 +68,7 @@ SAMPLER_DEFAULTS = {
 
 DEFAULT_CONFIG = {
     "data": {
+        "hdu": None,
         "mask_path": None,
         "mask_mode": "union",
         "pixel_scale": None,
@@ -840,6 +841,20 @@ def validate_config(config: dict[str, Any]) -> None:
             f"{unsupported_data_keys}. "
             "External noise maps and direct PSF paths are not yet "
             "supported by the single-band production workflow."
+        )
+
+    hdu = config["data"].get("hdu")
+
+    if hdu is not None and (
+        isinstance(hdu, bool)
+        or not (
+            (isinstance(hdu, int) and hdu >= 0)
+            or (isinstance(hdu, str) and hdu.strip())
+        )
+    ):
+        raise ValueError(
+            "Config data.hdu must be a non-negative HDU index or a non-empty "
+            f"extension name; got {hdu!r}."
         )
 
     mask_mode = str(

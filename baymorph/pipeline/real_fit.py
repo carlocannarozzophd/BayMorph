@@ -103,7 +103,8 @@ def run_real_fit_from_config(
 
     try:
         observation = Observation.from_fits(
-            resolved["data"]["image_path"]
+            resolved["data"]["image_path"],
+            hdu=resolved["data"].get("hdu"),
         )
     except FileNotFoundError:
         observation = None

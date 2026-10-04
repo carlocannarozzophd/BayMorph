@@ -225,11 +225,18 @@ def _preparation_config_identity(
 ) -> tuple[dict[str, Any], str]:
     """Return canonical configuration fields affecting preparation."""
     data_config = config["data"]
+    data_identity = {}
+
+    # The HDU enters the identity only when it is declared, so that products
+    # of images read from the primary HDU keep their identity (AD-049).
+    if data_config.get("hdu") is not None:
+        data_identity["hdu"] = data_config["hdu"]
 
     canonical = _json_value(
         {
             "object_name": config["object"]["name"],
             "data": {
+                **data_identity,
                 "image_path": str(image_path),
                 "mask_path": (
                     None
@@ -286,7 +293,10 @@ def build_prepared_input_identity(
     )
 
     file_identity_before = _file_identity(image_path)
-    disk_observation = Observation.from_fits(image_path)
+    disk_observation = Observation.from_fits(
+        image_path,
+        hdu=resolved["data"].get("hdu"),
+    )
     file_identity_after = _file_identity(image_path)
 
     if file_identity_before != file_identity_after:
@@ -358,6 +368,12 @@ def build_prepared_input_identity(
             "celestial_wcs_sha256": _wcs_sha256(observation),
         }
     )
+
+    if observation.image.hdu_index != 0:
+        fits_identity["hdu"] = {
+            "index": observation.image.hdu_index,
+            "name": observation.image.hdu_name,
+        }
 
     return {
         "schema_version": PREPARED_INPUT_IDENTITY_VERSION,

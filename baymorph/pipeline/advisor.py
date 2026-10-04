@@ -393,6 +393,7 @@ class ObservationAdvisor:
         fits_path: str | Path,
         *,
         target_position: TargetPosition = None,
+        hdu: int | str | None = None,
     ) -> None:
         self.fits_path = Path(fits_path)
 
@@ -400,6 +401,7 @@ class ObservationAdvisor:
             raise FileNotFoundError(f"FITS file not found: {self.fits_path}")
 
         self.target_position = target_position
+        self.hdu = hdu
         self._inspection: ObservationInspection | None = None
 
     @classmethod
@@ -409,6 +411,7 @@ class ObservationAdvisor:
         *,
         start: str | Path | None = None,
         target_position: TargetPosition = None,
+        hdu: int | str | None = None,
     ) -> ObservationAdvisor:
         """Create an Advisor using paths relative to a BayMorph project.
 
@@ -431,6 +434,10 @@ class ObservationAdvisor:
             working directory is used by default.
         target_position : mapping, sequence, {"center"}, or None
             Optional initial target-identification seed.
+        hdu : int or str, optional
+            Index or ``EXTNAME`` of the HDU that holds the image, written to
+            ``data.hdu`` of the proposed configuration. By default BayMorph
+            selects it as :meth:`ImageData.from_fits` describes.
 
         Returns
         -------
@@ -484,6 +491,7 @@ class ObservationAdvisor:
         advisor = cls(
             resolved_fits_path,
             target_position=target_position,
+            hdu=hdu,
         )
         advisor.project_root = project_root
 
@@ -507,7 +515,7 @@ class ObservationAdvisor:
         tuple of float
             Validated ``(x, y)`` target position.
         """
-        observation = Observation.from_fits(self.fits_path)
+        observation = Observation.from_fits(self.fits_path, hdu=self.hdu)
         data = np.asarray(
             observation.image.data,
             dtype=float,
@@ -593,7 +601,7 @@ class ObservationAdvisor:
         """
         from baymorph.plotting.target_selector import TargetSelector
 
-        observation = Observation.from_fits(self.fits_path)
+        observation = Observation.from_fits(self.fits_path, hdu=self.hdu)
         data = np.asarray(
             observation.image.data,
             dtype=float,
@@ -637,7 +645,7 @@ class ObservationAdvisor:
         self,
     ) -> ObservationInspection:
         """Inspect metadata, image scales, and optional target morphology."""
-        observation = Observation.from_fits(self.fits_path)
+        observation = Observation.from_fits(self.fits_path, hdu=self.hdu)
 
         data = np.asarray(
             observation.image.data,
@@ -973,6 +981,8 @@ class ObservationAdvisor:
 
         if target_position is None:
             raise ValueError("target_position is required to create a configuration.")
+
+        config_options.setdefault("hdu", self.hdu)
 
         return make_config_from_fits(
             self.fits_path,

@@ -576,6 +576,7 @@ def make_config_from_fits(
     fits_path: str | Path,
     *,
     target_position: TargetPosition | None = None,
+    hdu: int | str | None = None,
     output_path: str | Path | None = None,
     object_name: str | None = None,
     model_name: str = "single_sersic",
@@ -601,6 +602,11 @@ def make_config_from_fits(
     target_position : mapping, sequence, or {"center"}
         Explicit target-identification seed. The value ``"center"`` requests
         the detector centre and does not imply automatic target discovery.
+    hdu : int or str, optional
+        Index or ``EXTNAME`` of the HDU that holds the image, written to
+        ``data.hdu``. By default BayMorph selects it as
+        :meth:`baymorph.core.image.ImageData.from_fits` describes, and the
+        configuration does not record it.
     output_path : str or pathlib.Path, optional
         YAML path to write. If omitted, no file is written.
     object_name : str, optional
@@ -663,7 +669,8 @@ def make_config_from_fits(
         )
 
     observation = Observation.from_fits(
-        fits_path
+        fits_path,
+        hdu=hdu,
     )
 
     resolved_name = (
@@ -789,6 +796,7 @@ def make_config_from_fits(
             "image_path": str(
                 fits_path
             ),
+            **({} if hdu is None else {"hdu": hdu}),
             "pixel_scale": pixel_scale,
             "target_position": normalized_target,
             "cutout": cutout,

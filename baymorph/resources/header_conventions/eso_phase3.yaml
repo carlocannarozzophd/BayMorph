@@ -1,0 +1,43 @@
+# Science data products released through the ESO Phase 3 process, which
+# carry the product category PRODCATG.
+name: eso_phase3
+title: ESO science data products (Phase 3)
+priority: 20
+references:
+  - "ESO Science Data Products Standard, ESO-044286, version 6, 2020-06-15: https://www.eso.org/sci/observing/phase3/p3sdpstd_v6.pdf"
+match:
+  - keyword: PRODCATG
+    present: true
+quantities:
+  pipeline:
+    keywords: [PROCSOFT]
+  exposure_time:
+    keywords: [EXPTIME]
+    unit: s
+    note: "In a science data product EXPTIME is the total integration time per pixel."
+  total_exposure_time:
+    keywords: [TEXPTIME]
+    unit: s
+    note: "TEXPTIME is the sum of the integration times of all exposures in the product."
+  n_combined:
+    keywords: [NCOMBINE]
+    note: "NCOMBINE is the number of raw science files combined into the product."
+  zeropoint:
+    keywords: [PHOTZP]
+    unit: mag
+    note: "PHOTZP relates the pixel data to total magnitudes: MAG = -2.5 log10(data) + PHOTZP."
+  zeropoint_error:
+    keywords: [PHOTZPER]
+    unit: mag
+    note: "PHOTZPER is the one-sigma uncertainty of PHOTZP."
+  photometric_system:
+    keywords: [PHOTSYS]
+    note: "PHOTSYS is VEGA or AB."
+  magnitude_limit:
+    keywords: [ABMAGLIM]
+    unit: mag
+    note: "ABMAGLIM is the five-sigma AB limiting magnitude for point sources."
+  psf_fwhm:
+    keywords: [PSF_FWHM]
+    unit: arcsec
+    note: "PSF_FWHM is the effective spatial resolution, the FWHM of an unresolved source."

@@ -24,6 +24,7 @@ def observation_metadata_dict(
         serialization.
     """
     metadata = observation.metadata
+    image = getattr(observation, "image", None)
 
     return {
         "telescope": metadata.telescope,
@@ -44,4 +45,17 @@ def observation_metadata_dict(
         "total_exposure_time_s": metadata.total_exposure_time,
         "background_header": metadata.background_header,
         "bunit": metadata.bunit,
+        "hdu": (
+            None
+            if image is None
+            else {
+                "index": image.hdu_index,
+                "name": image.hdu_name,
+            }
+        ),
+        "header_reading": (
+            None
+            if metadata.header_reading is None
+            else metadata.header_reading.as_dict()
+        ),
     }

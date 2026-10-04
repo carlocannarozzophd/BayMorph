@@ -1,0 +1,47 @@
+# Keywords of the FITS standard and of the common dictionaries. This
+# convention applies to every header; the specific conventions take
+# precedence where they read the same quantity.
+name: generic
+title: FITS standard and commonly used keywords
+priority: 0
+references:
+  - "FITS Standard 4.0 (BUNIT, TELESCOP, INSTRUME): https://fits.gsfc.nasa.gov/fits_standard.html"
+  - "HEASARC, Dictionary of Commonly Used FITS Keywords (EXPTIME, FILTER, SATURATE): https://heasarc.gsfc.nasa.gov/docs/fcg/common_dict.html"
+  - "NOAO keyword dictionary in the nom.tam FITS library (GAIN in electrons per ADU): https://heasarc.gsfc.nasa.gov/docs/heasarc/fits/java/v1.0/javadoc/nom/tam/fits/header/extra/NOAOExt.html"
+match: always
+quantities:
+  telescope:
+    keywords: [TELESCOP]
+  instrument:
+    keywords: [INSTRUME]
+  filter:
+    keywords: [FILTER]
+  image_unit:
+    keywords: [BUNIT]
+  exposure_time:
+    keywords: [EXPTIME]
+    unit: s
+    note: "EXPTIME is the exposure time in seconds."
+  total_exposure_time:
+    keywords: [TEXPTIME]
+    unit_from_comment: true
+    units: [s]
+  gain:
+    keywords: [GAIN]
+    unit: electron/adu
+    note: "GAIN is the gain in electrons per ADU."
+  saturation:
+    keywords: [SATLEVEL, SATURATE]
+    unit: image
+    note: "SATURATE is the data value at which the detector saturates; SATLEVEL is read as its synonym."
+  zeropoint:
+    keywords: [PHOTZP]
+    note: "Outside the conventions that define PHOTZP its photometric meaning is not established."
+  psf_fwhm:
+    keywords: [FWHM]
+    unit_keywords: [FWHMUNIT, SEEUNIT]
+    unit_from_comment: true
+    units: [arcsec, pixels]
+  header_background:
+    keywords: [BKGMED]
+    note: "BKGMED has no generally documented meaning."

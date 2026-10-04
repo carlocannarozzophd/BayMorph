@@ -32,6 +32,7 @@ instance, is ignored, and the default backend is used.
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `data.image_path` | path | required | FITS image to analyse. |
+| `data.hdu` | integer, string or `null` | `null` | HDU that holds the image, by index or `EXTNAME`. `null` selects the primary HDU when it holds an image, otherwise the single `SCI` or `IMAGE` extension or the single image extension. Not accepted in a joint configuration. |
 | `data.target_position` | `{x, y}` or `center` | `null` | Target-identification seed in zero-based full-image pixel coordinates, or the detector centre. Required to prepare and fit; it is also the reference of priors declared with `relative_to`. |
 | `data.cutout` | mapping | | Cutout of the target. |
 | `data.cutout.mode` | `fixed` or `auto` | `fixed` | `fixed` cuts `data.cutout.size` pixels about the target seed; `auto` cuts a preliminary region, measures where the radial profile of the target reaches the sky plateau, and cuts the plateau plus a margin. |

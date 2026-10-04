@@ -11,6 +11,17 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* BayMorph reads the header of a FITS image through conventions, milestone 1
+  of AD-049 (`baymorph/core/header_metadata.py`). Each quantity carries its
+  keyword, its convention and a status, and no unit is inferred from a
+  value. The conventions distributed with the package cover the FITS
+  standard, ESO science data products and raw frames, SWarp coadds and the
+  VST-Tube pipeline (`baymorph/resources/header_conventions/`), and a user
+  may add files of the same form. An image stored in an extension is read
+  through `data.hdu`, or selected by default when the file holds a single
+  science image. `ObservationMetadata` keeps the values it always read and
+  adds the full reading in `header_reading`, which the product metadata
+  record.
 * AD-049, an optional observation advisor that reads the header of any FITS
   image through declared conventions and proposes priors from the header and
   from physics, accepted on 2026-10-04 with the recommendations of its

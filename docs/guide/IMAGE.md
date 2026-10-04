@@ -2,11 +2,32 @@
 
 ## The input image
 
-BayMorph reads a two-dimensional image from the primary HDU of a FITS file,
-in any units: counts, ADU, electrons per second or calibrated fluxes. The
-priors, the residual background and the effective gain are then expressed
-in the same units. The sky may still be in the image or may have been
-subtracted already; BayMorph measures and removes what is left.
+BayMorph reads a two-dimensional image from a FITS file, in any units:
+counts, ADU, electrons per second or calibrated fluxes. The priors, the
+residual background and the effective gain are then expressed in the same
+units. The sky may still be in the image or may have been subtracted
+already; BayMorph measures and removes what is left.
+
+The image is the primary HDU when it holds one. Otherwise BayMorph takes
+the single extension named `SCI` or `IMAGE`, as in HST, JWST and HSC
+products, or the single image extension, and inherits the keywords of the
+primary header. When a file holds several images, such as the detectors of
+a mosaic camera, name the one to analyse:
+
+```yaml
+data:
+  image_path: data/mosaic.fits
+  hdu: S4          # extension name, or its index
+```
+
+A joint fit of several observations does not accept `data.hdu` yet: each
+of its images must be the one BayMorph selects by default.
+
+BayMorph reads the header through conventions for the instruments and
+pipelines it knows, and through the FITS standard otherwise. Each quantity,
+such as the pixel scale, the gain, the zeropoint or the FWHM, carries the
+keyword it comes from and how certain it is, and BayMorph never infers a
+unit from a value.
 
 Every pixel must be finite. BayMorph refuses an image with NaN or infinite
 pixels instead of guessing a value for them: fill them before, and list them

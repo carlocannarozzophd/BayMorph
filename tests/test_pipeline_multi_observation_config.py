@@ -1274,3 +1274,28 @@ def test_joint_likelihood_cannot_declare_a_common_gain():
         resolve_multi_observation_observation_configs(
             config,
         )
+
+
+def test_joint_inference_rejects_a_declared_hdu(
+    tmp_path: Path,
+):
+    """Joint inference reads images by path alone, so data.hdu is refused."""
+    for band, data in (
+        ("g", {"image_path": "data/g.fits"}),
+        ("r", {"image_path": "data/r.fits", "hdu": "SCI"}),
+    ):
+        (tmp_path / f"{band}.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "object": {"name": f"target_{band}"},
+                    "data": data,
+                    "outputs": {"root": "runs"},
+                }
+            )
+        )
+
+    with pytest.raises(ValueError, match="declares data.hdu"):
+        resolve_multi_observation_observation_configs(
+            _multi_observation_config(),
+            base_dir=tmp_path,
+        )

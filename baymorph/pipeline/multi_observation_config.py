@@ -239,6 +239,15 @@ def resolve_multi_observation_observation_configs(
         )
 
         item = resolve_config(raw_observation_config)
+
+        if item["data"].get("hdu") is not None:
+            raise ValueError(
+                f"Observation '{observation}' declares data.hdu, which joint "
+                "inference does not support yet (AD-049). Its image must be "
+                "the one BayMorph selects by default: the primary HDU, or "
+                "the single SCI, IMAGE or image extension."
+            )
+
         _joint_likelihood(
             item["fit"]["likelihood"],
             f"Observation '{observation}' resolved fit.likelihood",

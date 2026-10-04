@@ -1,0 +1,46 @@
+# Coadds of the VST-Tube pipeline. No public document lists its keywords,
+# so this convention rests on the comments VST-Tube writes beside them and
+# reads a quantity only where a comment states its meaning and unit.
+name: vst_tube
+title: Coadds of the VST-Tube pipeline
+priority: 40
+references:
+  - "A. Grado, M. Capaccioli, L. Limatola and F. Getman, VST processing facility: first astronomical applications, arXiv:1102.1588."
+  - "The comments that VST-Tube writes beside its keywords."
+match:
+  - keyword: PROCSOFT
+    startswith: VST-tube
+quantities:
+  pipeline:
+    keywords: [PROCSOFT]
+  zeropoint:
+    keywords: [PHOTZP]
+    unit: mag
+    note: "The comment defines mag = -2.5 log10(ADU) + PHOTZP."
+  zeropoint_error:
+    keywords: [PHOTZPER]
+    unit: mag
+    note: "The comment calls it the internal RMS of the magnitudes at high signal-to-noise."
+  photometric_system:
+    keywords: [PHOTSYS]
+  n_combined:
+    keywords: [NCOMBINE]
+    note: "The comment calls it the number of combined frames."
+  total_exposure_time:
+    keywords: [TEXPTIME]
+    unit: s
+    note: "The comment calls it the total exposure time in seconds."
+  sky_level:
+    keywords: [BKGMED]
+    unit: image
+    note: "The comment reads BACKMEAN median. The pipeline subtracted the sky, and this level, in the units of the coadd, agrees with its sky scale for a Poisson sky (BayMorph research note NOISE_BACKGROUND_AUDIT_2026-10-01)."
+  psf_fwhm:
+    keywords: [FWHM]
+    note: "The comment reads FWHM median; no document of VST-Tube found states its unit."
+  saturation:
+    keywords: [SATLEVEL, SATURATE]
+    note: "The comment gives ADU, while a coadd may be in other units such as ADU/s, and VST-Tube documents no rescaling."
+  astrometric_error:
+    keywords: [ASTRERR]
+    unit: arcsec
+    note: "The comment calls it the RMS error of the astrometric solution in arcseconds."
