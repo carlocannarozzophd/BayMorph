@@ -11,6 +11,11 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* AD-049, an optional observation advisor that reads the header of any FITS
+  image through declared conventions and proposes priors from the header and
+  from physics, accepted on 2026-10-04 with the recommendations of its
+  proposal, which pre-registers a bench on real headers
+  ([proposal](docs/research/OBSERVATION_ADVISOR_PROPOSAL_2026-10-04.md)).
 * The BayMorph logo (`docs/assets/logo/`). Its lockup heads the README and
   the home page of the documentation, with dark and light versions; the site
   uses its tile as logo and favicon and takes its colours
