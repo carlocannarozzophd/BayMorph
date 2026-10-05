@@ -1,7 +1,6 @@
 include README.md
 include LICENSE
 include CHANGELOG.md
-include CONTRIBUTING.md
 include CITATION.cff
 
 recursive-include baymorph/resources *.yaml *.ipynb
@@ -11,6 +10,7 @@ prune dist
 prune docs
 prune tests
 prune validation
+prune benchmarks
 prune runs
 
 exclude .DS_Store

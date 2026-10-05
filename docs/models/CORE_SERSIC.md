@@ -85,8 +85,7 @@ an evidence comparison with `single_sersic` depends on that prior.
 
 - **Rendering.** Tested on 102 cases with `rb` from 0.5 to 5 px, `gamma`
   from 0 to 0.9, `alpha` from 0.5 to 2 and `n` of 4 and 6, under PSFs of
-  2.3 and 3.5 px FWHM: the largest pixel error is 5e-4 of the peak
-  ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+  2.3 and 3.5 px FWHM: the largest pixel error is 5e-4 of the peak.
 - **Flux.** The normalization agrees with an independent radial integral
   within 1e-9.
 - **Recovery.** On a simulated image whose core is resolved, the posterior

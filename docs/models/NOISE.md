@@ -106,8 +106,7 @@ and the index 1.1 to 3.0 times too narrow. This noise model brought the
 ratio of the true to the reported width to between 0.90 and 1.16, and its
 posterior widths agreed with the curvature of the likelihood within 5
 percent. On the same simulations the gain measured from a sky still in the
-image was within 0.6 percent of the truth
-([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/NOISE_MODEL_BENCH_2026-10-01.md)).
+image was within 0.6 percent of the truth.
 No fit of a real image has been validated yet.
 
 **Configuration.**

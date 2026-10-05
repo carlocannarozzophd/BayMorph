@@ -92,7 +92,7 @@ decompositions.
   Every ring of `sigma_ring` = 2 px or more is rendered within 1.5e-4 of the
   peak. Rings of 1 px far from the centre and seen at `q_ring` = 0.5 or
   less, half a pixel wide across their crest, are not rendered accurately:
-  hence the domain above ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+  hence the domain above.
 - **Deep images.** The error of the ring stays far below the noise; a
   compact bright bulge sets the limit, as in
   [`bulge_broken_disk`](BULGE_BROKEN_DISK.md).

@@ -81,7 +81,7 @@ model with two components.
 
 - **Rendering.** Tested on 92 cases with `c0` from −1 to 1, `n` from 1 to 6
   and `re` from 1 to 20 px, under PSFs of 2.3 and 3.5 px FWHM: the largest
-  pixel error is 7e-4 of the peak ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+  pixel error is 7e-4 of the peak.
 - **Flux.** The rendered flux agrees with the analytic flux within 1e-8, and
   within 3e-6 at `c0` = −1, where the radius has a kink on the axes.
 - **Recovery.** On a simulated image, the posterior of `c0` and `n` covers

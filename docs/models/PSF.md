@@ -89,8 +89,7 @@ without a halo, stars at least 50 px apart, no light beyond 64 px, and
 profiles with an effective radius of
 at least 1 px and an index up to 6. The extended wings leave a
 field-to-field uncertainty of about 1 percent in `re`, which a fit with one
-kernel cannot average away and must state as a systematic uncertainty
-([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/PSF_RENDERING_PROPOSAL_2026-10-01.md)).
+kernel cannot average away and must state as a systematic uncertainty.
 
 **Limits.** One kernel describes the whole image; a PSF that varies across
 the field is not modelled. Real PSFs may extend further than 64 px, and real

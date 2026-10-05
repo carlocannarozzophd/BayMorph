@@ -59,8 +59,7 @@ shape.
   related by exchanging the labels.
 - The split of the flux between the components is correlated with their
   radii and indices, and the posterior is far from Gaussian: a mixture of
-  Student-t distributions about its modes matches it poorly
-  ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/STRUCTURE_INFORMED_EVIDENCE_2026-09-29.md)).
+  Student-t distributions about its modes matches it poorly.
   Its evidence therefore relies on a nested sampler such as Nautilus.
 - Each component inherits the degeneracies of the
   [single Sérsic](SINGLE_SERSIC.md#known-degeneracies).
@@ -73,7 +72,7 @@ shape.
   with an error comparable with the noise once one of its components passes
   its own limit, usually the compact, steeper one: a component of n = 4 and
   Rₑ of 2 to 5 px reaches it at a peak signal-to-noise of 7e3 to 1.6e4, one
-  of n = 6 and Rₑ = 1 px at 1.2e3 ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/RENDERING_SIGNAL_LIMIT_2026-10-02.md)).
+  of n = 6 and Rₑ = 1 px at 1.2e3.
 - **Model comparison.** With `fit.comparison.enabled`, BayMorph computes the
   Bayes factor of `double_sersic` over `single_sersic` on the same prepared
   data, mask and likelihood.

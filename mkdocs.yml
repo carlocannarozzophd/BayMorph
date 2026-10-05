@@ -115,17 +115,17 @@ nav:
   - Output Files: reference/OUTPUT_FILES.md
   - Python API: reference/API.md
 
-- For Developers: DEVELOPERS.md
 
 plugins:
   - search
 
-  # The architecture, the research notes and the archive are development
-  # documents: they stay in the repository and are read on GitHub, linked
-  # from the page For Developers, and are not built into the user site.
-  # Zensical does not support exclude_docs and excludes them here.
+  # The development documents are kept on the machines of the developers and
+  # are not published: neither the repository nor the site holds them.
+  # Zensical does not support exclude_docs and excludes them here, so that a
+  # local copy never enters the site.
   - exclude:
       glob:
+        - DEVELOPERS.md
         - archive/*
         - architecture/*
         - research/*

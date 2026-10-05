@@ -88,7 +88,7 @@ where the disc is faint.
 
 - **Rendering.** The disc was tested on 96 cases of types II and III, with
   `wb_disk` from 0.5 to 5 px, under PSFs of 2.3 and 3.5 px FWHM: the largest
-  pixel error is 3e-5 of the peak ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+  pixel error is 3e-5 of the peak.
 - **Compact bright bulges.** The bulge is rendered as in
   [`bulge_disk`](BULGE_DISK.md): a compact bright bulge is rendered with an
   error comparable with the noise above a peak signal-to-noise of about

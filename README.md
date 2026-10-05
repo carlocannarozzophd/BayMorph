@@ -16,7 +16,7 @@
   <a href="#installation">Installation</a> ·
   <a href="#quick-start">Quick Start</a> ·
   <a href="docs/reference/API.md">API</a> ·
-  <a href="ROADMAP.md">Roadmap</a>
+  <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 ---
@@ -37,12 +37,10 @@
 
 > [!IMPORTANT]
 >
-> BayMorph is under active scientific development. The observation model of
-> the real-data path is being revised where the first real fit measured
-> defects: the effective-PSF rendering of AD-046 and the noise model of
-> AD-047 are implemented. No real-data fit has yet been validated
-> scientifically. The order of the remaining work is
-> in the [roadmap](ROADMAP.md).
+> BayMorph is under active scientific development. The model of real
+> observations, the rendering under an empirical PSF, the noise and the sky
+> background, is being revised and validated, and no fit of a real image has
+> yet been validated scientifically. Interfaces and defaults may change.
 
 ## What is BayMorph?
 
@@ -82,12 +80,12 @@ observations, or survey-level population inference.
 
 | Area | Capability |
 | --- | --- |
-| Observation preparation | FITS ingestion, target identification, automatic and fixed cutouts, constant background subtraction, a robust sky noise scale (AD-040, AD-041), exclusion of impossibly negative pixels (AD-043) |
-| Detection and masking | Source detection and segmentation, contaminant masking, external masks |
+| Observation preparation | FITS ingestion, target identification, automatic and fixed cutouts, constant background subtraction, a robust sky noise scale, exclusion of impossibly negative pixels |
+| Detection and masking | Source detection and segmentation, masking of the detected sources that stand out above the light of the target, external masks |
 | Morphology models | Single Sérsic, two labelled Sérsic components, bulge and disc, Sérsic plus point source |
-| Rendering | Detector-pixel integration, and effective-PSF rendering of empirical PSFs with sub-pixel kernels (AD-046) |
-| PSF | Analytic Gaussian PSFs; empirical PSFs built from the stars of the image, with sub-pixel kernels and extended wings (AD-046) |
-| Likelihoods | The noise model of AD-047 in both workflows: a normalized Gaussian whose variance is the prepared sky scale squared plus the source part of the model over a declared effective gain, with the stationary correlation of the sky through a 24-neighbour factorization. Cash and Poisson-Gaussian likelihoods for images in counts. The independent Gaussian remains for simulations through the Python API |
+| Rendering | Detector-pixel integration, and effective-PSF rendering of empirical PSFs with sub-pixel kernels |
+| PSF | Analytic Gaussian PSFs; empirical PSFs built from the stars of the image, with sub-pixel kernels and extended wings |
+| Likelihoods | The same noise model for single and joint fits: a normalized Gaussian whose variance is the prepared sky scale squared plus the source part of the model over a declared effective gain, with the stationary correlation of the sky through a 24-neighbour factorization. Cash and Poisson-Gaussian likelihoods for images in counts. The independent Gaussian remains for simulations through the Python API |
 | Inference | Backend-neutral inference problems with Nautilus (default), Dynesty (static and dynamic nested sampling) and pocoMC |
 | Results | Weighted posterior samples, Bayesian evidence, diagnostics and provenance in a backend-neutral `InferenceResult` |
 | Multi-observation inference | One joint workflow with explicit coupling across observations (shared, independent, hierarchical, wavelength-dependent) and conditionally factorized likelihoods |
@@ -123,8 +121,7 @@ BayMorph is observation-centred and backend-neutral:
 
 Changing among Nautilus, Dynesty and pocoMC does not change the scientific
 model, the prior, the likelihood, the meaning of a parameter or the
-interpretation of a result. The architectural contracts are in
-[`docs/architecture/`](docs/architecture/ARCHITECTURE.md).
+interpretation of a result.
 
 ## Installation
 
@@ -144,8 +141,14 @@ The installation includes the three supported inference backends. BayMorph
 distributes software, example configurations, tutorial notebooks and tests.
 It does not include observational data, and it does not include generated
 results such as run directories, posteriors, benchmark tables or figures.
-The development installation is described in
-[`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+To install from a clone of the repository, with the development tools:
+
+~~~bash
+git clone https://github.com/carlocannarozzophd/BayMorph.git
+cd BayMorph
+python -m pip install -e ".[dev]"
+~~~
 
 ## Quick start
 
@@ -197,17 +200,7 @@ Its sources are under [`docs/`](docs/index.md):
 | [Models](docs/models/index.md) | The galaxy models and their components, the PSFs, the noise models, the sky and the residual background |
 | [Theory](docs/theory/BAYESIAN_INFERENCE.md) | Bayesian inference, nested sampling and hierarchical models |
 | [Reference](docs/reference/CONFIGURATION.md) | The command line, every configuration key, the output files and the Python API |
-
-The site documents how to use BayMorph. The development documents are read
-in the repository:
-
-| Document | Purpose |
-| --- | --- |
-| [Architecture](docs/architecture/ARCHITECTURE.md) | Scientific contracts of observation, rendering, inference, pipeline and validation |
-| [Research notes](docs/research/index.md) | Measurements and formulations behind the decisions |
-| [Decisions](DECISIONS.md) | Accepted architectural decision records |
-| [Roadmap](ROADMAP.md) | Current priority and remaining work |
-| [Changelog](CHANGELOG.md) | Release history |
+| [Changelog](CHANGELOG.md) | The release history |
 
 To build the site locally:
 
@@ -219,18 +212,16 @@ python -m zensical serve
 ## Development status
 
 BayMorph is a scientific research programme and an evolving Python package.
-The current priority and the order of the remaining work are stated in the
-[roadmap](ROADMAP.md). The experimental native nested sampler is archived;
-production sampling is delegated to established backends (AD-039). The
-long-term objective is coherent Bayesian inference from several observations
-of the same object, with every dependence assumption stated explicitly.
+Sampling is delegated to established nested-sampling backends. The long-term
+objective is coherent Bayesian inference from several observations of the
+same object, with every dependence assumption stated explicitly.
 
 ## Contributing
 
-Contributions are welcome. Changes to scientific models, priors,
-likelihoods, rendering, inference, results or public interfaces must come
-with their validation and synchronized documentation. See
-[`CONTRIBUTING.md`](CONTRIBUTING.md).
+Contributions are welcome: open an issue or a pull request on GitHub.
+Changes to scientific models, priors, likelihoods, rendering, inference,
+results or public interfaces must come with their tests, their validation
+and their documentation, and pass `ruff check .` and `python -m pytest`.
 
 ## Citation
 

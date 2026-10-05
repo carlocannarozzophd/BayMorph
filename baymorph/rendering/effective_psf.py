@@ -16,9 +16,8 @@ the test bench of the PSF and rendering workstream; they are recorded in
 ``RENDERING_CONVENTION``, which enters the signature of every PSF that uses
 them.
 
-The evaluation follows the third milestone of AD-046,
-``docs/research/EFFECTIVE_PSF_COST_2026-10-01.md``: the fine cells away from
-the centre are point samples corrected to sixth order, and the fine
+The evaluation follows the third milestone of AD-046: the fine cells away
+from the centre are point samples corrected to sixth order, and the fine
 convolution is computed exactly but only at the native pixel centres. It
 agrees with the full evaluation within 1e-9 of the image peak.
 """

@@ -17,10 +17,9 @@ integer offsets and at the ``SUBPIXEL_FACTOR`` sub-pixel phases of each axis.
   and ``WING_START + WING_BLEND``; negative pixels are set to zero and the
   kernel is normalized.
 
-The algorithm is the candidate W1 of
-``docs/research/PSF_EXTENDED_WINGS_2026-10-01.md``, validated with the
-rendering of AD-046 on synthetic fields; its fixed constants are those of
-that validation, and its radii are configuration.
+The algorithm is the candidate W1 of the bench of builders with extended
+wings, validated with the rendering of AD-046 on synthetic fields; its fixed
+constants are those of that validation, and its radii are configuration.
 """
 
 from __future__ import annotations

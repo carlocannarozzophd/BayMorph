@@ -49,10 +49,7 @@ OPERATIONAL_PREFIXES = (
 
 OPERATIONAL_DOCUMENTS = {
     "README.md",
-    "docs/DEVELOPERS.md",
     "docs/index.md",
-    "docs/architecture/MULTI_OBSERVATION_PUBLIC_WORKFLOW.md",
-    "docs/architecture/PRODUCTION_WORKFLOW.md",
 }
 
 # A catalogue identifier followed by an underscore suffix, such as a band or a

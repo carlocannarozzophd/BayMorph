@@ -120,7 +120,7 @@ does not describe.
 - **Rendering.** Tested on 182 cases under PSFs of 2.3 and 3.5 px FWHM,
   with windings up to |w| = 11.4, a pitch angle of 5°, and axis ratios of
   0.6 and 0.4. Within the domain above the largest pixel error is 2.0e-3 of
-  the peak and the largest flux error 9.3e-6 ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+  the peak and the largest flux error 9.3e-6.
 - **Arms near the centre.** Where the arms wind faster than a pixel, near
   the centre, the rendering integrates them adaptively; the largest error
   there is 8e-7 of the peak of the arms.

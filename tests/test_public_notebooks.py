@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 
@@ -16,15 +17,6 @@ EXPECTED_NOTEBOOKS: set[str] = {
     "01_Simulated_SingleBand.ipynb",
     ASSESSMENT_NOTEBOOK,
     OBSERVED_FIT_NOTEBOOK,
-}
-
-# Research campaigns under validation/ are not tutorials and are not packaged.
-# They keep the hygiene contract but may use internal APIs and plot directly,
-# so they are listed separately rather than relaxing the public-notebook rules.
-EXPECTED_VALIDATION_NOTEBOOKS: set[str] = {
-    "cv_source_identification/cv_methods_on_one_image.ipynb",
-    "repeated_noise_recovery/repeated_noise_recovery.ipynb",
-    "structure_informed_evidence/nautilus_vs_model_informed.ipynb",
 }
 
 
@@ -67,72 +59,32 @@ def test_public_notebook_set_is_exact() -> None:
     assert notebooks == EXPECTED_NOTEBOOKS
 
 
-def test_only_public_and_packaged_notebooks_exist() -> None:
-    """Notebook copies must remain limited to public and packaged resources."""
-    notebooks = {
-        path.relative_to(PROJECT_ROOT)
-        for path in PROJECT_ROOT.rglob("*.ipynb")
-        if ".git" not in path.parts
-    }
+def _tracked_notebooks() -> set[Path]:
+    """Return the notebooks tracked by Git, relative to the project root."""
+    result = subprocess.run(
+        ["git", "ls-files", "*.ipynb"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
+    return {Path(line) for line in result.stdout.splitlines() if line}
+
+
+def test_only_public_and_packaged_notebooks_exist() -> None:
+    """The repository holds the public notebooks and their packaged copies only.
+
+    Only tracked files count: notebooks that a developer keeps on disk
+    outside the repository, or copies left in a build directory, are not
+    part of what BayMorph publishes.
+    """
     expected_public = {Path("notebooks") / name for name in EXPECTED_NOTEBOOKS}
     expected_packaged = {
         Path("baymorph/resources/notebooks") / name for name in EXPECTED_NOTEBOOKS
     }
-    expected_validation = {
-        Path("validation") / name for name in EXPECTED_VALIDATION_NOTEBOOKS
-    }
 
-    assert notebooks == (
-        expected_public | expected_packaged | expected_validation
-    )
-
-
-def test_validation_notebooks_are_not_packaged() -> None:
-    """Research campaigns must stay out of the distributed package."""
-    packaged = PROJECT_ROOT / "baymorph" / "resources" / "notebooks"
-
-    for name in EXPECTED_VALIDATION_NOTEBOOKS:
-        assert not (packaged / Path(name).name).is_file()
-
-
-def test_validation_notebooks_are_clean_and_code_cells_compile() -> None:
-    """Validation notebooks must be committed unexecuted and be valid."""
-    for name in EXPECTED_VALIDATION_NOTEBOOKS:
-        path = PROJECT_ROOT / "validation" / name
-
-        assert path.is_file()
-
-        notebook = _load_notebook(
-            path
-        )
-
-        assert notebook["nbformat"] == 4
-
-        for index, cell in enumerate(
-            notebook["cells"]
-        ):
-            if cell["cell_type"] != "code":
-                continue
-
-            assert cell.get(
-                "execution_count"
-            ) is None
-            assert cell.get(
-                "outputs",
-                [],
-            ) == []
-
-            compile(
-                "".join(
-                    cell.get(
-                        "source",
-                        [],
-                    )
-                ),
-                f"{path}:cell-{index}",
-                "exec",
-            )
+    assert _tracked_notebooks() == expected_public | expected_packaged
 
 
 def test_public_notebooks_avoid_parent_relative_paths() -> None:

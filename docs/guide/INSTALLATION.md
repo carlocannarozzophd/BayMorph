@@ -47,5 +47,11 @@ BayMorph distributes no observational data: you supply your own FITS images
 and choose where BayMorph writes its results. The packaged example simulates
 its own image.
 
-To install BayMorph from a clone of the repository, for development, see
-[For Developers](../DEVELOPERS.md).
+To install BayMorph from a clone of the repository, with the development
+tools:
+
+```bash
+git clone https://github.com/carlocannarozzophd/BayMorph.git
+cd BayMorph
+python -m pip install -e ".[dev]"
+```

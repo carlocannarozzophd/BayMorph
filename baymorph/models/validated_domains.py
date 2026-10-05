@@ -1,9 +1,9 @@
 """Validated rendering domains of the morphology families of AD-048.
 
 AD-048 registers a family only within the part of its parameter space where
-its rendering met the criteria of AD-046 on the bench recorded in
-``docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md``. Configuration
-validation rejects a prior whose support leaves that domain.
+its rendering met the criteria of AD-046 on the simulation bench of the
+families. Configuration validation rejects a prior whose support leaves that
+domain.
 
 A parameter without an entry is not restricted: larger radii, broader cores
 and lower Sérsic indices are smoother on the scale of a pixel than the

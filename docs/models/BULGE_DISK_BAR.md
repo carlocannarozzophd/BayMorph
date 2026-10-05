@@ -97,8 +97,7 @@ because the bulge absorbs the light of the bar
 - **Rendering.** Tested on 230 cases under PSFs of 2.3 and 3.5 px FWHM.
   Within the domain above, the largest pixel error is 2.2e-3 of the peak and
   the largest flux error 8.7e-4. Bars with a softer edge, `alpha_bar` below
-  2, or thinner than `q_bar` = 0.2 are not rendered accurately at their edge
-  ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+  2, or thinner than `q_bar` = 0.2 are not rendered accurately at their edge.
 - **Very bright bars.** The tips of the bar, more than 14 px from the
   centre, are rendered from samples at pixel centres. Under a PSF of
   2.3 px FWHM a bar whose own peak signal-to-noise exceeds about 1500 is

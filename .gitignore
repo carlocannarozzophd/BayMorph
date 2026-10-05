@@ -52,8 +52,6 @@ runs/
 /output/
 /outputs/
 
-/benchmarks/results/
-/docs/research/figures/
 
 # ------------------------------------------------------------------
 # Real-object configurations
@@ -112,3 +110,50 @@ runs/
 # ------------------------------------------------------------------
 
 /HISTORY.md
+
+# ------------------------------------------------------------------
+# Development documents and research code
+#
+# The design documents, the decision records, the plan of work, the
+# research notes and the code of the simulation benches and validation
+# campaigns, with the tests of that code, are kept on disk for the
+# developers and never published.
+# ------------------------------------------------------------------
+
+/DECISIONS.md
+/ROADMAP.md
+/CONTRIBUTING.md
+/docs/DEVELOPERS.md
+/docs/architecture/
+/docs/archive/
+/docs/research/
+/benchmarks/
+/validation/
+/tests/test_background_bench.py
+/tests/test_challenging_validation_problems.py
+/tests/test_correlated_gaussian_2d_validation.py
+/tests/test_correlated_noise_calibration.py
+/tests/test_cv_source_identification.py
+/tests/test_effective_psf_cost.py
+/tests/test_effective_psf_rendering.py
+/tests/test_empirical_psf_builder.py
+/tests/test_empirical_psf_builder_benchmark.py
+/tests/test_gaussian_1d_validation.py
+/tests/test_gaussian_2d_validation.py
+/tests/test_noise_interval_calibration.py
+/tests/test_noise_model_bench.py
+/tests/test_noise_model_cost.py
+/tests/test_profile_integration.py
+/tests/test_psf_builder_candidates.py
+/tests/test_psf_parameter_sensitivity.py
+/tests/test_psf_test_bench.py
+/tests/test_psf_wing_candidates.py
+/tests/test_rendering_convention.py
+/tests/test_rendering_signal_limit.py
+/tests/test_single_sersic_validation_problem.py
+/tests/test_structure_informed_adaptive.py
+/tests/test_structure_informed_evidence_comparison.py
+/tests/test_structure_informed_evidence_probe.py
+/tests/test_structure_informed_likelihood_views.py
+/tests/test_structure_informed_targets.py
+/tests/test_validation_repeatability.py

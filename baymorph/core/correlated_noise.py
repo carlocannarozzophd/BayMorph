@@ -11,9 +11,8 @@ estimates ``R`` once per observation on the sky region of the preparation:
 3. it is symmetrized and divided by its value at lag zero.
 
 The kernel keeps the lags up to ``CORRELATION_MAX_LAG`` along each axis, the
-value validated by the noise-model bench
-(``docs/research/NOISE_MODEL_BENCH_2026-10-01.md``). A kernel whose spectrum
-is not strictly positive is rejected, never repaired. The correlation at
+value validated by the simulation bench of noise models. A kernel whose
+spectrum is not strictly positive is rejected, never repaired. The correlation at
 the lags beyond the kernel, up to ``TRUNCATION_DIAGNOSTIC_MAX_LAG``, is
 reported as a diagnostic of the truncation.
 """

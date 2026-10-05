@@ -23,9 +23,8 @@ print(fit.posterior.summary("re"))
 !!! warning "Status"
 
     BayMorph is under active scientific development. No fit of a real image
-    has yet been validated scientifically; the order of the remaining work is
-    stated in the
-    [roadmap](https://github.com/carlocannarozzophd/BayMorph/blob/main/ROADMAP.md).
+    has yet been validated scientifically, and interfaces and defaults may
+    change.
 
 ![Four images: an intrinsic Sérsic galaxy, the same galaxy convolved with the PSF, plus a residual background plane, and with noise added](models/figures/forward_model-light.png#gh-light-mode-only)
 ![Four images: an intrinsic Sérsic galaxy, the same galaxy convolved with the PSF, plus a residual background plane, and with noise added](models/figures/forward_model-dark.png#gh-dark-mode-only)
@@ -104,6 +103,4 @@ properties of galaxy populations.
 ## Links
 
 - [Source code on GitHub](https://github.com/carlocannarozzophd/BayMorph)
-- [Roadmap](https://github.com/carlocannarozzophd/BayMorph/blob/main/ROADMAP.md)
 - [Changelog](https://github.com/carlocannarozzophd/BayMorph/blob/main/CHANGELOG.md)
-- [For developers](DEVELOPERS.md)

@@ -156,8 +156,7 @@ renders the Sérsic profile:
 
 Their `flux` is the total flux over the whole plane, as for the Sérsic
 profile. Each is validated within a rendering domain, which the page of
-each model states and the configuration enforces
-([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+each model states and the configuration enforces.
 
 ### Generalized Sérsic profile
 

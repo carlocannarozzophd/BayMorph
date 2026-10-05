@@ -38,8 +38,7 @@ and the project follows Semantic Versioning in spirit.
 * AD-049, an optional observation advisor that reads the header of any FITS
   image through declared conventions and proposes priors from the header and
   from physics, accepted on 2026-10-04 with the recommendations of its
-  proposal, which pre-registers a bench on real headers
-  ([proposal](docs/research/OBSERVATION_ADVISOR_PROPOSAL_2026-10-04.md)).
+  proposal, which pre-registers a bench on real headers.
 * The BayMorph logo (`docs/assets/logo/`). Its lockup heads the README and
   the home page of the documentation, with dark and light versions; the site
   uses its tile as logo and favicon and takes its colours
@@ -52,7 +51,7 @@ and the project follows Semantic Versioning in spirit.
   the true contaminants removes; on a sky with a large-scale field no
   treatment tested keeps the estimates unbiased with calibrated intervals,
   and the halo of a bright star and a sky subtracted on a mesh bias them by
-  several scatters ([note](docs/research/BACKGROUND_BENCH_2026-10-03.md)).
+  several scatters.
 * `benchmarks/noise_model_cost.py`, which reproduces through the path of a
   fit the cost of the noise model of AD-047 recorded in the status note on
   its milestone 3, with a test that the problem it times is the problem of
@@ -91,8 +90,7 @@ and the project follows Semantic Versioning in spirit.
   page shows the Sérsic profiles as well.
 * A measurement of the signal-to-noise above which the effective-PSF
   rendering of AD-046 leaves on a component an error comparable with the
-  noise ([note](docs/research/RENDERING_SIGNAL_LIMIT_2026-10-02.md),
-  `benchmarks/rendering_signal_limit.py`): from 1.2e3 for a Sérsic profile of
+  noise: from 1.2e3 for a Sérsic profile of
   n = 6 and re = 1 px to 2.1e4, 3.3 times the peak signal-to-noise of the
   production target for its profile, and above 1.8e4 for point sources. A
   status note under AD-046 and the pages of the original models state it.
@@ -110,8 +108,7 @@ and the project follows Semantic Versioning in spirit.
   draw a Z on the detector and negative ones an S. Its rendering is
   validated for `winding_spiral` from −6 to 6, pitch angles of at least
   9.5°, with `re_disk` of at least 10 px, `q_disk` of at least 0.4 and
-  `r_in_spiral` of at least 1 px
-  ([note](docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)), and it
+  `r_in_spiral` of at least 1 px, and it
   has a page and figures in `docs/models/`.
 * The generic cell rules integrate adaptively the cells where an oscillating
   component, such as spiral arms, has a wavelength shorter than their rule
@@ -127,8 +124,7 @@ and the project follows Semantic Versioning in spirit.
   of at least 2 px and `q_ring` of at least 0.5; configuration validation,
   now tested for every family, rejects priors beyond these domains. At high
   signal-to-noise the edge of a bar outside the window of AD-046 is rendered
-  with an error comparable with the noise, as its page states
-  ([note](docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+  with an error comparable with the noise, as its page states.
 * Adaptive integration in the generic cell rules splits the cells that the
   edge of a finite support crosses, whatever its test of agreement says: a
   sliver of light that no node samples was otherwise lost, up to 4.6e-5 of
@@ -144,8 +140,7 @@ and the project follows Semantic Versioning in spirit.
   * `core_sersic`, the core-Sérsic profile of a depleted core with `rb`,
     `gamma` and `alpha`.
 
-  Their rendering meets the criteria of AD-046 on the bench of the families
-  ([note](docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+  Their rendering meets the criteria of AD-046 on the bench of the families.
   Configuration validation rejects priors beyond the domain in which it is
   validated, and the multi-observation workflow rejects models without a
   geometry contract, these two included. Each has a page with figures in
@@ -161,10 +156,9 @@ and the project follows Semantic Versioning in spirit.
   The sixth-order rule of the fine cells is now shared with the Sérsic
   profile, which renders bit for bit as before. A bench measures the families
   against brute-force references, with its design and criteria fixed before
-  the runs ([note](docs/research/MORPHOLOGY_FAMILIES_RENDERING_2026-10-02.md)).
+  the runs.
 * AD-048, six further morphology families as available single-observation
-  models, and the survey behind it
-  ([note](docs/research/MORPHOLOGY_FAMILIES_2026-10-02.md)): a catalogue of
+  models, and the survey behind it: a catalogue of
   families beyond the Sérsic profile, spiral arms included, and the reasons
   why the production target needs none of them.
 * A Models section on the documentation site (`docs/models/`): the morphological
@@ -179,61 +173,49 @@ and the project follows Semantic Versioning in spirit.
   tutorials. `tests/test_documentation.py` keeps it in step with the default
   configuration, the models and the command line.
 * AD-047, source variance and sky correlation in the noise model, accepted on
-  2026-10-02 with three amendments
-  ([proposal](docs/research/NOISE_MODEL_PROPOSAL_2026-10-02.md)).
+  2026-10-02 with three amendments.
 * A simulation bench of noise models (`benchmarks/noise_model_bench.py`): the
   production model reports intervals up to 3.0 times too narrow, a model with
-  source variance and sky correlation within 0.90-1.16
-  ([note](docs/research/NOISE_MODEL_BENCH_2026-10-01.md)).
+  source variance and sky correlation within 0.90-1.16.
 * A feasibility study of computer-vision source identification against the
   production detection (`benchmarks/cv_source_identification.py`), closed with
-  a no-go as a replacement
-  ([note](docs/research/CV_SOURCE_IDENTIFICATION_2026-10-01.md)).
+  a no-go as a replacement.
 * An audit of the noise and background chain with a sandwich measurement of
   interval calibration (`benchmarks/noise_interval_calibration.py`): the
   production noise model reports intervals of n and re four to five times too
-  narrow ([note](docs/research/NOISE_BACKGROUND_AUDIT_2026-10-01.md)).
-* The proposed AD-046, effective-PSF rendering with extended empirical kernels
-  ([note](docs/research/PSF_RENDERING_PROPOSAL_2026-10-01.md)), since
-  accepted.
+  narrow.
+* The proposed AD-046, effective-PSF rendering with extended empirical
+  kernels, since accepted.
 * Empirical-PSF builders with extended wings measured on the test bench
   (`benchmarks/psf_wing_candidates.py`); W1, with the wings of the stars
-  measured out to 64 px, keeps the bias of n and re within 1 percent
-  ([note](docs/research/PSF_EXTENDED_WINGS_2026-10-01.md)).
+  measured out to 64 px, keeps the bias of n and re within 1 percent.
 * A measurement of how PSF and rendering errors move the fitted Sérsic
   parameters (`benchmarks/psf_parameter_sensitivity.py`): sampling at pixel
-  centres moves n and re by up to 14 and 22 percent
-  ([note](docs/research/PSF_PARAMETER_SENSITIVITY_2026-10-01.md)).
+  centres moves n and re by up to 14 and 22 percent.
 * A comparison of rendering conventions under an empirical PSF against a
   brute-force reference (`benchmarks/rendering_convention.py`): sampling at
   pixel centres fails both criteria, a smooth-window local oversampling meets
-  both ([note](docs/research/RENDERING_CONVENTION_2026-10-01.md)).
+  both.
 * Candidate empirical-PSF builders measured on the test bench
   (`benchmarks/psf_builder_candidates.py`): a phase regression of the stars,
-  with no interpolation, meets every criterion
-  ([note](docs/research/PSF_BUILDER_CANDIDATES_2026-09-30.md)).
+  with no interpolation, meets every criterion.
 * A test bench for the empirical-PSF builder (`benchmarks/psf_test_bench.py`):
-  the production kernel failed its own centring check in 36 of 40 fields
-  ([note](docs/research/PSF_TEST_BENCH_2026-09-30.md)).
+  the production kernel failed its own centring check in 36 of 40 fields.
 * An adaptive model-informed evidence estimator compared with Nautilus,
   Dynesty and pocoMC on six analytic targets: Nautilus was correct in 60 of 60
-  runs, the estimator in 47
-  ([note](docs/research/STRUCTURE_INFORMED_EVIDENCE_ADAPTIVE_2026-09-30.md)).
+  runs, the estimator in 47.
 * Likelihood views extending the model-informed evidence estimator to the
   correlated Gaussian, Cash and Poisson-Gaussian likelihoods
-  (`benchmarks/structure_informed_likelihood_views.py`)
-  ([note](docs/research/STRUCTURE_INFORMED_EVIDENCE_LIKELIHOODS_2026-09-29.md)).
+  (`benchmarks/structure_informed_likelihood_views.py`).
 * A comparison of the model-informed evidence estimator with Nautilus on the
   simulated galaxy of the first tutorial
   (`validation/structure_informed_evidence/`), a smoke test on one galaxy.
 * A model-informed evidence estimator that reproduces the Nautilus evidence of
   the r-band fit with 15 times fewer evaluations and flags its own failures;
-  AD-045 remains a proposal
-  ([note](docs/research/STRUCTURE_INFORMED_EVIDENCE_2026-09-29.md)).
+  AD-045 remains a proposal.
 * A decomposition of the cost of one likelihood evaluation
   (`benchmarks/profile_likelihood_decomposition.py`): 51.5 ms on the real
-  r-band problem, not the recorded 146 ms
-  ([note](docs/research/LIKELIHOOD_COST_DECOMPOSITION_2026-09-20.md)).
+  r-band problem, not the recorded 146 ms.
 * `preparation.masking.negative_threshold_sigma`, default 5, which excludes
   impossibly negative pixels from the likelihood support (AD-043).
 * Explicit `background` and `psf_max_peak` declarations in
@@ -284,6 +266,12 @@ and the project follows Semantic Versioning in spirit.
 
 ### Changed
 
+* The repository and the documentation site hold what a user of BayMorph
+  needs. The design documents, the decision records, the plan of work, the
+  research notes and the code of the simulation benches and validation
+  campaigns, with the tests of that code, are no longer published; the page
+  For Developers is removed, and the installation from a clone is described
+  in the README and the installation guide.
 * The production preparation masks a detected segment only when it still
   holds a source with the detection threshold raised by the smooth light of
   the target, `preparation.masking.contaminant_rule: local_excess`, the new
@@ -294,8 +282,7 @@ and the project follows Semantic Versioning in spirit.
   keeps the previous masks. A preparation records its rule and the segments
   it released, and products prepared before the rule are reused only when
   `all_segments` is declared. On the same simulated images the biases fall
-  within 0.14 of the scatter (AD-050,
-  [note](docs/research/CONTAMINANT_RULE_2026-10-04.md)).
+  within 0.14 of the scatter (AD-050).
 * BayMorph refuses, when it loads a FITS image, an image whose header
   declares pixel values that are not linear in flux, as AD-049 decides: a
   Pan-STARRS stack, whose values are compressed through `asinh` with
@@ -391,7 +378,7 @@ and the project follows Semantic Versioning in spirit.
 * The rendering of AD-046 is evaluated within 2e-10 of its previous evaluation
   in 68-72 ms instead of 158 ms per complete likelihood evaluation of a
   production-size problem; checkpoints made with the previous evaluation are
-  rejected ([note](docs/research/EFFECTIVE_PSF_COST_2026-10-01.md)).
+  rejected.
 * The production empirical-PSF builder is the builder of AD-046, with four new
   keys of `psf.empirical.construction` and PSF products of schema 2 holding
   the sub-pixel kernels; products of the previous schema are rejected for
@@ -465,7 +452,7 @@ and the project follows Semantic Versioning in spirit.
   the noise-model bench, which called the retired estimator.
 * Code used only by tests, found by the deep audit of 2026-09-30, with its
   tests: five modules and sixteen functions, none of them in the top-level
-  public API ([audit](docs/archive/audits/BayMorph_DEEP_AUDIT_2026-09-30.md)).
+  public API.
 * The posterior-only emcee backend, never released. Every fit, in both
   workflows, now requires a completely normalized likelihood.
 * Dead or superseded code found by the audit of 2026-09-29.

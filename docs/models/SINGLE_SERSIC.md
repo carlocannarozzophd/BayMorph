@@ -54,8 +54,7 @@ residuals and in the reduced chi-square, not in the posterior widths.
 
 - The flux, the effective radius and the index are strongly correlated: on a
   real image the local correlations were 0.99 between `flux` and `re`, 0.95
-  between `flux` and `n`, and 0.98 between `re` and `n`
-  ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/architecture/INFERENCE_GEOMETRY.md)).
+  between `flux` and `n`, and 0.98 between `re` and `n`.
   Assess them jointly, for example with
   `InferenceResult.mahalanobis_distance`.
 - The residual background is anticorrelated with the structural parameters,
@@ -63,8 +62,7 @@ residuals and in the reduced chi-square, not in the posterior widths.
   centre.
 - `theta` is undefined when `q` approaches 1, and has period π.
 - `n` and `re` follow the PSF core: each percent of error in its width moves
-  `n` by about 1 percent and `re` by about 2 percent
-  ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/PSF_PARAMETER_SENSITIVITY_2026-10-01.md)).
+  `n` by about 1 percent and `re` by about 2 percent.
 
 ![Two plots: the radial profiles of a Sérsic of index 4 and of the index-3 Sérsic that best matches it, and their difference in percent against radius](figures/sersic_degeneracy-light.png#gh-light-mode-only)
 ![Two plots: the radial profiles of a Sérsic of index 4 and of the index-3 Sérsic that best matches it, and their difference in percent against radius](figures/sersic_degeneracy-dark.png#gh-dark-mode-only)
@@ -80,15 +78,13 @@ residuals and in the reduced chi-square, not in the posterior widths.
 - **Very deep images.** Under an empirical PSF the rendering error is a
   fixed fraction of the profile, so it becomes comparable with the noise
   above a peak signal-to-noise that depends on n and Rₑ: from 1.2e3 for
-  n = 6 and Rₑ = 1 px to about 2e4 for shallower profiles
-  ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/RENDERING_SIGNAL_LIMIT_2026-10-02.md)).
+  n = 6 and Rₑ = 1 px to about 2e4 for shallower profiles.
 - **Calibration.** On fifty simulated images with independent noise, a
   Gaussian PSF and Gaussian noise, the posteriors were found calibrated.
 - **Noise model.** On simulated coadds whose noise has a Poisson term from
   the galaxy and a correlated sky, a model of independent pixels reported
   intervals up to three times too narrow; the noise model of BayMorph brings
-  the ratio of the true to the reported width to between 0.90 and 1.16
-  ([details](https://github.com/carlocannarozzophd/BayMorph/blob/main/docs/research/NOISE_MODEL_BENCH_2026-10-01.md)).
+  the ratio of the true to the reported width to between 0.90 and 1.16.
 - **Real data.** No fit of a real image has been validated yet.
 
 ## Configuration
