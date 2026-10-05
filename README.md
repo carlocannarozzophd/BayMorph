@@ -82,7 +82,7 @@ observations, or survey-level population inference.
 | --- | --- |
 | Observation preparation | FITS ingestion, target identification, automatic and fixed cutouts, constant background subtraction, a robust sky noise scale, exclusion of impossibly negative pixels |
 | Detection and masking | Source detection and segmentation, masking of the detected sources that stand out above the light of the target, external masks |
-| Morphology models | Single Sérsic, two labelled Sérsic components, bulge and disc, Sérsic plus point source |
+| Morphology models | Ten models built from nine components. For one image or several: single Sérsic, two labelled Sérsic components, Sérsic plus point source, bulge and disc. For one image: boxy or discy Sérsic, core-Sérsic, bulge and broken disc, and bulge and disc with a bar, a ring or two spiral arms |
 | Rendering | Detector-pixel integration, and effective-PSF rendering of empirical PSFs with sub-pixel kernels |
 | PSF | Analytic Gaussian PSFs; empirical PSFs built from the stars of the image, with sub-pixel kernels and extended wings |
 | Likelihoods | The same noise model for single and joint fits: a normalized Gaussian whose variance is the prepared sky scale squared plus the source part of the model over a declared effective gain, with the stationary correlation of the sky through a 24-neighbour factorization. Cash and Poisson-Gaussian likelihoods for images in counts. The independent Gaussian remains for simulations through the Python API |

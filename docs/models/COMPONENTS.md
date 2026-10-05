@@ -1,9 +1,12 @@
 # Morphological Components
 
-The four Sérsic-based morphology models are sums of three components:
-the Sérsic profile, the exponential disc and the unresolved point source.
-The six other models add components of their own, described at the end of
-this page. A component describes intrinsic light only; it owns no PSF, no
+BayMorph builds its ten morphology models from nine components. The four
+models that accept a single image or several are sums of three of them: the
+Sérsic profile, the exponential disc and the unresolved point source. The
+six models for a single image add six components of their own, described at
+the end of this page: the generalized Sérsic profile, the core-Sérsic
+profile, the broken exponential disc, the Ferrers bar, the Gaussian ring and
+the exponential disc with spiral arms. A component describes intrinsic light only; it owns no PSF, no
 noise and no prior.
 
 ## Sérsic profile

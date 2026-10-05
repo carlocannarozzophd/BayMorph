@@ -41,8 +41,6 @@ from matplotlib.colors import (  # noqa: E402
 from matplotlib.patches import (  # noqa: E402
     Arc,
     Ellipse,
-    FancyArrowPatch,
-    FancyBboxPatch,
     Patch,
     Rectangle,
 )
@@ -390,67 +388,84 @@ def forward_model(theme: Theme) -> plt.Figure:
     return fig
 
 
+MODEL_COMPONENTS = (
+    ("single_sersic", ("sersic",)),
+    ("double_sersic", ("sersic", "sersic")),
+    ("sersic_point_source", ("sersic", "point_source")),
+    ("bulge_disk", ("sersic", "exponential")),
+    ("boxy_sersic", ("generalized_sersic",)),
+    ("core_sersic", ("core_sersic",)),
+    ("bulge_broken_disk", ("sersic", "broken_exponential")),
+    ("bulge_disk_bar", ("sersic", "exponential", "ferrers_bar")),
+    ("bulge_disk_ring", ("sersic", "exponential", "gaussian_ring")),
+    ("bulge_disk_spiral", ("sersic", "spiral_disk")),
+)
+"""The components of each built-in model, in the order of the registry."""
+
+COMPONENT_LABELS = (
+    ("sersic", "Sérsic"),
+    ("exponential", "Exponential disc"),
+    ("point_source", "Point source"),
+    ("generalized_sersic", "Generalized Sérsic"),
+    ("core_sersic", "Core-Sérsic"),
+    ("broken_exponential", "Broken exponential"),
+    ("ferrers_bar", "Ferrers bar"),
+    ("gaussian_ring", "Gaussian ring"),
+    ("spiral_disk", "Disc with spiral arms"),
+)
+
+JOINT_MODELS = 4
+"""The first models of ``MODEL_COMPONENTS`` accept a joint fit of several images."""
+
+
 def model_composition(theme: Theme) -> plt.Figure:
     """Which components each morphology model is made of."""
-    fig, ax = plt.subplots(figsize=(30.0, 11.2))
-    ax.set_xlim(0, 10)
-    ax.set_ylim(1.0, 5.75)
+    rows = len(MODEL_COMPONENTS)
+    columns = len(COMPONENT_LABELS)
+    fig, ax = plt.subplots(figsize=(30.0, 21.0))
+    left, top = 4.6, rows
+    ax.set_xlim(0.0, left + columns + 3.2)
+    ax.set_ylim(-1.6, rows + 3.9)
     ax.axis("off")
 
-    def box(x, y, w, h, title, detail=None, emphasis=False):
-        ax.add_patch(
-            FancyBboxPatch(
-                (x, y), w, h,
-                boxstyle="round,pad=0.02,rounding_size=0.12",
-                facecolor=theme.grid if emphasis else theme.surface,
-                edgecolor=theme.ink,
-                linewidth=THIN,
-            )
-        )
-        if detail is None:
-            ax.text(x + w / 2, y + h / 2, title, ha="center", va="center",
-                    color=theme.ink, fontsize=33)
-            return
-        ax.text(x + w / 2, y + h / 2 + 0.15, title, ha="center", va="center",
-                color=theme.ink, fontsize=33)
-        ax.text(x + w / 2, y + h / 2 - 0.19, detail, ha="center", va="center",
-                color=theme.secondary, fontsize=27)
+    for column in range(columns + 1):
+        ax.plot([left + column, left + column], [0.0, top],
+                color=theme.grid, linewidth=THIN, zorder=0)
+    for row in range(rows + 1):
+        ax.plot([left, left + columns], [row, row],
+                color=theme.grid, linewidth=THIN, zorder=0)
+    ax.plot([0.1, left + columns + 3.1], [rows - JOINT_MODELS] * 2,
+            color=theme.muted, linewidth=LINE, zorder=1)
 
-    def link(start, end):
-        ax.add_patch(
-            FancyArrowPatch(
-                start, end, arrowstyle="-|>", mutation_scale=30,
-                color=theme.muted, linewidth=THIN, shrinkA=0, shrinkB=0,
-            )
-        )
+    for column, (_, label) in enumerate(COMPONENT_LABELS):
+        ax.text(left + column + 0.5, top + 0.2, cm(label), rotation=40,
+                ha="left", va="bottom", rotation_mode="anchor",
+                color=theme.ink, fontsize=30)
 
-    ax.text(1.3, 5.45, "Components", ha="center", color=theme.secondary)
-    ax.text(5.0, 5.45, "Morphology models", ha="center", color=theme.secondary)
-    ax.text(8.6, 5.45, "Observation", ha="center", color=theme.secondary)
+    index = {key: column for column, (key, _) in enumerate(COMPONENT_LABELS)}
+    for row, (name, components) in enumerate(MODEL_COMPONENTS):
+        y = top - row - 0.5
+        escaped = name.replace("_", "\\_")
+        ax.text(left - 0.2, y, rf"$\mathtt{{{escaped}}}$", ha="right",
+                va="center", color=theme.ink, fontsize=30)
+        for key in set(components):
+            count = components.count(key)
+            x = left + index[key] + 0.5
+            offsets = (0.0,) if count == 1 else (-0.17, 0.17)
+            for offset in offsets:
+                ax.plot(x + offset, y, "o", markersize=26, color=theme.ink,
+                        zorder=2)
 
-    box(0.15, 3.85, 2.3, 0.85, cm("Sérsic profile"))
-    box(0.15, 2.55, 2.3, 0.85, "Exponential disc", cm("Sérsic with $n = 1$"))
-    box(0.15, 1.25, 2.3, 0.85, "Point source", "unresolved")
-
-    models = (
-        ("single\\_sersic", cm("one Sérsic"), 4.25),
-        ("double\\_sersic", cm("Sérsic + Sérsic"), 3.25),
-        ("bulge\\_disk", cm("Sérsic bulge + exponential disc"), 2.25),
-        ("sersic\\_point\\_source", cm("Sérsic + point source"), 1.25),
-    )
-    for name, detail, y in models:
-        box(3.55, y, 2.9, 0.78, rf"$\mathtt{{{name}}}$", detail, emphasis=True)
-
-    sersic_out = (2.45, 4.27)
-    for _, _, y in models:
-        link(sersic_out, (3.55, y + 0.39))
-    link((2.45, 2.97), (3.55, 2.64))
-    link((2.45, 1.67), (3.55, 1.64))
-
-    box(7.35, 2.15, 2.5, 1.65,
-        "convolved with the PSF\n+ residual background\n= expected image")
-    for _, _, y in models:
-        link((6.45, y + 0.39), (7.35, 2.97))
+    ax.text(left + columns + 0.25, top - JOINT_MODELS / 2,
+            "single image\nor several", ha="left", va="center",
+            color=theme.secondary, fontsize=28)
+    ax.text(left + columns + 0.25, (rows - JOINT_MODELS) / 2,
+            "single image\nonly", ha="left", va="center",
+            color=theme.secondary, fontsize=28)
+    ax.text((left + columns) / 2 + 1.0, -0.9,
+            "Every model is convolved with the PSF and summed with the "
+            "residual background: the expected image.",
+            ha="center", va="center", color=theme.secondary, fontsize=28)
     return fig
 
 

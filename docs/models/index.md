@@ -33,7 +33,7 @@ measurement, and never change the meaning of a morphological parameter.
 
 | Part | Models | Page |
 | --- | --- | --- |
-| Morphological components | Sérsic, exponential disc, point source, and the components of the other models | [Components](COMPONENTS.md) |
+| Morphological components | nine components: Sérsic, exponential disc, point source, generalized Sérsic, core-Sérsic, broken exponential disc, Ferrers bar, Gaussian ring, exponential disc with spiral arms | [Components](COMPONENTS.md) |
 | Galaxy models | `single_sersic`, `double_sersic`, `sersic_point_source`, `bulge_disk`; `boxy_sersic`, `core_sersic`, `bulge_broken_disk`, `bulge_disk_bar`, `bulge_disk_ring`, `bulge_disk_spiral` | one page each, below |
 | Point-spread function | Gaussian, empirical | [Point-Spread Functions](PSF.md) |
 | Noise | correlated Gaussian; experimental Poisson likelihoods | [Noise Models](NOISE.md) |
@@ -65,8 +65,8 @@ domain in which their rendering is validated, which each page states.
 A fit samples these parameters together with those of the residual
 background: one for a constant background, three for a plane.
 
-![Diagram: the Sérsic, exponential-disc and point-source components feed the four morphology models, which are convolved with the PSF and summed with the residual background](figures/model_composition-light.png#gh-light-mode-only)
-![Diagram: the Sérsic, exponential-disc and point-source components feed the four morphology models, which are convolved with the PSF and summed with the residual background](figures/model_composition-dark.png#gh-dark-mode-only)
+![Grid of the ten morphology models against the nine components: a dot where a model uses a component, two for the two Sérsic components of double_sersic; the first four models accept a single image or several, the last six a single image only](figures/model_composition-light.png#gh-light-mode-only)
+![Grid of the ten morphology models against the nine components: a dot where a model uses a component, two for the two Sérsic components of double_sersic; the first four models accept a single image or several, the last six a single image only](figures/model_composition-dark.png#gh-dark-mode-only)
 
 *Which components each model is made of, and how every model becomes an expected image.*
 

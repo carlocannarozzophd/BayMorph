@@ -48,7 +48,7 @@ together.
 | `--target-center` | Use the detector centre as the target seed; cannot be combined with `--target-x` or `--target-y`. | |
 | `--output` | Path of the YAML file to write. | `<FITS stem>.yaml` in the current directory |
 | `--object-name` | Name of the analysis object, which names its output directory. | FITS file name without extension |
-| `--model` | Registered morphology model: `single_sersic`, `double_sersic`, `sersic_point_source` or `bulge_disk`. | `single_sersic` |
+| `--model` | Registered morphology model, one of the ten of the [Models](../models/index.md) section, such as `single_sersic`, `bulge_disk` or `core_sersic`; give the flux prior of each component with `--uniform-prior`, such as `flux_bulge` and `flux_disk`. | `single_sersic` |
 | `--sampler` | Inference backend: `nautilus`, `dynesty` or `pocomc`. | `nautilus` |
 | `--uniform-prior PARAMETER LOWER UPPER` | Uniform prior of one model parameter; repeat it for several. Required for every parameter without a default prior, such as `flux`. | |
 | `--cutout-mode` | `auto` derives the cutout from the sky plateau of the target; `fixed` uses `--cutout-size`. | `auto` |
