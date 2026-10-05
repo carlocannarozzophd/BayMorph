@@ -63,6 +63,7 @@ replaced by `data.mask_path`.
 | `preparation.detection.n_sigma` | number | 3.0 | Detection threshold above the background, in units of its noise. |
 | `preparation.detection.n_levels` | integer | 32 | Deblending levels of the segmentation. |
 | `preparation.detection.n_pixels` | integer | 20 | Minimum number of connected pixels of a source. |
+| `preparation.masking.contaminant_rule` | `local_excess` or `all_segments` | `local_excess` | Which detected segments are masked: with `local_excess`, only those that still hold a source with the detection threshold raised by the smooth light of the target; with `all_segments`, every segment other than the target. |
 | `preparation.masking.negative_threshold_sigma` | number or `null` | 5.0 | Pixels below `−k` times the noise scale after background subtraction leave the likelihood support; `null` disables the criterion. |
 | `preparation.background.box_size` | integer | 30 | Inert: kept only because the section enters the preparation identity. |
 | `preparation.background.filter_size` | integer | 3 | Inert, as above. |

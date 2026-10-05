@@ -12,8 +12,7 @@ segmentation map ([Photutils](https://photutils.readthedocs.io/)): on a
 smoothed copy of the cutout, pixels more than `n_sigma` noise units above
 the background, in groups of at least `n_pixels` connected pixels, are
 sources, and touching sources are separated by deblending with `n_levels`
-levels. The source that contains the target position is the target; every
-other source is masked.
+levels. The source that contains the target position is the target.
 
 ```yaml
 preparation:
@@ -22,6 +21,30 @@ preparation:
     n_pixels: 20       # smallest source, in connected pixels
     n_levels: 32       # deblending levels
 ```
+
+Not every other detected segment is masked. Over the wings of the target,
+the light of the target lifts peaks of the noise above the threshold, and
+each would become a segment of its own; masking them removes positive noise
+from the fit and biases the flux, the effective radius and the Sérsic index
+low. A segment is therefore masked only when it still holds a source once
+the threshold is raised by the smooth light of the target: at least
+`n_pixels` connected pixels above the median profile of the target, in
+elliptical annuli, by the same margin that the detection asks above the
+sky. Far from the target this is the detection itself. The other segments
+are released and enter the fit like every other pixel.
+
+```yaml
+preparation:
+  masking:
+    contaminant_rule: local_excess   # or all_segments, which masks every segment
+```
+
+`all_segments` masks every detected segment, as earlier versions of
+BayMorph did. It is kept so that products prepared before the rule can
+still be used: a preparation records its rule, and products prepared under
+the other rule are not reused. The rule decides segment by segment: a
+segment that holds a neighbour and, through the deblending, a part of the
+envelope of the target stays masked whole.
 
 Each source is masked over its detected segment. The faint outskirts of a
 bright neighbour beyond its segment are not masked; an external mask can
@@ -70,7 +93,8 @@ fig, ax = plot_log_image(used, title="Pixels used by the likelihood", show=True)
 | Attribute | Content |
 | --- | --- |
 | `fitting_mask` | The mask of the fit: `True` for excluded pixels. |
-| `contaminant_mask` | The other detected sources. |
+| `contaminant_mask` | The other detected sources that the contaminant rule masks. |
+| `released_labels` | The labels of the detected segments that the rule left unmasked. |
 | `target_segment` | The pixels detected as the target. |
 | `segmentation` | The segmentation map: 0 for the background, one integer label per source. |
 | `external_mask` | Your external mask on the cutout, when one is given. |

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +19,7 @@ from baymorph.core.background import (
 from baymorph.core.detection import (
     DetectionResult,
     detect_sources_segmentation,
+    segments_above_level,
 )
 from baymorph.core.noise import (
     estimate_noise_map,
@@ -35,12 +36,14 @@ from baymorph.core.sky import (
     PlateauResult,
     RadialProfile,
     SkyRegion,
+    build_elliptical_radius_map,
     build_sky_region,
 )
 from baymorph.pipeline.checkpoint_signing import (
     write_json_atomic as _write_json_atomic,
 )
 from baymorph.pipeline.config import (
+    DEFAULT_CONFIG,
     load_resolved_config,
     resolve_runtime_config,
 )
@@ -60,6 +63,8 @@ from baymorph.pipeline.outputs import (
 from baymorph.pipeline.preparation_steps import (
     AutoCutoutResult,
     TargetGeometry,
+    build_target_radial_profile,
+    estimate_target_geometry_from_image,
     estimate_target_sky,
 )
 from baymorph.pipeline.prepared_identity import (
@@ -450,15 +455,33 @@ def _validate_products_against_current_sources(
             "mask crop."
         )
 
+    rule = _contaminant_rule(config)
+    if products.contaminant_rule != rule:
+        raise RuntimeError(
+            "Persisted contaminant rule does not match the current "
+            "configuration."
+        )
+
     segmentation = np.asarray(products.segmentation)
-    expected_contaminants = (segmentation > 0) & (
+    candidates = (segmentation > 0) & (
         segmentation != int(products.target_label)
     )
+    released = np.asarray(products.released_labels, dtype=int)
+    if released.size and (
+        rule == "all_segments"
+        or np.unique(released).size != released.size
+        or not np.all(np.isin(released, np.unique(segmentation[candidates])))
+    ):
+        raise RuntimeError(
+            "Persisted released segments are not distinct non-target "
+            "segments released by the configured contaminant rule."
+        )
+    expected_contaminants = candidates & ~np.isin(segmentation, released)
     contaminants = np.asarray(products.contaminant_mask, dtype=bool)
     if not np.array_equal(contaminants, expected_contaminants):
         raise RuntimeError(
-            "Persisted contaminant mask does not match the segmentation and "
-            "target label."
+            "Persisted contaminant mask does not match the segmentation, "
+            "target label and released segments."
         )
 
     composition_mask = build_fitting_mask(
@@ -756,12 +779,147 @@ def prepare_real_fits_image(
 
 @dataclass(slots=True)
 class _TargetDetection:
-    """Target-selection products for one image coordinate system."""
+    """Target-selection products for one image coordinate system.
+
+    ``released_labels`` are the segments that the contaminant rule left
+    unmasked: they are absent from ``contaminant_mask``.
+    """
 
     detection: DetectionResult
     target_label: int
     target_segment: np.ndarray
     contaminant_mask: np.ndarray
+    released_labels: tuple[int, ...] = ()
+
+
+CONTAMINANT_RULES = ("local_excess", "all_segments")
+"""Rules that select the detected segments masked as contaminants."""
+
+
+def _contaminant_rule(config: Mapping[str, Any]) -> str:
+    """Return the configured contaminant rule.
+
+    A configuration passed as a mapping without the entry takes the default
+    that :func:`baymorph.pipeline.config.resolve_config` would give it.
+    """
+    rule = (
+        config.get("preparation", {})
+        .get("masking", {})
+        .get(
+            "contaminant_rule",
+            DEFAULT_CONFIG["preparation"]["masking"]["contaminant_rule"],
+        )
+    )
+
+    if rule not in CONTAMINANT_RULES:
+        raise ValueError(
+            "preparation.masking.contaminant_rule must be one of "
+            f"{list(CONTAMINANT_RULES)}, not {rule!r}."
+        )
+
+    return rule
+
+
+def _target_light_level(
+    image: np.ndarray,
+    target_detection: _TargetDetection,
+) -> np.ndarray:
+    """Return the background plus the smooth light of the target, per pixel.
+
+    The level is the median of the smoothed detection image in elliptical
+    annuli one pixel wide about the target, with the geometry measured from
+    the target segment and every other detected segment excluded; annuli
+    with no unmasked pixel take the value interpolated from their
+    neighbours. Far from the target it is the background of the image.
+    """
+    detection = target_detection.detection
+    geometry = estimate_target_geometry_from_image(
+        image,
+        target_detection.target_segment,
+    )
+    profile = build_target_radial_profile(
+        detection.detection_image,
+        geometry,
+        mask=target_detection.contaminant_mask,
+    )
+    valid = np.isfinite(profile.profile)
+
+    if not np.any(valid):
+        raise RuntimeError(
+            "The radial profile of the detection image has no unmasked "
+            "annulus; the contaminant rule cannot be applied."
+        )
+
+    level = np.interp(
+        profile.radius,
+        profile.radius[valid],
+        profile.profile[valid],
+    )
+    radius_map = build_elliptical_radius_map(
+        image.shape,
+        x0=geometry.x0,
+        y0=geometry.y0,
+        q=geometry.q,
+        theta=geometry.theta,
+    )
+
+    return level[np.floor(radius_map).astype(int)]
+
+
+def _apply_contaminant_rule(
+    image: np.ndarray,
+    target_detection: _TargetDetection,
+    *,
+    rule: str,
+    detection_cfg: Mapping[str, Any],
+) -> _TargetDetection:
+    """Select the detected segments that are masked as contaminants.
+
+    With ``all_segments`` every detected segment other than the target is
+    masked. With ``local_excess`` a segment stays masked only when it still
+    holds a source once the detection threshold is raised by the smooth light
+    of the target: at least ``n_pixels`` of ``detection_cfg`` connected
+    pixels of the smoothed image exceed the level of
+    :func:`_target_light_level` by the excess of the detection threshold
+    over its background. Peaks of the noise that the
+    wings of the target lift above the threshold are released, and enter the
+    likelihood like every other unmasked pixel; far from the target the test
+    is the detection itself.
+    """
+    if rule not in CONTAMINANT_RULES:
+        raise ValueError(
+            f"Unknown contaminant rule {rule!r}; expected one of "
+            f"{list(CONTAMINANT_RULES)}."
+        )
+
+    if rule == "all_segments":
+        return target_detection
+
+    detection = target_detection.detection
+    segmentation = np.asarray(detection.segmentation.data)
+    candidates = np.unique(segmentation[target_detection.contaminant_mask])
+
+    if candidates.size == 0:
+        return target_detection
+
+    holds_source = segments_above_level(
+        detection.detection_image,
+        segmentation,
+        candidates,
+        level=_target_light_level(image, target_detection),
+        excess=detection.threshold_level - detection.background_level,
+        n_pixels=detection_cfg["n_pixels"],
+    )
+    released = candidates[~holds_source]
+
+    return replace(
+        target_detection,
+        contaminant_mask=(
+            target_detection.contaminant_mask
+            & ~np.isin(segmentation, released)
+        ),
+        released_labels=tuple(int(value) for value in released),
+    )
 
 
 def _negative_threshold_sigma(
@@ -868,10 +1026,16 @@ def _resolve_auto_cutout(
     target_y: float,
     cutout_cfg: dict[str, Any],
     detection_cfg: dict[str, Any],
+    contaminant_rule: str,
     external_mask: np.ndarray | None = None,
     fitting_mask_mode: str = "union",
 ) -> AutoCutoutResult:
-    """Resolve a plateau-based automatic cutout for a target source."""
+    """Resolve a plateau-based automatic cutout for a target source.
+
+    The contaminant rule selects the masked segments of the preliminary
+    cutout, whose plateau sets the size of the cutout. On the whole image
+    only the target segment is used, so the rule is not applied there.
+    """
     full_detection = _detect_target_in_image(
         image,
         target_x=target_x,
@@ -907,12 +1071,17 @@ def _resolve_auto_cutout(
         preliminary_definition,
     )
 
-    preliminary_detection = _detect_target_in_image(
+    preliminary_detection = _apply_contaminant_rule(
         preliminary_cutout,
-        target_x=target_x - preliminary_definition.xmin,
-        target_y=target_y - preliminary_definition.ymin,
+        _detect_target_in_image(
+            preliminary_cutout,
+            target_x=target_x - preliminary_definition.xmin,
+            target_y=target_y - preliminary_definition.ymin,
+            detection_cfg=detection_cfg,
+            context="preliminary-cutout detection",
+        ),
+        rule=contaminant_rule,
         detection_cfg=detection_cfg,
-        context="preliminary-cutout detection",
     )
 
     preliminary_external_mask = (
@@ -1008,7 +1177,8 @@ class PreparedObservation:
         Curated exclusions are removed without inferring target membership
         from unmasked pixels.
     contaminant_mask : ndarray of bool
-        Automatic exclusion mask containing detected non-target sources.
+        Automatic exclusion mask containing the detected non-target segments
+        that the contaminant rule masks.
     segmentation : ndarray
         Integer segmentation map.
     background : float
@@ -1049,6 +1219,11 @@ class PreparedObservation:
         significant at several sigma indicates that
         ``fit.background.model: plane`` is warranted, which remains an
         explicit user decision.
+    contaminant_rule : {"local_excess", "all_segments"}, default="all_segments"
+        Rule that selected the masked segments; products persisted before
+        the rule existed masked every segment.
+    released_labels : tuple of int, default=()
+        Labels of the non-target segments that the rule left unmasked.
     """
 
     cutout: np.ndarray
@@ -1079,6 +1254,9 @@ class PreparedObservation:
     preliminary_segmentation: np.ndarray | None = None
 
     sky_gradient: dict[str, float] | None = None
+
+    contaminant_rule: str = "all_segments"
+    released_labels: tuple[int, ...] = ()
 
 
 def make_target_cutout(
@@ -1168,6 +1346,7 @@ def prepare_real_image_from_config(
 
     cutout_cfg = resolved["data"]["cutout"]
     detection_cfg = resolved["preparation"]["detection"]
+    contaminant_rule = _contaminant_rule(resolved)
 
     fitting_mask_mode = _resolve_fitting_mask_mode(resolved["data"])
 
@@ -1203,7 +1382,8 @@ def prepare_real_image_from_config(
             target_y=target_position["y"],
             cutout_cfg=cutout_cfg,
             detection_cfg=detection_cfg,
-                external_mask=external_mask,
+            contaminant_rule=contaminant_rule,
+            external_mask=external_mask,
             fitting_mask_mode=fitting_mask_mode,
         )
         cutout_definition = auto_cutout_result.cutout
@@ -1226,12 +1406,17 @@ def prepare_real_image_from_config(
     seed_target_x = float(target_position["x"]) - cutout_definition.xmin
     seed_target_y = float(target_position["y"]) - cutout_definition.ymin
 
-    final_detection = _detect_target_in_image(
+    final_detection = _apply_contaminant_rule(
         cutout,
-        target_x=seed_target_x,
-        target_y=seed_target_y,
+        _detect_target_in_image(
+            cutout,
+            target_x=seed_target_x,
+            target_y=seed_target_y,
+            detection_cfg=detection_cfg,
+            context="final-cutout detection",
+        ),
+        rule=contaminant_rule,
         detection_cfg=detection_cfg,
-        context="final-cutout detection",
     )
 
     segmentation = final_detection.detection.segmentation
@@ -1355,6 +1540,8 @@ def prepare_real_image_from_config(
         original_image=image.data,
         external_mask=external_mask,
         fitting_mask_mode=fitting_mask_mode,
+        contaminant_rule=contaminant_rule,
+        released_labels=final_detection.released_labels,
         cutout_bounds={
             "xmin": int(cutout_definition.xmin),
             "xmax": int(cutout_definition.xmax),
@@ -1626,6 +1813,18 @@ def save_image_preparation_products(
             else None
         ),
         "sky_gradient": products.sky_gradient,
+        "contaminant_masking": {
+            "rule": products.contaminant_rule,
+            "released_labels": [int(value) for value in products.released_labels],
+            "released_pixels": int(
+                np.count_nonzero(
+                    np.isin(
+                        np.asarray(products.segmentation),
+                        np.asarray(products.released_labels, dtype=int),
+                    )
+                )
+            ),
+        },
     }
 
     validate_prepared_input_identity(
@@ -1860,6 +2059,12 @@ def load_image_preparation_products(
     else:
         sky_region = None
 
+    # Bundles written before the contaminant rule masked every segment.
+    contaminant_masking = metadata.get(
+        "contaminant_masking",
+        {"rule": "all_segments", "released_labels": []},
+    )
+
     products = PreparedObservation(
         cutout=cutout,
         prepared_data=prepared_data,
@@ -1888,6 +2093,10 @@ def load_image_preparation_products(
         preliminary_cutout=preliminary_cutout,
         preliminary_segmentation=preliminary_segmentation,
         sky_gradient=metadata.get("sky_gradient"),
+        contaminant_rule=str(contaminant_masking["rule"]),
+        released_labels=tuple(
+            int(value) for value in contaminant_masking["released_labels"]
+        ),
     )
     _validate_products_for_persistence(products)
     _validate_products_against_current_sources(

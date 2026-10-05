@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
@@ -232,6 +233,21 @@ def _preparation_config_identity(
     if data_config.get("hdu") is not None:
         data_identity["hdu"] = data_config["hdu"]
 
+    # The contaminant rule enters the identity only when it is not the rule
+    # that masks every segment, so that products prepared before the rule
+    # existed keep their identity when that rule is declared.
+    preparation = copy.deepcopy(dict(config.get("preparation", {})))
+    masking = preparation.get("masking")
+    if (
+        isinstance(masking, Mapping)
+        and masking.get("contaminant_rule") == "all_segments"
+    ):
+        preparation["masking"] = {
+            key: value
+            for key, value in masking.items()
+            if key != "contaminant_rule"
+        }
+
     canonical = _json_value(
         {
             "object_name": config["object"]["name"],
@@ -250,7 +266,7 @@ def _preparation_config_identity(
                 "target_position": data_config.get("target_position"),
                 "cutout": data_config.get("cutout"),
             },
-            "preparation": config.get("preparation", {}),
+            "preparation": preparation,
         }
     )
 

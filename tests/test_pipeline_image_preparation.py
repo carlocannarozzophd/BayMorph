@@ -106,6 +106,7 @@ def _preparation_bundle(tmp_path, *, persist=True):
         target_x=5,
         target_y=6,
         target_label=1,
+        contaminant_rule="local_excess",
         original_image=image.copy(),
         cutout_bounds={
             "xmin": 0,
@@ -627,6 +628,7 @@ def test_auto_cutout_exact_mask_does_not_relabel_contaminants(
             "sky_margin": 2.0,
         },
         detection_cfg={},
+        contaminant_rule="all_segments",
         external_mask=curated_mask,
         fitting_mask_mode="exact",
     )

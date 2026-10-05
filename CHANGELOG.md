@@ -284,6 +284,18 @@ and the project follows Semantic Versioning in spirit.
 
 ### Changed
 
+* The production preparation masks a detected segment only when it still
+  holds a source with the detection threshold raised by the smooth light of
+  the target, `preparation.masking.contaminant_rule: local_excess`, the new
+  default. Over the wings of the target, peaks of the noise lifted above the
+  threshold were masked as contaminants, and on the simulated images of the
+  background bench this biased the flux, the effective radius and the
+  Sérsic index low by 0.6 to 1.9 of their scatter. The rule `all_segments`
+  keeps the previous masks. A preparation records its rule and the segments
+  it released, and products prepared before the rule are reused only when
+  `all_segments` is declared. On the same simulated images the biases fall
+  within 0.14 of the scatter (AD-050,
+  [note](docs/research/CONTAMINANT_RULE_2026-10-04.md)).
 * BayMorph refuses, when it loads a FITS image, an image whose header
   declares pixel values that are not linear in flux, as AD-049 decides: a
   Pan-STARRS stack, whose values are compressed through `asinh` with

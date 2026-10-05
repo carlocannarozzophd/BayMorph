@@ -122,7 +122,7 @@ image.target_x, image.target_y   # (125, 125): the target in the cutout
 | `fitting_mask` | `True` where a pixel is excluded from the fit; see [Masks](MASKS.md). |
 | `noise` | The noise scale of the sky in each pixel; see [Sky and Noise](SKY_AND_NOISE.md). |
 | `background` | The sky level that was subtracted. |
-| `segmentation`, `target_segment`, `contaminant_mask` | The detected sources, the target, and the other sources. |
+| `segmentation`, `target_segment`, `contaminant_mask` | The detected sources, the target, and the other sources that the contaminant rule masks. |
 | `sky_gradient` | The gradient of the sky across the cutout, a diagnostic. |
 
 Positions in the results, such as the fitted centre `x0`, `y0`, are in

@@ -10,6 +10,7 @@ from baymorph.core.background import (
 from baymorph.core.detection import (
     DetectionResult,
     detect_sources_segmentation,
+    segments_above_level,
 )
 from baymorph.core.image import ImageData
 from baymorph.core.mask import (
@@ -58,6 +59,7 @@ __all__ = [
     "intersection",
     "union",
     "detect_profile_plateau",
+    "segments_above_level",
     "detect_sources_segmentation",
     "estimate_background_photutils",
     "estimate_noise",

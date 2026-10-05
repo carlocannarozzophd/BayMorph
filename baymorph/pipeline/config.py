@@ -92,6 +92,10 @@ DEFAULT_CONFIG = {
         "noise": {},
         "masking": {
             "negative_threshold_sigma": 5.0,
+            # Only the segments that still hold a source above the smooth
+            # light of the target are masked; "all_segments" masks every
+            # detected segment, as before this rule.
+            "contaminant_rule": "local_excess",
         },
         "detection": {
             "n_sigma": 3.0,
@@ -1050,14 +1054,24 @@ def validate_config(config: dict[str, Any]) -> None:
     )
 
     unsupported_masking_entries = sorted(
-        set(masking_config) - {"negative_threshold_sigma"}
+        set(masking_config) - {"negative_threshold_sigma", "contaminant_rule"}
     )
 
     if unsupported_masking_entries:
         raise ValueError(
             "Unsupported configuration entries in preparation.masking: "
             f"{unsupported_masking_entries}. "
-            "Available entries: ['negative_threshold_sigma']."
+            "Available entries: ['contaminant_rule', "
+            "'negative_threshold_sigma']."
+        )
+
+    contaminant_rule = masking_config.get("contaminant_rule", "local_excess")
+
+    if contaminant_rule not in ("local_excess", "all_segments"):
+        raise ValueError(
+            "Config preparation.masking.contaminant_rule must be "
+            "'local_excess' or 'all_segments', not "
+            f"{contaminant_rule!r}."
         )
 
     negative_threshold = masking_config.get(
