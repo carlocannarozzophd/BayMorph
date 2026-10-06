@@ -381,7 +381,13 @@ def _bundle(tmp_path, *, rule, released, contaminant_labels):
                 "target_position": {"x": 5, "y": 5},
                 "cutout": {"mode": "fixed", "size": 10},
             },
-            "preparation": {"masking": {"contaminant_rule": rule}},
+            # The products below hold the segments as detected, not grown.
+            "preparation": {
+                "masking": {
+                    "contaminant_rule": rule,
+                    "contaminant_growth_pixels": 0,
+                }
+            },
             "outputs": {"root": str(tmp_path / "outputs"), "overwrite": True},
         }
     )
@@ -441,6 +447,7 @@ def test_released_segments_survive_the_round_trip(tmp_path):
         "rule": "local_excess",
         "released_labels": [3],
         "released_pixels": 4,
+        "growth_pixels": 0,
     }
 
 

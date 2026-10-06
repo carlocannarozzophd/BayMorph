@@ -64,14 +64,16 @@ replaced by `data.mask_path`.
 | `preparation.detection.n_levels` | integer | 32 | Deblending levels of the segmentation. |
 | `preparation.detection.n_pixels` | integer | 20 | Minimum number of connected pixels of a source. |
 | `preparation.masking.contaminant_rule` | `local_excess` or `all_segments` | `local_excess` | Which detected segments are masked: with `local_excess`, only those that still hold a source with the detection threshold raised by the smooth light of the target; with `all_segments`, every segment other than the target. |
+| `preparation.masking.contaminant_growth_pixels` | integer | 20; 0 with `data.mask_mode: exact` or `replace` | Every pixel within this distance, in pixels, of a masked segment is excluded from the sky region and from the likelihood support; the target, its geometry and the plateau keep the segments as detected. Only the detected segments are grown, so a growth above 0 requires `data.mask_mode: union`; 0 keeps the segments as detected. |
 | `preparation.masking.negative_threshold_sigma` | number or `null` | 5.0 | Pixels below `−k` times the noise scale after background subtraction leave the likelihood support; `null` disables the criterion. |
 | `preparation.background.box_size` | integer | 30 | Inert: kept only because the section enters the preparation identity. |
 | `preparation.background.filter_size` | integer | 3 | Inert, as above. |
-| `preparation.noise` | mapping | `{}` | Reserved; a `method` entry is rejected. |
+| `preparation.noise.sky_correlation` | `autocovariance` or `field_separated` | `autocovariance` | How the correlation of the sky is estimated. `field_separated` first removes a correlation on large scales, for a sky on which `autocovariance` is rejected, and requires `preparation.masking.contaminant_growth_pixels: 20`, the default with `data.mask_mode: union`. |
 
 `preparation.detection.npixels` (now `n_pixels`), a top-level `masking`
-section, and a `method` under `preparation.background` or
-`preparation.noise` are rejected.
+section, a `method` under `preparation.background` or
+`preparation.noise`, and any other entry under `preparation.noise` are
+rejected.
 
 ## `psf`
 

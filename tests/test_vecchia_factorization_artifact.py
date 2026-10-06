@@ -59,7 +59,7 @@ def artifact_environment(tmp_path, monkeypatch):
         calibration = SimpleNamespace(
             correlation_kernel=_kernel(),
             metadata={
-                "estimator": artifacts.CORRELATION_ESTIMATOR,
+                "estimator": artifacts.SKY_CORRELATION_ESTIMATORS["autocovariance"],
                 "max_lag": 1,
                 "generator_identity": {
                     "name": "test-calibration",
@@ -539,7 +539,7 @@ def test_manifest_binds_the_sky_correlation_of_ad047(
     assert manifest["schema_version"] == 2
     assert (
         manifest["source_binding"]["correlation_estimator"]
-        == artifacts.CORRELATION_ESTIMATOR
+        == artifacts.SKY_CORRELATION_ESTIMATORS["autocovariance"]
     )
     assert "marginal_sigma_sha256" not in manifest["source_binding"]
 

@@ -32,8 +32,8 @@ from baymorph.likelihood.vecchia_gaussian import (
     build_vecchia_factorization,
 )
 from baymorph.core.correlated_noise import (
-    CORRELATION_ESTIMATOR,
     CORRELATION_MAX_LAG,
+    SKY_CORRELATION_ESTIMATORS,
 )
 from baymorph.pipeline.config import load_resolved_config
 from baymorph.pipeline.image_preparation import load_image_preparation_products
@@ -41,6 +41,7 @@ from baymorph.pipeline.noise_calibration import (
     correlated_noise_calibration_path,
     load_correlated_noise_calibration,
     reject_correlated_noise_calibration_settings,
+    validate_correlated_noise_calibration_estimator,
     validate_correlated_noise_calibration_sources,
 )
 
@@ -449,7 +450,7 @@ def _validate_manifest_structure(manifest: Mapping[str, Any]) -> None:
         raise ValueError(
             "Vecchia source binding calibration_generator_identity is invalid."
         )
-    if binding["correlation_estimator"] != CORRELATION_ESTIMATOR:
+    if binding["correlation_estimator"] not in SKY_CORRELATION_ESTIMATORS.values():
         raise ValueError("Vecchia source binding correlation_estimator is invalid.")
 
     shape = manifest.get("image_shape")
@@ -640,6 +641,7 @@ def _capture_source_snapshot(
     calibration = load_correlated_noise_calibration(calibration_path)
     reject_correlated_noise_calibration_settings(resolved)
     _validate_calibration_kernel(calibration)
+    validate_correlated_noise_calibration_estimator(calibration, resolved)
     validate_correlated_noise_calibration_sources(
         calibration,
         products,
@@ -726,11 +728,12 @@ def _validate_source_shapes(products: Any) -> None:
 
 
 def _validate_calibration_kernel(calibration: Any) -> None:
-    """Require the sky correlation of the estimator and lag of AD-047."""
-    if calibration.metadata.get("estimator") != CORRELATION_ESTIMATOR:
+    """Require the sky correlation of a declared estimator and the lag of AD-047."""
+    if calibration.metadata.get("estimator") not in SKY_CORRELATION_ESTIMATORS.values():
         raise ValueError(
             "Vecchia factorization requires the sky correlation estimated "
-            f"by {CORRELATION_ESTIMATOR!r} (AD-047)."
+            f"by one of {sorted(SKY_CORRELATION_ESTIMATORS.values())} "
+            "(AD-047, AD-051)."
         )
     if calibration.metadata.get("max_lag") != CORRELATION_MAX_LAG:
         raise ValueError(

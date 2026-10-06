@@ -75,7 +75,7 @@ def test_simulated_image_is_fitted_with_the_noise_model_of_ad047(
     assert likelihood["marginal_model"] == "prepared_sky_scale"
     assert likelihood["effective_gain"]["source"] == "absent"
     assert likelihood["correlation_estimator"] == "masked_sky_autocovariance_v1"
-    assert likelihood["calibration_schema_version"] == 2
+    assert likelihood["calibration_schema_version"] == 3
     assert likelihood["vecchia_factorization_schema_version"] == 2
     assert likelihood["vecchia_max_neighbors"] == 24
     assert likelihood["normalization_complete"] is True

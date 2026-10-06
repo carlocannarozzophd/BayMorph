@@ -21,6 +21,7 @@ from baymorph.pipeline.noise_calibration import (
     correlated_noise_calibration_path,
     load_correlated_noise_calibration,
     reject_correlated_noise_calibration_settings,
+    validate_correlated_noise_calibration_estimator,
     validate_correlated_noise_calibration_sources,
 )
 from baymorph.pipeline.vecchia_factorization import (
@@ -308,6 +309,10 @@ def prepare_real_fit_likelihood_state(
             "calibration before fitting."
         ) from exc
 
+    validate_correlated_noise_calibration_estimator(
+        calibration,
+        config,
+    )
     validate_correlated_noise_calibration_sources(
         calibration,
         image_products,

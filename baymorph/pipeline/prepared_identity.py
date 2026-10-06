@@ -248,6 +248,27 @@ def _preparation_config_identity(
             if key != "contaminant_rule"
         }
 
+    # The growth of the contaminant masks and the sky-correlation estimator
+    # enter the identity only when they differ from the behaviour that
+    # preceded them, no growth and the estimator of AD-047, so that products
+    # prepared before AD-051 keep their identity.
+    for section, key, inert in (
+        ("masking", "contaminant_growth_pixels", 0),
+        ("noise", "sky_correlation", "autocovariance"),
+    ):
+        entries = preparation.get(section)
+        if (
+            isinstance(entries, Mapping)
+            and key in entries
+            and entries[key] == inert
+            and not isinstance(entries[key], bool)
+        ):
+            preparation[section] = {
+                name: value
+                for name, value in entries.items()
+                if name != key
+            }
+
     canonical = _json_value(
         {
             "object_name": config["object"]["name"],

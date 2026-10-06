@@ -63,6 +63,31 @@ covariance, stops the fit instead of being repaired.
 
 *Top: white noise and noise correlated over about a pixel, as in a resampled image. Bottom left: their correlation along x, measured by the estimator of BayMorph. Bottom right: the 24 earlier pixels on which the factorization conditions a pixel.*
 
+**A sky with structure on large scales.** The estimator above assumes that
+the correlation ends within 8 pixels. Many real skies also hold structure on
+scales of tens to hundreds of pixels, left by the subtraction of the sky
+during the reduction or by the faint outskirts of sources: their
+correlation is still near 0.05 to 0.1 at 8 pixels, the kernel cut there is
+not a valid covariance, and the fit stops. For such a sky BayMorph offers a
+second estimator, which you declare; it is never chosen automatically:
+
+```yaml
+preparation:
+  noise:
+    sky_correlation: field_separated
+```
+
+It measures the correlation of the sky up to 48 pixels, fits a smooth
+correlation $v\,e^{-r/\ell} + c$ to its values beyond 8 pixels, with $\ell$
+between 16 and 400 pixels, subtracts it within the kernel and divides the
+rest by its value at zero lag, $1 - v - c$. The constant $c$ absorbs the
+deficit that the removal of the plane leaves at short lags. The structure
+it removes is not modelled by the likelihood, which then describes the noise
+of the sky alone. The estimator was validated on sky regions whose masks
+were grown by 20 pixels, the default growth ([Masks](../guide/MASKS.md)),
+and it requires that growth, so it cannot be used with a curated mask in
+`exact` mode.
+
 **The nearest-neighbour factorization.** The inverse of $C$ is out of reach
 for an image of a million pixels, so BayMorph replaces the joint Gaussian by
 a product of conditional Gaussians, the approximation of Vecchia
@@ -96,6 +121,14 @@ assumed independent of each other.
 - The correlation is measured on the sky region of the cutout: a small
   cutout gives a noisy estimate, and faint light of the galaxy beyond the
   plateau, if any, raises it.
+- With `field_separated`, the line between the noise and the large-scale
+  structure is an assumption: structure between about 8 and 30 pixels can
+  be counted as either. Each calibration records as `attribution_ratio` the
+  kernel sum of a high-pass estimate, which counts that structure as noise,
+  over the kernel sum it uses; on three real coadds the ratio was 1.17, 1.29
+  and 2.23. The large-scale structure also adds an error on the scale of the
+  galaxy that no term of the likelihood carries, so on such a sky the
+  posterior intervals are too narrow.
 - The Poisson term uses the model, not the data, so it never depends on the
   noise of the image itself.
 
@@ -107,6 +140,12 @@ ratio of the true to the reported width to between 0.90 and 1.16, and its
 posterior widths agreed with the curvature of the likelihood within 5
 percent. On the same simulations the gain measured from a sky still in the
 image was within 0.6 percent of the truth.
+On simulated skies with a large-scale field of 7 percent of the sky
+variance, `field_separated` recovered the correlation of the noise within 8
+percent on average, and within 3 percent without a field, where the default
+estimator applies. Fitted with masks grown by 20 pixels, the flux, the
+effective radius and the Sérsic index were biased by less than 3 percent,
+but their reported intervals were 6 to 8 times too narrow.
 No fit of a real image has been validated yet.
 
 **Configuration.**

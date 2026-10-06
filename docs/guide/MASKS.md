@@ -46,9 +46,35 @@ the other rule are not reused. The rule decides segment by segment: a
 segment that holds a neighbour and, through the deblending, a part of the
 envelope of the target stays masked whole.
 
-Each source is masked over its detected segment. The faint outskirts of a
-bright neighbour beyond its segment are not masked; an external mask can
-cover them.
+A detected segment ends where the smoothed image falls below the detection
+threshold, but the faint outskirts of the source extend beyond it. Left in
+the fit, the outskirts of many neighbours raise the fitted background, which
+then takes light from the galaxy: on simulated images of a galaxy among many
+fainter neighbours, keeping them in the fit lowered its flux, effective
+radius and Sérsic index by 1 to 5 percent. BayMorph therefore grows every
+masked segment by 20 pixels: each pixel within that distance of a masked
+segment is excluded from the fit and from the measurement of the sky. On
+the same simulations the growth kept those biases within 0.2 percent, and
+within 3 percent when the sky also held structure on large scales. The
+target, its geometry and the plateau are still measured with the segments
+as detected.
+
+```yaml
+preparation:
+  masking:
+    contaminant_growth_pixels: 20    # the default, in pixels; 0 keeps the segments
+```
+
+The growth removes pixels: on a crowded image it can exclude half of the
+cutout, including pixels close to the galaxy, so look at the mask. The
+summary of the run, `runtime_report.yaml`, records as
+`excluded_target_fraction` the fraction of the detected target that the
+mask excludes. The 20 pixels were validated on images whose pixels sample a
+seeing of about 2.3 pixels; on an image of a very different sampling, or
+with a neighbour close to the target, a different growth may suit it better,
+but `field_separated` (see [Noise Models](../models/NOISE.md)) requires 20.
+The growth applies to the detected segments only: with `mask_mode: exact`,
+the external mask is used as drawn and nothing is grown.
 
 Pixels far below the sky, by default more than five noise units, are also
 excluded: source detection only looks for positive excursions, and a

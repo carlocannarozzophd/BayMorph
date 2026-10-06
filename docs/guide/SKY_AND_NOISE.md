@@ -89,6 +89,12 @@ The likelihood then describes the noise of every pixel with three parts:
 [Configuration reference](../reference/CONFIGURATION.md#likelihood) its
 options.
 
+If the fit stops because the correlation of the sky is not positive
+definite, the sky also holds structure on scales larger than 8 pixels. The
+message names the setting to declare, and
+[Noise Models](../models/NOISE.md) describes the estimator it selects and
+its limits.
+
 ## The effective gain
 
 The effective gain is the number of detected photons, or electrons, per

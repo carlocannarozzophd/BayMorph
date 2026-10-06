@@ -10,11 +10,13 @@ import numpy as np
 
 from baymorph.core.correlated_noise import (
     CALIBRATION_SCHEMA_VERSION,
-    CORRELATION_ESTIMATOR,
+    FIELD_SEPARATED_GROWTH_PIXELS,
+    SKY_CORRELATION_ESTIMATORS,
     CorrelatedGaussianNoiseCalibration,
     calibrate_correlated_gaussian_noise,
 )
 from baymorph.pipeline.config import (
+    DEFAULT_CONFIG,
     load_resolved_config,
 )
 from baymorph.pipeline.image_preparation import (
@@ -56,8 +58,9 @@ def build_correlated_noise_calibration(
 ) -> CorrelatedGaussianNoiseCalibration:
     """Estimate the sky correlation from persisted preparation products.
 
-    The estimator and its constants are fixed by AD-047; the configuration
-    selects none of them.
+    The estimators and their constants are fixed by AD-047 and AD-051; the
+    configuration only declares which one applies, with
+    ``preparation.noise.sky_correlation``.
 
     Parameters
     ----------
@@ -91,9 +94,25 @@ def build_correlated_noise_calibration(
             "Correlated-noise calibration requires a persisted sky region."
         )
 
+    estimator = configured_sky_correlation(
+        resolved
+    )
+
+    if (
+        estimator == "field_separated"
+        and products.contaminant_growth_pixels != FIELD_SEPARATED_GROWTH_PIXELS
+    ):
+        raise ValueError(
+            "The field-separated sky correlation was validated on sky regions "
+            "whose contaminant masks are grown by "
+            f"{FIELD_SEPARATED_GROWTH_PIXELS} px; this preparation grew them "
+            f"by {products.contaminant_growth_pixels} px."
+        )
+
     calibration = calibrate_correlated_gaussian_noise(
         products.cutout,
         products.sky_region.mask,
+        estimator=estimator,
     )
 
     metadata = dict(
@@ -204,11 +223,12 @@ def load_correlated_noise_calibration(
         | dict[str, Any]
     ),
 ) -> CorrelatedGaussianNoiseCalibration:
-    """Load a persisted calibration of the schema of AD-047.
+    """Load a persisted calibration of the current schema.
 
-    A calibration of an earlier schema, made with the tapered tile estimator
-    and the smooth marginal field that AD-047 retired, is rejected; it is
-    never converted or overwritten.
+    A calibration of an earlier schema is rejected, never converted or
+    overwritten: schema 1 held the tapered tile estimator and the smooth
+    marginal field that AD-047 retired, and schema 2 did not record which
+    estimator made the kernel.
     """
     if isinstance(
         path_or_config,
@@ -260,10 +280,17 @@ def load_correlated_noise_calibration(
         ):
             raise ValueError(
                 f"Correlated-noise calibration {path} has schema "
-                f"{schema_version!r}; AD-047 accepts only schema "
+                f"{schema_version!r}; BayMorph accepts only schema "
                 f"{CALIBRATION_SCHEMA_VERSION}, whose sky correlation is "
-                "estimated on the whole sky region without a taper. Build a "
-                "new calibration in a new output namespace."
+                "estimated on the whole sky region without a taper by a "
+                "declared estimator. Build a new calibration in a new output "
+                "namespace."
+            )
+
+        if metadata.get("estimator") not in SKY_CORRELATION_ESTIMATORS.values():
+            raise ValueError(
+                f"Correlated-noise calibration {path} records the unknown "
+                f"estimator {metadata.get('estimator')!r}."
             )
 
         correlation_kernel = np.asarray(
@@ -334,8 +361,52 @@ def reject_correlated_noise_calibration_settings(
     if isinstance(likelihood, dict) and "calibration" in likelihood:
         raise ValueError(
             "fit.likelihood.calibration is no longer accepted: AD-047 fixes "
-            "the sky-correlation estimator (the whole sky region, one plane "
-            "removed, no taper, lags up to 8). Remove the block."
+            "the sky-correlation estimators (the whole sky region, one plane "
+            "removed, no taper, lags up to 8), and "
+            "preparation.noise.sky_correlation declares which one applies. "
+            "Remove the block."
+        )
+
+
+def configured_sky_correlation(
+    config: dict[str, Any],
+) -> str:
+    """Return the sky-correlation estimator that the configuration declares.
+
+    A configuration passed as a mapping without the entry takes the default
+    that :func:`baymorph.pipeline.config.resolve_config` would give it.
+    """
+    noise = config.get("preparation", {}).get("noise") or {}
+    estimator = noise.get(
+        "sky_correlation",
+        DEFAULT_CONFIG["preparation"]["noise"]["sky_correlation"],
+    )
+
+    if estimator not in SKY_CORRELATION_ESTIMATORS:
+        raise ValueError(
+            "preparation.noise.sky_correlation must be one of "
+            f"{list(SKY_CORRELATION_ESTIMATORS)}, not {estimator!r}."
+        )
+
+    return estimator
+
+
+def validate_correlated_noise_calibration_estimator(
+    calibration: CorrelatedGaussianNoiseCalibration,
+    config: dict[str, Any],
+) -> None:
+    """Reject a calibration made by an estimator other than the declared one."""
+    estimator = configured_sky_correlation(
+        config
+    )
+    expected = SKY_CORRELATION_ESTIMATORS[estimator]
+
+    if calibration.metadata.get("estimator") != expected:
+        raise ValueError(
+            "Correlated-noise calibration was made by the estimator "
+            f"{calibration.metadata.get('estimator')!r}, but the "
+            f"configuration declares preparation.noise.sky_correlation: "
+            f"{estimator}. Build the calibration in a new output namespace."
         )
 
 
@@ -348,7 +419,8 @@ def validate_correlated_noise_calibration_sources(
         "schema_version"
     ) != CALIBRATION_SCHEMA_VERSION:
         raise ValueError(
-            "Correlated-noise calibration does not have the schema of AD-047."
+            "Correlated-noise calibration does not have the current schema "
+            f"{CALIBRATION_SCHEMA_VERSION}."
         )
 
     expected_sources = correlated_noise_source_fingerprints(
@@ -410,7 +482,7 @@ def _correlated_noise_calibration_generator_identity(
         ).hexdigest()
 
     return {
-        "algorithm": CORRELATION_ESTIMATOR,
+        "estimators": sorted(SKY_CORRELATION_ESTIMATORS.values()),
         "pipeline_source_sha256": file_sha256(
             __file__
         ),

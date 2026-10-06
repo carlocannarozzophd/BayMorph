@@ -49,6 +49,16 @@ def test_build_image_preparation_runtime():
             dtype=bool,
         ),
         contaminant_mask=np.zeros((4, 5), dtype=bool),
+        contaminant_growth_pixels=0,
+        target_segment=np.array(
+            [
+                [False, True, False, False, False],
+                [False, True, False, False, False],
+                [False, False, False, False, False],
+                [False, False, False, False, False],
+            ],
+            dtype=bool,
+        ),
         fitting_mask=np.array(
             [
                 [True, True, False, False, False],
@@ -100,6 +110,8 @@ def test_build_image_preparation_runtime():
     assert preparation["masking"]["automatic_fraction"] == 0.05
     assert preparation["masking"]["external_fraction"] == 0.05
     assert preparation["masking"]["fitting_fraction"] == 0.1
+    assert preparation["masking"]["contaminant_growth_pixels"] == 0
+    assert preparation["masking"]["excluded_target_fraction"] == 0.5
 
 
 def test_build_image_preparation_runtime_without_optional_products():
@@ -116,6 +128,8 @@ def test_build_image_preparation_runtime_without_optional_products():
         automatic_mask=np.zeros((3, 3), dtype=bool),
         external_mask=None,
         contaminant_mask=np.zeros((3, 3), dtype=bool),
+        contaminant_growth_pixels=0,
+        target_segment=np.eye(3, dtype=bool),
         fitting_mask=np.zeros((3, 3), dtype=bool),
         geometry=None,
         plateau=None,
@@ -133,3 +147,4 @@ def test_build_image_preparation_runtime_without_optional_products():
     assert preparation["plateau"] is None
     assert preparation["sky_region"] is None
     assert preparation["masking"]["external_fraction"] is None
+    assert preparation["masking"]["excluded_target_fraction"] == 0.0

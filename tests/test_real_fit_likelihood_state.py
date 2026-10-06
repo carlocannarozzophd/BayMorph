@@ -51,7 +51,7 @@ def _calibration():
             ]
         ),
         metadata={
-            "schema_version": 2,
+            "schema_version": 3,
             "factorization": "C = S R S",
             "correlation_model": "stationary_sky_autocovariance",
             "estimator": "masked_sky_autocovariance_v1",
@@ -156,7 +156,7 @@ def test_correlated_gaussian_uses_the_prepared_noise_map(
         state.metadata["correlation_estimator"]
         == "masked_sky_autocovariance_v1"
     )
-    assert state.metadata["calibration_schema_version"] == 2
+    assert state.metadata["calibration_schema_version"] == 3
     assert (
         state.metadata["fit_statistic"]
         == "nearest_neighbor_innovation_quadratic"

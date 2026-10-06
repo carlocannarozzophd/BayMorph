@@ -10,6 +10,7 @@ from typing import Any
 
 import numpy as np
 from astropy.io import fits
+from scipy.ndimage import distance_transform_edt
 
 from baymorph.core.background import (
     estimate_background_constant,
@@ -44,6 +45,7 @@ from baymorph.pipeline.checkpoint_signing import (
 )
 from baymorph.pipeline.config import (
     DEFAULT_CONFIG,
+    default_contaminant_growth_pixels,
     load_resolved_config,
     resolve_runtime_config,
 )
@@ -462,6 +464,13 @@ def _validate_products_against_current_sources(
             "configuration."
         )
 
+    growth = _contaminant_growth_pixels(config)
+    if products.contaminant_growth_pixels != growth:
+        raise RuntimeError(
+            "Persisted growth of the contaminant masks does not match the "
+            "current configuration."
+        )
+
     segmentation = np.asarray(products.segmentation)
     candidates = (segmentation > 0) & (
         segmentation != int(products.target_label)
@@ -489,8 +498,15 @@ def _validate_products_against_current_sources(
         external_mask=current_mask_crop,
         mode=mode,
     )
+    support_mask = composition_mask
+    if growth:
+        support_mask = build_fitting_mask(
+            _grown_contaminant_mask(expected_contaminants, growth),
+            external_mask=current_mask_crop,
+            mode=mode,
+        )
     expected_fitting_mask, _ = _apply_negative_outlier_mask(
-        composition_mask,
+        support_mask,
         prepared_data=products.prepared_data,
         noise=products.noise,
         threshold_sigma=_negative_threshold_sigma(config),
@@ -818,6 +834,52 @@ def _contaminant_rule(config: Mapping[str, Any]) -> str:
         )
 
     return rule
+
+
+def _contaminant_growth_pixels(config: Mapping[str, Any]) -> int:
+    """Return the configured growth of the contaminant masks, in pixels.
+
+    A configuration passed as a mapping without the entry takes the default
+    that :func:`baymorph.pipeline.config.resolve_config` would give it, which
+    depends on ``data.mask_mode``.
+    """
+    masking = config.get("preparation", {}).get("masking", {})
+
+    if "contaminant_growth_pixels" in masking:
+        growth = masking["contaminant_growth_pixels"]
+    else:
+        growth = default_contaminant_growth_pixels(
+            _resolve_fitting_mask_mode(dict(config.get("data", {})))
+        )
+
+    if isinstance(growth, bool) or not isinstance(growth, (int, np.integer)):
+        raise ValueError(
+            "preparation.masking.contaminant_growth_pixels must be an integer."
+        )
+
+    if growth < 0:
+        raise ValueError(
+            "preparation.masking.contaminant_growth_pixels must not be negative."
+        )
+
+    return int(growth)
+
+
+def _grown_contaminant_mask(
+    contaminant_mask: np.ndarray,
+    growth_pixels: int,
+) -> np.ndarray:
+    """Return the pixels within ``growth_pixels`` of a contaminant pixel.
+
+    The distance is Euclidean, between pixel centres; the contaminant pixels
+    themselves are included. A growth of zero returns the mask unchanged.
+    """
+    mask = np.asarray(contaminant_mask, dtype=bool)
+
+    if growth_pixels == 0 or not np.any(mask):
+        return mask.copy()
+
+    return np.asarray(distance_transform_edt(~mask) <= growth_pixels)
 
 
 def _target_light_level(
@@ -1224,6 +1286,10 @@ class PreparedObservation:
         the rule existed masked every segment.
     released_labels : tuple of int, default=()
         Labels of the non-target segments that the rule left unmasked.
+    contaminant_growth_pixels : int, default=0
+        Growth, in pixels, of ``contaminant_mask`` in the sky region and the
+        likelihood support; the target support, the geometry and the plateau
+        use the masks as detected.
     """
 
     cutout: np.ndarray
@@ -1257,6 +1323,7 @@ class PreparedObservation:
 
     contaminant_rule: str = "all_segments"
     released_labels: tuple[int, ...] = ()
+    contaminant_growth_pixels: int = 0
 
 
 def make_target_cutout(
@@ -1459,6 +1526,26 @@ def prepare_real_image_from_config(
         sky_margin=float(cutout_cfg.get("sky_margin", 20.0)),
     )
 
+    # The target support, the geometry and the plateau are measured with the
+    # masks as detected; the grown masks then define the sky region and the
+    # likelihood support (AD-051).
+    contaminant_growth_pixels = _contaminant_growth_pixels(resolved)
+    if contaminant_growth_pixels:
+        if fitting_mask_mode != "union":
+            raise ValueError(
+                "preparation.masking.contaminant_growth_pixels grows the "
+                "detected contaminant segments, which data.mask_mode "
+                f"{fitting_mask_mode!r} does not use."
+            )
+        fitting_mask = build_fitting_mask(
+            _grown_contaminant_mask(
+                contaminant_mask,
+                contaminant_growth_pixels,
+            ),
+            external_mask=external_mask,
+            mode=fitting_mask_mode,
+        )
+
     sky_region = build_sky_region(
         shape=cutout.shape,
         geometry=geometry,
@@ -1542,6 +1629,7 @@ def prepare_real_image_from_config(
         fitting_mask_mode=fitting_mask_mode,
         contaminant_rule=contaminant_rule,
         released_labels=final_detection.released_labels,
+        contaminant_growth_pixels=contaminant_growth_pixels,
         cutout_bounds={
             "xmin": int(cutout_definition.xmin),
             "xmax": int(cutout_definition.xmax),
@@ -1824,6 +1912,7 @@ def save_image_preparation_products(
                     )
                 )
             ),
+            "growth_pixels": int(products.contaminant_growth_pixels),
         },
     }
 
@@ -2096,6 +2185,10 @@ def load_image_preparation_products(
         contaminant_rule=str(contaminant_masking["rule"]),
         released_labels=tuple(
             int(value) for value in contaminant_masking["released_labels"]
+        ),
+        # Bundles written before AD-051 did not grow the masks.
+        contaminant_growth_pixels=int(
+            contaminant_masking.get("growth_pixels", 0)
         ),
     )
     _validate_products_for_persistence(products)

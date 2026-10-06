@@ -90,6 +90,29 @@ def _masked_fraction(mask) -> float | None:
     return float(np.mean(array))
 
 
+def _excluded_target_fraction(target_segment, fitting_mask) -> float:
+    """Return the fraction of the target support that the fitting mask excludes.
+
+    The target support keeps the segments as detected; a growth of the
+    contaminant masks, or the exclusion of negative pixels, can remove part
+    of it from the likelihood support.
+    """
+    import numpy as np
+
+    target = np.asarray(target_segment, dtype=bool)
+    excluded = np.asarray(fitting_mask, dtype=bool)
+
+    if target.shape != excluded.shape:
+        raise ValueError(
+            "The target support and the fitting mask must have the same shape."
+        )
+
+    if not np.any(target):
+        return 0.0
+
+    return float(np.count_nonzero(target & excluded) / np.count_nonzero(target))
+
+
 def build_image_preparation_runtime(
     products,
     *,
@@ -191,7 +214,12 @@ def build_image_preparation_runtime(
                 "automatic_fraction": _masked_fraction(products.automatic_mask),
                 "external_fraction": _masked_fraction(products.external_mask),
                 "contaminant_fraction": _masked_fraction(products.contaminant_mask),
+                "contaminant_growth_pixels": int(products.contaminant_growth_pixels),
                 "fitting_fraction": _masked_fraction(products.fitting_mask),
+                "excluded_target_fraction": _excluded_target_fraction(
+                    products.target_segment,
+                    products.fitting_mask,
+                ),
             },
         },
     }

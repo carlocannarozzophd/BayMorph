@@ -11,6 +11,21 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* AD-051: a declared estimator of the sky correlation for skies that hold a
+  large-scale field. With `preparation.noise.sky_correlation:
+  field_separated`, a smooth correlation `v exp(-r / l) + c`, with `l`
+  between 16 and 400 px, is fitted to the correlation of the sky beyond the
+  kernel of AD-047, up to 48 px, and subtracted within the kernel. The
+  estimator is declared, never chosen automatically; the message that
+  rejects a kernel of the default estimator, `autocovariance`, now names it.
+  It requires the growth of the contaminant masks by 20 px with which it
+  was validated. Each of its calibrations records the fitted field and, as
+  `attribution_ratio`, the kernel sum of a high-pass estimate over its own.
+  The estimator enters the preparation identity only when it is not the
+  default.
+* The summary of the preparation records the growth of the contaminant
+  masks and, as `excluded_target_fraction`, the fraction of the detected
+  target that the fitting mask excludes.
 * The header conventions of the first wave of AD-049, milestone 2: SDSS
   frames, the coadds of the Legacy Surveys, HST and JWST images, DECam
   images of the NOIRLab Community Pipeline, hscPipe images that record
@@ -266,6 +281,21 @@ and the project follows Semantic Versioning in spirit.
 
 ### Changed
 
+* AD-051: the preparation grows every masked contaminant segment by 20 px,
+  `preparation.masking.contaminant_growth_pixels`, and excludes the grown
+  pixels from the sky region and the likelihood support; the target
+  support, its geometry, the plateau and the cutout keep the segments as
+  detected. On simulated images of a galaxy among many fainter neighbours,
+  the faint outskirts of the neighbours beyond their segments lowered the
+  flux, the effective radius and the Sérsic index by 1 to 5 percent, and the
+  growth brought those biases within 0.2 percent, or within 3 percent when
+  the sky also held a large-scale field. A curated mask used as it is,
+  `data.mask_mode: exact` or `replace`, is not grown. The growth enters the
+  preparation identity unless it is 0, so products prepared before it are
+  reused only when `contaminant_growth_pixels: 0` is declared.
+* The calibration of the sky correlation moves to schema 3, which records
+  the estimator that made the kernel. A calibration of schema 2 is rejected,
+  never converted, and is rebuilt in a new output namespace.
 * The repository and the documentation site hold what a user of BayMorph
   needs. The design documents, the decision records, the plan of work, the
   research notes and the code of the simulation benches and validation

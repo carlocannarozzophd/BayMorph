@@ -10,6 +10,10 @@ from typing import Any
 
 import yaml
 
+from baymorph.core.correlated_noise import (
+    FIELD_SEPARATED_GROWTH_PIXELS,
+    SKY_CORRELATION_ESTIMATORS,
+)
 from baymorph.core.observation import (
     Observation,
     resolve_seeing_fwhm_pixels,
@@ -33,6 +37,21 @@ LIKELIHOOD_DEFAULTS = {
     },
 }
 """Defaults of each likelihood type, applied only to a block of that type."""
+
+DEFAULT_CONTAMINANT_GROWTH_PIXELS = FIELD_SEPARATED_GROWTH_PIXELS
+"""Default growth of the contaminant masks, in pixels, when the preparation
+masks its detected segments (``data.mask_mode: union``): the growth with
+which the likelihood support and the field-separated sky correlation were
+validated (AD-051). A curated mask used as it is, with ``exact`` or
+``replace``, is not grown."""
+
+
+def default_contaminant_growth_pixels(mask_mode: str) -> int:
+    """Return the default growth of the contaminant masks for a mask mode."""
+    if str(mask_mode).strip().lower() == "union":
+        return DEFAULT_CONTAMINANT_GROWTH_PIXELS
+
+    return 0
 
 SAMPLER_DEFAULTS = {
     "pocomc": {
@@ -89,13 +108,22 @@ DEFAULT_CONFIG = {
             "box_size": 30,
             "filter_size": 3,
         },
-        "noise": {},
+        "noise": {
+            # The estimator of the sky correlation of AD-047;
+            # "field_separated" (AD-051) is declared for a sky that also
+            # holds a large-scale field.
+            "sky_correlation": "autocovariance",
+        },
         "masking": {
             "negative_threshold_sigma": 5.0,
             # Only the segments that still hold a source above the smooth
             # light of the target are masked; "all_segments" masks every
             # detected segment, as before this rule.
             "contaminant_rule": "local_excess",
+            # Pixels within this distance of a masked segment are excluded
+            # from the sky region and the likelihood support (AD-051); 0
+            # when data.mask_mode is "exact" or "replace".
+            "contaminant_growth_pixels": DEFAULT_CONTAMINANT_GROWTH_PIXELS,
         },
         "detection": {
             "n_sigma": 3.0,
@@ -1054,15 +1082,20 @@ def validate_config(config: dict[str, Any]) -> None:
     )
 
     unsupported_masking_entries = sorted(
-        set(masking_config) - {"negative_threshold_sigma", "contaminant_rule"}
+        set(masking_config)
+        - {
+            "negative_threshold_sigma",
+            "contaminant_rule",
+            "contaminant_growth_pixels",
+        }
     )
 
     if unsupported_masking_entries:
         raise ValueError(
             "Unsupported configuration entries in preparation.masking: "
             f"{unsupported_masking_entries}. "
-            "Available entries: ['contaminant_rule', "
-            "'negative_threshold_sigma']."
+            "Available entries: ['contaminant_growth_pixels', "
+            "'contaminant_rule', 'negative_threshold_sigma']."
         )
 
     contaminant_rule = masking_config.get("contaminant_rule", "local_excess")
@@ -1072,6 +1105,72 @@ def validate_config(config: dict[str, Any]) -> None:
             "Config preparation.masking.contaminant_rule must be "
             "'local_excess' or 'all_segments', not "
             f"{contaminant_rule!r}."
+        )
+
+    mask_mode = str(
+        config.get("data", {}).get("mask_mode", "union")
+    ).strip().lower()
+    contaminant_growth = masking_config.get(
+        "contaminant_growth_pixels",
+        default_contaminant_growth_pixels(mask_mode),
+    )
+
+    if (
+        isinstance(contaminant_growth, bool)
+        or not isinstance(contaminant_growth, Integral)
+        or contaminant_growth < 0
+    ):
+        raise ValueError(
+            "Config preparation.masking.contaminant_growth_pixels must be a "
+            "non-negative integer number of pixels."
+        )
+
+    if contaminant_growth > 0 and mask_mode in {"exact", "replace"}:
+        raise ValueError(
+            "Config preparation.masking.contaminant_growth_pixels grows the "
+            "detected contaminant segments, which data.mask_mode "
+            f"{mask_mode!r} does not use: set it to 0, or use mask_mode "
+            "'union'."
+        )
+
+    noise_config = preparation_config.get("noise", {})
+    unsupported_noise_entries = sorted(
+        set(noise_config) - {"sky_correlation", "method"}
+    )
+
+    if unsupported_noise_entries:
+        raise ValueError(
+            "Unsupported configuration entries in preparation.noise: "
+            f"{unsupported_noise_entries}. "
+            "Available entries: ['sky_correlation']."
+        )
+
+    sky_correlation = noise_config.get("sky_correlation", "autocovariance")
+
+    if (
+        not isinstance(sky_correlation, str)
+        or sky_correlation not in SKY_CORRELATION_ESTIMATORS
+    ):
+        raise ValueError(
+            "Config preparation.noise.sky_correlation must be one of "
+            f"{list(SKY_CORRELATION_ESTIMATORS)}, not {sky_correlation!r}."
+        )
+
+    if (
+        sky_correlation == "field_separated"
+        and contaminant_growth != FIELD_SEPARATED_GROWTH_PIXELS
+    ):
+        requirement = (
+            f"{FIELD_SEPARATED_GROWTH_PIXELS} px, which data.mask_mode "
+            f"{mask_mode!r} does not apply"
+            if mask_mode in {"exact", "replace"}
+            else f"{FIELD_SEPARATED_GROWTH_PIXELS} px"
+        )
+        raise ValueError(
+            "Config preparation.noise.sky_correlation 'field_separated' was "
+            "validated on sky regions whose detected contaminant masks are "
+            "grown by preparation.masking.contaminant_growth_pixels: "
+            f"{requirement}."
         )
 
     negative_threshold = masking_config.get(
@@ -1339,6 +1438,16 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
     resolved["fit"]["likelihood"] = resolve_likelihood_config(
         user_likelihood
     )
+
+    # The default growth of the contaminant masks depends on the mask mode:
+    # a curated mask used as it is is not grown.
+    user_masking = (config.get("preparation") or {}).get("masking") or {}
+    if "contaminant_growth_pixels" not in user_masking:
+        resolved["preparation"]["masking"]["contaminant_growth_pixels"] = (
+            default_contaminant_growth_pixels(
+                resolved["data"].get("mask_mode", "union")
+            )
+        )
 
     resolved["fit"]["sampler"] = deep_update(
         deepcopy(
