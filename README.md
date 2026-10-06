@@ -1,7 +1,7 @@
 <h1 align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo/baymorph-lockup-dark.png">
-    <img alt="BayMorph" src="docs/assets/logo/baymorph-lockup-light.png" width="640">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo/baymorph-lockup-dark.svg">
+    <img alt="BayMorph" src="docs/assets/logo/baymorph-lockup-light.svg" width="640">
   </picture>
 </h1>
 

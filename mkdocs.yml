@@ -18,8 +18,8 @@ theme:
   name: material
   variant: modern
   language: en
-  logo: assets/logo/baymorph-tile.png
-  favicon: assets/logo/favicon.png
+  logo: assets/logo/baymorph-tile.svg
+  favicon: assets/logo/favicon.svg
 
   features:
     - navigation.instant
