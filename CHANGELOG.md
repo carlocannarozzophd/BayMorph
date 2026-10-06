@@ -9,564 +9,124 @@ and the project follows Semantic Versioning in spirit.
 
 ## [Unreleased]
 
+---
+
+## [0.4.0] - 2026-10-06
+
+This release changes how BayMorph models the noise, the background and the
+PSF of a real image, adds fits of several observations of one object and
+six morphology models, and rewrites the documentation. Configurations and
+products of 0.3.0 must be updated: see "Upgrading from 0.3.0" below.
+
 ### Added
 
-* AD-051: a declared estimator of the sky correlation for skies that hold a
-  large-scale field. With `preparation.noise.sky_correlation:
-  field_separated`, a smooth correlation `v exp(-r / l) + c`, with `l`
-  between 16 and 400 px, is fitted to the correlation of the sky beyond the
-  kernel of AD-047, up to 48 px, and subtracted within the kernel. The
-  estimator is declared, never chosen automatically; the message that
-  rejects a kernel of the default estimator, `autocovariance`, now names it.
-  It requires the growth of the contaminant masks by 20 px with which it
-  was validated. Each of its calibrations records the fitted field and, as
-  `attribution_ratio`, the kernel sum of a high-pass estimate over its own.
-  The estimator enters the preparation identity only when it is not the
-  default.
-* The summary of the preparation records the growth of the contaminant
-  masks and, as `excluded_target_fraction`, the fraction of the detected
-  target that the fitting mask excludes.
-* The header conventions of the first wave of AD-049, milestone 2: SDSS
-  frames, the coadds of the Legacy Surveys, HST and JWST images, DECam
-  images of the NOIRLab Community Pipeline, hscPipe images that record
-  `FLUXMAG0`, Pan-STARRS stacks and the cutouts that astrocut linearizes,
-  each written from the documentation it cites. A convention may now state
-  a value, such as the zeropoint 22.5 of images in nanomaggies, or derive
-  one through a formula over header keywords, such as the AB zeropoint of
-  HST from `PHOTFLAM` and `PHOTPLAM`, and may require conditions on the
-  header for its reading to hold: the zeropoints of HST and JWST are derived
-  only for the drizzled images in electrons per second and the `i2d`
-  mosaics in MJy/sr that their documentation covers. The predictions of the
-  header bench for these conventions are added to the proposal of AD-049
-  before any real header is read; the bench itself is not yet run.
-* BayMorph reads the header of a FITS image through conventions, milestone 1
-  of AD-049 (`baymorph/core/header_metadata.py`). Each quantity carries its
-  keyword, its convention and a status, and no unit is inferred from a
-  value. The conventions distributed with the package cover the FITS
-  standard, ESO science data products and raw frames, SWarp coadds and the
-  VST-Tube pipeline (`baymorph/resources/header_conventions/`), and a user
-  may add files of the same form. An image stored in an extension is read
-  through `data.hdu`, or selected by default when the file holds a single
-  science image. `ObservationMetadata` keeps the values it always read and
-  adds the full reading in `header_reading`, which the product metadata
-  record.
-* AD-049, an optional observation advisor that reads the header of any FITS
-  image through declared conventions and proposes priors from the header and
-  from physics, accepted on 2026-10-04 with the recommendations of its
-  proposal, which pre-registers a bench on real headers.
-* The BayMorph logo (`docs/assets/logo/`). Its lockup heads the README and
-  the home page of the documentation, with dark and light versions; the site
-  uses its tile as logo and favicon and takes its colours
-  (`docs/stylesheets/brand.css`).
-* A simulation bench of the background of a fit
-  (`benchmarks/background_bench.py`), pre-registered with two amendments
-  before its gate of 450 realizations: on a flat sky the production
-  detection masks peaks of the noise over the wings of the galaxy and biases
-  flux, re and n low by 0.6 to 1.9 of their scatter, a bias that masking only
-  the true contaminants removes; on a sky with a large-scale field no
-  treatment tested keeps the estimates unbiased with calibrated intervals,
-  and the halo of a bright star and a sky subtracted on a mesh bias them by
-  several scatters.
-* `benchmarks/noise_model_cost.py`, which reproduces through the path of a
-  fit the cost of the noise model of AD-047 recorded in the status note on
-  its milestone 3, with a test that the problem it times is the problem of
-  a fit. On the synthetic problem of the production size a complete
-  evaluation takes 87.6 ms, against 68.1 ms with independent pixels, and the
-  factorization 60 s. The likelihood alone takes 23.3 ms against 5.2 ms: the
-  likelihood of the noise model adds about 18 ms per evaluation, where the
-  bench of the decision measured 10.5 ms for its own implementation of the
-  model.
-* An end-to-end test of the noise model of AD-047 through the runner, on a
-  simulated image (`tests/test_noise_model_workflow.py`, about a minute,
-  excluded from `scripts/test_fast.sh`).
-* The source Poisson variance of AD-047, milestone 2 of its plan: with an
-  effective gain `g`, the nearest-neighbour correlated Gaussian likelihood
-  computes the scale `sqrt(s^2 + max(m, 0) / g)` at every evaluation from
-  the source part `m` of the model, which the single and joint inference
-  problems render apart from the residual background and hand to it; the
-  normalization includes the logarithm of that scale. The likelihood equals
-  the model N3 of the noise-model bench to 1e-12.
-  `fit.likelihood.effective_gain` declares the gain as `declared`,
-  `sky_level`, `measured_sky` or `absent`
-  (`baymorph/core/effective_gain.py`), with the guard of ten sky scales for
-  the two sky sources; the correlated likelihood requires it, the common
-  likelihood block of a joint fit refuses it, and the resolved gain is
-  recorded in the products and the checkpoint signatures.
-* References on every page of the Models section: each page of a model, a
-  component, the PSFs and the residual background ends with the sources of
-  its model and formulas, linked to their records in NASA ADS, and the text
-  cites them where each formula appears; forms that are BayMorph's own, such
-  as the fading of the spiral arms toward the centre, are stated as such.
-  Each bibcode was checked on 2026-10-02 against the ADS or NED record of
-  its title. A test keeps every citation listed and every link a well-formed
-  ADS record. Two figures complete the pages: the boxy and discy Sérsic
-  profile along the diagonal of its isophotes, and a core-Sérsic galaxy
-  against its Sérsic body with the light the core lacks; the single-Sérsic
-  page shows the Sérsic profiles as well.
-* A measurement of the signal-to-noise above which the effective-PSF
-  rendering of AD-046 leaves on a component an error comparable with the
-  noise: from 1.2e3 for a Sérsic profile of
-  n = 6 and re = 1 px to 2.1e4, 3.3 times the peak signal-to-noise of the
-  production target for its profile, and above 1.8e4 for point sources. A
-  status note under AD-046 and the pages of the original models state it.
-* The record of the validation of the morphology families of AD-048: a
-  status note under AD-046 on two limits of the effective-PSF rendering,
-  compact bright Sérsic components and sharp structure far from the centre;
-  a status note under AD-048 on the validated domain of each model and the
-  decisions to register the models with those limits stated; a section on the
-  generic cell rules in `docs/architecture/RENDERING.md` (§13.2); and the
-  families among the established capabilities of `ROADMAP.md`.
-* The `bulge_disk_spiral` model of AD-048, for single-observation fits: a
-  Sérsic bulge and an exponential disc with two logarithmic spiral arms
-  (`amplitude_spiral`, `winding_spiral` = cot ψ, `phase_spiral`,
-  `r_in_spiral`) that leave the flux of the disc unchanged; positive windings
-  draw a Z on the detector and negative ones an S. Its rendering is
-  validated for `winding_spiral` from −6 to 6, pitch angles of at least
-  9.5°, with `re_disk` of at least 10 px, `q_disk` of at least 0.4 and
-  `r_in_spiral` of at least 1 px, and it
-  has a page and figures in `docs/models/`.
-* The generic cell rules integrate adaptively the cells where an oscillating
-  component, such as spiral arms, has a wavelength shorter than their rule
-  resolves: five cells for the pixels under an analytic PSF, forty for the
-  finer cells of AD-046. Components that do not oscillate render bit for bit
-  as before.
-* The `bulge_disk_bar` and `bulge_disk_ring` models of AD-048, for
-  single-observation fits: a Sérsic bulge and an exponential disc with a
-  Ferrers bar (`a_bar`, `alpha_bar`, `c0_bar`, `q_bar`, `theta_bar`) or with
-  a Gaussian ring (`r_ring`, `sigma_ring`, `q_ring`, `theta_ring`), with
-  their pages and figures in `docs/models/`. Their rendering is validated for
-  `alpha_bar` of at least 2 and `q_bar` of at least 0.2, and for `sigma_ring`
-  of at least 2 px and `q_ring` of at least 0.5; configuration validation,
-  now tested for every family, rejects priors beyond these domains. At high
-  signal-to-noise the edge of a bar outside the window of AD-046 is rendered
-  with an error comparable with the noise, as its page states.
-* Adaptive integration in the generic cell rules splits the cells that the
-  edge of a finite support crosses, whatever its test of agreement says: a
-  sliver of light that no node samples was otherwise lost, up to 4.6e-5 of
-  the flux of a bar. Components without such an edge render bit for bit as
-  before.
-* The `bulge_broken_disk` model of AD-048, for single-observation fits: a
-  Sérsic bulge with an exponential disc whose scale length changes at a
-  break, of type I, II or III (`h_in_disk`, `h_out_disk`, `rb_disk`,
-  `wb_disk`), with its page and figures in `docs/models/`.
-* Two morphology models of AD-048 for single-observation fits:
-  * `boxy_sersic`, a Sérsic profile on generalized ellipses with the isophote
-    shape `c0`;
-  * `core_sersic`, the core-Sérsic profile of a depleted core with `rb`,
-    `gamma` and `alpha`.
-
-  Their rendering meets the criteria of AD-046 on the bench of the families.
-  Configuration validation rejects priors beyond the domain in which it is
-  validated, and the multi-observation workflow rejects models without a
-  geometry contract, these two included. Each has a page with figures in
-  `docs/models/`.
-* A generic rendering for profile components other than the Sérsic profile
-  (AD-048):
-  * isophote coordinates on generalized ellipses (`baymorph/models/isophote.py`);
-  * a base class of profile components (`baymorph/models/profile.py`);
-  * generic cell rules (`baymorph/rendering/profile_integration.py`), with the
-    renderer names of the Sérsic profile, so components render under analytic
-    PSFs and under the effective-PSF rendering of AD-046.
-
-  The sixth-order rule of the fine cells is now shared with the Sérsic
-  profile, which renders bit for bit as before. A bench measures the families
-  against brute-force references, with its design and criteria fixed before
-  the runs.
-* AD-048, six further morphology families as available single-observation
-  models, and the survey behind it: a catalogue of
-  families beyond the Sérsic profile, spiral arms included, and the reasons
-  why the production target needs none of them.
-* A Models section on the documentation site (`docs/models/`): the morphological
-  components, the four morphology models, the PSFs and the residual background,
-  each with its definition, parameters, priors, degeneracies, validation status
-  and figures in a light and a dark version from
-  `scripts/make_model_figures.py`: most are computed with BayMorph, one
-  evaluates the Sérsic equations with SciPy and two are diagrams of
-  conventions. Tests keep the pages, models and figures in step.
-* A user guide on the documentation site (`docs/guide/`): installation, quick
-  start, command line, configuration reference, preparation and products, and
-  tutorials. `tests/test_documentation.py` keeps it in step with the default
-  configuration, the models and the command line.
-* AD-047, source variance and sky correlation in the noise model, accepted on
-  2026-10-02 with three amendments.
-* A simulation bench of noise models (`benchmarks/noise_model_bench.py`): the
-  production model reports intervals up to 3.0 times too narrow, a model with
-  source variance and sky correlation within 0.90-1.16.
-* A feasibility study of computer-vision source identification against the
-  production detection (`benchmarks/cv_source_identification.py`), closed with
-  a no-go as a replacement.
-* An audit of the noise and background chain with a sandwich measurement of
-  interval calibration (`benchmarks/noise_interval_calibration.py`): the
-  production noise model reports intervals of n and re four to five times too
-  narrow.
-* The proposed AD-046, effective-PSF rendering with extended empirical
-  kernels, since accepted.
-* Empirical-PSF builders with extended wings measured on the test bench
-  (`benchmarks/psf_wing_candidates.py`); W1, with the wings of the stars
-  measured out to 64 px, keeps the bias of n and re within 1 percent.
-* A measurement of how PSF and rendering errors move the fitted Sérsic
-  parameters (`benchmarks/psf_parameter_sensitivity.py`): sampling at pixel
-  centres moves n and re by up to 14 and 22 percent.
-* A comparison of rendering conventions under an empirical PSF against a
-  brute-force reference (`benchmarks/rendering_convention.py`): sampling at
-  pixel centres fails both criteria, a smooth-window local oversampling meets
-  both.
-* Candidate empirical-PSF builders measured on the test bench
-  (`benchmarks/psf_builder_candidates.py`): a phase regression of the stars,
-  with no interpolation, meets every criterion.
-* A test bench for the empirical-PSF builder (`benchmarks/psf_test_bench.py`):
-  the production kernel failed its own centring check in 36 of 40 fields.
-* An adaptive model-informed evidence estimator compared with Nautilus,
-  Dynesty and pocoMC on six analytic targets: Nautilus was correct in 60 of 60
-  runs, the estimator in 47.
-* Likelihood views extending the model-informed evidence estimator to the
-  correlated Gaussian, Cash and Poisson-Gaussian likelihoods
-  (`benchmarks/structure_informed_likelihood_views.py`).
-* A comparison of the model-informed evidence estimator with Nautilus on the
-  simulated galaxy of the first tutorial
-  (`validation/structure_informed_evidence/`), a smoke test on one galaxy.
-* A model-informed evidence estimator that reproduces the Nautilus evidence of
-  the r-band fit with 15 times fewer evaluations and flags its own failures;
-  AD-045 remains a proposal.
-* A decomposition of the cost of one likelihood evaluation
-  (`benchmarks/profile_likelihood_decomposition.py`): 51.5 ms on the real
-  r-band problem, not the recorded 146 ms.
-* `preparation.masking.negative_threshold_sigma`, default 5, which excludes
-  impossibly negative pixels from the likelihood support (AD-043).
-* Explicit `background` and `psf_max_peak` declarations in
-  `make_config_from_fits` and `ObservationAdvisor.propose_config`, which warn
-  when either is left to a default not scaled to the image.
-* `ObservationAdvisor.propose_config` writes every sampled prior, defaults
-  included, and names the defaulted ones in a warning.
-* Observed-galaxy tutorial notebooks `02A_Observed_Assessment_and_Config` and
-  `02B_Observed_Fit`, packaged and copied by `baymorph init`.
-* The simulated single-band tutorial notebook, rebuilt against the current
-  public API.
-* Truth markers in `corner_plot`, drawn automatically for simulated
-  single-observation runs.
-* `InferenceResult.equal_weight_samples` for visualization, beside the
-  weighted samples that remain the statistical source of truth.
-* `InferenceResult.mahalanobis_distance()`, with `weighted_covariance` and
-  `mahalanobis_distance_squared`, to measure how far a reference vector lies
-  from a posterior.
-* A repeated-noise recovery campaign under
-  `validation/repeated_noise_recovery/`, measuring posterior calibration
-  across independent noise realizations.
-* Discovery of project-root-relative configurations from nested working
-  directories.
-* A runner-driven all-in-one simulated-galaxy workflow and parameter-recovery
-  tutorial.
-* A prior-volume coverage review for observationally calibrated flux priors,
-  and post-fit diagnostics of posterior contact with prior boundaries.
-* Canonical multi-observation configuration, preparation, joint inference,
-  persistence and diagnostics.
-* Explicit parameter coupling across observations: exact sharing,
-  observation-specific and fixed parameters, hierarchical and
-  wavelength-dependent coupling.
-* Native-grid and WCS-aware modelling of heterogeneous observations.
-* The Nautilus production backend beside Dynesty and pocoMC.
-* Within-observation correlated-noise calibration and correlated Gaussian
-  image likelihoods.
-* Likelihood normalization status and per-observation likelihood provenance.
-* Hybrid Sérsic rendering with validated adaptive numerical refinement.
-* The observation advisor, guided configuration and evidence-aware flux-prior
-  calibration.
-* Experimental preparation-free model screening with simulation, interpretable
-  features, a classifier and mandatory user model selection.
-* Backend-neutral validation runners, reference problems, repeatability
-  analyses and simulation-based calibration infrastructure.
-* Packaging tests for runtime, development and interactive dependencies.
-* Public-source boundary checks that keep observational data and generated
-  research products out of release artifacts.
+* A noise model for real images: a normalized Gaussian likelihood whose
+  variance in each pixel is the sky variance plus the Poisson variance of
+  the source, `s^2 + max(m, 0) / g`, with the correlation of the sky
+  measured on the sky region of the preparation and a nearest-neighbour
+  factorization of 24 neighbours. The effective gain `g` is declared in
+  `fit.likelihood.effective_gain` as `declared`, `sky_level`,
+  `measured_sky` or `absent`; it is never fitted and has no default.
+* `preparation.noise.sky_correlation: field_separated`, an estimator of the
+  sky correlation for skies that hold a large-scale field. It is declared
+  in the configuration, never chosen automatically.
+* Effective-PSF rendering: an empirical PSF carries its kernels at
+  sub-pixel offsets, and models are convolved with them instead of being
+  sampled at pixel centres. The empirical-PSF builder measures the stars at
+  each sub-pixel phase.
+* Six morphology models for single-observation fits, beside
+  `single_sersic`, `double_sersic`, `sersic_point_source` and `bulge_disk`:
+  `boxy_sersic`, `core_sersic`, `bulge_broken_disk`, `bulge_disk_bar`,
+  `bulge_disk_ring` and `bulge_disk_spiral`. Configuration validation
+  rejects priors outside the domain in which their rendering is validated,
+  which the page of each model states.
+* Fits of several observations of one object: one configuration, the
+  preparation of each observation on its own grid with its own PSF, mask
+  and noise, joint inference and joint products, with explicit coupling of
+  the parameters across observations (shared, per observation, fixed,
+  hierarchical or wavelength-dependent).
+* A residual background fitted with the galaxy, `fit.background`, constant
+  or a plane, with its priors under `fit.background.priors`.
+* Nautilus, the default sampler, and pocoMC, beside Dynesty.
+* The header of a FITS image is read through conventions: the FITS
+  standard, ESO products, SWarp and VST-Tube coadds, SDSS, the Legacy
+  Surveys, HST, JWST, DECam, hscPipe, Pan-STARRS and astrocut cutouts.
+  `data.hdu` selects an image stored in an extension.
+* The summary of a preparation records the fraction of the detected target
+  that the fitting mask excludes.
+* `InferenceResult.equal_weight_samples` for plots, beside the weighted
+  samples that remain the statistical result, and
+  `InferenceResult.mahalanobis_distance()`.
+* Truth markers in the corner plots of simulated fits, and a diagnostic of
+  posteriors that reach the bounds of their priors.
+* Tutorial notebooks for a simulated galaxy and for an observed galaxy, in
+  two parts: its assessment and configuration, and its fit. `baymorph init`
+  copies them.
+* A documentation site written for users: a User Guide with one page for
+  each stage of an analysis, a Theory section, a page for each model and
+  component with its figures and references, and a Reference section for
+  the command line, the configuration, the output files and the Python API.
 
 ### Changed
 
-* AD-051: the preparation grows every masked contaminant segment by 20 px,
-  `preparation.masking.contaminant_growth_pixels`, and excludes the grown
-  pixels from the sky region and the likelihood support; the target
-  support, its geometry, the plateau and the cutout keep the segments as
-  detected. On simulated images of a galaxy among many fainter neighbours,
-  the faint outskirts of the neighbours beyond their segments lowered the
-  flux, the effective radius and the Sérsic index by 1 to 5 percent, and the
-  growth brought those biases within 0.2 percent, or within 3 percent when
-  the sky also held a large-scale field. A curated mask used as it is,
-  `data.mask_mode: exact` or `replace`, is not grown. The growth enters the
-  preparation identity unless it is 0, so products prepared before it are
-  reused only when `contaminant_growth_pixels: 0` is declared.
-* The calibration of the sky correlation moves to schema 3, which records
-  the estimator that made the kernel. A calibration of schema 2 is rejected,
-  never converted, and is rebuilt in a new output namespace.
-* The repository and the documentation site hold what a user of BayMorph
-  needs. The design documents, the decision records, the plan of work, the
-  research notes and the code of the simulation benches and validation
-  campaigns, with the tests of that code, are no longer published; the page
-  For Developers is removed, and the installation from a clone is described
-  in the README and the installation guide.
-* The production preparation masks a detected segment only when it still
-  holds a source with the detection threshold raised by the smooth light of
-  the target, `preparation.masking.contaminant_rule: local_excess`, the new
-  default. Over the wings of the target, peaks of the noise lifted above the
-  threshold were masked as contaminants, and on the simulated images of the
-  background bench this biased the flux, the effective radius and the
-  Sérsic index low by 0.6 to 1.9 of their scatter. The rule `all_segments`
-  keeps the previous masks. A preparation records its rule and the segments
-  it released, and products prepared before the rule are reused only when
-  `all_segments` is declared. On the same simulated images the biases fall
-  within 0.14 of the scatter (AD-050).
-* BayMorph refuses, when it loads a FITS image, an image whose header
-  declares pixel values that are not linear in flux, as AD-049 decides: a
-  Pan-STARRS stack, whose values are compressed through `asinh` with
-  `BSOFTEN` and `BOFFSET`, was read as if it were linear. The FITS cutouts
-  of the PS1 image cutout service and the cutouts that astrocut linearizes
-  are linear and load as before.
-* The documentation site is rewritten for users. A User Guide gives one
-  page to each stage of an analysis, the runner, the configuration, the
-  image and its cutout, the masks, the sky and the noise, the PSF, the fit,
-  the results, the plots, several observations and simulations, each with
-  the code to run it and to inspect what it produced, run on simulated
-  images; a Theory section explains Bayesian inference, nested sampling
-  and hierarchical models; the Models section adds the pages Noise Models
-  and Sky and Background; and a Reference section holds the command line,
-  the configuration, the output files and the Python API. The
-  architecture, the research notes and the decisions are no longer built
-  into the site: they stay in the repository, linked from the page For
-  Developers, and the model pages no longer cite decision numbers. The
-  figures of the Models and Theory sections follow the plotting style of
-  `baymorph.plotting.style`, with at most two panels per row and the
-  colours and light and dark versions of before;
-  `scripts/make_model_figures.py` makes them.
-* The documentation site is built by Zensical 0.0.67 instead of MkDocs and
-  Material for MkDocs: MkDocs has had no maintainer since August 2024, its
-  version 2.0 drops the plugins and the themes of Material, and Material is
-  in maintenance only since November 2025. Zensical, by the authors of
-  Material, reads `mkdocs.yml` and builds the same pages, in its modern
-  variant. It does not support `exclude_docs`: its `exclude` plugin keeps
-  the architecture, the research notes and the archive out of the site.
-  `python -m zensical build --strict` is the documentation gate, locally
-  and in the continuous integration, and also fails on a link to an anchor
-  that does not exist; `requirements-docs.txt` pins the version.
-* The architecture documents follow AD-047, milestone 4 of its plan.
-  `docs/architecture/OBSERVATION_MODEL.md` §22.9 defines the noise model:
-  its marginal scale, the estimator of the sky correlation, the
-  nearest-neighbour factorization and the normalized log-likelihood, the
-  declared effective gain, the fixed inputs whose uncertainty is not
-  propagated, the residual diagnostics, the limitations and the weight map
-  still to come; §11 and §22 no longer call the independent Gaussian the
-  current likelihood, and §22.3 adds the case of a covariance whose inputs
-  are fixed but whose value follows the predicted source image.
-  `INFERENCE.md` §14 states that the normalization of such a covariance
-  enters every evaluation, and §15 no longer writes the likelihood of a
-  masked image as a sum over pixels, which holds only for independent
-  pixels. The contracts of `BAYMORPH_CORE_CONTRACT.md`, with the cost of a
-  complete evaluation under AD-047, and the fixed quantities of
-  `PIPELINE.md` follow the decision. The public API documentation describes
-  the standardized residual and the chi-square of the fit products and the
-  `requires_source` contract of likelihoods; the guide to preparation and
-  products describes the sky correlation and factorization products; and
-  the observed-fit tutorial, with its packaged copy, no longer says that
-  its noise lacks the galaxy's Poisson noise.
-* Every fit run from a configuration uses the noise model of AD-047,
-  milestone 3 of its plan. The single path passes the nearest-neighbour
-  factorization to its likelihood, which closes finding A1 of the deep audit;
-  the residual diagnostics of both paths are standardized by the scale of the
-  model and report the conditional quadratic form. A configuration without a
-  likelihood takes the correlated Gaussian with 24 neighbours, the only order
-  accepted for fits, and declares no gain, so the fit asks for one.
-  `baymorph config` writes `effective_gain: {source: measured_sky}` only when
-  the sky of the image passes the guard of AD-047, and says so otherwise.
-* The packaged simulated example is 201 x 201 px, which halves the scatter of
-  its sky correlation, and declares the source variance absent; the tutorial
-  notebooks, with their packaged copies, and the validation workspaces
-  declare the gain of their images.
-* Image likelihoods take an optional `source`, the source part of the model
-  without the residual background, which only a likelihood whose covariance
-  depends on it (`requires_source`) uses; `BackgroundAppliedModel` renders
-  both with `render_prediction`.
-* The sky correlation of the correlated Gaussian likelihood follows AD-047,
-  milestone 1 of its plan: it is estimated on the whole sky region of the
-  preparation with one plane removed, normalized by the number of pixel pairs
-  at each lag, without a taper and up to lag 8, and rejected unless its
-  spectrum is strictly positive; the correlation at lags 9 to 16 is recorded
-  as a diagnostic of the truncation. The tapered tile estimator and the
-  smooth marginal field are retired, and the correlated likelihood takes its
-  marginal scale from the prepared noise map. The calibration product and
-  the nearest-neighbour factorization artifact take their schema 2; products
-  of the earlier schemas are rejected and never converted.
-* The model screening is pinned to the four models it was trained on
-  (`SCREENING_MODELS`), so models registered later leave its simulations,
-  classifier and reports unchanged (AD-048).
-* `README.md`, `CONTRIBUTING.md`, `ROADMAP.md` and the ADR policy are revised,
-  `DECISIONS.md` gains an index, and the Unreleased entries of this changelog
-  are shortened.
-* The documentation site is reorganized: a Getting Started section, research
-  notes grouped by workstream, a complete architecture map, and retitled
-  validation documents. `PAPER_BLUEPRINT.md` moved to
-  `docs/archive/research_history/` with a status note.
-* The architecture documents follow AD-046: `docs/architecture/RENDERING.md`
-  §13.1 defines the effective-PSF rendering in place of the rule that an
-  empirical kernel requires sampling at pixel centres.
-* The rendering of AD-046 is evaluated within 2e-10 of its previous evaluation
-  in 68-72 ms instead of 158 ms per complete likelihood evaluation of a
-  production-size problem; checkpoints made with the previous evaluation are
-  rejected.
-* The production empirical-PSF builder is the builder of AD-046, with four new
-  keys of `psf.empirical.construction` and PSF products of schema 2 holding
-  the sub-pixel kernels; products of the previous schema are rejected for
-  fits.
-* `EmpiricalPSF` accepts sub-pixel kernels and `ConvolvedModel` renders with
-  them as AD-046 defines; the rendering convention enters every checkpoint
-  signature.
-* Three duplications are merged without changing any digest or signature:
-  sampler checkpoint signing, the backend envelope, and canonical JSON
-  hashing.
-* The current priority is stated once, in `ROADMAP.md`, and the other
-  documents refer to it.
-* Joint inference uses the residual-background abstraction instead of the
-  model-level `sky` parameter (AD-044); configurations naming `sky` are
-  rejected with a migration hint.
-* One production model factory, `ObservedModelFactory`, builds the observed
-  model of single and joint fits.
-* `DEFAULT_CONFIG` proposes `single_sersic`, the production baseline, instead
-  of `double_sersic`.
-* The simulation configuration accepts only the nested `simulation.noise` and
-  `simulation.psf` sections.
-* `ValidationWorkspace` writes configurations the pipeline accepts.
-* The likelihood alias table and the diagnostic helpers exist once.
-* The validation modules share their posterior, evidence and likelihood-call
-  accessors.
-* `estimate_noise_map` fails closed when no finite unmasked pixel exists, and
-  source detection no longer swallows a `SourceCatalog` failure.
-* `pipeline_paths` no longer declares directories and files that are never
-  written.
-* `RealFitProducts.corner` labels its axes from the sampled parameter names.
-* Real-object configurations under `configs/` are ignored by Git, and the
-  object-neutrality and local-path guards cover more cases.
-* PSF convolution caches the padded kernel transform, bit-identical to
-  `scipy.signal.fftconvolve`: a complete r-band evaluation takes 46.4 ms
-  instead of 51.5 ms.
-* The Nautilus backend installs the inference problem in each worker once, so
-  64 bytes instead of 29.34 MB travel per task chunk; Dynesty and pocoMC keep
-  the defect.
-* Image-preparation products made before AD-043 are rejected, because
-  `preparation.masking` enters the preparation identity.
-* The error rejecting fixed noise-estimation entries no longer calls the
-  production noise estimator MAD-based.
-* `prepare_image`, `select_psf_candidates` and `build_psf` reuse an accepted
-  product of the same output namespace and report the reuse (AD-042).
-* `ObservationConfigProposal.write` refuses to replace an existing
-  configuration unless `overwrite=True` is passed.
-* Single-image colorbars align with their image panels.
-* Legacy multiband terminology and runtime objects are replaced by the general
-  multi-observation architecture.
-* Inference backends consume only backend-neutral `InferenceProblem`
-  instances.
-* Posterior samples, evidence, diagnostics, timing and provenance live in
-  backend-neutral result objects.
-* Inference footprints are separate from preparation footprints.
-* Typed prior configuration and parameter routing are standardized.
-* Plotting no longer needs an external LaTeX installation.
-* Model-screening runtime code is separate from its validation and training
-  infrastructure.
-* The documentation is consolidated around the production contracts.
-* The roadmap is refocused on real multi-observation production fits and paper
-  closure.
-* Normalized Gaussian likelihoods are the neutral tutorial default, and
-  correlated-noise models require explicit validation.
+* Every fit run from a configuration uses the noise model above and
+  requires a declared effective gain. `baymorph config` declares
+  `effective_gain: {source: measured_sky}` only when the sky of the image
+  allows it, and says so otherwise.
+* The preparation masks a detected segment only when it holds a source
+  above the light of the target (`preparation.masking.contaminant_rule:
+  local_excess`, the default; `all_segments` keeps the previous masks),
+  grows the masked segments by 20 px for the sky region and the likelihood
+  support (`contaminant_growth_pixels`, 0 for a curated mask used as it
+  is), and excludes pixels more than 5 sky scales below zero
+  (`negative_threshold_sigma`). On simulated images of a galaxy among
+  neighbours, the light of the neighbours beyond their detected segments
+  biased the flux, the effective radius and the Sérsic index by up to 5
+  percent; the grown masks keep these biases within 0.2 percent on a flat
+  sky.
+* The noise scale of the preparation is a Gaussian scale corrected for the
+  truncation and measured about a plane fitted to the sky region.
+* FITS images whose pixel values are not linear in flux, such as
+  Pan-STARRS stacks compressed with `asinh`, are refused.
+* `DEFAULT_CONFIG` proposes `single_sersic` instead of `double_sersic`.
+* Faster fits: the PSF convolution keeps the transform of its kernel, and
+  Nautilus installs the problem in each worker once instead of sending it
+  with every task.
+* BayMorph depends on Nautilus, pocoMC, h5py, multiprocess and
+  threadpoolctl, besides Dynesty; the interactive and development tools
+  are optional extras.
+* The documentation site is built with Zensical.
 
 ### Removed
 
-* The independent Gaussian likelihood for fits run from a configuration,
-  rejected by AD-047; it remains in the library for simulations and tests.
-* `fit.likelihood.calibration` and its estimator settings, rejected now that
-  AD-047 fixes the estimator, and the unused `package_correlation` helper of
-  the noise-model bench, which called the retired estimator.
-* Code used only by tests, found by the deep audit of 2026-09-30, with its
-  tests: five modules and sixteen functions, none of them in the top-level
-  public API.
-* The posterior-only emcee backend, never released. Every fit, in both
-  workflows, now requires a completely normalized likelihood.
-* Dead or superseded code found by the audit of 2026-09-29.
-* The model-level `sky` parameter and `SkyModelWrapper`.
-* The `data.external_mask_path` and `data.cutout_size` shims, and legacy
-  inference archives without a format version.
-* The experimental native nested-sampler runtime and its production
-  integration.
-* Superseded geometry-specific sampler infrastructure.
-* Legacy multiband compatibility modules and obsolete configuration paths.
-* Obsolete validation backends, notebooks, audit artifacts and broken
-  benchmarks.
-* Target-specific public configuration and tracked generated tables, summaries
-  and figures.
-* All tutorial notebooks, pending a rebuild against the current public API.
+* The independent Gaussian likelihood for fits run from a configuration; it
+  remains in the library for simulations and tests.
+* The model parameter `sky`: the residual background is `fit.background` in
+  a single fit and a parameter of `fit.multi_observation.parameters` in a
+  joint fit.
+* `data.cutout_size`: a fixed cutout is declared as `data.cutout` with
+  `mode: fixed` and `size`.
 
 ### Fixed
 
-* The residual maps of `diagnostics`, single and joint, and the residual
-  figure of the observed-fit tutorial divided the residual by the prepared
-  sky scale alone, while the likelihood of AD-047 standardizes it by the
-  scale of its noise model, which adds the source Poisson variance. On the
-  best model of the earlier r-band fit, with the gain of 44.4 that AD-047
-  gives that image, the scale reaches 5.8 times the sky scale at the centre
-  of the galaxy, so the maps would have overstated the central residuals by
-  up to that factor. They now draw the `norm_residual` of the fit products,
-  computed by the likelihood: `plot_pipeline_fit_maps` takes it in place of
-  a noise map, and `plot_log_data_model_residual` accepts it as
-  `norm_residual`. The saved products are unchanged: `norm_residual.npy`
-  and the chi-square already followed the likelihood, and `noise.npy`
-  remains the prepared sky scale.
-* The status note on milestone 1 of AD-047 attributed to the r-band target a
-  sky region of about 11 600 pixels, the size of the region of the packaged
-  simulated example; the region of the target holds 477 362 pixels. The note
-  now gives the measured dependence on the size of the region, and the
-  measurement on the example.
-* Two attributions of the components, in the pages and the docstrings: the
-  Ferrers profile was credited to Imfit (Erwin 2015), whose paper does not
-  describe it, and is now credited to GALFIT (Peng et al. 2010); the
-  convention `c = 2 + c0` of generalized ellipses was credited to Peng et al.
-  (2002), whose GALFIT uses the exponent `c` itself, and is now credited to
-  GALFIT (Peng et al. 2010) and Imfit.
-* Source detection no longer falls back silently to a background that ignores
-  the detection mask: preparation detects without a background, and the
-  observation advisor raises instead.
-* Documents that declared capabilities the code does not provide, found by the
-  deep audit of 2026-09-30, with status notes under AD-028, AD-032, AD-040 and
-  AD-042.
-* AD-041 names the project's scientific invariants instead of a file that is
-  not distributed.
-* `ObservationAdvisor.calibrate_flux_prior` no longer demands a `sky` prior.
-* The multi-observation validation workspace and campaigns declare the
-  residual background as `background_level`.
-* The prepared noise scale is measured about a plane fitted to the sky region,
-  so an unmodelled gradient is not counted as noise (AD-041).
-* Preparation reports the fitted sky gradient and its significance as a
-  diagnostic that never selects a background model.
-* `pipeline_paths` exposes `fit_summary` and `fit_summary_text` in place of a
-  key naming a file that was never written.
-* The prepared noise scale is a truncation-corrected Gaussian scale instead of
-  a scaled median absolute deviation, with 0.7 instead of 1.1 percent
-  run-to-run scatter (AD-040).
-* `estimate_noise_map`, then used by the observation advisor and the
-  empirical-PSF candidate selection, uses a scaled median absolute deviation:
-  bias -0.26 instead of -1.54 percent.
-* Per-observation likelihood overrides take precedence over joint defaults.
-* The correlated-noise calibration is built before joint inference for every
-  observation that needs it.
-* Multi-observation fit statistics use each observation's likelihood and
-  noise.
-* Joint products persist the per-observation likelihood metadata and
-  normalization status.
-* Mahalanobis statistics are consistent with the likelihood of correlated
-  observations.
-* All runtime dependencies are declared, and the interactive and development
-  ones are optional.
-* PSF selection, mask handling, background estimation, radial diagnostics,
-  output persistence and sampler provenance.
-* Inconsistencies of the public notebooks, API, terminology and release
-  documentation.
-* The simulated-galaxy example field is 121 x 121 px, so that it contains the
-  sky plateau and the preparation margin.
-* Residual-map diagnostics no longer load empirical-PSF provenance for fits
-  with an analytic Gaussian PSF.
+* Source detection no longer falls back silently to a background that
+  ignores the detection mask.
+* Fixes in the preparation, the selection of PSF stars, the masks, the
+  estimation of the background, the diagnostics and the saved products.
+
+### Upgrading from 0.3.0
+
+* Declare `fit.likelihood.effective_gain` in every configuration.
+* Remove the `sky` parameter, and give the background priors under
+  `fit.background.priors`, or under `fit.multi_observation.parameters` in
+  a joint fit.
+* Replace `data.cutout_size` by `data.cutout` with `mode: fixed` and
+  `size`.
+* Prepare the images and build the PSFs again in new output namespaces:
+  the preparation products, PSFs and checkpoints of 0.3.0 are rejected,
+  never converted.
+* Remove `data.noise_map_path` and `data.psf_path`, even when they are
+  null: external noise maps and PSF files are not supported yet.
 
 ---
 
@@ -617,5 +177,6 @@ and the project follows Semantic Versioning in spirit.
 
 ---
 
-[Unreleased]: https://github.com/carlocannarozzophd/BayMorph/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/carlocannarozzophd/BayMorph/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.4.0
 [0.3.0]: https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.3.0
