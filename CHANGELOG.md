@@ -9,6 +9,18 @@ and the project follows Semantic Versioning in spirit.
 
 ## [Unreleased]
 
+---
+
+## [0.5.0] - 2026-10-07
+
+This release completes the observation advisor. It reads the FITS header,
+prepares the image and builds its PSF, and proposes every prior of one or
+several models from the header, from physics and from those fixed inputs,
+never from the image it is about to fit; nothing is written before you
+review and accept the proposal. The advisor works from Python, from
+`baymorph config --advise` and in the observed-image tutorials.
+Configurations written for 0.4.0 run unchanged.
+
 ### Added
 
 * `ObservationAdvisor.propose_config` proposes every prior of the
@@ -235,6 +247,7 @@ products of 0.3.0 must be updated: see "Upgrading from 0.3.0" below.
 
 ---
 
-[Unreleased]: https://github.com/carlocannarozzophd/BayMorph/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/carlocannarozzophd/BayMorph/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.5.0
 [0.4.0]: https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.4.0
 [0.3.0]: https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.3.0

@@ -49,7 +49,7 @@ from baymorph.analysis.model_screening_persistence import (
     load_model_screening_classifier,
 )
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 __all__ = [
     "BayMorphRunner",
