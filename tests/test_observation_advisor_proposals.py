@@ -12,7 +12,9 @@ import yaml
 from astropy.io import fits
 
 from baymorph import ObservationAdvisor
+from baymorph.models.labels import PARAMETER_KINDS
 from baymorph.pipeline.advisor import FixedInputs
+from baymorph.pipeline.config import resolve_config, validate_fit_priors
 from baymorph.pipeline.psf_construction import estimate_psf_core_fwhm
 
 SKY_SCALE = 2.5
@@ -418,3 +420,211 @@ def test_multi_component_model_keeps_its_component_ranges(
             flux_prior={"type": "log_uniform", "lower": 1.0, "upper": 1.0e6},
             outputs_root=tmp_path / "runs",
         )
+
+
+def test_fixed_inputs_measured_first_settle_the_ceiling_of_the_proposal(
+    tmp_path: Path,
+    stages: list[dict],
+) -> None:
+    """Fixed inputs measured before the proposal must carry its PSF ceiling."""
+    fits_path = _write_coadd(tmp_path, saturation_unit_known=True)
+    advisor = ObservationAdvisor(fits_path, target_position=(40.0, 40.0))
+    options = {"outputs_root": tmp_path / "runs"}
+
+    inputs = advisor.measure_fixed_inputs(**options)
+
+    assert stages[0]["psf"]["empirical"]["candidate_selection"]["max_peak"] == (
+        pytest.approx(13000.0)
+    )
+
+    proposal = advisor.propose_config(
+        output_path=tmp_path / "coadd.yaml",
+        fixed_inputs=inputs,
+        flux_prior={"type": "log_uniform", "lower": 10.0, "upper": 1.0e7},
+        **options,
+    )
+
+    assert len(stages) == 1
+    assert proposal.provenance["fixed_inputs"] == inputs.as_dict()
+    assert proposal.provenance["psf_max_peak"]["source"] == "header"
+
+
+def test_one_proposal_holds_several_models_with_their_priors(
+    tmp_path: Path,
+    stages: list[dict],
+) -> None:
+    """Every chosen model must receive its priors by the same rules."""
+    fits_path = _write_coadd(tmp_path)
+    advisor = ObservationAdvisor(fits_path, target_position=(40.0, 40.0))
+    output_path = tmp_path / "configs" / "coadd.yaml"
+    models = ["single_sersic", "double_sersic", "bulge_disk"]
+    q_disk = {"type": "uniform", "lower": 0.2, "upper": 1.0}
+
+    proposal = advisor.propose_config(
+        output_path=output_path,
+        models=models,
+        model_priors={"bulge_disk": {"q_disk": q_disk}},
+        outputs_root=tmp_path / "runs",
+        psf_type="gaussian",
+        gaussian_fwhm_pixels=2.74,
+        background_model="plane",
+    )
+
+    assert len(stages) == 1
+
+    config = proposal.config
+    priors = config["fit"]["priors"]
+
+    assert config["fit"]["models"] == models
+    assert list(priors) == models
+
+    header_flux = {
+        "type": "log_uniform",
+        "lower": pytest.approx(1.0),
+        "upper": pytest.approx(10.0**8.8),
+    }
+
+    for model_name, name in (
+        ("single_sersic", "flux"),
+        ("double_sersic", "flux_bulge"),
+        ("double_sersic", "flux_disk"),
+        ("bulge_disk", "flux_bulge"),
+        ("bulge_disk", "flux_disk"),
+    ):
+        assert priors[model_name][name] == header_flux
+
+    for model_name in models:
+        assert list(priors[model_name]) == list(PARAMETER_KINDS[model_name])
+        assert priors[model_name]["x0"]["upper"] == pytest.approx(3.0 * 2.74)
+
+    assert priors["single_sersic"]["re"]["type"] == "log_uniform"
+    assert priors["double_sersic"]["re_bulge"] == {
+        "type": "uniform",
+        "lower": 1.0,
+        "upper": 30.0,
+    }
+    assert priors["double_sersic"]["q_bulge"] == {
+        "type": "uniform",
+        "lower": 0.4,
+        "upper": 1.0,
+    }
+    assert priors["bulge_disk"]["q_disk"] == q_disk
+    assert config["fit"]["background"]["model"] == "plane"
+
+    provenance = proposal.provenance
+
+    assert provenance["models"] == models
+    assert list(provenance["priors"]) == models
+    assert provenance["priors"]["bulge_disk"]["q_disk"]["source"] == "user"
+    assert provenance["priors"]["double_sersic"]["q_disk"]["source"] == "reference"
+    assert proposal.models == tuple(models)
+    assert proposal.starting_model == "single_sersic"
+    assert proposal.flux_prior is None
+
+    summary = proposal.summary()
+
+    assert "User-selected models: single_sersic, double_sersic, bulge_disk" in summary
+    assert "own evidence" in summary
+    assert "double_sersic:" in summary
+
+    proposal.write(accept=True)
+
+    written = yaml.safe_load(output_path.read_text(encoding="utf-8"))
+    resolved = resolve_config(written)
+    validate_fit_priors(resolved)
+
+    assert resolved["fit"]["models"] == models
+    assert written["fit"]["priors"] == priors
+
+
+def test_choice_of_models_and_their_priors_must_be_explicit(
+    tmp_path: Path,
+    stages: list[dict],
+) -> None:
+    """Ambiguous model choices must be refused before any stage runs."""
+    fits_path = _write_coadd(tmp_path)
+    advisor = ObservationAdvisor(fits_path, target_position=(40.0, 40.0))
+    options = {
+        "output_path": tmp_path / "coadd.yaml",
+        "outputs_root": tmp_path / "runs",
+        "psf_type": "gaussian",
+        "gaussian_fwhm_pixels": 2.74,
+    }
+    re_prior = {"type": "uniform", "lower": 2.0, "upper": 50.0}
+
+    with pytest.raises(ValueError, match="not both"):
+        advisor.propose_config(
+            model_name="single_sersic",
+            models=["bulge_disk"],
+            **options,
+        )
+
+    with pytest.raises(TypeError, match="sequence of model names"):
+        advisor.propose_config(models="single_sersic", **options)
+
+    with pytest.raises(ValueError, match="at least one"):
+        advisor.propose_config(models=[], **options)
+
+    with pytest.raises(ValueError, match="more than once"):
+        advisor.propose_config(models=["single_sersic", "single_sersic"], **options)
+
+    with pytest.raises(ValueError, match="Unknown model"):
+        advisor.propose_config(models=["single_sersic", "spiral"], **options)
+
+    with pytest.raises(ValueError, match="not among the chosen models"):
+        advisor.propose_config(
+            models=["single_sersic"],
+            model_priors={"bulge_disk": {"re_disk": re_prior}},
+            **options,
+        )
+
+    with pytest.raises(ValueError, match="has no parameters"):
+        advisor.propose_config(
+            models=["single_sersic", "bulge_disk"],
+            model_priors={"bulge_disk": {"re": re_prior}},
+            **options,
+        )
+
+    with pytest.raises(ValueError, match="one model"):
+        advisor.propose_config(
+            models=["single_sersic", "core_sersic"],
+            flux_prior={"type": "log_uniform", "lower": 1.0, "upper": 1.0e6},
+            **options,
+        )
+
+    assert stages == []
+
+
+def test_several_models_without_a_zeropoint_name_each_missing_flux(
+    tmp_path: Path,
+    stages: list[dict],
+) -> None:
+    """Without a zeropoint, every undeclared flux must be named with its model."""
+    fits_path = _write_coadd(tmp_path, saturation_unit_known=True)
+    advisor = ObservationAdvisor(fits_path, target_position=(40.0, 40.0))
+    flux = {"type": "log_uniform", "lower": 10.0, "upper": 1.0e7}
+
+    with pytest.raises(ValueError, match="bulge_disk.flux_disk") as error:
+        advisor.propose_config(
+            output_path=tmp_path / "coadd.yaml",
+            models=["single_sersic", "bulge_disk"],
+            model_priors={"single_sersic": {"flux": flux}},
+            outputs_root=tmp_path / "runs",
+        )
+
+    assert "single_sersic.flux" not in str(error.value)
+    assert "keyed by model" in str(error.value)
+
+
+def test_header_report_tables_what_the_header_holds(tmp_path: Path) -> None:
+    """The report must show the values read, their units and their sources."""
+    fits_path = _write_coadd(tmp_path)
+
+    report = ObservationAdvisor(fits_path).header_report()
+
+    assert report.startswith("BayMorph Header Reading")
+    assert "HDU: selected by BayMorph" in report
+    assert "zeropoint" in report
+    assert "PHOTZP" in report
+    assert "BKGMED" in report
+    assert "HDU: 0" in ObservationAdvisor(fits_path, hdu=0).header_report()

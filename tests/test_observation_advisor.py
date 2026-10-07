@@ -7,6 +7,7 @@ import pytest
 from astropy.io import fits
 
 from baymorph import ObservationAdvisor
+from baymorph.models.labels import PARAMETER_KINDS, parameter_names
 
 
 def _write_source_fits(
@@ -1064,3 +1065,53 @@ def test_advisor_summary_reports_units_and_saturation_as_header_metadata(
         "Saturation keyword: 30000 (header units, not unit-checked)"
         in summary
     )
+
+
+def test_prior_guidance_covers_every_model_by_kind(
+    tmp_path,
+) -> None:
+    """Every parameter of the ten models must have guidance from its kind."""
+    fits_path = tmp_path / "galaxy.fits"
+
+    _write_source_fits(fits_path)
+
+    advisor = ObservationAdvisor(
+        fits_path,
+        target_position="center",
+    )
+    families = {
+        "flux": {"log_uniform"},
+        "length": {"positive_scale"},
+        "position": {"uniform_relative_to_target"},
+        "angle": {"uniform_axial", "uniform_periodic"},
+        "dimensionless": {"bounded", "bounded_0_1"},
+    }
+    whole_target = {"flux", "re", "q", "theta"}
+
+    for model_name, kinds in PARAMETER_KINDS.items():
+        guidance = advisor.prior_guidance(model_name)
+
+        assert list(guidance) == parameter_names(model_name)
+
+        for name, item in guidance.items():
+            assert item.parameter == name
+            assert item.family in families[kinds[name]], (model_name, name)
+            assert item.use_observed_scale_for_prior is False
+
+            if name in whole_target:
+                assert item.observed_scale_source == "fitted_image"
+                assert "diagnostic" in item.rationale
+            else:
+                assert item.observed_scale is None
+                assert item.observed_scale_source is None
+
+    assert (
+        advisor.prior_guidance("bulge_disk_spiral")["phase_spiral"].family
+        == "uniform_periodic"
+    )
+    assert advisor.prior_guidance("double_sersic")["q_disk"].family == "bounded_0_1"
+    assert "clips it" in advisor.prior_guidance("bulge_disk")["re_disk"].rationale
+    assert "validated" in advisor.prior_guidance("core_sersic")["rb"].rationale
+
+    with pytest.raises(ValueError, match="Unknown model"):
+        advisor.prior_guidance("spiral")

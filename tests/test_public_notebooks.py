@@ -180,20 +180,43 @@ def test_public_notebooks_never_prompt_for_input() -> None:
 
 
 def test_assessment_notebook_only_writes_a_reviewed_configuration() -> None:
-    """02A inspects and configures; it never prepares, builds a PSF, or fits."""
+    """02A guides the advisor to a reviewed configuration; it never fits.
+
+    The advisor prepares the image and builds its PSF, the fixed inputs
+    that the fit of 02B reuses, before it proposes the priors of the chosen
+    models with the same options.
+    """
     source = _notebook_source(NOTEBOOK_DIRECTORY / ASSESSMENT_NOTEBOOK)
 
-    assert "ObservationAdvisor.from_project(" in source
-    assert "advisor.select_target(" in source
-    assert "advisor.propose_config(" in source
-    assert "proposal.write(accept=True)" in source
+    for step in (
+        "ObservationAdvisor.from_project(",
+        "advisor.header_report()",
+        "advisor.select_target(",
+        "advisor.measure_fixed_inputs(**stage_options)",
+        "advisor.propose_config(",
+        "models=models",
+        "fixed_inputs=fixed_inputs",
+        "**stage_options",
+        "proposal.write(accept=True)",
+    ):
+        assert step in source
 
     for forbidden in (
         "BayMorphRunner",
         "calibrate_flux_prior",
         "overwrite=True",
+        ".fit(",
     ):
         assert forbidden not in source
+
+
+def test_observed_fit_notebook_shows_every_fitted_model() -> None:
+    """02B must show the posterior, residuals and evidence of each model."""
+    source = _notebook_source(NOTEBOOK_DIRECTORY / OBSERVED_FIT_NOTEBOOK)
+
+    assert 'runner.config["fit"]["models"]' in source
+    assert "for model_name, fit in fits.items():" in source
+    assert "logZ - best" in source
 
 
 def test_observed_fit_notebook_runs_the_pipeline_from_the_written_yaml() -> None:

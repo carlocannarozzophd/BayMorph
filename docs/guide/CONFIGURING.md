@@ -61,6 +61,24 @@ baymorph config data/galaxy.fits \
 `--uniform-prior` can be repeated for any parameter. The options are listed
 in [Command Line](../reference/CLI.md).
 
+With `--advise`, the command lets the observation advisor described below
+propose the configuration instead:
+
+```bash
+baymorph config data/galaxy.fits \
+  --target-x 500 --target-y 500 \
+  --advise \
+  --model single_sersic --model double_sersic \
+  --output configs/galaxy.yaml
+```
+
+It prints what the header holds, prepares the image and builds its PSF,
+and prints the proposal with the source of every prior. Nothing is written
+until you run the same command again with `--accept`. Several `--model`
+options give one configuration with every model, each fitted separately;
+with several models, a declared prior names its model, as in
+`--uniform-prior double_sersic.q_bulge 0.4 1`.
+
 ### From Python
 
 ```python
@@ -98,23 +116,32 @@ you have reviewed and accepted it. The tutorial notebook
 from baymorph import ObservationAdvisor
 
 advisor = ObservationAdvisor.from_project("data/galaxy.fits")
+print(advisor.header_report())    # what the header holds
 advisor.select_target()           # click on the galaxy, then confirm
 advisor.inspect()
-print(advisor.summary())
+print(advisor.summary())          # diagnostics of the image and the target
 
 proposal = advisor.propose_config(
     output_path="configs/galaxy.yaml",
-    model_name="single_sersic",
+    models=["single_sersic", "double_sersic"],
     background_model="plane",
 )
 print(proposal.summary())
 proposal.write(accept=True)
 ```
 
+`header_report()` lists each quantity read from the header with its value,
+unit, status and source. A quantity whose unit or meaning the header does
+not establish is marked `ambiguous` and is never used: a unit is never
+guessed from a value.
+
 The Advisor first prepares the image and builds its PSF, the inputs of the
-observation model that come before any prior; the fit then reuses them.
-It then proposes the priors from the header, from physics and from those
-inputs, never from the image it is about to fit:
+observation model that come before any prior; the fit then reuses them. To
+look at them before the priors, call `advisor.measure_fixed_inputs(...)` and
+pass the result to `propose_config(fixed_inputs=...)` with the same options,
+as the tutorial does. The Advisor then proposes the priors from the header,
+from physics and from those inputs, never from the image it is about to
+fit:
 
 | Parameter | Proposed prior |
 | --- | --- |
@@ -131,11 +158,21 @@ order, and it compares them when it finds more than one. When the header
 gives the saturation level in the units of the image, half of it becomes
 the brightest star allowed for the PSF.
 
+`models` holds one or more models, written to `fit.models`. Each receives
+its priors by the same rules, and the fit runs one fit per model on the same
+prepared image, PSF and likelihood, each with its own posterior and
+evidence. The choice of the models is yours: BayMorph distributes no
+validated classifier that ranks them, and fitting several is not a
+preference for any of them.
+
 Anything you declare is kept as declared: a prior through `model_priors`
-or `flux_prior`, `background`, `likelihood` or `psf_max_peak`. Without a
-zeropoint in the header, the flux prior must be declared in image units;
-without a pixel scale, the lengths keep the default ranges in pixels, and
-the summary says so.
+or `flux_prior`, `background`, `likelihood` or `psf_max_peak`. With
+`models`, `model_priors` maps each model to its declared priors, for
+example `{"double_sersic": {"q_bulge": {...}}}`; `flux_prior` applies to a
+proposal of one model with one total flux. Without a zeropoint in the
+header, the flux priors must be declared in image units; without a pixel
+scale, the lengths keep the default ranges in pixels, and the summary says
+so.
 
 Without the interactive widgets, `advisor.set_target_position(x, y)` sets
 the target instead of the click. Nothing is written until

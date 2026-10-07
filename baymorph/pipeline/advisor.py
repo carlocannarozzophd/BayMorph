@@ -16,12 +16,14 @@ from baymorph.analysis.prior_predictive import (
     FluxPriorCalibration,
     calibrate_single_sersic_flux_prior,
 )
+from baymorph.core.header_metadata import HeaderReading
 from baymorph.core.observation import Observation
 from baymorph.models.labels import PARAMETER_KINDS
 from baymorph.pipeline.config import (
     DEFAULT_CONFIG,
     load_resolved_config,
     resolve_config,
+    validate_fit_priors,
 )
 from baymorph.pipeline.config_maker import make_config_from_fits
 from baymorph.pipeline.image_preparation import (
@@ -302,16 +304,284 @@ def _flux_prior_requires_review(
     return bool(position <= edge_fraction or position >= (1.0 - edge_fraction))
 
 
+_OBSERVED_SCALE_NOTES = {
+    "flux": (
+        "The positive flux of the segmented target is a diagnostic scale, "
+        "not a prior bound."
+    ),
+    "re": (
+        "The half-light radius of the segmented target is a diagnostic "
+        "scale, not a prior bound."
+    ),
+    "q": "The image-moment estimate of the axis ratio is diagnostic only.",
+    "theta": (
+        "The image-moment estimate of the position angle is diagnostic only."
+    ),
+}
+"""Meaning of the scale measured on the target, for each parameter that
+describes the whole target."""
+
+
+def _guidance_rule(
+    name: str,
+    kind: str,
+    *,
+    one_component: bool,
+) -> tuple[str, str]:
+    """Return the prior family of a parameter and the rule that proposes it."""
+    if kind == "flux":
+        return "log_uniform", (
+            "A flux is a positive scale. The advisor proposes magnitudes "
+            f"{MAGNITUDE_RANGE[0]:g} to {MAGNITUDE_RANGE[1]:g} through the "
+            "zeropoint of the header, log-uniform in flux."
+        )
+
+    if kind == "length":
+        smallest, largest = ANGULAR_RANGE_ARCSEC
+
+        if one_component:
+            return "positive_scale", (
+                "A length is a positive scale. The advisor proposes "
+                f"{smallest:g} to {largest:g} arcsec through the pixel scale, "
+                "log-uniform in pixels, within the validated rendering domain."
+            )
+
+        return "positive_scale", (
+            "A length is a positive scale. Its reference range tells the "
+            "components of the model apart, and the advisor clips it to "
+            f"{smallest:g} to {largest:g} arcsec through the pixel scale."
+        )
+
+    if kind == "position":
+        return "uniform_relative_to_target", (
+            f"The centre lies within {CENTRE_FWHM_MULTIPLE:g} times the FWHM "
+            "of the PSF of the confirmed target position."
+        )
+
+    if kind == "angle":
+        if name.startswith("theta"):
+            return "uniform_axial", (
+                "A position angle is axial: theta == theta + pi. The advisor "
+                "keeps the reference prior, the complete axial domain, "
+                "rather than bounds read from the image."
+            )
+
+        return "uniform_periodic", (
+            "A phase is periodic. The advisor keeps the reference prior, "
+            "one complete period."
+        )
+
+    if name == "q" or name.startswith("q_"):
+        return "bounded_0_1", (
+            "An axis ratio has physical support 0 < q <= 1. The advisor "
+            "keeps the reference prior of BayMorph."
+        )
+
+    return "bounded", (
+        "A dimensionless shape parameter. The advisor keeps the reference "
+        "prior of BayMorph; do not derive its bounds from a preliminary fit "
+        "to the same image."
+    )
+
+
+def _settle_psf_max_peak(
+    reading: HeaderReading,
+    config_options: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Settle the ceiling on the peak of the PSF stars in ``config_options``.
+
+    The ceiling selects the stars of an empirical PSF, so the measurement of
+    the fixed inputs and the proposal settle it in the same way before the
+    stages run: the value the user declares, else half the saturation level
+    when the header gives it in the units of the image, else the BayMorph
+    default.
+
+    Returns
+    -------
+    tuple
+        The provenance record of the ceiling, or None for a Gaussian PSF,
+        and a warning when the BayMorph default applies, or None.
+    """
+    psf_type = str(
+        config_options.get(
+            "psf_type",
+            "empirical",
+        )
+    ).strip().lower()
+
+    if psf_type != "empirical":
+        return None, None
+
+    if config_options.get("psf_max_peak") is not None:
+        return {
+            "value": float(config_options["psf_max_peak"]),
+            "source": "user",
+            "detail": "declared by the user",
+        }, None
+
+    peak, peak_detail = propose_psf_max_peak(
+        reading
+    )
+
+    if peak is not None:
+        config_options["psf_max_peak"] = peak
+
+        return {
+            "value": peak,
+            "source": "header",
+            "detail": peak_detail,
+        }, None
+
+    return {
+        "value": None,
+        "source": "default",
+        "detail": peak_detail,
+    }, (
+        "No empirical-PSF candidate peak ceiling was declared, and the "
+        f"header gives none ({peak_detail}). BayMorph will use its default "
+        "max_peak, which is not checked against the detector saturation "
+        "level or the image units. Declare psf_max_peak=... in "
+        "science-image units."
+    )
+
+
+def _chosen_models(
+    model_name: str | None,
+    models: Sequence[str] | None,
+    model_priors: Mapping[str, Any] | None,
+) -> tuple[list[str], dict[str, dict[str, dict[str, Any]]]]:
+    """Return the chosen models and the priors declared for each.
+
+    ``model_name`` chooses one model, whose ``model_priors`` map parameters to
+    priors; ``models`` chooses one or more, whose ``model_priors`` map each
+    model to such a mapping. Without either, the model is ``single_sersic``.
+    """
+    if model_name is not None and models is not None:
+        raise ValueError(
+            "Supply model_name or models, not both."
+        )
+
+    if models is None:
+        chosen = [
+            str(
+                "single_sersic" if model_name is None else model_name
+            ).strip()
+        ]
+        keyed = {
+            chosen[0]: model_priors or {},
+        }
+    else:
+        if isinstance(models, str) or not isinstance(models, Sequence):
+            raise TypeError(
+                "models must be a sequence of model names, such as "
+                "['single_sersic', 'bulge_disk']."
+            )
+
+        chosen = [
+            str(name).strip()
+            for name in models
+        ]
+
+        if not chosen:
+            raise ValueError(
+                "models must name at least one model."
+            )
+
+        duplicates = sorted(
+            {
+                name
+                for name in chosen
+                if chosen.count(name) > 1
+            }
+        )
+
+        if duplicates:
+            raise ValueError(
+                f"models names {duplicates} more than once."
+            )
+
+        keyed = dict(
+            model_priors or {}
+        )
+        foreign = sorted(
+            str(name)
+            for name in set(keyed) - set(chosen)
+        )
+
+        if foreign:
+            raise ValueError(
+                "With models=..., model_priors maps each chosen model to "
+                f"its priors; {foreign} are not among the chosen models "
+                f"{chosen}."
+            )
+
+    declared: dict[str, dict[str, dict[str, Any]]] = {}
+
+    for name in chosen:
+        if name not in PARAMETER_KINDS:
+            raise ValueError(
+                f"Unknown model: {name}"
+            )
+
+        priors = keyed.get(name) or {}
+
+        if not isinstance(priors, Mapping):
+            raise TypeError(
+                f"The declared priors of {name!r} must map parameters to "
+                "priors."
+            )
+
+        unknown = sorted(
+            set(map(str, priors)) - set(PARAMETER_KINDS[name])
+        )
+
+        if unknown:
+            raise ValueError(
+                f"Model {name!r} has no parameters {unknown}."
+            )
+
+        declared[name] = {
+            str(parameter): dict(prior)
+            for parameter, prior in priors.items()
+        }
+
+    return chosen, declared
+
+
+def _undecided_parameters(
+    decided: Mapping[str, Mapping[str, Any]],
+    kind: str,
+) -> list[str]:
+    """Return the parameters of one kind that have no decided prior.
+
+    ``decided`` maps each chosen model to its decided priors. The names are
+    qualified by their model, as ``model.parameter``, when several models are
+    chosen.
+    """
+    several = len(decided) > 1
+
+    return [
+        f"{model}.{parameter}" if several else parameter
+        for model, priors in decided.items()
+        for parameter, parameter_kind in PARAMETER_KINDS[model].items()
+        if parameter_kind == kind and parameter not in priors
+    ]
+
+
 @dataclass(frozen=True, slots=True)
 class ObservationConfigProposal:
     """Human-reviewable proposal for one observed-image configuration.
 
     Creating a proposal never writes a file. The user must call
-    :meth:`write` with ``accept=True`` after reviewing the starting model,
+    :meth:`write` with ``accept=True`` after reviewing the chosen models,
     the priors with their sources, and the warnings. A proposal of the
     advisor carries the provenance of every proposed value, which
     :meth:`write` records in a JSON report beside the YAML, outside every
     checkpoint signature (AD-049).
+
+    ``starting_model`` is the first of the chosen models, and ``models``
+    holds all of them in the order of ``fit.models``; it is empty for a
+    proposal built by hand, which then has the starting model only.
     """
 
     config: dict[str, Any]
@@ -322,6 +592,14 @@ class ObservationConfigProposal:
     requires_flux_review: bool
     warnings: tuple[str, ...] = ()
     provenance: dict[str, Any] | None = None
+    models: tuple[str, ...] = ()
+
+    @property
+    def chosen_models(
+        self,
+    ) -> tuple[str, ...]:
+        """Return the chosen models, in the order of ``fit.models``."""
+        return self.models or (self.starting_model,)
 
     @property
     def report_path(
@@ -365,13 +643,20 @@ class ObservationConfigProposal:
         else:
             target_text = str(target)
 
+        chosen = self.chosen_models
+        several = len(chosen) > 1
+
         lines = [
             "BayMorph Configuration Proposal",
             "",
             f"Output YAML: {self.output_path}",
             (f"FITS: {self.config['data']['image_path']}"),
             f"Confirmed target: {target_text}",
-            (f"User-selected starting model: {self.starting_model}"),
+            (
+                f"User-selected models: {', '.join(chosen)}"
+                if several
+                else f"User-selected starting model: {self.starting_model}"
+            ),
             (f"Flux prior source: {self.flux_prior_source}"),
         ]
 
@@ -403,8 +688,12 @@ class ObservationConfigProposal:
                 "",
                 "MODEL-SCREENING SCOPE",
                 (
-                    "The starting model is a user decision, not a pre-fit "
-                    "Bayesian model preference."
+                    "The models are a user decision, not a pre-fit Bayesian "
+                    "model preference. Each model is fitted separately and "
+                    "has its own evidence."
+                    if several
+                    else "The starting model is a user decision, not a "
+                    "pre-fit Bayesian model preference."
                 ),
                 comparison_scope,
             ]
@@ -814,6 +1103,38 @@ class ObservationAdvisor:
 
         return selector
 
+    def header_report(
+        self,
+    ) -> str:
+        """Return the table of the quantities read from the FITS header.
+
+        Each row gives a quantity, its value, its unit, its status and the
+        keyword and convention it was read from (AD-049). A quantity whose
+        status is ``ambiguous`` or ``conflicting`` shows its raw value and
+        is never used without a declaration of the user; a quantity that
+        the header does not hold is left out.
+
+        Returns
+        -------
+        str
+            The report, ready to print.
+        """
+        hdu_text = (
+            "selected by BayMorph"
+            if self.hdu is None
+            else repr(self.hdu)
+        )
+        lines = [
+            "BayMorph Header Reading",
+            "",
+            f"FITS: {self.fits_path}",
+            f"HDU: {hdu_text}",
+            "",
+            self._header_reading().report(),
+        ]
+
+        return "\n".join(lines)
+
     def inspect(
         self,
     ) -> ObservationInspection:
@@ -929,103 +1250,80 @@ class ObservationAdvisor:
         self,
         model_name: str = "single_sersic",
     ) -> dict[str, PriorGuidance]:
-        """Return evidence-aware prior guidance.
+        """Return evidence-aware prior guidance for every parameter of a model.
 
-        Image-derived estimates are reported only as diagnostic or numerical
-        scales. They never define scientific-prior bounds automatically.
+        The guidance names the prior family of each parameter and the rule
+        by which :meth:`propose_config` proposes it, from the kind of the
+        parameter (AD-049). A parameter that describes the whole target,
+        ``flux``, ``re``, ``q`` or ``theta``, also carries the scale measured
+        on the segmented target. Those scales come from the image being
+        fitted: they are diagnostics, never prior bounds.
+
+        Parameters
+        ----------
+        model_name : str, default="single_sersic"
+            Any of the ten built-in models.
+
+        Returns
+        -------
+        dict of str to PriorGuidance
+            One entry per parameter, in the order of the model.
         """
-        if model_name != "single_sersic":
-            raise NotImplementedError(
-                "ObservationAdvisor prior guidance currently supports "
-                "only 'single_sersic'."
+        model_name = str(
+            model_name
+        ).strip()
+
+        if model_name not in PARAMETER_KINDS:
+            raise ValueError(
+                f"Unknown model: {model_name}"
             )
 
         inspection = self._inspection or self.inspect()
 
+        observed_scales = {
+            "flux": inspection.target_flux_scale,
+            "re": inspection.target_half_light_radius,
+            "q": inspection.target_axis_ratio,
+            "theta": (
+                None
+                if inspection.target_position_angle is None
+                else float(
+                    (inspection.target_position_angle + 0.5 * np.pi) % np.pi
+                    - 0.5 * np.pi
+                )
+            ),
+        }
         image_scale = {
             "observed_scale_source": "fitted_image",
             "observed_scale_role": "diagnostic_numerical_scale",
             "use_observed_scale_for_prior": False,
         }
+        one_component = model_name in PHYSICAL_LENGTH_MODELS
+        guidance: dict[str, PriorGuidance] = {}
 
-        return {
-            "flux": PriorGuidance(
-                parameter="flux",
-                family="log_uniform",
-                observed_scale=inspection.target_flux_scale,
-                rationale=(
-                    "Flux is a positive scale parameter. "
-                    "The segmented positive-flux scale may guide numerical "
-                    "parameterization, but scientific prior bounds must be "
-                    "declared independently when Bayesian evidence is used."
-                ),
-                **image_scale,
-            ),
-            "re": PriorGuidance(
-                parameter="re",
-                family="positive_scale",
-                observed_scale=inspection.target_half_light_radius,
-                rationale=(
-                    "Effective radius is positive. "
-                    "The segmented half-light radius is a diagnostic scale, "
-                    "not an automatically inferred scientific prior."
-                ),
-                **image_scale,
-            ),
-            "n": PriorGuidance(
-                parameter="n",
-                family="bounded",
-                rationale=(
-                    "Use an explicit bounded morphology prior. "
-                    "Do not derive its bounds from a preliminary fit "
-                    "to the same image."
-                ),
-            ),
-            "q": PriorGuidance(
-                parameter="q",
-                family="bounded_0_1",
-                observed_scale=inspection.target_axis_ratio,
-                rationale=(
-                    "Axis ratio has physical support 0 < q <= 1. "
-                    "The image-moment estimate is diagnostic only."
-                ),
-                **image_scale,
-            ),
-            "theta": PriorGuidance(
-                parameter="theta",
-                family="uniform_axial",
-                observed_scale=(
-                    None
-                    if inspection.target_position_angle is None
-                    else float(
-                        (inspection.target_position_angle + 0.5 * np.pi) % np.pi
-                        - 0.5 * np.pi
-                    )
-                ),
-                rationale=(
-                    "Position angle is axial: theta == theta + pi. "
-                    "Use a complete declared axial domain rather than "
-                    "data-derived bounds."
-                ),
-                **image_scale,
-            ),
-            "x0": PriorGuidance(
-                parameter="x0",
-                family="uniform_relative_to_target",
-                rationale=(
-                    "Centre priors may be expressed relative to the "
-                    "explicit target-identification seed."
-                ),
-            ),
-            "y0": PriorGuidance(
-                parameter="y0",
-                family="uniform_relative_to_target",
-                rationale=(
-                    "Centre priors may be expressed relative to the "
-                    "explicit target-identification seed."
-                ),
-            ),
-        }
+        for name, kind in PARAMETER_KINDS[model_name].items():
+            family, rationale = _guidance_rule(
+                name,
+                kind,
+                one_component=one_component,
+            )
+
+            if name in observed_scales:
+                guidance[name] = PriorGuidance(
+                    parameter=name,
+                    family=family,
+                    rationale=f"{rationale} {_OBSERVED_SCALE_NOTES[name]}",
+                    observed_scale=observed_scales[name],
+                    **image_scale,
+                )
+            else:
+                guidance[name] = PriorGuidance(
+                    parameter=name,
+                    family=family,
+                    rationale=rationale,
+                )
+
+        return guidance
 
     def summary(
         self,
@@ -1449,6 +1747,11 @@ class ObservationAdvisor:
         already accepted for it are reused, so the fit that follows does not
         prepare the image again.
 
+        The ceiling on the peak of the PSF stars is settled as
+        :meth:`propose_config` settles it: when ``psf_max_peak`` is not
+        declared, half the saturation level of the header, when its unit is
+        established, selects the stars.
+
         Parameters
         ----------
         model_name : str, default="single_sersic"
@@ -1470,6 +1773,11 @@ class ObservationAdvisor:
                 "A confirmed target position is required before preparing "
                 "the image."
             )
+
+        _settle_psf_max_peak(
+            self._header_reading(),
+            config_options,
+        )
 
         resolved = self._stage_config(
             model_name=model_name,
@@ -1551,7 +1859,8 @@ class ObservationAdvisor:
         self,
         *,
         output_path: str | Path,
-        model_name: str = "single_sersic",
+        model_name: str | None = None,
+        models: Sequence[str] | None = None,
         flux_calibration: FluxPriorCalibration | None = None,
         flux_prior: Mapping[str, Any] | None = None,
         model_priors: Mapping[str, Any] | None = None,
@@ -1585,27 +1894,38 @@ class ObservationAdvisor:
           ceiling on the peak of the PSF stars is half the saturation level
           when its unit is established.
 
+        One proposal may hold several models, chosen with ``models``. Each
+        receives its priors by the same rules, and the fit runs one fit per
+        model, each with its own evidence, on the same prepared image, PSF,
+        likelihood and residual background.
+
         The fixed inputs come from :meth:`measure_fixed_inputs`, which
         prepares the image and builds its PSF when they are not supplied. A
         prior, background, likelihood or PSF ceiling that the caller supplies
-        is kept as declared. The chosen model remains an explicit
-        user-selected starting model, not a pre-fit evidence preference.
+        is kept as declared. The chosen models remain an explicit user
+        decision, not a pre-fit evidence preference.
 
         Parameters
         ----------
         output_path : str or pathlib.Path
             Destination used only if the returned proposal is explicitly
             accepted and written.
-        model_name : str, default="single_sersic"
-            User-selected starting model.
+        model_name : str, optional
+            One user-selected starting model; ``single_sersic`` when neither
+            ``model_name`` nor ``models`` is given.
+        models : sequence of str, optional
+            One or more user-selected models, written to ``fit.models`` in
+            this order. Not allowed together with ``model_name``.
         flux_calibration : FluxPriorCalibration, optional
             Observational detectability-and-saturation calibration of the
-            total flux of a model with one flux.
+            total flux of a single chosen model with one flux.
         flux_prior : mapping, optional
-            Explicit scientific prior of the total flux of a model with one
-            flux.
+            Explicit scientific prior of the total flux of a single chosen
+            model with one flux.
         model_priors : mapping, optional
-            Explicit priors of any parameters, kept as declared.
+            Explicit priors of any parameters, kept as declared. With
+            ``model_name`` it maps parameters to priors; with ``models`` it
+            maps each chosen model to such a mapping.
         fixed_inputs : FixedInputs, optional
             Fixed inputs measured by :meth:`measure_fixed_inputs` with the
             same options.
@@ -1631,27 +1951,21 @@ class ObservationAdvisor:
                 "a configuration."
             )
 
-        model_name = str(
-            model_name
-        ).strip()
-
-        if model_name not in PARAMETER_KINDS:
-            raise ValueError(
-                f"Unknown model: {model_name}"
-            )
-
-        kinds = PARAMETER_KINDS[model_name]
-        priors = {
-            str(name): dict(prior)
-            for name, prior in (model_priors or {}).items()
-        }
-        unknown = sorted(
-            set(priors) - set(kinds)
+        chosen, declared = _chosen_models(
+            model_name,
+            models,
+            model_priors,
         )
+        several = len(chosen) > 1
+        first = chosen[0]
 
-        if unknown:
+        if several and (
+            flux_calibration is not None or flux_prior is not None
+        ):
             raise ValueError(
-                f"Model {model_name!r} has no parameters {unknown}."
+                "flux_calibration and flux_prior apply to a proposal of one "
+                "model; with several models, declare each flux through "
+                "model_priors."
             )
 
         supplied_sources = sum(
@@ -1659,7 +1973,7 @@ class ObservationAdvisor:
             for source in (
                 flux_calibration,
                 flux_prior,
-                priors.get("flux"),
+                declared[first].get("flux"),
             )
         )
 
@@ -1672,10 +1986,10 @@ class ObservationAdvisor:
 
         if (
             flux_calibration is not None or flux_prior is not None
-        ) and "flux" not in kinds:
+        ) and "flux" not in PARAMETER_KINDS[first]:
             raise ValueError(
                 "flux_calibration and flux_prior apply to models with one "
-                f"total flux; declare the fluxes of {model_name!r} through "
+                f"total flux; declare the fluxes of {first!r} through "
                 "model_priors."
             )
 
@@ -1706,15 +2020,18 @@ class ObservationAdvisor:
             )
 
         warnings: list[str] = []
-        decided: dict[str, PriorProposal] = {
-            name: PriorProposal(
-                parameter=name,
-                kind=kinds[name],
-                prior=prior,
-                source="user",
-                detail="declared by the user",
-            )
-            for name, prior in priors.items()
+        decided: dict[str, dict[str, PriorProposal]] = {
+            name: {
+                parameter: PriorProposal(
+                    parameter=parameter,
+                    kind=PARAMETER_KINDS[name][parameter],
+                    prior=prior,
+                    source="user",
+                    detail="declared by the user",
+                )
+                for parameter, prior in declared[name].items()
+            }
+            for name in chosen
         }
 
         if flux_calibration is not None:
@@ -1725,7 +2042,7 @@ class ObservationAdvisor:
                     "Flux calibration did not produce a valid candidate prior."
                 )
 
-            decided["flux"] = PriorProposal(
+            decided[first]["flux"] = PriorProposal(
                 parameter="flux",
                 kind="flux",
                 prior=dict(candidate),
@@ -1733,7 +2050,7 @@ class ObservationAdvisor:
                 detail="observational detectability and saturation calibration",
             )
         elif flux_prior is not None:
-            decided["flux"] = PriorProposal(
+            decided[first]["flux"] = PriorProposal(
                 parameter="flux",
                 kind="flux",
                 prior=dict(flux_prior),
@@ -1741,10 +2058,7 @@ class ObservationAdvisor:
                 detail="explicit user-declared scientific prior",
             )
 
-        reading = Observation.from_fits(
-            self.fits_path,
-            hdu=self.hdu,
-        ).metadata.header_reading
+        reading = self._header_reading()
         zeropoint = _finite_or_none(
             reading.value("zeropoint")
         )
@@ -1754,31 +2068,30 @@ class ObservationAdvisor:
         photometric_system = reading.value(
             "photometric_system"
         )
-        undecided = [
-            name
-            for name in kinds
-            if name not in decided
-        ]
-        undecided_fluxes = [
-            name
-            for name in undecided
-            if kinds[name] == "flux"
-        ]
+        undecided_fluxes = _undecided_parameters(
+            decided,
+            "flux",
+        )
 
         if undecided_fluxes and zeropoint is None:
             raise ValueError(
                 "The header gives no usable zeropoint, so the priors of "
                 f"{undecided_fluxes} cannot be proposed from magnitudes. "
-                "Supply exactly one flux-prior source: flux_prior=... in "
-                "image units or flux_calibration=... for a model with one "
-                "total flux, or model_priors=... for each flux."
+                + (
+                    "Declare each flux in image units through model_priors, "
+                    "keyed by model."
+                    if several
+                    else "Supply exactly one flux-prior source: "
+                    "flux_prior=... in image units or flux_calibration=... "
+                    "for a model with one total flux, or model_priors=... "
+                    "for each flux."
+                )
             )
 
-        undecided_lengths = [
-            name
-            for name in undecided
-            if kinds[name] == "length"
-        ]
+        undecided_lengths = _undecided_parameters(
+            decided,
+            "length",
+        )
 
         if pixel_scale is None and undecided_lengths:
             warnings.append(
@@ -1789,59 +2102,25 @@ class ObservationAdvisor:
             )
 
         # The ceiling on the peak of the PSF stars shapes the PSF, so it is
-        # settled before the stages run.
-        psf_type = str(
-            config_options.get(
-                "psf_type",
-                "empirical",
-            )
-        ).strip().lower()
-        max_peak_record: dict[str, Any] | None = None
+        # settled before the stages run, as measure_fixed_inputs settles it.
+        max_peak_record, peak_warning = _settle_psf_max_peak(
+            reading,
+            config_options,
+        )
 
-        if psf_type == "empirical":
-            if config_options.get("psf_max_peak") is None:
-                peak, peak_detail = propose_psf_max_peak(
-                    reading
-                )
-
-                if peak is not None:
-                    config_options["psf_max_peak"] = peak
-                    max_peak_record = {
-                        "value": peak,
-                        "source": "header",
-                        "detail": peak_detail,
-                    }
-                else:
-                    warnings.append(
-                        "No empirical-PSF candidate peak ceiling was "
-                        f"declared, and the header gives none ({peak_detail}). "
-                        "BayMorph will use its default max_peak, which is not "
-                        "checked against the detector saturation level or "
-                        "the image units. Declare psf_max_peak=... in "
-                        "science-image units."
-                    )
-                    max_peak_record = {
-                        "value": None,
-                        "source": "default",
-                        "detail": peak_detail,
-                    }
-            else:
-                max_peak_record = {
-                    "value": float(config_options["psf_max_peak"]),
-                    "source": "user",
-                    "detail": "declared by the user",
-                }
+        if peak_warning is not None:
+            warnings.append(peak_warning)
 
         stage_identity = _stage_identity(
             self._stage_config(
-                model_name=model_name,
+                model_name=first,
                 **config_options,
             )
         )
 
         if fixed_inputs is None:
             fixed_inputs = self.measure_fixed_inputs(
-                model_name=model_name,
+                model_name=first,
                 **config_options,
             )
 
@@ -1852,18 +2131,21 @@ class ObservationAdvisor:
                 "this proposal, or let the proposal measure them."
             )
 
-        proposals = propose_model_priors(
-            model_name,
-            zeropoint=zeropoint,
-            pixel_scale=pixel_scale,
-            psf_fwhm_pixels=fixed_inputs.psf_fwhm_pixels,
-            decided=decided,
-            photometric_system=(
-                None
-                if photometric_system is None
-                else str(photometric_system)
-            ),
-        )
+        proposals = {
+            name: propose_model_priors(
+                name,
+                zeropoint=zeropoint,
+                pixel_scale=pixel_scale,
+                psf_fwhm_pixels=fixed_inputs.psf_fwhm_pixels,
+                decided=decided[name],
+                photometric_system=(
+                    None
+                    if photometric_system is None
+                    else str(photometric_system)
+                ),
+            )
+            for name in chosen
+        }
 
         if config_options.get("background") is not None:
             background_record = {
@@ -1958,7 +2240,8 @@ class ObservationAdvisor:
 
         if sampler_name == "pocomc" and any(
             proposal.prior.get("type") == "log_uniform"
-            for proposal in proposals.values()
+            for model_proposals in proposals.values()
+            for proposal in model_proposals.values()
         ):
             raise ValueError(
                 "pocoMC accepts uniform, beta and normal priors only, and the "
@@ -1967,45 +2250,69 @@ class ObservationAdvisor:
             )
 
         inspection = self._inspection or self.inspect()
-        flux_proposal = proposals.get("flux")
-        requires_flux_review = flux_proposal is not None and (
-            _flux_prior_requires_review(
-                flux_proposal.prior,
+        flux_review_models = [
+            name
+            for name in chosen
+            if "flux" in proposals[name]
+            and _flux_prior_requires_review(
+                proposals[name]["flux"].prior,
                 inspection.target_flux_scale,
             )
-        )
+        ]
+        requires_flux_review = bool(flux_review_models)
 
         if requires_flux_review:
             warnings.append(
                 "The observed target flux diagnostic lies outside or near "
-                "an edge of the proposed flux-prior measure. The prior was "
-                "not widened automatically; posterior boundary diagnostics "
-                "must be reviewed before interpreting the posterior or any "
-                "evidence comparison."
+                "an edge of the proposed flux-prior measure"
+                + (f" of {flux_review_models}" if several else "")
+                + ". The prior was not widened automatically; posterior "
+                "boundary diagnostics must be reviewed before interpreting "
+                "the posterior or any evidence comparison."
             )
 
         warnings.append(
             "No validated model-screening classifier is distributed with "
-            "BayMorph. The starting model is therefore a user decision."
+            "BayMorph. "
+            + (
+                "The choice of the models is therefore a user decision."
+                if several
+                else "The starting model is therefore a user decision."
+            )
         )
 
         config = self.make_config(
             output_path=None,
-            model_name=model_name,
+            model_name=first,
             model_priors={
-                name: deepcopy(proposal.prior)
-                for name, proposal in proposals.items()
+                parameter: deepcopy(proposal.prior)
+                for parameter, proposal in proposals[first].items()
             },
             **config_options,
         )
-
-        # Record every prior the fit will sample, so the written YAML does not
-        # depend on BayMorph defaults that a later version could change.
-        resolved = resolve_config(config)
+        config["fit"]["models"] = list(chosen)
         config["fit"]["priors"] = {
-            model_name: deepcopy(
-                resolved["fit"]["priors"][model_name]
-            ),
+            name: {
+                parameter: deepcopy(proposal.prior)
+                for parameter, proposal in proposals[name].items()
+            }
+            for name in chosen
+        }
+
+        # Validate every chosen model as the fit will read it, and record
+        # the prior of every parameter the fit will sample, in the order of
+        # the model, so the written YAML does not depend on BayMorph defaults
+        # that a later version could change.
+        resolved = resolve_config(config)
+        validate_fit_priors(resolved)
+        config["fit"]["priors"] = {
+            name: {
+                parameter: deepcopy(
+                    resolved["fit"]["priors"][name][parameter]
+                )
+                for parameter in PARAMETER_KINDS[name]
+            }
+            for name in chosen
         }
 
         background_resolved = resolved["fit"]["background"]
@@ -2048,7 +2355,7 @@ class ObservationAdvisor:
             "image_path": config["data"]["image_path"],
             "hdu": self.hdu,
             "target_position": deepcopy(config["data"]["target_position"]),
-            "models": [model_name],
+            "models": list(chosen),
             "rules": {
                 "magnitudes": list(MAGNITUDE_RANGE),
                 "angular_range_arcsec": list(ANGULAR_RANGE_ARCSEC),
@@ -2063,10 +2370,11 @@ class ObservationAdvisor:
             "header": reading.as_dict(),
             "fixed_inputs": fixed_inputs.as_dict(),
             "priors": {
-                model_name: {
-                    name: proposal.as_dict()
-                    for name, proposal in proposals.items()
-                },
+                name: {
+                    parameter: proposal.as_dict()
+                    for parameter, proposal in proposals[name].items()
+                }
+                for name in chosen
             },
             "background": {
                 **background_record,
@@ -2078,10 +2386,16 @@ class ObservationAdvisor:
             "warnings": list(warnings),
         }
 
+        flux_proposal = (
+            None
+            if several
+            else proposals[first].get("flux")
+        )
+
         return ObservationConfigProposal(
             config=config,
             output_path=destination,
-            starting_model=str(model_name),
+            starting_model=first,
             flux_prior=(
                 None
                 if flux_proposal is None
@@ -2095,7 +2409,17 @@ class ObservationAdvisor:
             requires_flux_review=requires_flux_review,
             warnings=tuple(warnings),
             provenance=provenance,
+            models=tuple(chosen),
         )
+
+    def _header_reading(
+        self,
+    ) -> HeaderReading:
+        """Return the reading of the header of the image HDU."""
+        return Observation.from_fits(
+            self.fits_path,
+            hdu=self.hdu,
+        ).metadata.header_reading
 
     def _resolve_target(
         self,

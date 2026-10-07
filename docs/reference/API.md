@@ -25,9 +25,9 @@ path or a configuration dictionary. See [The Runner](../guide/RUNNER.md).
 
 **`make_config_from_fits(fits_path, *, target_position, ...)`** returns a
 configuration for one FITS image, and writes it when `output_path` is
-given. Its keyword arguments are `output_path`, `object_name`, `model_name`,
-`model_priors`, `likelihood`, `background`, `sampler`, `outputs_root`,
-`overwrite`, `cutout_mode`, `fixed_size`, `psf_type`,
+given. Its keyword arguments are `hdu`, `output_path`, `object_name`,
+`model_name`, `model_priors`, `likelihood`, `background`, `sampler`,
+`outputs_root`, `overwrite`, `cutout_mode`, `fixed_size`, `psf_type`,
 `gaussian_fwhm_pixels`, `psf_max_peak` and `preparation`. See
 [Writing a Configuration](../guide/CONFIGURING.md).
 
@@ -37,17 +37,18 @@ for review.
 | Member | Description |
 | --- | --- |
 | `ObservationAdvisor.from_project(fits_path)` | Create an advisor, with paths relative to the project. |
+| `header_report()` | The quantities read from the header, with their values, units, statuses and sources, as a table to print. |
 | `select_target()`, `set_target_position(x, y)` | Choose the target, by clicking or explicitly. |
 | `inspect()`, `summary()` | Measure and print header metadata and image diagnostics. |
-| `prior_guidance(model_name)` | The suggested prior family of every parameter, as `PriorGuidance` objects. |
+| `prior_guidance(model_name)` | The prior family of every parameter of any of the ten models and the rule that proposes it, as `PriorGuidance` objects. |
 | `measure_fixed_inputs(...)` | Prepare the image and build its PSF, and return the sky scale, the cutout and the FWHM of the PSF as `FixedInputs`. |
-| `propose_config(...)` | Propose every prior from the header, physics and the fixed inputs, and build an `ObservationConfigProposal` in memory. |
+| `propose_config(...)` | Propose every prior of one model (`model_name`) or of several (`models`) from the header, physics and the fixed inputs, and build an `ObservationConfigProposal` in memory. |
 
 `ObservationConfigProposal.summary()` lists the proposal, the source of
-every prior and its warnings, `config` holds it, `provenance` records
-where each value comes from, and `write(accept=True)` writes the YAML
-with the report `report_path` beside it; an existing different file is
-replaced only with `overwrite=True`.
+every prior and its warnings, `config` holds it, `models` names its
+models, `provenance` records where each value comes from, and
+`write(accept=True)` writes the YAML with the report `report_path` beside
+it; an existing different file is replaced only with `overwrite=True`.
 
 **`make_multi_parameters(model, observations, *, target_centers, prior_bounds, shared, ...)`**
 and **`make_multi_observation_config(observations, *, target_positions, parameters, output_dir, ...)`**

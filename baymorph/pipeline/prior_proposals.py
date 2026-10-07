@@ -39,6 +39,7 @@ from baymorph.models.labels import PARAMETER_KINDS, parameter_names
 from baymorph.models.validated_domains import validated_domain
 from baymorph.observation.background import background_parameter_names
 from baymorph.pipeline.config import DEFAULT_CONFIG
+from baymorph.pipeline.prior_config import prior_config_for_parameter
 
 MAGNITUDE_RANGE = (8.0, 30.0)
 """Default range of magnitudes of a flux, brightest first."""
@@ -671,21 +672,53 @@ def propose_model_priors(
             )
             continue
 
-        if name not in references:
-            raise ValueError(
-                f"BayMorph has no reference prior for {name!r} of "
-                f"{model_name!r}; declare it."
-            )
-
+        prior, detail = _reference_prior(
+            model_name,
+            name,
+            references,
+        )
         proposals[name] = PriorProposal(
             parameter=name,
             kind=kind,
-            prior=references[name],
+            prior=prior,
             source="reference",
-            detail="reference prior of BayMorph",
+            detail=detail,
         )
 
     return proposals
+
+
+def _reference_prior(
+    model_name: str,
+    name: str,
+    references: Mapping[str, Any],
+) -> tuple[dict[str, Any], str]:
+    """Return the reference prior of a parameter and how it was found.
+
+    A parameter without its own reference prior takes the default that the
+    components of its model share, as the fit does: the axis ratios and
+    position angles of the two components of ``double_sersic`` take the
+    defaults ``q`` and ``theta``.
+    """
+    try:
+        prior = prior_config_for_parameter(
+            name,
+            references,
+        )
+    except ValueError:
+        raise ValueError(
+            f"BayMorph has no reference prior for {name!r} of "
+            f"{model_name!r}; declare it."
+        ) from None
+
+    detail = (
+        "reference prior of BayMorph"
+        if name in references
+        else "reference prior of BayMorph, the default that the components "
+        "of the model share"
+    )
+
+    return deepcopy(dict(prior)), detail
 
 
 def _normalized_unit(value: Any) -> str | None:

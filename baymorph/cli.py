@@ -6,7 +6,11 @@ import argparse
 import shutil
 from importlib import metadata, resources
 from pathlib import Path
+from typing import Any
 
+from baymorph.core.correlated_noise import SKY_CORRELATION_ESTIMATORS
+from baymorph.observation.background import BACKGROUND_PARAMETER_NAMES
+from baymorph.pipeline.advisor import ObservationAdvisor
 from baymorph.pipeline.config_maker import make_config_from_fits
 from baymorph.runner import BayMorphRunner
 
@@ -165,10 +169,50 @@ def _target_position_from_args(
     )
 
 
+def _models_from_args(
+    args: argparse.Namespace,
+) -> list[str]:
+    """Return the models requested on the command line, in order."""
+    models = [
+        str(name).strip()
+        for name in (args.model or ["single_sersic"])
+    ]
+
+    if any(not name for name in models):
+        raise ValueError(
+            "Model names must be non-empty."
+        )
+
+    duplicates = sorted(
+        {
+            name
+            for name in models
+            if models.count(name) > 1
+        }
+    )
+
+    if duplicates:
+        raise ValueError(
+            f"--model names {duplicates} more than once."
+        )
+
+    return models
+
+
 def _model_priors_from_args(
     args: argparse.Namespace,
-) -> dict[str, dict[str, float | str]] | None:
-    """Build explicit uniform model priors supplied on the command line."""
+    models: list[str],
+) -> dict[str, dict[str, dict[str, float | str]]] | None:
+    """Build explicit uniform model priors supplied on the command line.
+
+    A prior names its parameter, or ``MODEL.PARAMETER`` to name the model it
+    belongs to. The plain name is allowed only when one model is requested.
+
+    Returns
+    -------
+    dict or None
+        The priors of each requested model that declares any, or None.
+    """
     entries = args.uniform_prior
 
     if not entries:
@@ -176,25 +220,48 @@ def _model_priors_from_args(
 
     priors: dict[
         str,
-        dict[str, float | str],
+        dict[str, dict[str, float | str]],
     ] = {}
 
-    for parameter_name, lower, upper in entries:
-        name = str(
-            parameter_name
+    for qualified_name, lower, upper in entries:
+        text = str(
+            qualified_name
         ).strip()
+        model_name, separator, parameter_name = text.rpartition(".")
+
+        if not separator:
+            if len(models) > 1:
+                raise ValueError(
+                    f"With several --model options, name the model of each "
+                    f"prior: --uniform-prior MODEL.{text} LOWER UPPER."
+                )
+
+            model_name = models[0]
+        elif model_name not in models:
+            raise ValueError(
+                f"The prior {text!r} names the model {model_name!r}, which "
+                f"is not among the requested models {models}."
+            )
+
+        name = parameter_name.strip()
 
         if not name:
             raise ValueError(
                 "Prior parameter names must be non-empty."
             )
 
-        if name in priors:
+        model_priors = priors.setdefault(
+            model_name,
+            {},
+        )
+
+        if name in model_priors:
             raise ValueError(
-                f"Duplicate prior supplied for parameter {name!r}."
+                f"Duplicate prior supplied for parameter {name!r} of model "
+                f"{model_name!r}."
             )
 
-        priors[name] = {
+        model_priors[name] = {
             "type": "uniform",
             "lower": float(
                 lower
@@ -205,6 +272,36 @@ def _model_priors_from_args(
         }
 
     return priors
+
+
+def _hdu_argument(
+    value: str,
+) -> int | str:
+    """Return an HDU index, or an ``EXTNAME`` given as text."""
+    text = str(
+        value
+    ).strip()
+
+    if not text:
+        raise argparse.ArgumentTypeError(
+            "--hdu must be an HDU index or an EXTNAME."
+        )
+
+    return int(text) if text.isdigit() else text
+
+
+def _preparation_from_args(
+    args: argparse.Namespace,
+) -> dict[str, Any] | None:
+    """Return the preparation section requested on the command line."""
+    if args.sky_correlation is None:
+        return None
+
+    return {
+        "noise": {
+            "sky_correlation": args.sky_correlation,
+        },
+    }
 
 
 def _command_config(
@@ -227,15 +324,55 @@ def _command_config(
     target_position = _target_position_from_args(
         args
     )
+    models = _models_from_args(
+        args
+    )
+    model_priors = _model_priors_from_args(
+        args,
+        models,
+    )
+    preparation = _preparation_from_args(
+        args
+    )
+
+    if args.advise:
+        return _advise_config(
+            args,
+            fits_path=fits_path,
+            output_path=output_path,
+            target_position=target_position,
+            models=models,
+            model_priors=model_priors,
+            preparation=preparation,
+        )
+
+    for option, value in (
+        ("--accept", args.accept),
+        ("--background-model", args.background_model),
+        ("--resampling-variance-factor", args.resampling_variance_factor),
+    ):
+        if value is not None and value is not False:
+            raise ValueError(
+                f"{option} requires --advise."
+            )
+
+    if len(models) > 1:
+        raise ValueError(
+            "Several --model options require --advise: without it the "
+            "configuration holds one model."
+        )
 
     config = make_config_from_fits(
         fits_path,
         target_position=target_position,
+        hdu=args.hdu,
         output_path=output_path,
         object_name=args.object_name,
-        model_name=args.model,
-        model_priors=_model_priors_from_args(
-            args
+        model_name=models[0],
+        model_priors=(
+            None
+            if model_priors is None
+            else model_priors[models[0]]
         ),
         sampler=args.sampler,
         outputs_root=args.outputs_root,
@@ -244,6 +381,8 @@ def _command_config(
         fixed_size=args.cutout_size,
         psf_type=args.psf,
         gaussian_fwhm_pixels=args.gaussian_fwhm_pixels,
+        psf_max_peak=args.psf_max_peak,
+        preparation=preparation,
     )
 
     print(
@@ -261,6 +400,79 @@ def _command_config(
 
     return 0
 
+
+def _advise_config(
+    args: argparse.Namespace,
+    *,
+    fits_path: Path,
+    output_path: Path,
+    target_position,
+    models: list[str],
+    model_priors: dict[str, dict[str, dict[str, float | str]]] | None,
+    preparation: dict[str, Any] | None,
+) -> int:
+    """Propose a configuration with the observation advisor.
+
+    The advisor prepares the image and builds its PSF in the run directory,
+    where the fit reuses them, and proposes every prior. The configuration
+    and its report are written only with ``--accept``.
+    """
+    advisor = ObservationAdvisor(
+        fits_path.resolve(),
+        target_position=target_position,
+        hdu=args.hdu,
+    )
+
+    print(advisor.header_report())
+    print()
+    print(
+        "Preparing the image and building its PSF, which the fit will reuse."
+    )
+
+    # Absolute paths, as the configuration maker writes them, keep the
+    # products of the advisor and of the fit in one run directory.
+    proposal = advisor.propose_config(
+        output_path=output_path,
+        models=models,
+        model_priors=model_priors,
+        background_model=args.background_model,
+        resampling_variance_factor=args.resampling_variance_factor,
+        object_name=args.object_name,
+        sampler=args.sampler,
+        outputs_root=Path(args.outputs_root).expanduser().resolve(),
+        overwrite=args.overwrite,
+        cutout_mode=args.cutout_mode,
+        fixed_size=args.cutout_size,
+        psf_type=args.psf,
+        gaussian_fwhm_pixels=args.gaussian_fwhm_pixels,
+        psf_max_peak=args.psf_max_peak,
+        preparation=preparation,
+    )
+
+    print()
+    print(proposal.summary())
+    print()
+
+    if not args.accept:
+        print(
+            "Review the proposal, then run the same command with --accept "
+            "to write the configuration and its report."
+        )
+
+        return 0
+
+    written_path = proposal.write(
+        accept=True,
+    )
+
+    print(
+        "BayMorph configuration written to:\n"
+        f"{written_path}\n"
+        "Advisor report written to:\n"
+        f"{proposal.report_path.expanduser().resolve()}"
+    )
+
+    return 0
 
 
 def _command_run(
@@ -370,10 +582,20 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     config_parser.add_argument(
-        "--model",
-        default="single_sersic",
+        "--hdu",
+        type=_hdu_argument,
         help=(
-            "Registered morphology model. "
+            "Index or EXTNAME of the HDU that holds the image. "
+            "Default: selected by BayMorph."
+        ),
+    )
+
+    config_parser.add_argument(
+        "--model",
+        action="append",
+        help=(
+            "Registered morphology model. Repeat it with --advise to "
+            "propose several models, each fitted separately. "
             "Default: single_sersic."
         ),
     )
@@ -400,10 +622,52 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Explicit uniform scientific prior. "
             "Repeat for multiple parameters, for example "
-            "'--uniform-prior flux 100 1000000'."
+            "'--uniform-prior flux 100 1000000'. With several --model "
+            "options, name the model too: "
+            "'--uniform-prior double_sersic.q_bulge 0.4 1'."
         ),
     )
 
+    config_parser.add_argument(
+        "--advise",
+        action="store_true",
+        help=(
+            "Print what the header holds, prepare the image and build its "
+            "PSF in the run directory, where the fit reuses them, and "
+            "propose every prior from the header, physics and these fixed "
+            "inputs. Nothing is written without --accept."
+        ),
+    )
+
+    config_parser.add_argument(
+        "--accept",
+        action="store_true",
+        help=(
+            "With --advise, write the reviewed proposal and its report "
+            "beside it."
+        ),
+    )
+
+    config_parser.add_argument(
+        "--background-model",
+        choices=tuple(
+            BACKGROUND_PARAMETER_NAMES
+        ),
+        help=(
+            "With --advise, the residual background model whose priors are "
+            "proposed. Default: constant."
+        ),
+    )
+
+    config_parser.add_argument(
+        "--resampling-variance-factor",
+        type=float,
+        help=(
+            "With --advise, the factor by which a resampling of the image "
+            "multiplied the variance of its noise, which lets the gain "
+            "keyword of a resampled image be proposed."
+        ),
+    )
 
     config_parser.add_argument(
         "--target-center",
@@ -458,6 +722,28 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Gaussian PSF FWHM in pixels. Required only when it cannot "
             "be derived from FITS metadata."
+        ),
+    )
+
+    config_parser.add_argument(
+        "--psf-max-peak",
+        type=float,
+        help=(
+            "Brightest peak pixel accepted for an empirical-PSF star, in "
+            "image units; keep it below the saturation level. With --advise "
+            "and without this option, half the saturation level of the "
+            "header is proposed when its unit is established."
+        ),
+    )
+
+    config_parser.add_argument(
+        "--sky-correlation",
+        choices=tuple(
+            SKY_CORRELATION_ESTIMATORS
+        ),
+        help=(
+            "Estimator of the sky correlation of the noise model. "
+            "Default: autocovariance."
         ),
     )
 

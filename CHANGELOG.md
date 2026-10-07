@@ -30,6 +30,22 @@ and the project follows Semantic Versioning in spirit.
 * `make_config_from_fits(preparation=...)` writes a `preparation` section.
 * `baymorph.models.labels.PARAMETER_KINDS`: the kind of every parameter of
   the ten models (flux, length, position, angle or dimensionless).
+* `ObservationAdvisor.propose_config(models=[...])` proposes one
+  configuration for several models. Each model receives its priors by the
+  same rules, `model_priors` maps each model to the priors declared for
+  it, and the fit runs one fit per model, each with its own evidence.
+* `ObservationAdvisor.header_report()` lists what the header holds: each
+  quantity with its value, unit, status and source.
+* `ObservationAdvisor.prior_guidance` covers the ten models.
+* `baymorph config --advise` prints the header report and the proposal of
+  the advisor, and writes the configuration and its report only with
+  `--accept`. With `--advise`, `--model` may be repeated, and
+  `--background-model` and `--resampling-variance-factor` reach the
+  advisor.
+* `baymorph config --hdu`, `--psf-max-peak` and `--sky-correlation`.
+* Tutorial 02A guides the advisor from the header to the reviewed
+  configuration, and prepares the image and the PSF; tutorial 02B reuses
+  them and shows the posterior, residuals and evidence of each model.
 
 ### Changed
 
@@ -38,6 +54,18 @@ and the project follows Semantic Versioning in spirit.
   PSF unless `fixed_inputs=` is supplied.
 * Generated configurations no longer write the unused key
   `psf.empirical.candidate_selection.auto`.
+* `baymorph config --uniform-prior` accepts a parameter written as
+  `MODEL.PARAMETER`, which it requires when several models are chosen.
+
+### Fixed
+
+* `ObservationAdvisor.measure_fixed_inputs` sets the ceiling on the peak of
+  the PSF stars from the saturation level of the header, as
+  `propose_config` does. Fixed inputs measured first are therefore accepted
+  by a proposal with the same options.
+* The advisor proposes the axis ratios and position angles of the two
+  components of `double_sersic` from the defaults the fit uses, instead of
+  refusing to propose them.
 
 ---
 

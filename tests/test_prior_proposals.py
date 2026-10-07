@@ -9,6 +9,7 @@ from astropy.io import fits
 
 from baymorph.core.header_metadata import read_header
 from baymorph.models.labels import PARAMETER_KINDS, parameter_names
+from baymorph.pipeline.prior_config import prior_config_for_parameter
 from baymorph.pipeline.prior_proposals import (
     PHYSICAL_LENGTH_MODELS,
     PriorProposal,
@@ -280,42 +281,13 @@ def test_multi_component_lengths_keep_their_reference_ranges() -> None:
 
 
 def test_every_model_receives_a_complete_proposal() -> None:
-    """All ten models must be proposable, double Sersic with its free axes."""
+    """All ten models must be proposable without a declared prior."""
     for model_name in PARAMETER_KINDS:
-        decided = {}
-
-        if model_name == "double_sersic":
-            with pytest.raises(ValueError, match="no reference prior"):
-                propose_model_priors(
-                    model_name,
-                    zeropoint=30.0,
-                    pixel_scale=0.21,
-                    psf_fwhm_pixels=2.74,
-                )
-
-            for name in ("q_bulge", "q_disk"):
-                decided[name] = PriorProposal(
-                    name,
-                    "dimensionless",
-                    {"type": "uniform", "lower": 0.4, "upper": 1.0},
-                    "user",
-                    "declared by the user",
-                )
-            for name in ("theta_bulge", "theta_disk"):
-                decided[name] = PriorProposal(
-                    name,
-                    "angle",
-                    {"type": "uniform", "lower": "-pi/2", "upper": "pi/2"},
-                    "user",
-                    "declared by the user",
-                )
-
         proposals = propose_model_priors(
             model_name,
             zeropoint=30.0,
             pixel_scale=0.21,
             psf_fwhm_pixels=2.74,
-            decided=decided,
         )
 
         assert list(proposals) == parameter_names(model_name)
@@ -326,6 +298,38 @@ def test_every_model_receives_a_complete_proposal() -> None:
                     "header" if model_name in PHYSICAL_LENGTH_MODELS else "reference"
                 )
                 assert proposal.source == expected, (model_name, name)
+
+
+def test_double_sersic_axes_take_the_defaults_the_fit_shares() -> None:
+    """The axes of both components take the q and theta defaults, as in a fit."""
+    proposals = propose_model_priors(
+        "double_sersic",
+        zeropoint=30.0,
+        pixel_scale=0.21,
+        psf_fwhm_pixels=2.74,
+    )
+
+    for name in ("q_bulge", "q_disk"):
+        assert proposals[name].prior == {"type": "uniform", "lower": 0.4, "upper": 1.0}
+        assert proposals[name].source == "reference"
+        assert "components of the model share" in proposals[name].detail
+
+    for name in ("theta_bulge", "theta_disk"):
+        assert proposals[name].prior == {
+            "type": "uniform",
+            "lower": "-pi/2",
+            "upper": "pi/2",
+        }
+
+    assert proposals["n_bulge"].detail == "reference prior of BayMorph"
+
+    # The fit reads the prior of each axis through the same shared defaults.
+    fit_priors = reference_priors("double_sersic")
+
+    for name in ("q_bulge", "q_disk", "theta_bulge", "theta_disk"):
+        assert proposals[name].prior == dict(
+            prior_config_for_parameter(name, fit_priors)
+        )
 
 
 def test_sky_level_of_the_header_gives_the_gain_of_a_coadd() -> None:

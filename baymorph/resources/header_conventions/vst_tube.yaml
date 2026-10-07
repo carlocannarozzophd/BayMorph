@@ -33,7 +33,7 @@ quantities:
   sky_level:
     keywords: [BKGMED]
     unit: image
-    note: "The comment reads BACKMEAN median. The pipeline subtracted the sky, and this level, in the units of the coadd, agrees with its sky scale for a Poisson sky (BayMorph research note NOISE_BACKGROUND_AUDIT_2026-10-01)."
+    note: "The comment reads BACKMEAN median. The pipeline subtracted the sky, and this level, in the units of the coadd, agrees with its sky scale for a Poisson sky, as BayMorph found on VST-Tube coadds."
   psf_fwhm:
     keywords: [FWHM]
     note: "The comment reads FWHM median; no document of VST-Tube found states its unit."
