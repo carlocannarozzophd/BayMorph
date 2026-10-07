@@ -9,6 +9,36 @@ and the project follows Semantic Versioning in spirit.
 
 ## [Unreleased]
 
+### Added
+
+* `ObservationAdvisor.propose_config` proposes every prior of the
+  configuration from the header, from physics and from the fixed inputs of
+  the observation model, never from the image it is about to fit: a flux
+  from the magnitudes 8 to 30 through the zeropoint of the header, a length
+  of a one-component model from 0.1 to 120 arcsec through the pixel scale,
+  the centre within three times the FWHM of the PSF, and the residual
+  background within five times the sky scale. The lengths of models with
+  several components keep the ranges that tell their components apart.
+  The advisor also proposes the source of the effective gain, with a
+  cross-check of the gain keyword, and the ceiling on the peak of the PSF
+  stars from the saturation level when its unit is known. Declared priors
+  and settings are kept as they are.
+* `ObservationAdvisor.measure_fixed_inputs` prepares the image and builds
+  its PSF before the priors are proposed; the fit reuses these products.
+* Writing a proposal also writes a JSON report beside the YAML that records
+  where every proposed value comes from.
+* `make_config_from_fits(preparation=...)` writes a `preparation` section.
+* `baymorph.models.labels.PARAMETER_KINDS`: the kind of every parameter of
+  the ten models (flux, length, position, angle or dimensionless).
+
+### Changed
+
+* `ObservationAdvisor.propose_config` no longer requires a flux prior when
+  the header gives a zeropoint, and it prepares the image and builds the
+  PSF unless `fixed_inputs=` is supplied.
+* Generated configurations no longer write the unused key
+  `psf.empirical.candidate_selection.auto`.
+
 ---
 
 ## [0.4.0] - 2026-10-06

@@ -207,9 +207,7 @@ def test_config_maker_builds_minimal_runnable_config(
         "candidate_selection"
     ]
 
-    assert candidate[
-        "auto"
-    ] is True
+    assert "auto" not in candidate
 
     assert "max_peak" not in candidate
 
@@ -219,6 +217,10 @@ def test_config_maker_builds_minimal_runnable_config(
     resolved = resolve_config(
         config
     )
+
+    # The unused key is no longer written, but the defaults still hold it, so
+    # the resolved configuration and the PSF identity are unchanged.
+    assert resolved["psf"]["empirical"]["candidate_selection"]["auto"] is True
 
     assert resolved[
         "fit"
@@ -954,4 +956,36 @@ def test_config_maker_rejects_invalid_psf_max_peak(
             fits_path,
             target_position="center",
             psf_max_peak=max_peak,
+        )
+
+
+def test_config_maker_writes_a_declared_preparation(
+    tmp_path,
+):
+    """A preparation section is written as declared and validated."""
+    fits_path = tmp_path / "galaxy.fits"
+    _write_test_fits(fits_path)
+    preparation = {
+        "noise": {"sky_correlation": "field_separated"},
+        "masking": {"contaminant_growth_pixels": 20},
+    }
+
+    config = make_config_from_fits(
+        fits_path,
+        target_position="center",
+        preparation=preparation,
+    )
+
+    assert config["preparation"] == preparation
+    assert list(config).index("preparation") < list(config).index("psf")
+    assert (
+        resolve_config(config)["preparation"]["noise"]["sky_correlation"]
+        == "field_separated"
+    )
+
+    with pytest.raises(TypeError, match="preparation must be a mapping"):
+        make_config_from_fits(
+            fits_path,
+            target_position="center",
+            preparation=["noise"],
         )

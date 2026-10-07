@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
@@ -15,7 +17,9 @@ from baymorph.analysis.prior_predictive import (
     calibrate_single_sersic_flux_prior,
 )
 from baymorph.core.observation import Observation
+from baymorph.models.labels import PARAMETER_KINDS
 from baymorph.pipeline.config import (
+    DEFAULT_CONFIG,
     load_resolved_config,
     resolve_config,
 )
@@ -25,10 +29,25 @@ from baymorph.pipeline.image_preparation import (
     prepare_real_fits_image,
     prepare_real_image_from_config,
 )
+from baymorph.pipeline.prior_proposals import (
+    ANGULAR_RANGE_ARCSEC,
+    BACKGROUND_SKY_SCALE_MULTIPLE,
+    CENTRE_FWHM_MULTIPLE,
+    GAIN_RATIO_TOLERANCE,
+    MAGNITUDE_RANGE,
+    PHYSICAL_LENGTH_MODELS,
+    PSF_PEAK_SATURATION_FRACTION,
+    PriorProposal,
+    background_priors,
+    propose_effective_gain,
+    propose_model_priors,
+    propose_psf_max_peak,
+)
 from baymorph.pipeline.psf_candidates import (
     run_psf_candidate_selection_from_config,
 )
 from baymorph.pipeline.psf_construction import (
+    estimate_psf_core_fwhm,
     run_psf_construction_from_config,
 )
 from baymorph.observation.background import background_parameter_names
@@ -92,6 +111,104 @@ class ObservationInspection:
     target_position_angle: float | None
     target_area_pixels: int | None
     seeing_fwhm_unit: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FixedInputs:
+    """Fixed inputs of the observation model, measured before any prior.
+
+    The prepared sky scale, the cutout and the PSF enter the observation
+    model as fixed inputs (AD-046, AD-047). The advisor measures them by
+    preparing the image and building its PSF, and derives from them the
+    priors of the centre and of the residual background (AD-049).
+
+    Parameters
+    ----------
+    sky_scale : float
+        Prepared sky scale, in image units.
+    measured_sky_level : float
+        Background level that the preparation measured and subtracted.
+    cutout_shape : tuple of int
+        Shape ``(rows, columns)`` of the prepared cutout.
+    psf_fwhm_pixels : float
+        FWHM of the PSF, in pixels.
+    psf_fwhm_source : str
+        How the FWHM was obtained.
+    stage_identity : str
+        Fingerprint of the configuration sections that the preparation and
+        the PSF depend on; a proposal accepts only fixed inputs measured for
+        its own sections.
+    run_directory : str
+        Directory of the products of the preparation and of the PSF.
+    """
+
+    sky_scale: float
+    measured_sky_level: float
+    cutout_shape: tuple[int, int]
+    psf_fwhm_pixels: float
+    psf_fwhm_source: str
+    stage_identity: str
+    run_directory: str
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return a JSON-serializable description of the fixed inputs."""
+        return {
+            "sky_scale": float(self.sky_scale),
+            "measured_sky_level": float(self.measured_sky_level),
+            "cutout_shape": [int(value) for value in self.cutout_shape],
+            "psf_fwhm_pixels": float(self.psf_fwhm_pixels),
+            "psf_fwhm_source": self.psf_fwhm_source,
+            "stage_identity": self.stage_identity,
+            "run_directory": self.run_directory,
+        }
+
+
+_STAGE_SECTIONS = (
+    "object",
+    "data",
+    "preparation",
+    "psf",
+    "outputs",
+)
+"""Configuration sections that the preparation and the PSF depend on."""
+
+_NON_STAGE_OPTIONS = (
+    "likelihood",
+    "background",
+    "sampler",
+)
+"""Options of the configuration maker that leave the stages unchanged."""
+
+
+def _stage_identity(
+    resolved: Mapping[str, Any],
+) -> str:
+    """Return the fingerprint of the sections the stages depend on."""
+    sections = {
+        name: resolved.get(name)
+        for name in _STAGE_SECTIONS
+    }
+    text = json.dumps(
+        sections,
+        sort_keys=True,
+        default=str,
+    )
+
+    return hashlib.sha256(
+        text.encode("utf-8")
+    ).hexdigest()
+
+
+def _baymorph_version() -> str:
+    """Return the installed BayMorph version."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("baymorph")
+    except PackageNotFoundError:
+        from baymorph import __version__
+
+        return __version__
 
 
 PRIOR_WIDTH_WARNING_DEX = 6.0
@@ -191,16 +308,29 @@ class ObservationConfigProposal:
 
     Creating a proposal never writes a file. The user must call
     :meth:`write` with ``accept=True`` after reviewing the starting model,
-    prior source, and warnings.
+    the priors with their sources, and the warnings. A proposal of the
+    advisor carries the provenance of every proposed value, which
+    :meth:`write` records in a JSON report beside the YAML, outside every
+    checkpoint signature (AD-049).
     """
 
     config: dict[str, Any]
     output_path: Path
     starting_model: str
-    flux_prior: dict[str, Any]
+    flux_prior: dict[str, Any] | None
     flux_prior_source: str
     requires_flux_review: bool
     warnings: tuple[str, ...] = ()
+    provenance: dict[str, Any] | None = None
+
+    @property
+    def report_path(
+        self,
+    ) -> Path:
+        """Return the path of the provenance report beside the YAML."""
+        return self.output_path.with_name(
+            f"{self.output_path.stem}.advisor.json"
+        )
 
     def summary(
         self,
@@ -227,37 +357,58 @@ class ObservationConfigProposal:
             "appropriate evidence-producing fits and diagnostics."
         )
 
+        if isinstance(target, Mapping):
+            target_text = (
+                f"X={float(target['x']):.3f}, "
+                f"Y={float(target['y']):.3f}"
+            )
+        else:
+            target_text = str(target)
+
         lines = [
             "BayMorph Configuration Proposal",
             "",
             f"Output YAML: {self.output_path}",
             (f"FITS: {self.config['data']['image_path']}"),
-            (
-                "Confirmed target: "
-                f"X={float(target['x']):.3f}, "
-                f"Y={float(target['y']):.3f}"
-            ),
+            f"Confirmed target: {target_text}",
             (f"User-selected starting model: {self.starting_model}"),
             (f"Flux prior source: {self.flux_prior_source}"),
-            (
-                "Flux prior: "
-                f"{self.flux_prior['type']}("
-                f"{self.flux_prior['lower']}, "
-                f"{self.flux_prior['upper']})"
-            ),
-            (
-                "Flux coverage review: "
-                + ("REQUIRED" if self.requires_flux_review else "clear")
-            ),
-            sampler_scope,
-            "",
-            "MODEL-SCREENING SCOPE",
-            (
-                "The starting model is a user decision, not a pre-fit "
-                "Bayesian model preference."
-            ),
-            comparison_scope,
         ]
+
+        if self.flux_prior is not None:
+            lines.append(
+                "Flux prior: "
+                + _format_prior(self.flux_prior)
+            )
+
+        lines.extend(
+            [
+                (
+                    "Flux coverage review: "
+                    + ("REQUIRED" if self.requires_flux_review else "clear")
+                ),
+                sampler_scope,
+            ]
+        )
+
+        if self.provenance is not None:
+            lines.extend(
+                _provenance_summary(
+                    self.provenance
+                )
+            )
+
+        lines.extend(
+            [
+                "",
+                "MODEL-SCREENING SCOPE",
+                (
+                    "The starting model is a user decision, not a pre-fit "
+                    "Bayesian model preference."
+                ),
+                comparison_scope,
+            ]
+        )
 
         if self.warnings:
             lines.extend(
@@ -329,7 +480,9 @@ class ObservationConfigProposal:
         -----
         Writing the same proposal again is accepted and changes nothing, so a
         notebook can be re-executed. A destination whose content differs is
-        never replaced without ``overwrite=True``.
+        never replaced without ``overwrite=True``. When the proposal carries
+        its provenance, the JSON report :attr:`report_path` is written with
+        the YAML, and both destinations are checked before either is written.
         """
         if accept is not True:
             raise ValueError("Writing a configuration proposal requires accept=True.")
@@ -345,35 +498,55 @@ class ObservationConfigProposal:
 
         destination = self.output_path.expanduser()
 
-        serialized = yaml.safe_dump(
-            self.config,
-            sort_keys=False,
-        )
+        documents = [
+            (
+                destination,
+                yaml.safe_dump(
+                    self.config,
+                    sort_keys=False,
+                ),
+                "Configuration",
+            ),
+        ]
 
-        if destination.exists() and overwrite is not True:
-            if (
-                destination.read_text(
-                    encoding="utf-8",
+        if self.provenance is not None:
+            documents.append(
+                (
+                    self.report_path.expanduser(),
+                    json.dumps(
+                        self.provenance,
+                        indent=2,
+                    )
+                    + "\n",
+                    "Provenance report",
                 )
-                == serialized
-            ):
-                return destination.resolve()
-
-            raise FileExistsError(
-                f"Configuration already exists and differs: {destination}. "
-                "Choose a new output path, or pass overwrite=True only if "
-                "replacing it is intended; products already created from it "
-                "are not updated."
             )
-        destination.parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
 
-        destination.write_text(
-            serialized,
-            encoding="utf-8",
-        )
+        for path, text, label in documents:
+            if (
+                path.exists()
+                and overwrite is not True
+                and path.read_text(encoding="utf-8") != text
+            ):
+                raise FileExistsError(
+                    f"{label} already exists and differs: {path}. "
+                    "Choose a new output path, or pass overwrite=True only if "
+                    "replacing it is intended; products already created from "
+                    "it are not updated."
+                )
+
+        for path, text, _ in documents:
+            if path.exists() and path.read_text(encoding="utf-8") == text:
+                continue
+
+            path.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+            path.write_text(
+                text,
+                encoding="utf-8",
+            )
 
         return destination.resolve()
 
@@ -1183,6 +1356,197 @@ class ObservationAdvisor:
             unit=inspection.bunit,
         )
 
+    def _stage_config(
+        self,
+        *,
+        model_name: str,
+        **config_options: Any,
+    ) -> dict[str, Any]:
+        """Return the resolved configuration that the stages run on.
+
+        It is the configuration :meth:`propose_config` writes with the same
+        options, without priors, likelihood, background or sampler, which the
+        preparation and the PSF do not depend on. A relative output root is
+        anchored to the project root, as the runner anchors it for a
+        configuration in the ``configs`` directory of the project.
+        """
+        options = {
+            key: value
+            for key, value in config_options.items()
+            if key not in _NON_STAGE_OPTIONS
+        }
+        project_root = getattr(
+            self,
+            "project_root",
+            None,
+        )
+        output_root = Path(
+            options.get(
+                "outputs_root",
+                "runs",
+            )
+        ).expanduser()
+
+        if project_root is not None and not output_root.is_absolute():
+            options["outputs_root"] = str(
+                (Path(project_root) / output_root).resolve()
+            )
+
+        config = self.make_config(
+            output_path=None,
+            model_name=model_name,
+            model_priors=None,
+            _require_complete_priors=False,
+            **options,
+        )
+
+        return resolve_config(config)
+
+    def _run_fixed_input_stages(
+        self,
+        resolved: Mapping[str, Any],
+    ) -> tuple[Any, Any]:
+        """Run the preparation and PSF stages of the runner.
+
+        The stages reuse products already accepted for this configuration,
+        and fail closed when persisted products do not match it.
+
+        Returns
+        -------
+        tuple
+            The preparation products, and the PSF image of an empirical PSF
+            or None for a Gaussian PSF.
+        """
+        # The runner orchestrates the canonical stages; importing it here
+        # keeps the pipeline modules independent of the public entry point.
+        from baymorph.runner import BayMorphRunner
+
+        runner = BayMorphRunner(
+            dict(resolved)
+        )
+        products = runner.prepare_image()
+        psf = None
+
+        if str(resolved["psf"]["type"]).strip().lower() == "empirical":
+            runner.select_psf_candidates()
+            psf = runner.build_psf()
+
+        return products, psf
+
+    def measure_fixed_inputs(
+        self,
+        *,
+        model_name: str = "single_sersic",
+        **config_options: Any,
+    ) -> FixedInputs:
+        """Prepare the image and build its PSF, and return the fixed inputs.
+
+        The prepared sky scale, the cutout and the PSF are fixed inputs of
+        the observation model. This method runs the preparation and PSF
+        stages of :class:`baymorph.BayMorphRunner` on the configuration that
+        :meth:`propose_config` writes with the same options. The products are
+        written to the run directory of that configuration, and products
+        already accepted for it are reused, so the fit that follows does not
+        prepare the image again.
+
+        Parameters
+        ----------
+        model_name : str, default="single_sersic"
+            Model of the configuration; the stages do not depend on it.
+        **config_options
+            Options of :func:`baymorph.make_config_from_fits` that the
+            proposal will use, such as ``object_name``, ``outputs_root``,
+            ``cutout_mode``, ``psf_type``, ``psf_max_peak`` or
+            ``preparation``.
+
+        Returns
+        -------
+        FixedInputs
+            The sky scale, the measured sky level, the cutout shape and the
+            FWHM of the PSF.
+        """
+        if self.target_position is None:
+            raise ValueError(
+                "A confirmed target position is required before preparing "
+                "the image."
+            )
+
+        resolved = self._stage_config(
+            model_name=model_name,
+            **config_options,
+        )
+        products, psf = self._run_fixed_input_stages(
+            resolved
+        )
+
+        noise = np.asarray(
+            products.noise,
+            dtype=float,
+        )
+        finite_noise = noise[np.isfinite(noise)]
+
+        if finite_noise.size == 0:
+            raise ValueError(
+                "The preparation gave no finite sky scale."
+            )
+
+        sky_scale = float(
+            np.median(finite_noise)
+        )
+
+        psf_config = resolved["psf"]
+
+        if str(psf_config["type"]).strip().lower() == "gaussian":
+            psf_fwhm = float(
+                psf_config["gaussian"]["fwhm"]
+            )
+            psf_fwhm_source = "FWHM of the declared Gaussian PSF"
+        else:
+            if psf is None:
+                raise ValueError(
+                    "The PSF stage returned no empirical PSF."
+                )
+
+            psf_fwhm = float(
+                estimate_psf_core_fwhm(
+                    np.asarray(
+                        psf,
+                        dtype=float,
+                    )
+                )
+            )
+            psf_fwhm_source = "core FWHM of the empirical PSF"
+
+        if not (np.isfinite(sky_scale) and sky_scale > 0.0):
+            raise ValueError(
+                "The prepared sky scale must be positive and finite."
+            )
+
+        if not (np.isfinite(psf_fwhm) and psf_fwhm > 0.0):
+            raise ValueError(
+                "The FWHM of the PSF must be positive and finite."
+            )
+
+        rows, columns = np.shape(
+            products.prepared_data
+        )
+
+        return FixedInputs(
+            sky_scale=sky_scale,
+            measured_sky_level=float(products.background),
+            cutout_shape=(
+                int(rows),
+                int(columns),
+            ),
+            psf_fwhm_pixels=psf_fwhm,
+            psf_fwhm_source=psf_fwhm_source,
+            stage_identity=_stage_identity(resolved),
+            run_directory=str(
+                Path(resolved["outputs"]["root"])
+                / str(resolved["object"]["name"])
+            ),
+        )
+
     def propose_config(
         self,
         *,
@@ -1191,16 +1555,41 @@ class ObservationAdvisor:
         flux_calibration: FluxPriorCalibration | None = None,
         flux_prior: Mapping[str, Any] | None = None,
         model_priors: Mapping[str, Any] | None = None,
+        fixed_inputs: FixedInputs | None = None,
+        background_model: str | None = None,
+        resampling_variance_factor: float | None = None,
         **config_options: Any,
     ) -> ObservationConfigProposal:
         """Build a reviewable configuration proposal without writing it.
 
-        Exactly one total-flux prior source is required: either an
-        observational :class:`FluxPriorCalibration`, an explicit
-        ``flux_prior``, or a ``flux`` entry in ``model_priors``.
+        The proposal follows AD-049: its priors come only from the header,
+        from physics and from the fixed inputs of the observation model,
+        never from the intensities of the image being fitted.
 
-        The chosen model remains an explicit user-selected starting model.
-        BayMorph does not interpret it as a pre-fit evidence preference.
+        - Every flux takes the magnitudes 8 to 30 through the zeropoint of
+          the header, as a log-uniform prior in image units, unless a flux
+          prior is supplied: ``flux_calibration``, ``flux_prior`` or an entry
+          of ``model_priors``.
+        - Every length of a model with one extended component takes 0.1 to
+          120 arcsec through the pixel scale, as a log-uniform prior in
+          pixels within the validated rendering domain; the lengths of the
+          other models keep their reference ranges, which tell their
+          components apart, clipped to that angular range.
+        - The centre lies within three times the FWHM of the PSF of the
+          target position, and the dimensionless parameters and angles keep
+          the reference priors of BayMorph.
+        - The residual background lies within five times the prepared sky
+          scale.
+        - The effective gain of AD-047 comes from the sky level the header
+          records, the measured sky, or the gain keyword, in that order; the
+          ceiling on the peak of the PSF stars is half the saturation level
+          when its unit is established.
+
+        The fixed inputs come from :meth:`measure_fixed_inputs`, which
+        prepares the image and builds its PSF when they are not supplied. A
+        prior, background, likelihood or PSF ceiling that the caller supplies
+        is kept as declared. The chosen model remains an explicit
+        user-selected starting model, not a pre-fit evidence preference.
 
         Parameters
         ----------
@@ -1210,11 +1599,24 @@ class ObservationAdvisor:
         model_name : str, default="single_sersic"
             User-selected starting model.
         flux_calibration : FluxPriorCalibration, optional
-            Observational detectability-and-saturation calibration.
+            Observational detectability-and-saturation calibration of the
+            total flux of a model with one flux.
         flux_prior : mapping, optional
-            Explicit scientific total-flux prior.
+            Explicit scientific prior of the total flux of a model with one
+            flux.
         model_priors : mapping, optional
-            Additional explicit model-prior overrides.
+            Explicit priors of any parameters, kept as declared.
+        fixed_inputs : FixedInputs, optional
+            Fixed inputs measured by :meth:`measure_fixed_inputs` with the
+            same options.
+        background_model : {"constant", "plane"}, optional
+            Residual background model whose priors the advisor proposes; by
+            default the BayMorph default model. Not allowed together with
+            ``background``.
+        resampling_variance_factor : float, optional
+            Factor by which a resampling of the image multiplied the variance
+            of its noise, which lets the gain keyword of a resampled image be
+            proposed.
         **config_options
             Options forwarded to the canonical configuration maker.
 
@@ -1229,46 +1631,61 @@ class ObservationAdvisor:
                 "a configuration."
             )
 
-        priors = dict(model_priors or {})
-        embedded_flux_prior = priors.pop(
-            "flux",
-            None,
+        model_name = str(
+            model_name
+        ).strip()
+
+        if model_name not in PARAMETER_KINDS:
+            raise ValueError(
+                f"Unknown model: {model_name}"
+            )
+
+        kinds = PARAMETER_KINDS[model_name]
+        priors = {
+            str(name): dict(prior)
+            for name, prior in (model_priors or {}).items()
+        }
+        unknown = sorted(
+            set(priors) - set(kinds)
         )
+
+        if unknown:
+            raise ValueError(
+                f"Model {model_name!r} has no parameters {unknown}."
+            )
 
         supplied_sources = sum(
             source is not None
             for source in (
                 flux_calibration,
                 flux_prior,
-                embedded_flux_prior,
+                priors.get("flux"),
             )
         )
 
-        if supplied_sources != 1:
+        if supplied_sources > 1:
             raise ValueError(
                 "Supply exactly one flux-prior source: flux_calibration, "
-                "flux_prior, or model_priors['flux']."
+                "flux_prior, or model_priors['flux'], or none to propose the "
+                "flux prior from the zeropoint of the header."
             )
 
-        warnings = []
-        flux_prior_source: str
+        if (
+            flux_calibration is not None or flux_prior is not None
+        ) and "flux" not in kinds:
+            raise ValueError(
+                "flux_calibration and flux_prior apply to models with one "
+                f"total flux; declare the fluxes of {model_name!r} through "
+                "model_priors."
+            )
 
-        if flux_calibration is not None:
-            candidate = flux_calibration.candidate_prior
-
-            if candidate is None:
-                raise ValueError(
-                    "Flux calibration did not produce a valid candidate prior."
-                )
-
-            selected_flux_prior = dict(candidate)
-            flux_prior_source = "observational detectability and saturation calibration"
-        elif flux_prior is not None:
-            selected_flux_prior = dict(flux_prior)
-            flux_prior_source = "explicit user-declared scientific prior"
-        else:
-            selected_flux_prior = dict(embedded_flux_prior)
-            flux_prior_source = "explicit user-declared scientific prior"
+        if (
+            config_options.get("background") is not None
+            and background_model is not None
+        ):
+            raise ValueError(
+                "Supply background or background_model, not both."
+            )
 
         likelihood = config_options.get("likelihood")
 
@@ -1288,11 +1705,274 @@ class ObservationAdvisor:
                 "likelihood for standard evidence interpretation."
             )
 
-        inspection = self._inspection or self.inspect()
+        warnings: list[str] = []
+        decided: dict[str, PriorProposal] = {
+            name: PriorProposal(
+                parameter=name,
+                kind=kinds[name],
+                prior=prior,
+                source="user",
+                detail="declared by the user",
+            )
+            for name, prior in priors.items()
+        }
 
-        requires_flux_review = _flux_prior_requires_review(
-            selected_flux_prior,
-            inspection.target_flux_scale,
+        if flux_calibration is not None:
+            candidate = flux_calibration.candidate_prior
+
+            if candidate is None:
+                raise ValueError(
+                    "Flux calibration did not produce a valid candidate prior."
+                )
+
+            decided["flux"] = PriorProposal(
+                parameter="flux",
+                kind="flux",
+                prior=dict(candidate),
+                source="calibration",
+                detail="observational detectability and saturation calibration",
+            )
+        elif flux_prior is not None:
+            decided["flux"] = PriorProposal(
+                parameter="flux",
+                kind="flux",
+                prior=dict(flux_prior),
+                source="user",
+                detail="explicit user-declared scientific prior",
+            )
+
+        reading = Observation.from_fits(
+            self.fits_path,
+            hdu=self.hdu,
+        ).metadata.header_reading
+        zeropoint = _finite_or_none(
+            reading.value("zeropoint")
+        )
+        pixel_scale = _finite_or_none(
+            reading.value("pixel_scale")
+        )
+        photometric_system = reading.value(
+            "photometric_system"
+        )
+        undecided = [
+            name
+            for name in kinds
+            if name not in decided
+        ]
+        undecided_fluxes = [
+            name
+            for name in undecided
+            if kinds[name] == "flux"
+        ]
+
+        if undecided_fluxes and zeropoint is None:
+            raise ValueError(
+                "The header gives no usable zeropoint, so the priors of "
+                f"{undecided_fluxes} cannot be proposed from magnitudes. "
+                "Supply exactly one flux-prior source: flux_prior=... in "
+                "image units or flux_calibration=... for a model with one "
+                "total flux, or model_priors=... for each flux."
+            )
+
+        undecided_lengths = [
+            name
+            for name in undecided
+            if kinds[name] == "length"
+        ]
+
+        if pixel_scale is None and undecided_lengths:
+            warnings.append(
+                "The header gives no pixel scale, so the lengths "
+                f"{undecided_lengths} keep the reference priors of BayMorph in "
+                "pixels instead of an angular range. Review them, or declare "
+                "them through model_priors."
+            )
+
+        # The ceiling on the peak of the PSF stars shapes the PSF, so it is
+        # settled before the stages run.
+        psf_type = str(
+            config_options.get(
+                "psf_type",
+                "empirical",
+            )
+        ).strip().lower()
+        max_peak_record: dict[str, Any] | None = None
+
+        if psf_type == "empirical":
+            if config_options.get("psf_max_peak") is None:
+                peak, peak_detail = propose_psf_max_peak(
+                    reading
+                )
+
+                if peak is not None:
+                    config_options["psf_max_peak"] = peak
+                    max_peak_record = {
+                        "value": peak,
+                        "source": "header",
+                        "detail": peak_detail,
+                    }
+                else:
+                    warnings.append(
+                        "No empirical-PSF candidate peak ceiling was "
+                        f"declared, and the header gives none ({peak_detail}). "
+                        "BayMorph will use its default max_peak, which is not "
+                        "checked against the detector saturation level or "
+                        "the image units. Declare psf_max_peak=... in "
+                        "science-image units."
+                    )
+                    max_peak_record = {
+                        "value": None,
+                        "source": "default",
+                        "detail": peak_detail,
+                    }
+            else:
+                max_peak_record = {
+                    "value": float(config_options["psf_max_peak"]),
+                    "source": "user",
+                    "detail": "declared by the user",
+                }
+
+        stage_identity = _stage_identity(
+            self._stage_config(
+                model_name=model_name,
+                **config_options,
+            )
+        )
+
+        if fixed_inputs is None:
+            fixed_inputs = self.measure_fixed_inputs(
+                model_name=model_name,
+                **config_options,
+            )
+
+        if fixed_inputs.stage_identity != stage_identity:
+            raise ValueError(
+                "The fixed inputs were measured for another preparation or "
+                "PSF configuration. Measure them again with the options of "
+                "this proposal, or let the proposal measure them."
+            )
+
+        proposals = propose_model_priors(
+            model_name,
+            zeropoint=zeropoint,
+            pixel_scale=pixel_scale,
+            psf_fwhm_pixels=fixed_inputs.psf_fwhm_pixels,
+            decided=decided,
+            photometric_system=(
+                None
+                if photometric_system is None
+                else str(photometric_system)
+            ),
+        )
+
+        if config_options.get("background") is not None:
+            background_record = {
+                "source": "user",
+                "detail": "declared by the user",
+            }
+        else:
+            chosen_background = str(
+                background_model
+                or DEFAULT_CONFIG["fit"]["background"]["model"]
+            ).strip().lower()
+            config_options["background"] = {
+                "model": chosen_background,
+                "priors": background_priors(
+                    chosen_background,
+                    sky_scale=fixed_inputs.sky_scale,
+                    cutout_shape=fixed_inputs.cutout_shape,
+                ),
+            }
+            background_record = {
+                "source": "fixed_inputs",
+                "detail": (
+                    f"level within {BACKGROUND_SKY_SCALE_MULTIPLE:g} times "
+                    f"the prepared sky scale {fixed_inputs.sky_scale:.4g}"
+                    + (
+                        ", and gradients that change the plane by as much "
+                        "over half the cutout"
+                        if chosen_background == "plane"
+                        else ""
+                    )
+                ),
+            }
+
+        likelihood = config_options.get("likelihood")
+        likelihood_type = (
+            str(likelihood.get("type", "correlated_gaussian"))
+            if isinstance(likelihood, Mapping)
+            else "correlated_gaussian"
+        ).strip().lower()
+
+        if isinstance(likelihood, Mapping) and "effective_gain" in likelihood:
+            gain_record: dict[str, Any] = {
+                "source": "user",
+                "declaration": deepcopy(dict(likelihood["effective_gain"])),
+            }
+        elif likelihood_type != "correlated_gaussian":
+            gain_record = {
+                "source": None,
+                "detail": (
+                    f"not proposed: the {likelihood_type!r} likelihood "
+                    "declares no effective gain"
+                ),
+            }
+        else:
+            gain = propose_effective_gain(
+                reading,
+                sky_scale=fixed_inputs.sky_scale,
+                measured_sky_level=fixed_inputs.measured_sky_level,
+                resampling_variance_factor=resampling_variance_factor,
+            )
+            warnings.extend(gain.warnings)
+            declared_likelihood = (
+                deepcopy(dict(likelihood))
+                if isinstance(likelihood, Mapping)
+                else {"type": "correlated_gaussian"}
+            )
+
+            if gain.declaration is not None:
+                declared_likelihood["effective_gain"] = deepcopy(
+                    gain.declaration
+                )
+
+            config_options["likelihood"] = declared_likelihood
+            gain_record = {
+                "source": (
+                    None
+                    if gain.declaration is None
+                    else "header and fixed_inputs"
+                ),
+                **gain.as_dict(),
+            }
+
+        sampler = config_options.get(
+            "sampler",
+            "nautilus",
+        )
+        sampler_name = str(
+            sampler.get("name", "")
+            if isinstance(sampler, Mapping)
+            else sampler
+        ).strip().lower()
+
+        if sampler_name == "pocomc" and any(
+            proposal.prior.get("type") == "log_uniform"
+            for proposal in proposals.values()
+        ):
+            raise ValueError(
+                "pocoMC accepts uniform, beta and normal priors only, and the "
+                "proposal holds log-uniform priors. Choose nautilus or "
+                "dynesty, or declare the priors through model_priors."
+            )
+
+        inspection = self._inspection or self.inspect()
+        flux_proposal = proposals.get("flux")
+        requires_flux_review = flux_proposal is not None and (
+            _flux_prior_requires_review(
+                flux_proposal.prior,
+                inspection.target_flux_scale,
+            )
         )
 
         if requires_flux_review:
@@ -1309,66 +1989,32 @@ class ObservationAdvisor:
             "BayMorph. The starting model is therefore a user decision."
         )
 
-        priors["flux"] = selected_flux_prior
-
         config = self.make_config(
             output_path=None,
             model_name=model_name,
-            model_priors=priors,
+            model_priors={
+                name: deepcopy(proposal.prior)
+                for name, proposal in proposals.items()
+            },
             **config_options,
         )
-
-        if "background" not in config["fit"]:
-            warnings.append(
-                "No residual-background prior was declared. The proposal "
-                "records BayMorph's default constant-background prior, whose "
-                "bounds are in science-image units but are not scaled to this "
-                "image. Declare background=... to make that assumption "
-                "explicit."
-            )
-
-        psf_config = config["psf"]
-
-        if psf_config["type"] == "empirical" and (
-            "max_peak" not in psf_config["empirical"]["candidate_selection"]
-        ):
-            warnings.append(
-                "No empirical-PSF candidate peak ceiling was declared. "
-                "BayMorph will use its default max_peak, which is not checked "
-                "against the detector saturation level or the image units. "
-                "Declare psf_max_peak=... in science-image units."
-            )
 
         # Record every prior the fit will sample, so the written YAML does not
         # depend on BayMorph defaults that a later version could change.
         resolved = resolve_config(config)
-        model_priors_resolved = deepcopy(
-            resolved["fit"]["priors"][model_name]
-        )
-        default_prior_names = [
-            name for name in model_priors_resolved if name not in priors
-        ]
-
-        if default_prior_names:
-            warnings.append(
-                "Priors for "
-                + ", ".join(default_prior_names)
-                + " are BayMorph reference defaults, recorded explicitly in "
-                "the proposal. Review them, or override them with "
-                "model_priors=... ."
-            )
-
         config["fit"]["priors"] = {
-            model_name: model_priors_resolved,
+            model_name: deepcopy(
+                resolved["fit"]["priors"][model_name]
+            ),
         }
 
         background_resolved = resolved["fit"]["background"]
-        background_model = str(background_resolved["model"]).strip().lower()
+        background_model_name = str(background_resolved["model"]).strip().lower()
         config["fit"]["background"] = {
-            "model": background_model,
+            "model": background_model_name,
             "priors": {
                 name: deepcopy(background_resolved["priors"][name])
-                for name in background_parameter_names(background_model)
+                for name in background_parameter_names(background_model_name)
             },
         }
 
@@ -1394,14 +2040,61 @@ class ObservationAdvisor:
             else:
                 config["data"]["image_path"] = str(relative_image_path)
 
+        provenance = {
+            "schema": "baymorph.advisor_proposal",
+            "schema_version": 1,
+            "decision": "AD-049",
+            "baymorph_version": _baymorph_version(),
+            "image_path": config["data"]["image_path"],
+            "hdu": self.hdu,
+            "target_position": deepcopy(config["data"]["target_position"]),
+            "models": [model_name],
+            "rules": {
+                "magnitudes": list(MAGNITUDE_RANGE),
+                "angular_range_arcsec": list(ANGULAR_RANGE_ARCSEC),
+                "physical_length_models": sorted(PHYSICAL_LENGTH_MODELS),
+                "centre_fwhm_multiple": CENTRE_FWHM_MULTIPLE,
+                "background_sky_scale_multiple": (
+                    BACKGROUND_SKY_SCALE_MULTIPLE
+                ),
+                "psf_peak_saturation_fraction": PSF_PEAK_SATURATION_FRACTION,
+                "gain_ratio_tolerance": GAIN_RATIO_TOLERANCE,
+            },
+            "header": reading.as_dict(),
+            "fixed_inputs": fixed_inputs.as_dict(),
+            "priors": {
+                model_name: {
+                    name: proposal.as_dict()
+                    for name, proposal in proposals.items()
+                },
+            },
+            "background": {
+                **background_record,
+                "model": background_model_name,
+                "priors": deepcopy(config["fit"]["background"]["priors"]),
+            },
+            "effective_gain": gain_record,
+            "psf_max_peak": max_peak_record,
+            "warnings": list(warnings),
+        }
+
         return ObservationConfigProposal(
             config=config,
             output_path=destination,
             starting_model=str(model_name),
-            flux_prior=selected_flux_prior,
-            flux_prior_source=flux_prior_source,
+            flux_prior=(
+                None
+                if flux_proposal is None
+                else deepcopy(flux_proposal.prior)
+            ),
+            flux_prior_source=(
+                "see the priors of each flux"
+                if flux_proposal is None
+                else flux_proposal.detail
+            ),
             requires_flux_review=requires_flux_review,
             warnings=tuple(warnings),
+            provenance=provenance,
         )
 
     def _resolve_target(
@@ -1572,3 +2265,147 @@ def _format_optional(
     suffix = f" {unit}" if unit else ""
 
     return f"{value:.6g}{suffix}"
+
+
+def _format_bound(
+    value: Any,
+) -> str:
+    """Format a prior bound, numeric or symbolic."""
+    if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
+        value,
+        bool,
+    ):
+        return f"{float(value):.6g}"
+
+    return str(value)
+
+
+def _format_prior(
+    prior: Mapping[str, Any],
+) -> str:
+    """Format one prior declaration for a human reader."""
+    prior_type = str(prior.get("type", "unspecified"))
+
+    if "lower" in prior or "upper" in prior:
+        text = (
+            f"{prior_type}("
+            f"{_format_bound(prior.get('lower'))}, "
+            f"{_format_bound(prior.get('upper'))})"
+        )
+    elif "value" in prior:
+        text = f"{prior_type}({_format_bound(prior['value'])})"
+    else:
+        text = prior_type
+
+    if prior.get("relative_to"):
+        text += f" relative to {prior['relative_to']}"
+
+    return text
+
+
+def _provenance_summary(
+    provenance: Mapping[str, Any],
+) -> list[str]:
+    """Return the summary lines of the provenance of a proposal."""
+    lines = [
+        "",
+        "PRIORS AND THEIR SOURCES",
+    ]
+
+    for model_name, entries in provenance.get("priors", {}).items():
+        lines.append(f"{model_name}:")
+        lines.extend(
+            f"  {name}: {_format_prior(entry['prior'])} "
+            f"[{entry['source']}] {entry['detail']}"
+            for name, entry in entries.items()
+        )
+
+    background = provenance.get("background")
+
+    if background:
+        lines.extend(
+            [
+                "",
+                "RESIDUAL BACKGROUND",
+                (
+                    f"Model: {background['model']} [{background['source']}] "
+                    f"{background.get('detail', '')}"
+                ).rstrip(),
+            ]
+        )
+        lines.extend(
+            f"{name}: {_format_prior(prior)}"
+            for name, prior in background["priors"].items()
+        )
+
+    lines.extend(
+        [
+            "",
+            "OBSERVATION",
+        ]
+    )
+
+    gain = provenance.get("effective_gain") or {}
+    declaration = gain.get("declaration")
+
+    if gain.get("source") == "user":
+        lines.append(
+            "Effective gain: declared by the user "
+            f"({_format_prior(declaration or {})})"
+        )
+    elif declaration:
+        lines.append(
+            f"Effective gain: {gain['value']:.6g} from the source "
+            f"{declaration['source']!r}"
+        )
+    else:
+        lines.append(
+            "Effective gain: not proposed; "
+            + str(
+                gain.get(
+                    "detail",
+                    "declare it before running the fit",
+                )
+            )
+        )
+
+    if gain.get("ratio") is not None:
+        expected = gain.get("expected_ratio")
+        lines.append(
+            f"Gain cross-check: ratio of two sources {gain['ratio']:.3g}"
+            + (
+                f", predicted {expected:.3g}"
+                if expected is not None
+                else ", no prediction without a declared resampling factor"
+            )
+        )
+
+    peak = provenance.get("psf_max_peak")
+
+    if peak:
+        value = peak.get("value")
+        lines.append(
+            "PSF peak ceiling: "
+            + ("BayMorph default" if value is None else f"{value:.6g}")
+            + f" [{peak['source']}] {peak['detail']}"
+        )
+
+    fixed = provenance.get("fixed_inputs")
+
+    if fixed:
+        rows, columns = fixed["cutout_shape"]
+        lines.extend(
+            [
+                "",
+                "FIXED INPUTS (prepared before any prior)",
+                f"Prepared sky scale: {fixed['sky_scale']:.6g}",
+                f"Cutout: {columns} x {rows} pixels",
+                (
+                    f"PSF FWHM: {fixed['psf_fwhm_pixels']:.4g} pixels "
+                    f"({fixed['psf_fwhm_source']})"
+                ),
+                f"Products: {fixed['run_directory']}",
+            ]
+        )
+
+    return lines

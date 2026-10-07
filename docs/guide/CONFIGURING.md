@@ -90,8 +90,8 @@ The function returns the configuration as a dictionary and writes it when
 ### Interactively, in a notebook
 
 `ObservationAdvisor` reads the image and its header, lets you click on the
-target, shows prior guidance for each parameter and writes the YAML only
-after you have reviewed and accepted it. The tutorial notebook
+target, proposes a complete configuration and writes the YAML only after
+you have reviewed and accepted it. The tutorial notebook
 `02A_Observed_Assessment_and_Config.ipynb` walks through it:
 
 ```python
@@ -105,23 +105,43 @@ print(advisor.summary())
 proposal = advisor.propose_config(
     output_path="configs/galaxy.yaml",
     model_name="single_sersic",
-    flux_prior={"type": "log_uniform", "lower": 1e3, "upper": 1e7},
-    background={
-        "model": "constant",
-        "priors": {
-            "background_level": {"type": "uniform", "lower": -20, "upper": 20},
-        },
-    },
-    psf_max_peak=50000,
+    background_model="plane",
 )
 print(proposal.summary())
 proposal.write(accept=True)
 ```
 
+The Advisor first prepares the image and builds its PSF, the inputs of the
+observation model that come before any prior; the fit then reuses them.
+It then proposes the priors from the header, from physics and from those
+inputs, never from the image it is about to fit:
+
+| Parameter | Proposed prior |
+| --- | --- |
+| Fluxes | Magnitudes 8 to 30, converted through the zeropoint of the header: log-uniform in image units. |
+| Lengths of a model with one component | 0.1 to 120 arcsec, converted through the pixel scale: log-uniform in pixels, within the range where the rendering of the model is validated. |
+| Lengths of a model with several components | The default ranges, which tell the components apart, limited to 0.1 to 120 arcsec. |
+| Centre | Within three times the FWHM of the PSF of the target position. |
+| Sérsic index, axis ratio, angles | The BayMorph defaults. |
+| Residual background | Within five times the sky scale; a plane changes by at most as much over half the cutout. |
+
+It also proposes where the effective gain comes from: the sky level the
+header records, the sky measured in the image, or the gain keyword, in that
+order, and it compares them when it finds more than one. When the header
+gives the saturation level in the units of the image, half of it becomes
+the brightest star allowed for the PSF.
+
+Anything you declare is kept as declared: a prior through `model_priors`
+or `flux_prior`, `background`, `likelihood` or `psf_max_peak`. Without a
+zeropoint in the header, the flux prior must be declared in image units;
+without a pixel scale, the lengths keep the default ranges in pixels, and
+the summary says so.
+
 Without the interactive widgets, `advisor.set_target_position(x, y)` sets
 the target instead of the click. Nothing is written until
-`proposal.write(accept=True)`, and the summary lists the priors left at
-their defaults, so that you can review them first. The diagnostics the
+`proposal.write(accept=True)`. The summary lists every prior with its
+source, and the written YAML comes with a report, `galaxy.advisor.json`,
+that records where every proposed value comes from. The diagnostics the
 Advisor prints, such as a flux or radius measured on the image, are there
 to check that a prior is sensible, never to set its bounds.
 
@@ -139,6 +159,9 @@ fit:
 | The effective gain | `fit.likelihood.effective_gain` | It sets the Poisson noise of the galaxy; see [Sky and Noise](SKY_AND_NOISE.md). |
 | The brightest star for the PSF | `psf.empirical.candidate_selection.max_peak` | The default, 80000, is not scaled to your image: keep it below the saturation level, so that saturated stars are not used. |
 | The cutout | `data.cutout` | The cutout is the part of the image the fit sees; see [Image and Cutout](IMAGE.md). |
+
+The Advisor proposes each of these and records where each value comes
+from, but accepting them stays your decision.
 
 !!! tip "Priors are assumptions"
 

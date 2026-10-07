@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -13,6 +14,36 @@ from baymorph import (
     ObservationAdvisor,
     ObservationConfigProposal,
 )
+
+FAKE_SKY_SCALE = 2.0
+
+
+@pytest.fixture(autouse=True)
+def fixed_input_stages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Replace the preparation and PSF stages with known fixed inputs."""
+
+    def fake_stages(self, resolved):
+        products = SimpleNamespace(
+            noise=np.full((60, 60), FAKE_SKY_SCALE),
+            prepared_data=np.zeros((60, 60)),
+            background=10.0,
+        )
+        psf = None
+
+        if resolved["psf"]["type"] == "empirical":
+            y, x = np.indices((25, 25), dtype=float)
+            psf = np.exp(-0.5 * ((x - 12.0) ** 2 + (y - 12.0) ** 2) / 1.2**2)
+            psf /= psf.sum()
+
+        return products, psf
+
+    monkeypatch.setattr(
+        ObservationAdvisor,
+        "_run_fixed_input_stages",
+        fake_stages,
+    )
 
 
 def write_observation(
@@ -389,7 +420,7 @@ def test_proposal_write_refuses_to_replace_existing_configuration(
 def test_proposal_warns_about_undeclared_unit_dependent_choices(
     tmp_path: Path,
 ) -> None:
-    """Default background priors and PSF ceilings must be flagged, not hidden."""
+    """An undeclared background is scaled to the sky; a PSF ceiling is flagged."""
     fits_path = write_observation(tmp_path)
 
     advisor = ObservationAdvisor(
@@ -414,12 +445,16 @@ def test_proposal_warns_about_undeclared_unit_dependent_choices(
 
     warnings = "\n".join(undeclared.warnings)
 
-    assert "No residual-background prior was declared" in warnings
     assert "No empirical-PSF candidate peak ceiling was declared" in warnings
     assert undeclared.config["fit"]["background"]["model"] == "constant"
-    assert set(undeclared.config["fit"]["background"]["priors"]) == {
-        "background_level",
+    assert undeclared.config["fit"]["background"]["priors"] == {
+        "background_level": {
+            "type": "uniform",
+            "lower": pytest.approx(-5.0 * FAKE_SKY_SCALE),
+            "upper": pytest.approx(5.0 * FAKE_SKY_SCALE),
+        },
     }
+    assert undeclared.provenance["background"]["source"] == "fixed_inputs"
 
     declared = advisor.propose_config(
         output_path=(tmp_path / "declared.yaml"),
@@ -550,15 +585,21 @@ def test_proposal_records_every_sampled_prior(
     assert priors["single_sersic"]["re"] == re_prior
     assert proposal.config["fit"]["background"] == background
 
-    defaults_warning = next(
-        warning
-        for warning in proposal.warnings
-        if "reference defaults" in warning
-    )
+    sources = {
+        name: entry["source"]
+        for name, entry in proposal.provenance["priors"]["single_sersic"].items()
+    }
 
-    assert "n, q, theta, x0, y0" in defaults_warning
-    assert "re," not in defaults_warning
-    assert "flux" not in defaults_warning
+    assert sources == {
+        "flux": "user",
+        "re": "user",
+        "n": "reference",
+        "q": "reference",
+        "theta": "reference",
+        "x0": "fixed_inputs",
+        "y0": "fixed_inputs",
+    }
+    assert priors["single_sersic"]["x0"]["upper"] == pytest.approx(3.0 * 2.0)
 
     written = yaml.safe_load(
         proposal.write(accept=True).read_text(encoding="utf-8")

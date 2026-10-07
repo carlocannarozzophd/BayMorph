@@ -266,9 +266,7 @@ def _empirical_psf_config(
     that threshold after resolving its units against the science image;
     ``max_peak`` carries that explicit declaration when the caller makes it.
     """
-    candidate_selection: dict[str, Any] = {
-        "auto": True,
-    }
+    candidate_selection: dict[str, Any] = {}
 
     if max_peak is not None:
         candidate_selection["max_peak"] = max_peak
@@ -591,6 +589,7 @@ def make_config_from_fits(
     psf_type: str = "empirical",
     gaussian_fwhm_pixels: float | None = None,
     psf_max_peak: float | None = None,
+    preparation: Mapping[str, Any] | None = None,
     _require_complete_priors: bool = True,
 ) -> dict[str, Any]:
     """Create a runnable BayMorph configuration from one FITS image.
@@ -643,6 +642,10 @@ def make_config_from_fits(
         FITS saturation keywords are never converted automatically. Valid
         only with ``psf_type="empirical"``. If omitted, BayMorph uses its
         default ceiling, which is not unit-checked against the image.
+    preparation : mapping, optional
+        Explicit ``preparation`` section, such as the masking rule or the
+        estimator of the sky correlation, written as given and validated by
+        the configuration layer. If omitted, the preparation defaults apply.
 
     Returns
     -------
@@ -747,6 +750,14 @@ def make_config_from_fits(
         model_priors
     )
 
+    if preparation is not None and not isinstance(
+        preparation,
+        Mapping,
+    ):
+        raise TypeError(
+            "preparation must be a mapping or None."
+        )
+
     fit_config: dict[str, Any] = {
         "models": [
             model_name,
@@ -811,6 +822,15 @@ def make_config_from_fits(
                 overwrite
             ),
         },
+        **(
+            {}
+            if preparation is None
+            else {
+                "preparation": deepcopy(
+                    dict(preparation)
+                ),
+            }
+        ),
         "psf": psf,
         "fit": fit_config,
     }

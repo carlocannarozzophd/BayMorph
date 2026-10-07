@@ -1,4 +1,4 @@
-"""Parameter names and display labels for built-in BayMorph models.
+"""Parameter names, display labels and kinds for built-in BayMorph models.
 
 The tables list morphology parameters only. Residual-background
 parameters are owned by ``fit.background`` and labelled through
@@ -6,6 +6,16 @@ parameters are owned by ``fit.background`` and labelled through
 """
 
 from __future__ import annotations
+
+PARAMETER_KIND_NAMES = (
+    "flux",
+    "length",
+    "position",
+    "angle",
+    "dimensionless",
+)
+"""Kinds of model parameters: what a parameter measures, which decides how a
+prior in physical units maps to it (AD-049)."""
 
 MODEL_PARAMETER_LABELS = {
     "single_sersic": {
@@ -147,6 +157,183 @@ MODEL_PARAMETER_LABELS = {
         "y0": r"$y_0$",
     },
 }
+
+
+_SHARED_CENTRE_KINDS = {
+    "x0": "position",
+    "y0": "position",
+}
+
+PARAMETER_KINDS = {
+    "single_sersic": {
+        "flux": "flux",
+        "re": "length",
+        "n": "dimensionless",
+        "q": "dimensionless",
+        "theta": "angle",
+        **_SHARED_CENTRE_KINDS,
+    },
+    "double_sersic": {
+        "flux_bulge": "flux",
+        "re_bulge": "length",
+        "n_bulge": "dimensionless",
+        "q_bulge": "dimensionless",
+        "theta_bulge": "angle",
+        "flux_disk": "flux",
+        "re_disk": "length",
+        "n_disk": "dimensionless",
+        "q_disk": "dimensionless",
+        "theta_disk": "angle",
+        **_SHARED_CENTRE_KINDS,
+    },
+    "sersic_point_source": {
+        "flux_sersic": "flux",
+        "re": "length",
+        "n": "dimensionless",
+        "q": "dimensionless",
+        "theta": "angle",
+        "flux_point_source": "flux",
+        **_SHARED_CENTRE_KINDS,
+    },
+    "bulge_disk": {
+        "flux_bulge": "flux",
+        "re_bulge": "length",
+        "n_bulge": "dimensionless",
+        "q_bulge": "dimensionless",
+        "theta_bulge": "angle",
+        "flux_disk": "flux",
+        "re_disk": "length",
+        "q_disk": "dimensionless",
+        "theta_disk": "angle",
+        **_SHARED_CENTRE_KINDS,
+    },
+    "boxy_sersic": {
+        "flux": "flux",
+        "re": "length",
+        "n": "dimensionless",
+        "q": "dimensionless",
+        "c0": "dimensionless",
+        "theta": "angle",
+        **_SHARED_CENTRE_KINDS,
+    },
+    "bulge_broken_disk": {
+        "flux_bulge": "flux",
+        "re_bulge": "length",
+        "n_bulge": "dimensionless",
+        "q_bulge": "dimensionless",
+        "theta_bulge": "angle",
+        "flux_disk": "flux",
+        "h_in_disk": "length",
+        "h_out_disk": "length",
+        "rb_disk": "length",
+        "wb_disk": "length",
+        "q_disk": "dimensionless",
+        "theta_disk": "angle",
+        **_SHARED_CENTRE_KINDS,
+    },
+    "bulge_disk_bar": {
+        "flux_bulge": "flux",
+        "re_bulge": "length",
+        "n_bulge": "dimensionless",
+        "q_bulge": "dimensionless",
+        "theta_bulge": "angle",
+        "flux_disk": "flux",
+        "re_disk": "length",
+        "q_disk": "dimensionless",
+        "theta_disk": "angle",
+        "flux_bar": "flux",
+        "a_bar": "length",
+        "alpha_bar": "dimensionless",
+        "c0_bar": "dimensionless",
+        "q_bar": "dimensionless",
+        "theta_bar": "angle",
+        **_SHARED_CENTRE_KINDS,
+    },
+    "bulge_disk_ring": {
+        "flux_bulge": "flux",
+        "re_bulge": "length",
+        "n_bulge": "dimensionless",
+        "q_bulge": "dimensionless",
+        "theta_bulge": "angle",
+        "flux_disk": "flux",
+        "re_disk": "length",
+        "q_disk": "dimensionless",
+        "theta_disk": "angle",
+        "flux_ring": "flux",
+        "r_ring": "length",
+        "sigma_ring": "length",
+        "q_ring": "dimensionless",
+        "theta_ring": "angle",
+        **_SHARED_CENTRE_KINDS,
+    },
+    "bulge_disk_spiral": {
+        "flux_bulge": "flux",
+        "re_bulge": "length",
+        "n_bulge": "dimensionless",
+        "q_bulge": "dimensionless",
+        "theta_bulge": "angle",
+        "flux_disk": "flux",
+        "re_disk": "length",
+        "q_disk": "dimensionless",
+        "theta_disk": "angle",
+        "amplitude_spiral": "dimensionless",
+        "winding_spiral": "dimensionless",
+        "phase_spiral": "angle",
+        "r_in_spiral": "length",
+        **_SHARED_CENTRE_KINDS,
+    },
+    "core_sersic": {
+        "flux": "flux",
+        "re": "length",
+        "n": "dimensionless",
+        "rb": "length",
+        "gamma": "dimensionless",
+        "alpha": "dimensionless",
+        "q": "dimensionless",
+        "theta": "angle",
+        **_SHARED_CENTRE_KINDS,
+    },
+}
+"""Kind of every parameter of the built-in models: a flux in image units, a
+length in pixels, a position in pixels, an angle in radians, or a
+dimensionless number. The advisor of AD-049 maps priors in physical units to
+parameters through their kind."""
+
+
+def parameter_kind(
+    model_name: str,
+    parameter: str,
+) -> str:
+    """Return the kind of one parameter of a built-in model.
+
+    Parameters
+    ----------
+    model_name : str
+        Name of the built-in model.
+    parameter : str
+        Name of one of its parameters.
+
+    Returns
+    -------
+    str
+        One of ``PARAMETER_KIND_NAMES``.
+
+    Raises
+    ------
+    ValueError
+        If the model or the parameter is unknown.
+    """
+    kinds = PARAMETER_KINDS.get(model_name)
+
+    if kinds is None:
+        raise ValueError(f"Unknown model: {model_name}")
+
+    if parameter not in kinds:
+        raise ValueError(
+            f"Model {model_name!r} has no parameter {parameter!r}."
+        )
+
+    return kinds[parameter]
 
 
 def parameter_names(
