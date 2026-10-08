@@ -9,6 +9,15 @@ and the project follows Semantic Versioning in spirit.
 
 ## [Unreleased]
 
+---
+
+## [0.5.1] - 2026-10-08
+
+This release lets BayMorph use the noise products of a preparation made by
+an earlier release when the code that computes them is unchanged.
+Configurations and products of 0.5.0 run unchanged; a checkpoint still
+resumes only under the release that wrote it.
+
 ### Fixed
 
 * A new BayMorph release no longer rejects, by itself, the sky correlation
@@ -256,7 +265,8 @@ products of 0.3.0 must be updated: see "Upgrading from 0.3.0" below.
 
 ---
 
-[Unreleased]: https://github.com/carlocannarozzophd/BayMorph/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/carlocannarozzophd/BayMorph/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.5.1
 [0.5.0]: https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.5.0
 [0.4.0]: https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.4.0
 [0.3.0]: https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.3.0
