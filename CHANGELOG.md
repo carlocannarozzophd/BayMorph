@@ -9,6 +9,15 @@ and the project follows Semantic Versioning in spirit.
 
 ## [Unreleased]
 
+### Fixed
+
+* A new BayMorph release no longer rejects, by itself, the sky correlation
+  of a preparation and its nearest-neighbour factorization. They are
+  accepted when the code that computes them and the versions of NumPy and
+  SciPy are unchanged, and the BayMorph version that made them stays
+  recorded with them. Products of an earlier schema, or computed by other
+  code, are still rejected.
+
 ---
 
 ## [0.5.0] - 2026-10-07

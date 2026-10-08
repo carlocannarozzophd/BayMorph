@@ -44,6 +44,7 @@ from baymorph.pipeline.noise_calibration import (
     validate_correlated_noise_calibration_estimator,
     validate_correlated_noise_calibration_sources,
 )
+from baymorph.pipeline.prepared_identity import validate_generator_identity
 
 
 DEFAULT_VECCHIA_FACTORIZATION_DIRECTORY = "correlated_gaussian_vecchia"
@@ -69,6 +70,14 @@ SUPPORTED_VECCHIA_NEIGHBOR_ORDERS = (
     VALIDATION_VECCHIA_NEIGHBORS,
 )
 DEFAULT_MIN_CONDITIONAL_VARIANCE = 1.0e-12
+# The version label of BayMorph and the source of this module, which persists
+# and authenticates the bundle, are provenance: they are recorded in the
+# manifest but not compared. The factorization is fixed by the builder module,
+# by the inputs and settings that the manifest binds, and by the numerical
+# runtime, which are compared.
+VECCHIA_PROVENANCE_FIELDS = frozenset(
+    {"baymorph_version", "pipeline_source_sha256"}
+)
 VECCHIA_PUBLICATION_WAIT_SECONDS = 5.0
 VECCHIA_PUBLICATION_POLL_SECONDS = 0.05
 
@@ -430,11 +439,16 @@ def _validate_manifest_structure(manifest: Mapping[str, Any]) -> None:
         "neighbor_policy": VECCHIA_NEIGHBOR_POLICY,
         "distance_metric": VECCHIA_DISTANCE_METRIC,
         "tie_break": VECCHIA_TIE_BREAK,
-        "generator_identity": _generator_identity(),
     }
     for key, expected in identity.items():
         if manifest.get(key) != expected:
             raise ValueError(f"Vecchia manifest has stale or invalid {key}.")
+    validate_generator_identity(
+        manifest.get("generator_identity"),
+        _generator_identity(),
+        provenance_fields=VECCHIA_PROVENANCE_FIELDS,
+        product="Vecchia factorization",
+    )
 
     array_specs = manifest.get("arrays")
     if not isinstance(array_specs, Mapping) or set(array_specs) != set(_ARRAY_FILES):

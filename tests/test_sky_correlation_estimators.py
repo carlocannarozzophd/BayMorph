@@ -35,6 +35,7 @@ from baymorph.pipeline.noise_calibration import (
     load_correlated_noise_calibration,
     save_correlated_noise_calibration,
     validate_correlated_noise_calibration_estimator,
+    validate_correlated_noise_calibration_sources,
 )
 
 SHAPE = (400, 400)
@@ -444,3 +445,64 @@ def test_the_field_separated_estimator_requires_the_validated_growth(
             _declaring("field_separated"),
             save=False,
         )
+
+
+# ---------------------------------------------------------------------------
+# Producer identity
+# ---------------------------------------------------------------------------
+
+
+def _calibration_of_the_products(monkeypatch):
+    """Return a calibration and the preparation products that it measured."""
+    products = _products(FIELD_SEPARATED_GROWTH_PIXELS)
+    monkeypatch.setattr(
+        noise_calibration,
+        "load_image_preparation_products",
+        lambda config: products,
+    )
+    calibration = build_correlated_noise_calibration(
+        _declaring(None),
+        save=False,
+    )
+
+    return calibration, products
+
+
+def test_a_calibration_of_another_release_with_the_same_code_is_accepted(
+    monkeypatch,
+):
+    """The version label and the persistence source are provenance only."""
+    calibration, products = _calibration_of_the_products(monkeypatch)
+    identity = calibration.metadata["generator_identity"]
+    identity["baymorph_version"] = "0.3.0"
+    identity["pipeline_source_sha256"] = "0" * 64
+
+    validate_correlated_noise_calibration_sources(calibration, products)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "core_source_sha256",
+        "estimators",
+        "numpy_version",
+        "scipy_version",
+    ],
+)
+def test_a_calibration_of_other_estimator_code_or_runtime_is_rejected(
+    monkeypatch,
+    field,
+):
+    calibration, products = _calibration_of_the_products(monkeypatch)
+    calibration.metadata["generator_identity"][field] = "other"
+
+    with pytest.raises(ValueError, match=f"another implementation.*{field}"):
+        validate_correlated_noise_calibration_sources(calibration, products)
+
+
+def test_a_calibration_without_its_version_label_is_rejected(monkeypatch):
+    calibration, products = _calibration_of_the_products(monkeypatch)
+    del calibration.metadata["generator_identity"]["baymorph_version"]
+
+    with pytest.raises(ValueError, match="incomplete or unknown generator"):
+        validate_correlated_noise_calibration_sources(calibration, products)

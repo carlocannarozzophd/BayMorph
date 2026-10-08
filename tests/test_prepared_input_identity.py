@@ -14,6 +14,7 @@ from baymorph.pipeline.config import resolve_config
 from baymorph.pipeline.prepared_identity import (
     PREPARED_INPUT_IDENTITY_VERSION,
     build_prepared_input_identity,
+    validate_generator_identity,
     validate_prepared_input_identity,
 )
 
@@ -273,3 +274,59 @@ def test_build_rejects_conflicting_mask_paths(tmp_path):
         match=r"mask_path.*external_mask_path|external_mask_path.*mask_path",
     ):
         build_prepared_input_identity(config)
+
+
+_CURRENT_GENERATOR = {
+    "core_source_sha256": "a" * 64,
+    "package_version": "0.5.0",
+}
+
+
+def test_generator_identity_ignores_only_its_provenance_fields():
+    """A new version label alone must not invalidate a derived product."""
+    validate_generator_identity(
+        {**_CURRENT_GENERATOR, "package_version": "0.3.0"},
+        _CURRENT_GENERATOR,
+        provenance_fields={"package_version"},
+        product="Test product",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Test product was made by .*\(different core_source_sha256\)",
+    ):
+        validate_generator_identity(
+            {**_CURRENT_GENERATOR, "core_source_sha256": "b" * 64},
+            _CURRENT_GENERATOR,
+            provenance_fields={"package_version"},
+            product="Test product",
+        )
+
+
+@pytest.mark.parametrize(
+    "saved",
+    [
+        None,
+        ["core_source_sha256", "package_version"],
+        {"core_source_sha256": "a" * 64},
+        {**_CURRENT_GENERATOR, "extra": 1},
+    ],
+)
+def test_generator_identity_must_hold_exactly_the_current_fields(saved):
+    with pytest.raises(ValueError, match="incomplete or unknown generator"):
+        validate_generator_identity(
+            saved,
+            _CURRENT_GENERATOR,
+            provenance_fields={"package_version"},
+            product="Test product",
+        )
+
+
+def test_generator_identity_rejects_unknown_provenance_fields():
+    with pytest.raises(ValueError, match="not fields of its generator"):
+        validate_generator_identity(
+            _CURRENT_GENERATOR,
+            _CURRENT_GENERATOR,
+            provenance_fields={"pakage_version"},
+            product="Test product",
+        )

@@ -25,10 +25,25 @@ from baymorph.pipeline.image_preparation import (
 from baymorph.pipeline.outputs import (
     pipeline_paths,
 )
+from baymorph.pipeline.prepared_identity import (
+    validate_generator_identity,
+)
 
 
 DEFAULT_CORRELATED_NOISE_FILENAME = (
     "correlated_gaussian_noise.npz"
+)
+
+# The version label of BayMorph and the source of this module, which loads the
+# inputs and persists the calibration, are provenance: they are recorded with
+# the calibration but not compared. The kernel is fixed by the estimator
+# module, by the inputs that the source fingerprints bind, and by the
+# numerical runtime, which are compared.
+CALIBRATION_PROVENANCE_FIELDS = frozenset(
+    {
+        "baymorph_version",
+        "pipeline_source_sha256",
+    }
 )
 
 
@@ -414,7 +429,13 @@ def validate_correlated_noise_calibration_sources(
     calibration: CorrelatedGaussianNoiseCalibration,
     products,
 ) -> None:
-    """Reject calibration metadata stale for current prepared inputs."""
+    """Reject calibration metadata stale for current prepared inputs.
+
+    The calibration must have the current schema and match the current
+    cutout, prepared image, sky mask and fitting mask. Its generator identity
+    must match the current estimator module and numerical runtime; the fields
+    of ``CALIBRATION_PROVENANCE_FIELDS`` are provenance and are not compared.
+    """
     if calibration.metadata.get(
         "schema_version"
     ) != CALIBRATION_SCHEMA_VERSION:
@@ -435,16 +456,14 @@ def validate_correlated_noise_calibration_sources(
             "cutout, prepared image, sky mask, and fitting mask."
         )
 
-    expected_generator = (
-        _correlated_noise_calibration_generator_identity()
+    validate_generator_identity(
+        calibration.metadata.get(
+            "generator_identity"
+        ),
+        _correlated_noise_calibration_generator_identity(),
+        provenance_fields=CALIBRATION_PROVENANCE_FIELDS,
+        product="Correlated-noise calibration",
     )
-    if calibration.metadata.get(
-        "generator_identity"
-    ) != expected_generator:
-        raise ValueError(
-            "Correlated-noise calibration generator identity does not "
-            "match the current implementation and numerical runtime."
-        )
 
 
 def _correlated_noise_calibration_generator_identity(

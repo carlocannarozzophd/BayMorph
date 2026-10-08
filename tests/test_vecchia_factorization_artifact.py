@@ -565,3 +565,126 @@ def test_calibration_of_another_estimator_is_rejected(
         artifacts.build_vecchia_factorization_artifact(
             config
         )
+
+
+def _build_recording(
+    monkeypatch,
+    config,
+    edit,
+    provenance_fields=None,
+):
+    """Build an artifact as a builder of another generator identity would."""
+    recorded = edit(artifacts._generator_identity())
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            artifacts,
+            "_generator_identity",
+            lambda: recorded,
+        )
+
+        if provenance_fields is not None:
+            patch.setattr(
+                artifacts,
+                "VECCHIA_PROVENANCE_FIELDS",
+                frozenset(provenance_fields),
+            )
+
+        return artifacts.build_vecchia_factorization_artifact(
+            config
+        )
+
+
+def test_another_release_with_the_same_builder_code_is_accepted(
+    artifact_environment,
+    monkeypatch,
+):
+    """The version label and the persistence source are provenance only."""
+    config, _ = artifact_environment(
+        "release"
+    )
+    built = _build_recording(
+        monkeypatch,
+        config,
+        lambda identity: {
+            **identity,
+            "baymorph_version": "0.3.0",
+            "pipeline_source_sha256": "0" * 64,
+        },
+    )
+
+    loaded = artifacts.load_vecchia_factorization_artifact(
+        config
+    )
+    manifest = artifacts.load_vecchia_factorization_manifest(
+        config
+    )
+
+    np.testing.assert_array_equal(
+        loaded.weights,
+        built.weights,
+    )
+    assert manifest["generator_identity"]["baymorph_version"] == "0.3.0"
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "core_source_sha256",
+        "numpy_version",
+        "scipy_version",
+    ],
+)
+def test_other_builder_code_or_runtime_is_stale(
+    artifact_environment,
+    monkeypatch,
+    field,
+):
+    """The builder source and the numerical runtime still bind an artifact."""
+    config, _ = artifact_environment(
+        f"runtime-{field}"
+    )
+    _build_recording(
+        monkeypatch,
+        config,
+        lambda identity: {
+            **identity,
+            field: "other",
+        },
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=f"another implementation.*{field}",
+    ):
+        artifacts.load_vecchia_factorization_artifact(
+            config
+        )
+
+
+def test_an_incomplete_generator_identity_is_rejected(
+    artifact_environment,
+    monkeypatch,
+):
+    """A manifest without its version label fails closed."""
+    config, _ = artifact_environment(
+        "incomplete"
+    )
+    _build_recording(
+        monkeypatch,
+        config,
+        lambda identity: {
+            key: value
+            for key, value in identity.items()
+            if key != "baymorph_version"
+        },
+        provenance_fields={"pipeline_source_sha256"},
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="incomplete or unknown generator identity",
+    ):
+        artifacts.load_vecchia_factorization_artifact(
+            config
+        )

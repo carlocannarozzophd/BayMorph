@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from importlib import metadata
 from pathlib import Path
 from typing import Any
@@ -493,8 +493,74 @@ def validate_prepared_input_identity(
     )
 
 
+def validate_generator_identity(
+    saved: Any,
+    current: Mapping[str, Any],
+    *,
+    provenance_fields: Collection[str],
+    product: str,
+) -> None:
+    """Reject a derived product made by other computing code or runtime.
+
+    A generator identity records what made a persisted product of the
+    preparation. Its fields other than ``provenance_fields`` fix the numbers
+    of the product, such as the source of the module that computes them and
+    the versions of NumPy and SciPy, and must equal those of the current
+    runtime. The provenance fields, such as the version label of BayMorph and
+    the source of the module that persists the product, are recorded but not
+    compared: a release whose computing code is unchanged makes the same
+    product. The saved identity must hold exactly the fields of the current
+    one.
+
+    Parameters
+    ----------
+    saved : Any
+        Generator identity recorded in the persisted product.
+    current : mapping
+        Generator identity of the current implementation and runtime.
+    provenance_fields : collection of str
+        Fields of ``current`` that are recorded but not compared.
+    product : str
+        Name of the product in error messages.
+
+    Raises
+    ------
+    ValueError
+        If the saved identity is not a mapping, does not hold exactly the
+        fields of the current identity, or differs from it outside the
+        provenance fields.
+    """
+    unknown = sorted(set(provenance_fields) - set(current))
+
+    if unknown:
+        raise ValueError(
+            f"{product}: provenance fields {unknown} are not fields of its "
+            "generator identity."
+        )
+
+    if not isinstance(saved, Mapping) or set(saved) != set(current):
+        raise ValueError(
+            f"{product} has an incomplete or unknown generator identity. "
+            "Build it in a new output namespace."
+        )
+
+    changed = sorted(
+        key
+        for key in current
+        if key not in provenance_fields and saved[key] != current[key]
+    )
+
+    if changed:
+        raise ValueError(
+            f"{product} was made by another implementation or numerical "
+            f"runtime (different {', '.join(changed)}). Build it in a new "
+            "output namespace."
+        )
+
+
 __all__ = [
     "PREPARED_INPUT_IDENTITY_VERSION",
     "build_prepared_input_identity",
+    "validate_generator_identity",
     "validate_prepared_input_identity",
 ]
