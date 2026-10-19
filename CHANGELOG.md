@@ -9,6 +9,14 @@ and the project follows Semantic Versioning in spirit.
 
 ## [Unreleased]
 
+### Changed
+
+* A command that fails while it runs prints its error on one line,
+  `baymorph: error: …`, and exits with status 1, also when a file is not
+  FITS. Options that are invalid or do not go together still exit with
+  status 2, now after the usage of their own command rather than of
+  `baymorph`.
+
 ---
 
 ## [0.5.1] - 2026-10-08

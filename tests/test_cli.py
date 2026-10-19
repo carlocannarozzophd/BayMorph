@@ -103,6 +103,7 @@ def test_init_command_creates_project_tree(
 def test_init_rejects_nonempty_directory_without_force(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The init command refuses to overwrite a non-empty directory."""
     project = tmp_path / "project"
@@ -122,10 +123,66 @@ def test_init_rejects_nonempty_directory_without_force(
         ],
     )
 
-    with pytest.raises(
-        SystemExit,
-    ):
-        main()
+    assert main() == 1
+    assert "Project directory is not empty" in capsys.readouterr().err
+
+
+def test_a_runtime_error_prints_one_line_and_exits_1(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A failing command prints its error on one line, without the usage."""
+    missing_path = tmp_path / "missing.fits"
+
+    assert main(["config", str(missing_path), "--target-center"]) == 1
+
+    error = capsys.readouterr().err
+
+    assert error.startswith("baymorph: error: ")
+    assert error.count("\n") == 1
+    assert "usage:" not in error
+
+
+def test_a_corrupt_fits_file_is_a_runtime_error(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A file that is not FITS fails with exit status 1, not a traceback."""
+    fits_path = tmp_path / "corrupt.fits"
+    fits_path.write_bytes(b"not a FITS file")
+
+    assert main(["config", str(fits_path), "--target-center"]) == 1
+    assert capsys.readouterr().err.startswith("baymorph: error: ")
+
+
+def test_a_usage_error_shows_the_usage_of_its_command(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An invalid combination of options exits 2 with the command usage."""
+    fits_path = tmp_path / "galaxy.fits"
+
+    _write_fits(fits_path)
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            [
+                "config",
+                str(fits_path),
+                "--target-center",
+                "--target-x",
+                "14.5",
+                "--target-y",
+                "9.5",
+            ]
+        )
+
+    assert raised.value.code == 2
+
+    error = capsys.readouterr().err
+
+    assert "usage: baymorph config" in error
+    assert "--target-center cannot be combined" in error
 
 
 def test_config_command_writes_yaml_with_explicit_center(
@@ -272,8 +329,10 @@ def test_config_command_requires_complete_target_seed(
 
     with pytest.raises(
         SystemExit,
-    ):
+    ) as raised:
         main()
+
+    assert raised.value.code == 2
 
 
 def test_config_command_rejects_conflicting_target_modes(
@@ -301,8 +360,10 @@ def test_config_command_rejects_conflicting_target_modes(
 
     with pytest.raises(
         SystemExit,
-    ):
+    ) as raised:
         main()
+
+    assert raised.value.code == 2
 
 
 def test_make_config_from_fits_is_top_level_public_api() -> None:
@@ -694,9 +755,10 @@ def test_config_command_rejects_ambiguous_options(
         ],
     )
 
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit) as raised:
         main()
 
+    assert raised.value.code == 2
     assert message in capsys.readouterr().err
     assert not output_path.exists()
     assert advisor_stages == []

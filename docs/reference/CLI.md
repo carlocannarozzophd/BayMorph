@@ -105,3 +105,11 @@ diagnostics. See [The Runner](../guide/RUNNER.md).
 | --- | --- |
 | `config_path` | YAML configuration to execute. |
 | `--no-diagnostics` | Fit without generating the configured diagnostics. |
+
+## Exit status
+
+| Status | Meaning |
+| --- | --- |
+| `0` | The command succeeded. |
+| `1` | The command failed while it ran, for example because a file is missing or is not a FITS file, or a configuration is invalid. The error is printed on one line, `baymorph: error: …`. |
+| `2` | The options are invalid or do not go together, for example `--target-center` with `--target-x`. The error is printed after the usage of the command. |

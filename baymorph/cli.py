@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import shutil
+import sys
+from collections.abc import Sequence
 from importlib import metadata, resources
 from pathlib import Path
 from typing import Any
@@ -16,6 +18,14 @@ from baymorph.runner import BayMorphRunner
 
 
 _RESOURCE_PACKAGE = "baymorph.resources"
+
+
+class UsageError(ValueError):
+    """An invalid combination of command-line options.
+
+    It is reported with the usage of the command and the exit status 2,
+    like the errors that argparse finds itself.
+    """
 
 
 def _package_version() -> str:
@@ -139,7 +149,7 @@ def _target_position_from_args(
             args.target_x is not None
             or args.target_y is not None
         ):
-            raise ValueError(
+            raise UsageError(
                 "--target-center cannot be combined with "
                 "--target-x or --target-y."
             )
@@ -150,7 +160,7 @@ def _target_position_from_args(
         args.target_x is None
         and args.target_y is None
     ):
-        raise ValueError(
+        raise UsageError(
             "Specify either --target-center or both "
             "--target-x and --target-y."
         )
@@ -159,7 +169,7 @@ def _target_position_from_args(
         args.target_x is None
         or args.target_y is None
     ):
-        raise ValueError(
+        raise UsageError(
             "--target-x and --target-y must be supplied together."
         )
 
@@ -179,7 +189,7 @@ def _models_from_args(
     ]
 
     if any(not name for name in models):
-        raise ValueError(
+        raise UsageError(
             "Model names must be non-empty."
         )
 
@@ -192,7 +202,7 @@ def _models_from_args(
     )
 
     if duplicates:
-        raise ValueError(
+        raise UsageError(
             f"--model names {duplicates} more than once."
         )
 
@@ -231,14 +241,14 @@ def _model_priors_from_args(
 
         if not separator:
             if len(models) > 1:
-                raise ValueError(
+                raise UsageError(
                     f"With several --model options, name the model of each "
                     f"prior: --uniform-prior MODEL.{text} LOWER UPPER."
                 )
 
             model_name = models[0]
         elif model_name not in models:
-            raise ValueError(
+            raise UsageError(
                 f"The prior {text!r} names the model {model_name!r}, which "
                 f"is not among the requested models {models}."
             )
@@ -246,7 +256,7 @@ def _model_priors_from_args(
         name = parameter_name.strip()
 
         if not name:
-            raise ValueError(
+            raise UsageError(
                 "Prior parameter names must be non-empty."
             )
 
@@ -256,7 +266,7 @@ def _model_priors_from_args(
         )
 
         if name in model_priors:
-            raise ValueError(
+            raise UsageError(
                 f"Duplicate prior supplied for parameter {name!r} of model "
                 f"{model_name!r}."
             )
@@ -352,12 +362,12 @@ def _command_config(
         ("--resampling-variance-factor", args.resampling_variance_factor),
     ):
         if value is not None and value is not False:
-            raise ValueError(
+            raise UsageError(
                 f"{option} requires --advise."
             )
 
     if len(models) > 1:
-        raise ValueError(
+        raise UsageError(
             "Several --model options require --advise: without it the "
             "configuration holds one model."
         )
@@ -539,6 +549,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     examples_parser.set_defaults(
         handler=_command_examples,
+        command_parser=examples_parser,
     )
 
     init_parser = subparsers.add_parser(
@@ -556,6 +567,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     init_parser.set_defaults(
         handler=_command_init,
+        command_parser=init_parser,
     )
 
     config_parser = subparsers.add_parser(
@@ -761,6 +773,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     config_parser.set_defaults(
         handler=_command_config,
+        command_parser=config_parser,
     )
 
     run_parser = subparsers.add_parser(
@@ -784,26 +797,46 @@ def _build_parser() -> argparse.ArgumentParser:
 
     run_parser.set_defaults(
         handler=_command_run,
+        command_parser=run_parser,
     )
 
     return parser
 
 
-def main() -> int:
-    """Run the BayMorph command-line interface."""
+def main(
+    argv: Sequence[str] | None = None,
+) -> int:
+    """Run the BayMorph command-line interface.
+
+    Parameters
+    ----------
+    argv : sequence of str, optional
+        Arguments after the program name. Default: those of the process.
+
+    Returns
+    -------
+    int
+        Exit status: 0 on success, 1 when the command fails. An invalid
+        combination of options exits with status 2 and the usage of the
+        command, as argparse does.
+    """
     parser = _build_parser()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         return int(args.handler(args))
+    except UsageError as error:
+        args.command_parser.error(str(error))
     except (
-        FileExistsError,
-        FileNotFoundError,
+        OSError,
         RuntimeError,
         TypeError,
         ValueError,
     ) as error:
-        parser.error(str(error))
+        print(
+            f"baymorph: error: {error}",
+            file=sys.stderr,
+        )
 
     return 1
 
