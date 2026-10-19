@@ -15,10 +15,12 @@ from baymorph.core.header_metadata import (
     STATUSES,
     USABLE_STATUSES,
     Formula,
+    canonical_unit,
     ensure_linear_pixels,
     load_header_conventions,
     normalize_declared_unit,
     read_header,
+    validate_declarations,
 )
 from baymorph.core.observation import ObservationMetadata
 
@@ -417,7 +419,7 @@ def test_the_reading_serializes_and_reports() -> None:
 
 
 def test_usable_statuses_are_the_certain_ones() -> None:
-    assert USABLE_STATUSES == {"explicit", "convention", "derived"}
+    assert USABLE_STATUSES == {"declared", "explicit", "convention", "derived"}
 
 
 @pytest.mark.parametrize(
@@ -499,7 +501,7 @@ def test_the_hst_zeropoint_is_derived_for_count_rates_of_drizzled_products() -> 
 @pytest.mark.parametrize(
     ("bunit", "filename", "observed"),
     [
-        ("ELECTRONS", "j8xi01abq_flt.fits", "BUNIT = 'ELECTRONS'"),
+        ("ELECTRONS", "j8xi01abq_flt.fits", "the image unit is 'ELECTRONS'"),
         ("ELECTRONS/S", "ibxl01abq_flt.fits", "FILENAME = 'ibxl01abq_flt.fits'"),
     ],
 )
@@ -556,9 +558,9 @@ def test_an_sdss_frame_states_its_zeropoint_and_reads_no_gain() -> None:
     assert reading.value("photometric_system") == "AB"
     assert reading["gain"].status == "missing"
 
-    # The fields that BayMorph always read keep header values only.
+    # The metadata hold the usable values of the reading.
     metadata = ObservationMetadata.from_header(header, image_shape=(100, 100))
-    assert metadata.zeropoint is None
+    assert metadata.zeropoint == pytest.approx(22.5)
 
 
 def test_a_legacy_survey_coadd_states_its_zeropoint_but_no_system() -> None:
@@ -807,3 +809,171 @@ def test_a_user_convention_derives_a_quantity_under_its_requirements(
 
     assert zeropoint.status == "ambiguous"
     assert "BUNIT is 'ADU'" in zeropoint.note
+
+
+def _convention_lines(*quantity_lines: str, match: tuple[str, ...] = ()) -> str:
+    """Return a user convention that recognizes the example camera."""
+    return "\n".join(
+        [
+            "name: example_camera",
+            "title: Example camera",
+            "priority: 50",
+            "references:",
+            "  - Example camera manual, section 4.",
+            "match:",
+            *(
+                match
+                or ("  - keyword: INSTRUME", "    equals: example camera")
+            ),
+            "quantities:",
+            *quantity_lines,
+        ]
+    )
+
+
+def test_a_declared_value_takes_the_place_of_the_header_reading() -> None:
+    """The declaration is used, and the reading of the header stays beside it."""
+    reading = read_header(
+        _coadd_header(),
+        declarations={
+            "zeropoint": 29.8,
+            "photometric_system": "ab",
+            "exposure_time": 2100,
+            "saturation": 75.0,
+        },
+    )
+    zeropoint = reading["zeropoint"]
+
+    assert zeropoint.status == "declared"
+    assert zeropoint.usable
+    assert zeropoint.value == 29.8
+    assert zeropoint.unit == "mag"
+    assert zeropoint.source == "configuration"
+    assert zeropoint.header.status == "convention"
+    assert zeropoint.header.value == 30.0
+    assert reading.value("photometric_system") == "AB"
+    assert reading.value("exposure_time") == 2100.0
+    assert reading["saturation"].unit == "image"
+    assert reading["saturation"].header.status == "ambiguous"
+    assert (
+        reading.as_dict()["quantities"]["zeropoint"]["header"]["value"] == 30.0
+    )
+    assert "header" not in reading.as_dict()["quantities"]["gain"]
+
+    report = reading.report()
+
+    assert "declared" in report
+    assert "data.calibration" in report
+
+
+def test_a_declared_zeropoint_sets_aside_the_system_and_error_of_the_header() -> None:
+    """The system and the error of the header belong to its own zeropoint."""
+    reading = read_header(_coadd_header(), declarations={"zeropoint": 29.8})
+
+    assert reading.value("zeropoint") == 29.8
+    assert reading["photometric_system"].status == "missing"
+    assert reading["photometric_system"].header.value == "AB"
+    assert reading["zeropoint_error"].status == "missing"
+
+
+def test_a_declared_unit_unlocks_the_hst_zeropoint() -> None:
+    """A rate declared for a drizzled image in ELECTRONS meets the convention."""
+    primary, image = _hst_headers(bunit="ELECTRONS")
+
+    assert read_header(image, primary_header=primary)["zeropoint"].status == (
+        "ambiguous"
+    )
+
+    reading = read_header(
+        image, primary_header=primary, declarations={"image_unit": "electrons/s"}
+    )
+
+    assert reading["image_unit"].status == "declared"
+    assert reading["image_unit"].header.value == "ELECTRONS"
+    assert reading["zeropoint"].status == "derived"
+    assert reading["zeropoint"].value == pytest.approx(
+        -2.5 * math.log10(7.0e-20) - 5.0 * math.log10(8045.0) - 2.408,
+        rel=1e-12,
+    )
+    assert reading.value("photometric_system") == "AB"
+
+
+def test_a_declared_unit_unlike_the_header_sets_aside_values_in_image_units() -> None:
+    """Header values in the units of the image no longer hold under another unit."""
+    header = _coadd_header()
+
+    assert read_header(header)["sky_level"].status == "convention"
+
+    same = read_header(header, declarations={"image_unit": "adu / sec"})
+    other = read_header(header, declarations={"image_unit": "ADU"})
+
+    assert same["sky_level"].status == "convention"
+    assert other["sky_level"].status == "ambiguous"
+    assert other["sky_level"].value is None
+    assert other["sky_level"].raw_value == 250.0
+    assert "declared as 'ADU'" in other["sky_level"].note
+
+
+@pytest.mark.parametrize(
+    ("text", "other"),
+    [
+        ("ELECTRONS/S", "electron/s"),
+        ("electrons / sec", "e-/s"),
+        ("ADU/s", "adu/second"),
+        ("MJy/sr", "mjy / sr"),
+    ],
+)
+def test_units_are_compared_in_one_form(text, other) -> None:
+    assert canonical_unit(text) == canonical_unit(other)
+
+
+@pytest.mark.parametrize(
+    ("declarations", "message"),
+    [
+        ({"seeing": 1.0}, "cannot declare"),
+        ({"photometric_system": "AB"}, "declare data.calibration.zeropoint"),
+        ({"zeropoint": 25.0, "photometric_system": "ST"}, "one of AB, Vega"),
+        ({"zeropoint": True}, "must be a number"),
+        ({"zeropoint": float("nan")}, "must be finite"),
+        ({"gain": -1.0}, "must be positive"),
+        ({"exposure_time": 0}, "must be positive"),
+        ({"saturation": "high"}, "must be a number"),
+        ({"image_unit": "  "}, "non-empty unit"),
+        ("ADU", "must map quantities"),
+    ],
+)
+def test_declarations_are_checked(declarations, message) -> None:
+    with pytest.raises(ValueError, match=message):
+        validate_declarations(declarations)
+
+
+def test_a_requirement_tests_only_a_quantity_read_before(tmp_path) -> None:
+    """A requirement on a later quantity, or a match on a quantity, is refused."""
+    path = tmp_path / "camera.yaml"
+    path.write_text(
+        _convention_lines(
+            "  exposure_time:",
+            "    keywords: [EXPTIME]",
+            "    unit: s",
+            "    requires:",
+            "      - quantity: zeropoint",
+            "        present: true",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="read before"):
+        load_header_conventions([path])
+
+    path.write_text(
+        _convention_lines(
+            "  exposure_time:",
+            "    keywords: [EXPTIME]",
+            "    unit: s",
+            match=("  - quantity: image_unit", "    equals: ADU"),
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="only a requirement"):
+        load_header_conventions([path])

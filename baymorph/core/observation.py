@@ -69,10 +69,11 @@ class ObservationMetadata:
         Valid two-dimensional celestial WCS.
     header_reading : HeaderReading, optional
         Every quantity read from the header through the conventions of
-        AD-049, with its provenance and status. The fields above keep the
-        header values that BayMorph has always read, whatever their status;
-        only the reading says whether a value may be used without a
-        declaration of the user.
+        AD-049, with its provenance and status, and the declarations of
+        AD-053 when the observation was opened with them. The fields
+        above hold only usable values, read or declared; a value whose
+        status is ambiguous, conflicting or missing is None there and
+        stays in the reading, with its raw header value.
     """
 
     width: int
@@ -431,8 +432,8 @@ def _optional_positive_int(header: fits.Header | None, keyword: str) -> int | No
 
 
 def _header_number(reading: HeaderReading, name: str) -> float | None:
-    """Return the finite number that the header holds for a quantity."""
-    value = reading[name].raw_value
+    """Return the usable finite number of a quantity, read or declared."""
+    value = reading.value(name)
 
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
@@ -443,8 +444,8 @@ def _header_number(reading: HeaderReading, name: str) -> float | None:
 
 
 def _header_text(reading: HeaderReading, name: str) -> str | None:
-    """Return the non-empty string that the header holds for a quantity."""
-    value = reading[name].raw_value
+    """Return the usable non-empty text of a quantity, read or declared."""
+    value = reading.value(name)
 
     if not isinstance(value, str) or not value.strip():
         return None

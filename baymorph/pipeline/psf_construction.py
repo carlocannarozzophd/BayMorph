@@ -819,7 +819,9 @@ def run_psf_construction_from_config(config: str | Path | dict[str, Any]) -> np.
         resolved = config
 
     observation = open_observation(
-        resolved["data"]["image_path"], hdu=resolved["data"].get("hdu")
+        resolved["data"]["image_path"],
+        hdu=resolved["data"].get("hdu"),
+        declarations=resolved["data"].get("calibration"),
     )
     image = observation.image
 

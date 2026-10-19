@@ -35,6 +35,27 @@ follows from others, such as the AB zeropoint of HST from `PHOTFLAM` and
 `PHOTPLAM`, BayMorph derives it only for the products its documentation
 covers, here the drizzled images in electrons per second.
 
+When the header lacks a calibration quantity, or states it wrongly, declare
+it in `data.calibration`. A drizzled image whose header says `ELECTRONS`
+while its pixels are electrons per second, and whose `PHOTFLAM` is 0, takes:
+
+```yaml
+data:
+  image_path: data/galaxy_drz.fits
+  calibration:
+    image_unit: electron/s
+    zeropoint: 25.94        # from the documentation of the product
+    photometric_system: AB
+```
+
+A declared value takes the place of the header reading, with the status
+`declared`, and the header reading stays recorded beside it in every report.
+A declared unit also reaches the quantities that depend on it, so declaring
+`electron/s` lets the HST convention derive the zeropoint from `PHOTFLAM` and
+`PHOTPLAM` when they are valid. The quantities that may be declared are
+listed in the [configuration reference](../reference/CONFIGURATION.md).
+A joint fit does not accept `data.calibration` yet.
+
 BayMorph fits pixel values that are linear in flux. It refuses an image
 whose header declares another encoding, such as a Pan-STARRS stack, whose
 values are compressed through `asinh` (`BSOFTEN` and `BOFFSET`); the FITS

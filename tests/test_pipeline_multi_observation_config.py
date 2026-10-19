@@ -1299,3 +1299,28 @@ def test_joint_inference_rejects_a_declared_hdu(
             _multi_observation_config(),
             base_dir=tmp_path,
         )
+
+
+def test_joint_inference_rejects_declared_calibration(
+    tmp_path: Path,
+):
+    """Joint inference does not read data.calibration yet, so it is refused."""
+    for band, data in (
+        ("g", {"image_path": "data/g.fits"}),
+        ("r", {"image_path": "data/r.fits", "calibration": {"zeropoint": 25.0}}),
+    ):
+        (tmp_path / f"{band}.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "object": {"name": f"target_{band}"},
+                    "data": data,
+                    "outputs": {"root": "runs"},
+                }
+            )
+        )
+
+    with pytest.raises(ValueError, match="declares data.calibration"):
+        resolve_multi_observation_observation_configs(
+            _multi_observation_config(),
+            base_dir=tmp_path,
+        )

@@ -136,6 +136,13 @@ def resolve_multi_observation_observation_configs(
                 "the single SCI, IMAGE or image extension."
             )
 
+        if item["data"].get("calibration"):
+            raise ValueError(
+                f"Observation '{observation}' declares data.calibration, which "
+                "joint inference does not read yet (AD-053); remove it, or fit "
+                "the observation alone."
+            )
+
         _joint_likelihood(
             item["fit"]["likelihood"],
             f"Observation '{observation}' resolved fit.likelihood",

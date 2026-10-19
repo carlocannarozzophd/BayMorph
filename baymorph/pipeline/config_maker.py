@@ -278,10 +278,9 @@ def _gaussian_psf_config(
         )
 
         if fwhm_pixels is None:
-            if (
-                observation.metadata.seeing_fwhm is not None
-                and observation.metadata.seeing_fwhm_unit is None
-            ):
+            reading = observation.metadata.header_reading
+
+            if reading is not None and reading["psf_fwhm"].status == "ambiguous":
                 reason = "the FITS FWHM unit is unresolved"
             else:
                 reason = "no explicitly convertible FITS FWHM is available"

@@ -14,6 +14,8 @@ reading to hold.
 Every quantity of a reading carries its provenance, the keyword and the
 convention, and one status:
 
+- ``declared``: the configuration declares the value (AD-053), which takes
+  the place of the reading of the header; that reading is kept beside it;
 - ``explicit``: the header itself declares the value and, for a number, its
   unit;
 - ``convention``: a matched convention documents the meaning and unit, or
@@ -24,8 +26,12 @@ convention, and one status:
 - ``conflicting``: present under several keywords with different values;
 - ``missing``: absent.
 
-No unit is ever inferred from a value. Only the first three statuses give a
+No unit is ever inferred from a value. Only the first four statuses give a
 usable value; the others keep the raw header value for inspection only.
+
+A convention may require the value of a quantity read before, such as the
+unit of the image, so that a declared unit reaches the quantities that
+depend on it.
 """
 
 from __future__ import annotations
@@ -35,7 +41,7 @@ import math
 import operator
 import warnings
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
@@ -48,15 +54,39 @@ from astropy.io import fits
 from astropy.wcs import WCS, FITSFixedWarning
 from astropy.wcs.utils import proj_plane_pixel_scales
 
-STATUSES = ("explicit", "convention", "derived", "ambiguous", "conflicting", "missing")
+STATUSES = (
+    "declared",
+    "explicit",
+    "convention",
+    "derived",
+    "ambiguous",
+    "conflicting",
+    "missing",
+)
 """Statuses of a quantity read from a header, from the most to the least
 certain."""
 
-USABLE_STATUSES = frozenset({"explicit", "convention", "derived"})
-"""Statuses whose value may be used without a declaration of the user."""
+USABLE_STATUSES = frozenset({"declared", "explicit", "convention", "derived"})
+"""Statuses whose value may be used."""
 
 IMAGE_UNIT = "image"
 """Unit of a quantity expressed in the units of the image pixels (BUNIT)."""
+
+DECLARABLE_QUANTITIES: Mapping[str, str | None] = MappingProxyType(
+    {
+        "image_unit": None,
+        "zeropoint": "mag",
+        "photometric_system": None,
+        "exposure_time": "s",
+        "gain": "electron/adu",
+        "saturation": IMAGE_UNIT,
+    }
+)
+"""Quantities that a configuration may declare in ``data.calibration``
+(AD-053), with the unit of a declared value."""
+
+PHOTOMETRIC_SYSTEMS = ("AB", "Vega")
+"""Photometric systems that a declared zeropoint may name."""
 
 LINEAR_ENCODING = "linear"
 """Encoding of pixel values that are linear in flux, the only one fitted."""
@@ -185,7 +215,15 @@ _CONVENTION_KEYS = frozenset(
     {"name", "title", "priority", "references", "match", "quantities"}
 )
 _RULE_KEYS = frozenset(
-    {"keyword", "keyword_prefix", "present", "equals", "startswith", "contains"}
+    {
+        "keyword",
+        "keyword_prefix",
+        "quantity",
+        "present",
+        "equals",
+        "startswith",
+        "contains",
+    }
 )
 _RELATIVE_AGREEMENT = 1e-9
 
@@ -387,57 +425,107 @@ class QuantitySpec:
 
 @dataclass(frozen=True)
 class MatchRule:
-    """One rule that recognizes a convention in a header."""
+    """One rule on a header, or on a quantity resolved before.
+
+    A rule with ``quantity`` tests the usable value of a quantity already
+    declared or read, instead of a keyword, and appears only among the
+    requirements of a later quantity. The unit of the image is compared in
+    the form of :func:`canonical_unit`, so ``ELECTRONS/S`` and
+    ``electron/s`` agree.
+    """
 
     keyword: str | None = None
     keyword_prefix: str | None = None
+    quantity: str | None = None
     present: bool = False
     equals: str | None = None
     startswith: str | None = None
     contains: str | None = None
 
-    def matches(self, lookup: _HeaderLookup) -> bool:
-        """Return whether the header satisfies the rule."""
+    def matches(
+        self,
+        lookup: _HeaderLookup,
+        resolved: Mapping[str, HeaderQuantity] | None = None,
+    ) -> bool:
+        """Return whether the header, or a resolved quantity, satisfies the rule."""
         if self.keyword_prefix is not None:
             prefix = self.keyword_prefix.upper()
             return any(keyword.startswith(prefix) for keyword in lookup.keywords())
+
+        if self.quantity is not None:
+            quantity = (resolved or {}).get(self.quantity)
+
+            if quantity is None or not quantity.usable:
+                return False
+
+            return self.present or self._test(quantity.value)
 
         found = lookup.find(self.keyword)
 
         if found is None:
             return False
 
-        if self.present:
-            return True
+        return self.present or self._test(found.value)
 
-        text = str(found.value).strip().lower()
+    def _test(self, value: Any) -> bool:
+        """Return whether a value passes the test of the rule."""
+        text = self._comparable(value)
 
         if self.equals is not None:
-            return text == self.equals.strip().lower()
+            return text == self._comparable(self.equals)
 
         if self.startswith is not None:
-            return text.startswith(self.startswith.strip().lower())
+            return text.startswith(self._comparable(self.startswith))
 
-        return self.contains.strip().lower() in text
+        return self._comparable(self.contains) in text
+
+    def _comparable(self, value: Any) -> str:
+        """Return the form in which the rule compares a value."""
+        if self.quantity == "image_unit":
+            return canonical_unit(value)
+
+        return str(value).strip().lower()
 
     def describe(self) -> str:
         """Describe the rule in words, for the notes of a reading."""
         if self.keyword_prefix is not None:
             return f"a keyword starts with {self.keyword_prefix!r}"
 
+        subject = (
+            self.keyword
+            if self.quantity is None
+            else "the " + self.quantity.replace("_", " ")
+        )
+
         if self.present:
-            return f"{self.keyword} is present"
+            return f"{subject} is present"
 
         if self.equals is not None:
-            return f"{self.keyword} is {self.equals!r}"
+            return f"{subject} is {self.equals!r}"
 
         if self.startswith is not None:
-            return f"{self.keyword} starts with {self.startswith!r}"
+            return f"{subject} starts with {self.startswith!r}"
 
-        return f"{self.keyword} contains {self.contains!r}"
+        return f"{subject} contains {self.contains!r}"
 
-    def observe(self, lookup: _HeaderLookup) -> str:
-        """Describe what the header holds for the keyword of the rule."""
+    def observe(
+        self,
+        lookup: _HeaderLookup,
+        resolved: Mapping[str, HeaderQuantity] | None = None,
+    ) -> str:
+        """Describe what the header holds for the keyword or quantity of the rule."""
+        if self.quantity is not None:
+            subject = "the " + self.quantity.replace("_", " ")
+            quantity = (resolved or {}).get(self.quantity)
+
+            if quantity is None or quantity.status == "missing":
+                return f"{subject} is not known"
+
+            if not quantity.usable:
+                return f"{subject} is {quantity.status}"
+
+            return f"{subject} is {quantity.value!r} ({quantity.status})"
+
         if self.keyword is None:
             return f"no keyword starts with {self.keyword_prefix!r}"
 
@@ -506,10 +594,11 @@ class HeaderQuantity:
     keyword : str, optional
         Keyword the value was read from; for a derived value, the keywords
         of its formula, separated by commas.
-    source : {"image", "primary", "image, primary"}, optional
+    source : {"image", "primary", "image, primary", "configuration"}, optional
         Header that holds the keyword: the header of the image HDU, or the
         primary header inherited by an image stored in an extension; both
-        when the keywords of a formula come from both.
+        when the keywords of a formula come from both. ``"configuration"``
+        for a declared value.
     convention : str, optional
         Convention that read the value.
     raw_value : object or None
@@ -520,6 +609,8 @@ class HeaderQuantity:
     candidates : tuple of (str, object)
         Every keyword of the convention found in the header, with its raw
         value, in priority order.
+    header : HeaderQuantity, optional
+        For a declared value, the reading of the header that it replaced.
     """
 
     name: str
@@ -532,15 +623,20 @@ class HeaderQuantity:
     raw_value: Any = None
     note: str | None = None
     candidates: tuple[tuple[str, Any], ...] = ()
+    header: HeaderQuantity | None = None
 
     @property
     def usable(self) -> bool:
-        """Whether the value may be used without a declaration of the user."""
+        """Whether the value may be used."""
         return self.status in USABLE_STATUSES
 
     def as_dict(self) -> dict[str, Any]:
-        """Return a JSON-serializable description of the quantity."""
-        return {
+        """Return a JSON-serializable description of the quantity.
+
+        A declared value carries the reading of the header it replaced under
+        ``header``.
+        """
+        description = {
             "status": self.status,
             "value": _json_value(self.value),
             "unit": self.unit,
@@ -550,6 +646,11 @@ class HeaderQuantity:
             "raw_value": _json_value(self.raw_value),
             "note": self.note,
         }
+
+        if self.header is not None:
+            description["header"] = self.header.as_dict()
+
+        return description
 
 
 @dataclass(frozen=True)
@@ -602,7 +703,9 @@ class HeaderReading:
             shown = quantity.value if quantity.usable else quantity.raw_value
             source = quantity.keyword or "-"
 
-            if quantity.convention is not None:
+            if quantity.status == "declared":
+                source = "data.calibration"
+            elif quantity.convention is not None:
                 source = f"{source} ({quantity.convention})"
 
             rows.append(
@@ -686,8 +789,19 @@ def read_header(
     *,
     primary_header: fits.Header | None = None,
     conventions: Sequence[HeaderConvention] | None = None,
+    declarations: Mapping[str, Any] | None = None,
 ) -> HeaderReading:
     """Read the quantities of an observation from its FITS header.
+
+    Quantities are read in the order of ``QUANTITIES``, so a requirement of a
+    convention may test a quantity read or declared before. A declared value
+    takes the place of the reading of the header, which it keeps under
+    ``header`` (AD-053). Two consequences follow. A declared image unit that
+    differs from a usable unit of the header leaves no header value in the
+    units of the image established. A declared zeropoint takes its
+    photometric system only from the declarations, and the zeropoint error
+    of the header, which belongs to the zeropoint of the header, is set
+    aside.
 
     Parameters
     ----------
@@ -699,16 +813,25 @@ def read_header(
     conventions : sequence of HeaderConvention, optional
         Conventions to consult. The conventions distributed with BayMorph are
         used by default.
+    declarations : mapping, optional
+        Values of ``data.calibration``, validated by
+        :func:`validate_declarations`.
 
     Returns
     -------
     HeaderReading
         Every quantity, with its provenance and status, and the celestial
         WCS of ``header``.
+
+    Raises
+    ------
+    ValueError
+        If the declarations are not valid.
     """
     if conventions is None:
         conventions = load_header_conventions()
 
+    declared = validate_declarations(declarations)
     lookup = _HeaderLookup(header, primary_header)
     matched = sorted(
         (convention for convention in conventions if convention.matches(lookup)),
@@ -718,7 +841,29 @@ def read_header(
     quantities: dict[str, HeaderQuantity] = {}
 
     for name, definition in QUANTITIES.items():
-        quantities[name] = _read_quantity(definition, matched, lookup)
+        reading = _read_quantity(definition, matched, lookup, quantities)
+
+        if name in declared:
+            reading = _declared_quantity(name, declared[name], reading)
+        elif name in _ZEROPOINT_QUALIFIERS and "zeropoint" in declared:
+            reading = HeaderQuantity(
+                name=name,
+                status="missing",
+                note=(
+                    "The zeropoint is declared, and this quantity of the header "
+                    "belongs to the zeropoint of the header."
+                    + (
+                        " Declare it in data.calibration.photometric_system."
+                        if name == "photometric_system"
+                        else ""
+                    )
+                ),
+                header=reading,
+            )
+
+        quantities[name] = reading
+
+    _set_aside_image_unit_values(quantities)
 
     celestial_wcs = read_celestial_wcs(header)
     quantities["pixel_scale"] = _read_pixel_scale_quantity(celestial_wcs)
@@ -728,6 +873,186 @@ def read_header(
         quantities=quantities,
         celestial_wcs=celestial_wcs,
     )
+
+
+_ZEROPOINT_QUALIFIERS = ("zeropoint_error", "photometric_system")
+"""Quantities of the header that belong to the zeropoint of the header."""
+
+
+def validate_declarations(declarations: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Validate the declarations of ``data.calibration`` (AD-053).
+
+    Parameters
+    ----------
+    declarations : mapping or None
+        Declared values by quantity: ``image_unit`` (text), ``zeropoint`` (a
+        finite number, in magnitudes), ``photometric_system`` (AB or Vega,
+        only together with ``zeropoint``), and the positive numbers
+        ``exposure_time`` (s), ``gain`` (electrons per ADU of the detector)
+        and ``saturation`` (in the units of the image).
+
+    Returns
+    -------
+    dict
+        The declarations in the order of ``DECLARABLE_QUANTITIES``, with
+        numbers as floats and the photometric system written as in
+        ``PHOTOMETRIC_SYSTEMS``.
+
+    Raises
+    ------
+    ValueError
+        If a quantity cannot be declared or its value is not valid.
+    """
+    if declarations is None:
+        return {}
+
+    if not isinstance(declarations, Mapping):
+        raise ValueError(
+            "data.calibration must map quantities to their declared values."
+        )
+
+    unknown = sorted(
+        str(name) for name in set(declarations) - set(DECLARABLE_QUANTITIES)
+    )
+
+    if unknown:
+        raise ValueError(
+            f"data.calibration cannot declare {unknown}; it declares "
+            + ", ".join(DECLARABLE_QUANTITIES)
+            + "."
+        )
+
+    validated: dict[str, Any] = {}
+
+    for name in DECLARABLE_QUANTITIES:
+        if name not in declarations:
+            continue
+
+        value = declarations[name]
+        key = f"data.calibration.{name}"
+
+        if name == "image_unit":
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{key} must be a non-empty unit, such as 'ADU/s'.")
+
+            validated[name] = value.strip()
+        elif name == "photometric_system":
+            systems = {system.lower(): system for system in PHOTOMETRIC_SYSTEMS}
+
+            if not isinstance(value, str) or value.strip().lower() not in systems:
+                raise ValueError(
+                    f"{key} must be one of " + ", ".join(PHOTOMETRIC_SYSTEMS) + "."
+                )
+
+            if "zeropoint" not in declarations:
+                raise ValueError(
+                    f"{key} qualifies a declared zeropoint; declare "
+                    "data.calibration.zeropoint with it."
+                )
+
+            validated[name] = systems[value.strip().lower()]
+        else:
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(f"{key} must be a number.")
+
+            number = float(value)
+
+            if not math.isfinite(number):
+                raise ValueError(f"{key} must be finite.")
+
+            if name != "zeropoint" and number <= 0.0:
+                raise ValueError(f"{key} must be positive.")
+
+            validated[name] = number
+
+    return validated
+
+
+def canonical_unit(text: Any) -> str:
+    """Return a unit written in one form, for comparing units.
+
+    Case and spaces are ignored, ``electrons`` and ``e-`` read as
+    ``electron``, and a second after a slash, written ``sec`` or ``second``,
+    as ``s``; so ``ELECTRONS/S``, ``electrons / sec`` and ``e-/s`` agree.
+
+    Parameters
+    ----------
+    text : object
+        A unit as a header or a declaration writes it.
+
+    Returns
+    -------
+    str
+        The unit in canonical form.
+    """
+    unit = str(text).strip().lower().replace(" ", "")
+    unit = unit.replace("electrons", "electron").replace("e-", "electron")
+
+    for spelling in ("/seconds", "/second", "/sec"):
+        unit = unit.replace(spelling, "/s")
+
+    return unit
+
+
+def _declared_quantity(name: str, value: Any, header: HeaderQuantity) -> HeaderQuantity:
+    """Return a declared quantity, which keeps the reading of the header."""
+    if header.status == "missing":
+        was = "the header does not hold it"
+    else:
+        shown = header.value if header.usable else header.raw_value
+        was = f"the header reading is {shown!r} ({header.status}"
+        was += f", {header.keyword})" if header.keyword else ")"
+
+    return HeaderQuantity(
+        name=name,
+        status="declared",
+        value=value,
+        unit=DECLARABLE_QUANTITIES[name],
+        source="configuration",
+        raw_value=header.raw_value if header.raw_value is not None else header.value,
+        note=f"Declared in data.calibration; {was}.",
+        header=header,
+    )
+
+
+def _set_aside_image_unit_values(quantities: dict[str, HeaderQuantity]) -> None:
+    """Make ambiguous the header values in image units under another unit.
+
+    A declared image unit that differs from a usable unit of the header says
+    that the pixels are not in the unit the header wrote, so a value that the
+    header gives in the units of the image is no longer established.
+    """
+    image_unit = quantities["image_unit"]
+
+    if image_unit.status != "declared" or image_unit.header is None:
+        return
+
+    header_unit = image_unit.header
+
+    if not header_unit.usable or canonical_unit(header_unit.value) == canonical_unit(
+        image_unit.value
+    ):
+        return
+
+    for name, quantity in quantities.items():
+        if (
+            quantity.status in ("explicit", "convention", "derived")
+            and quantity.unit == IMAGE_UNIT
+        ):
+            quantities[name] = replace(
+                quantity,
+                status="ambiguous",
+                value=None,
+                raw_value=(
+                    quantity.value if quantity.raw_value is None else quantity.raw_value
+                ),
+                note=_join_notes(
+                    quantity.note,
+                    f"The image unit is declared as {image_unit.value!r} while "
+                    f"the header gives {header_unit.value!r}, so this value in "
+                    "the units of the image is no longer established.",
+                ),
+            )
 
 
 def ensure_linear_pixels(reading: HeaderReading, *, image: str) -> None:
@@ -776,6 +1101,7 @@ def _read_quantity(
     definition: QuantityDefinition,
     conventions: Sequence[HeaderConvention],
     lookup: _HeaderLookup,
+    resolved: Mapping[str, HeaderQuantity],
 ) -> HeaderQuantity:
     """Read one quantity through the first convention that finds it.
 
@@ -783,7 +1109,8 @@ def _read_quantity(
     or every keyword of its formula; a value it states without keywords is
     found as soon as the convention matches. The convention that finds the
     quantity decides it, and its requirements decide whether the reading
-    holds.
+    holds; a requirement may test a quantity in ``resolved``, read or
+    declared before.
     """
     for convention in conventions:
         spec = convention.quantities.get(definition.name)
@@ -804,10 +1131,14 @@ def _read_quantity(
         if spec.formula is not None and len(found) < len(names):
             continue
 
-        unmet = next((rule for rule in spec.requires if not rule.matches(lookup)), None)
+        unmet = next(
+            (rule for rule in spec.requires if not rule.matches(lookup, resolved)), None
+        )
 
         if unmet is not None:
-            return _resolve_unmet(definition, spec, found, convention, unmet, lookup)
+            return _resolve_unmet(
+                definition, spec, found, convention, unmet, lookup, resolved
+            )
 
         if spec.formula is not None:
             return _resolve_formula(definition, spec, found, convention)
@@ -830,6 +1161,7 @@ def _resolve_unmet(
     convention: HeaderConvention,
     rule: MatchRule,
     lookup: _HeaderLookup,
+    resolved: Mapping[str, HeaderQuantity],
 ) -> HeaderQuantity:
     """Report a quantity whose convention does not hold for this header."""
     raw_value = None
@@ -853,7 +1185,7 @@ def _resolve_unmet(
         note=_join_notes(
             spec.note,
             f"The convention reads it only when {rule.describe()}, and "
-            f"{rule.observe(lookup)}.",
+            f"{rule.observe(lookup, resolved)}.",
         ),
         candidates=tuple((card.keyword, card.value) for card in found),
     )
@@ -1390,8 +1722,14 @@ def _parse_rules(match: Any, *, source: str) -> tuple[MatchRule, ...] | None:
     return tuple(_parse_rule(rule, source=source) for rule in match)
 
 
-def _parse_rule(rule: Any, *, source: str) -> MatchRule:
-    """Validate one rule on a header, of a match or of a requirement."""
+def _parse_rule(
+    rule: Any, *, source: str, before: Sequence[str] | None = None
+) -> MatchRule:
+    """Validate one rule on a header, of a match or of a requirement.
+
+    ``before`` lists the quantities read before the one whose requirement
+    the rule is; only such a requirement may test a quantity.
+    """
     if not isinstance(rule, Mapping) or set(rule) - _RULE_KEYS:
         raise ValueError(f"Header convention {source}: malformed rule {rule!r}.")
 
@@ -1404,12 +1742,27 @@ def _parse_rule(rule: Any, *, source: str) -> MatchRule:
         return MatchRule(keyword_prefix=str(rule["keyword_prefix"]))
 
     tests = set(rule) & {"present", "equals", "startswith", "contains"}
+    subjects = set(rule) & {"keyword", "quantity"}
 
-    if "keyword" not in rule or len(tests) != 1:
+    if len(subjects) != 1 or len(tests) != 1:
         raise ValueError(
-            f"Header convention {source}: a rule needs a keyword and exactly "
-            "one of present, equals, startswith or contains."
+            f"Header convention {source}: a rule needs a keyword or a quantity "
+            "and exactly one of present, equals, startswith or contains."
         )
+
+    if "quantity" in rule:
+        if before is None:
+            raise ValueError(
+                f"Header convention {source}: only a requirement may test a "
+                "quantity."
+            )
+
+        if rule["quantity"] not in before:
+            raise ValueError(
+                f"Header convention {source}: a requirement may test only a "
+                f"quantity read before, among {', '.join(before)}; got "
+                f"{rule['quantity']!r}."
+            )
 
     if "present" in rule and rule["present"] is not True:
         raise ValueError(
@@ -1417,7 +1770,8 @@ def _parse_rule(rule: Any, *, source: str) -> MatchRule:
         )
 
     return MatchRule(
-        keyword=str(rule["keyword"]),
+        keyword=None if "keyword" not in rule else str(rule["keyword"]),
+        quantity=None if "quantity" not in rule else str(rule["quantity"]),
         present="present" in rule,
         equals=_optional_text(rule.get("equals")),
         startswith=_optional_text(rule.get("startswith")),
@@ -1521,8 +1875,18 @@ def _parse_spec(
         note=_optional_text(spec.get("note")),
         value=value,
         formula=formula,
-        requires=tuple(_parse_rule(rule, source=source) for rule in requires),
+        requires=tuple(
+            _parse_rule(rule, source=source, before=_quantities_before(definition))
+            for rule in requires
+        ),
     )
+
+
+def _quantities_before(definition: QuantityDefinition) -> tuple[str, ...]:
+    """Return the quantities read before one, in the order of reading."""
+    names = tuple(QUANTITIES)
+
+    return names[: names.index(definition.name)]
 
 
 def _parse_value(
@@ -1623,9 +1987,11 @@ def _format_value(value: Any) -> str:
 
 
 __all__ = [
+    "DECLARABLE_QUANTITIES",
     "DERIVED_QUANTITIES",
     "IMAGE_UNIT",
     "LINEAR_ENCODING",
+    "PHOTOMETRIC_SYSTEMS",
     "QUANTITIES",
     "STATUSES",
     "USABLE_STATUSES",
@@ -1635,10 +2001,12 @@ __all__ = [
     "HeaderReading",
     "QuantityDefinition",
     "QuantitySpec",
+    "canonical_unit",
     "ensure_linear_pixels",
     "load_header_conventions",
     "normalize_declared_unit",
     "read_celestial_wcs",
     "read_header",
     "read_pixel_scales",
+    "validate_declarations",
 ]

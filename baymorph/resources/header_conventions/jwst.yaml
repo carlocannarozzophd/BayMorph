@@ -14,7 +14,7 @@ quantities:
     formula: "-2.5 * log10(1e6 * PIXAR_SR / 3631)"
     unit: mag
     requires:
-      - keyword: BUNIT
+      - quantity: image_unit
         equals: MJy/sr
       - keyword: FILENAME
         contains: _i2d
@@ -25,7 +25,7 @@ quantities:
   photometric_system:
     value: AB
     requires:
-      - keyword: BUNIT
+      - quantity: image_unit
         equals: MJy/sr
       - keyword: FILENAME
         contains: _i2d

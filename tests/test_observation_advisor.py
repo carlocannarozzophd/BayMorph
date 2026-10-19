@@ -135,12 +135,8 @@ def test_advisor_inspects_target_without_creating_outputs(
         )
     )
 
-    assert (
-        inspection.seeing_fwhm
-        == pytest.approx(
-            0.8
-        )
-    )
+    # A FWHM without a unit is not established, so it is not used.
+    assert inspection.seeing_fwhm is None
 
     assert (
         inspection.target_flux_scale
@@ -1034,7 +1030,7 @@ def test_header_fwhm_formatter_preserves_unit_uncertainty() -> None:
 def test_advisor_summary_reports_units_and_saturation_as_header_metadata(
     tmp_path,
 ) -> None:
-    """Unit-dependent header metadata must be shown without being trusted."""
+    """Saturation is shown only when its unit is that of the image."""
     fits_path = tmp_path / "galaxy.fits"
 
     _write_source_fits(
@@ -1046,8 +1042,8 @@ def test_advisor_summary_reports_units_and_saturation_as_header_metadata(
         target_position="center",
     ).summary()
 
-    assert "Image units (BUNIT): counts" in summary
-    assert "Saturation keyword: unavailable" in summary
+    assert "Image units: counts" in summary
+    assert "Saturation: not established" in summary
     assert "Noise sigma (whole-image diagnostic)" in summary
 
     fits.setval(
@@ -1061,10 +1057,7 @@ def test_advisor_summary_reports_units_and_saturation_as_header_metadata(
         target_position="center",
     ).summary()
 
-    assert (
-        "Saturation keyword: 30000 (header units, not unit-checked)"
-        in summary
-    )
+    assert "Saturation: 30000 in the units of the image" in summary
 
 
 def test_prior_guidance_covers_every_model_by_kind(

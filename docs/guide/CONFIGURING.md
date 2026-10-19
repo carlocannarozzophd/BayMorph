@@ -133,7 +133,8 @@ proposal.write(accept=True)
 `header_report()` lists each quantity read from the header with its value,
 unit, status and source. A quantity whose unit or meaning the header does
 not establish is marked `ambiguous` and is never used: a unit is never
-guessed from a value.
+guessed from a value. Declare such a quantity in `data.calibration` (see
+[The image](IMAGE.md)); its status then becomes `declared`.
 
 The Advisor first prepares the image and builds its PSF, the inputs of the
 observation model that come before any prior; the fit then reuses them. To

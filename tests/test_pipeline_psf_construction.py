@@ -627,7 +627,7 @@ def test_psf_construction_rejects_low_snr_candidates(
     monkeypatch.setattr(
         module,
         "open_observation",
-        lambda _, hdu=None: observation,
+        lambda _, hdu=None, declarations=None: observation,
     )
     monkeypatch.setattr(
         module,
@@ -790,7 +790,7 @@ def test_psf_construction_fails_when_all_candidates_fail_snr(
     monkeypatch.setattr(
         module,
         "open_observation",
-        lambda _, hdu=None: observation,
+        lambda _, hdu=None, declarations=None: observation,
     )
     monkeypatch.setattr(
         module,

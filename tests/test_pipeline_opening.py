@@ -19,6 +19,7 @@ import baymorph.pipeline.prepared_identity as prepared_identity
 from baymorph.core.observation import Observation
 from baymorph.pipeline import pipeline_paths, resolve_config
 from baymorph.pipeline.config import resolve_runtime_config
+from baymorph.pipeline.observation_metadata import observation_metadata_dict
 from baymorph.pipeline.prepared_identity import (
     _preparation_config_identity,
     build_prepared_input_identity,
@@ -187,6 +188,50 @@ def test_an_opening_reads_the_header_and_builds_the_wcs_once(
     assert metadata.wcs is metadata.header_reading.celestial_wcs
     assert metadata.pixel_scale == pytest.approx(0.21)
     assert metadata.header_reading.value("pixel_scale") == pytest.approx(0.21)
+
+
+def test_declarations_reach_the_metadata_of_the_same_image(tmp_path, monkeypatch):
+    """Declared values reach the metadata; the image is read and kept once."""
+    _reuse_every_file(monkeypatch)
+    image_path = tmp_path / "coadd.fits"
+    _write_coadd(image_path)
+    declarations = {"zeropoint": 27.5, "photometric_system": "AB", "saturation": 90.0}
+
+    plain = opening.open_observation(image_path)
+    declared = opening.open_observation(image_path, declarations=declarations)
+
+    assert declared.image is plain.image
+    assert plain.metadata.zeropoint is None
+    assert declared.metadata.zeropoint == 27.5
+    assert declared.metadata.saturation == 90.0
+    assert declared.metadata.header_reading["zeropoint"].status == "declared"
+    assert declared.image.header_reading["zeropoint"].status == "ambiguous"
+    assert observation_metadata_dict(declared)["header_reading"]["quantities"][
+        "zeropoint"
+    ]["header"]["status"] == "ambiguous"
+
+
+def test_declarations_stay_out_of_the_identity_of_the_preparation(tmp_path):
+    """Declared calibration changes no prepared product, so no identity."""
+    image_path = tmp_path / "coadd.fits"
+    _write_coadd(image_path)
+    config = {
+        "object": {"name": "declared"},
+        "data": {
+            "image_path": str(image_path),
+            "target_position": {"x": 32, "y": 32},
+            "cutout": {"mode": "fixed", "size": 48},
+        },
+        "outputs": {"root": str(tmp_path / "outputs"), "overwrite": False},
+    }
+    declared = {
+        **config,
+        "data": {**config["data"], "calibration": {"zeropoint": 27.5}},
+    }
+
+    assert build_prepared_input_identity(
+        resolve_config(declared)
+    ) == build_prepared_input_identity(resolve_config(config))
 
 
 def test_a_small_file_is_read_at_every_opening(tmp_path):

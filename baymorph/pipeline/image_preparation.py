@@ -1225,7 +1225,9 @@ def prepare_real_image_from_config(
     make_output_tree(resolved)
 
     observation = open_observation(
-        resolved["data"]["image_path"], hdu=resolved["data"].get("hdu")
+        resolved["data"]["image_path"],
+        hdu=resolved["data"].get("hdu"),
+        declarations=resolved["data"].get("calibration"),
     )
 
     resolved = resolve_runtime_config(resolved, observation)

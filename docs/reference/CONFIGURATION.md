@@ -44,6 +44,13 @@ instance, is ignored, and the default backend is used.
 | `data.mask_path` | path | `null` | External FITS mask, `True` (non-zero) for excluded pixels, on the grid of the image. |
 | `data.mask_mode` | `union`, `exact`, `replace` | `union` | `union` excludes the detected contaminants and the external mask; `exact` and `replace`, which are equivalent, use the external mask instead of the detected contaminants and require `data.mask_path`. |
 | `data.pixel_scale` | number, `auto` or `null` | `null` | Pixel scale in arcsec. `null` or `auto` reads it from the FITS metadata. It is used for reporting, not by the fit. |
+| `data.calibration` | mapping | none | Calibration quantities declared where the header does not give them, or gives them wrongly. A declared value takes the place of the header reading, which stays recorded beside it; declarations change no prepared product. Not accepted in a joint configuration. |
+| `data.calibration.image_unit` | string | | Unit of the pixel values, such as `ADU/s` or `electron/s`. A unit that differs from the header leaves the header values given in the units of the image unestablished. |
+| `data.calibration.zeropoint` | number | | Zeropoint in magnitudes, with m = zeropoint − 2.5 log10(flux in image units). The system and the zeropoint error of the header are then set aside. |
+| `data.calibration.photometric_system` | `AB` or `Vega` | | System of the declared zeropoint; only together with `zeropoint`. |
+| `data.calibration.exposure_time` | number | | Exposure time in seconds. |
+| `data.calibration.gain` | number | | Gain of the detector in electrons per ADU, the meaning of the `GAIN` keyword; not the effective gain of `fit.likelihood.effective_gain`. |
+| `data.calibration.saturation` | number | | Saturation level in the units of the image. |
 
 Rejected: `data.noise_map_path` and `data.psf_path`, which the
 single-observation workflow does not support, and `data.external_mask_path`,

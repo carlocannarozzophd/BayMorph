@@ -51,13 +51,13 @@ def test_observation_metadata_dict():
 
     assert metadata["pixel_scale_arcsec"] == pytest.approx(0.2)
 
-    assert metadata["seeing_fwhm"] == 0.72
+    assert metadata["seeing_fwhm"] is None
 
     assert metadata["seeing_fwhm_unit"] is None
 
     assert metadata["seeing_fwhm_arcsec"] is None
 
-    assert metadata["zeropoint"] == 30.0
+    assert metadata["zeropoint"] is None
 
     assert metadata["gain"] == 2.5
 
@@ -65,11 +65,19 @@ def test_observation_metadata_dict():
 
     assert metadata["exposure_time_s"] == 1200.0
 
-    assert metadata["total_exposure_time_s"] == 3600.0
+    assert metadata["total_exposure_time_s"] is None
 
-    assert metadata["background_header"] == 12.3
+    assert metadata["background_header"] is None
 
     assert metadata["bunit"] == "ADU"
+
+    # Values whose unit or meaning the header leaves open stay in the reading.
+    quantities = metadata["header_reading"]["quantities"]
+
+    assert quantities["psf_fwhm"]["raw_value"] == 0.72
+    assert quantities["zeropoint"]["raw_value"] == 30.0
+    assert quantities["total_exposure_time"]["raw_value"] == 3600.0
+    assert quantities["header_background"]["raw_value"] == 12.3
 
 
 def test_explicit_arcsec_fwhm_is_persisted_safely() -> None:

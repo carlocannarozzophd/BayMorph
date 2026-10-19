@@ -9,7 +9,25 @@ and the project follows Semantic Versioning in spirit.
 
 ## [Unreleased]
 
+### Added
+
+* `data.calibration` declares the calibration quantities that the header
+  does not give, or gives wrongly: the image unit, the zeropoint and its
+  photometric system, the exposure time, the gain of the detector and the
+  saturation level. A declared value takes the place of the header reading
+  with the status `declared`, the header reading stays recorded beside it,
+  and a declared unit reaches the quantities that depend on it, such as the
+  zeropoint of an HST image. Declarations change no prepared product. A
+  joint configuration does not accept them yet.
+
 ### Changed
+
+* The metadata of an observation (`ObservationMetadata`) hold only values
+  that the header reading establishes or that are declared. A value whose
+  unit or meaning the header leaves open, such as a saturation level in ADU
+  in an image in ADU/s, is `None` there and stays in the header reading with
+  its raw value; it is no longer used as if it were in the units of the
+  image.
 
 * A command that fails while it runs prints its error on one line,
   `baymorph: error: …`, and exits with status 1, also when a file is not

@@ -91,7 +91,9 @@ def run_real_fit_from_config(config: str | Path | dict[str, Any]):
 
     try:
         observation = open_observation(
-            resolved["data"]["image_path"], hdu=resolved["data"].get("hdu")
+            resolved["data"]["image_path"],
+            hdu=resolved["data"].get("hdu"),
+            declarations=resolved["data"].get("calibration"),
         )
     except FileNotFoundError:
         observation = None

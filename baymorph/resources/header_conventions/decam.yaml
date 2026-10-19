@@ -17,7 +17,7 @@ quantities:
     keywords: [MAGZERO]
     unit: mag
     requires:
-      - keyword: BUNIT
+      - quantity: image_unit
         equals: adu
     note: "The pipeline gives MAGZERO for pixel values in ADU, m = MAGZERO -
       2.5 log10(ADU), and MAGZPT for ADU per second; its reference catalogue

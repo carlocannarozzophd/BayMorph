@@ -68,7 +68,7 @@ def make_image(
 
 
 def test_metadata_reads_complete_header() -> None:
-    """All supported metadata should be read from a complete header."""
+    """The metadata hold the usable values; the others stay in the reading."""
     metadata = ObservationMetadata.from_header(make_complete_header())
 
     assert metadata.width == 1451
@@ -82,9 +82,9 @@ def test_metadata_reads_complete_header() -> None:
     assert metadata.pixel_scale == pytest.approx(0.21)
 
     assert metadata.gain == pytest.approx(9.155573901)
-    assert metadata.saturation == pytest.approx(54652.6192)
-    assert metadata.seeing_fwhm == pytest.approx(0.78812181)
-    assert metadata.zeropoint == pytest.approx(30.0)
+    assert metadata.saturation is None
+    assert metadata.seeing_fwhm is None
+    assert metadata.zeropoint is None
 
     assert metadata.filter_name == "i_SDSS"
     assert metadata.telescope == "ESO-VST"
@@ -92,8 +92,17 @@ def test_metadata_reads_complete_header() -> None:
     assert metadata.bunit == "ADU/s"
 
     assert metadata.exposure_time == pytest.approx(1.0)
-    assert metadata.total_exposure_time == pytest.approx(1000.0)
-    assert metadata.background_header == pytest.approx(533.62216185)
+    assert metadata.total_exposure_time is None
+    assert metadata.background_header is None
+
+    reading = metadata.header_reading
+
+    assert reading["saturation"].status == "conflicting"
+    assert reading["saturation"].raw_value == pytest.approx(54652.6192)
+    assert reading["psf_fwhm"].raw_value == pytest.approx(0.78812181)
+    assert reading["zeropoint"].raw_value == pytest.approx(30.0)
+    assert reading["total_exposure_time"].raw_value == pytest.approx(1000.0)
+    assert reading["header_background"].raw_value == pytest.approx(533.62216185)
 
     assert metadata.wcs is not None
 
@@ -172,13 +181,14 @@ def test_dimensions_are_required_without_image_shape() -> None:
         ObservationMetadata.from_header(fits.Header())
 
 
-def test_satlevel_has_priority_over_saturate() -> None:
-    """SATLEVEL should take precedence over SATURATE."""
+def test_disagreeing_saturation_keywords_give_no_saturation() -> None:
+    """SATLEVEL and SATURATE that disagree leave the saturation unestablished."""
     header = make_complete_header()
 
     metadata = ObservationMetadata.from_header(header)
 
-    assert metadata.saturation == pytest.approx(header["SATLEVEL"])
+    assert metadata.saturation is None
+    assert metadata.header_reading["saturation"].status == "conflicting"
 
 
 def test_saturate_is_fallback_for_missing_satlevel() -> None:
@@ -395,10 +405,11 @@ def test_fwhm_unit_requires_explicit_metadata() -> None:
         header
     )
 
-    assert metadata.seeing_fwhm == pytest.approx(
+    assert metadata.seeing_fwhm is None
+    assert metadata.seeing_fwhm_unit is None
+    assert metadata.header_reading["psf_fwhm"].raw_value == pytest.approx(
         0.78812181
     )
-    assert metadata.seeing_fwhm_unit is None
 
 
 def test_fwhm_unit_reads_explicit_header_keyword() -> None:
@@ -462,10 +473,9 @@ def test_conflicting_fwhm_unit_declarations_are_unresolved() -> None:
         header
     )
 
-    assert metadata.seeing_fwhm == pytest.approx(
-        0.8
-    )
+    assert metadata.seeing_fwhm is None
     assert metadata.seeing_fwhm_unit is None
+    assert metadata.header_reading["psf_fwhm"].status == "ambiguous"
 
 @pytest.mark.parametrize(
     (

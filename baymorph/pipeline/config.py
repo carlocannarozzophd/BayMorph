@@ -14,6 +14,7 @@ from baymorph.core.correlated_noise import (
     FIELD_SEPARATED_GROWTH_PIXELS,
     SKY_CORRELATION_ESTIMATORS,
 )
+from baymorph.core.header_metadata import validate_declarations
 from baymorph.core.observation import Observation, resolve_seeing_fwhm_pixels
 from baymorph.fitting.execution import resolve_sampler_execution
 from baymorph.likelihood.factory import normalize_likelihood_type
@@ -514,6 +515,9 @@ def validate_config(config: dict[str, Any]) -> None:
             "Config data.external_mask_path is no longer supported. "
             "Declare the curated mask under data.mask_path."
         )
+
+    if "calibration" in config["data"]:
+        validate_declarations(config["data"]["calibration"])
 
     hdu = config["data"].get("hdu")
 

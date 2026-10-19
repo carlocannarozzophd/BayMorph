@@ -1106,16 +1106,13 @@ class ObservationAdvisor:
                     inspection.seeing_fwhm, inspection.seeing_fwhm_unit
                 )
             ),
-            f"Image units (BUNIT): {inspection.bunit or 'unavailable'}",
+            f"Image units: {inspection.bunit or 'not established'}",
             (
-                "Saturation keyword: "
+                "Saturation: "
                 + (
-                    "unavailable"
+                    "not established (see the header report)"
                     if inspection.saturation is None
-                    else (
-                        f"{inspection.saturation:.6g} "
-                        "(header units, not unit-checked)"
-                    )
+                    else f"{inspection.saturation:.6g} in the units of the image"
                 )
             ),
             ("Background (whole-image diagnostic): " f"{inspection.background:.6g}"),
@@ -1325,8 +1322,9 @@ class ObservationAdvisor:
 
         if inspection.saturation is None:
             raise ValueError(
-                "Flux upper-bound calibration requires finite detector "
-                "saturation metadata."
+                "Flux upper-bound calibration requires the saturation level in "
+                "the units of the image, which the header does not establish; "
+                "declare it in data.calibration.saturation."
             )
 
         try:

@@ -162,7 +162,9 @@ def _resolve_psf_fwhm_pixels(
 
         return value, "caller_supplied_pixels"
 
-    if metadata.seeing_fwhm is None:
+    header_fwhm = _header_fwhm_value(metadata)
+
+    if header_fwhm is None:
         raise ValueError("No FITS FWHM value is available. Supply psf_fwhm_pixels.")
 
     if header_fwhm_unit is None:
@@ -174,7 +176,7 @@ def _resolve_psf_fwhm_pixels(
     normalized_unit = str(header_fwhm_unit).strip().lower()
 
     if normalized_unit == "pixels":
-        value = float(metadata.seeing_fwhm)
+        value = header_fwhm
         source = "fits_header_fwhm_declared_pixels"
     elif normalized_unit == "arcsec":
         if (
@@ -187,7 +189,7 @@ def _resolve_psf_fwhm_pixels(
                 "the FITS FWHM from arcseconds to pixels."
             )
 
-        value = float(metadata.seeing_fwhm / metadata.pixel_scale)
+        value = header_fwhm / float(metadata.pixel_scale)
         source = "fits_header_fwhm_declared_arcsec"
     else:
         raise ValueError("header_fwhm_unit must be exactly 'arcsec' or 'pixels'.")
@@ -198,6 +200,30 @@ def _resolve_psf_fwhm_pixels(
         )
 
     return value, source
+
+
+def _header_fwhm_value(metadata: ObservationMetadata) -> float | None:
+    """Return the FWHM number of the header, usable or of unestablished unit.
+
+    The caller declares its unit through ``header_fwhm_unit``, so a FWHM
+    whose unit the header leaves ambiguous is taken from the reading.
+    """
+    if metadata.seeing_fwhm is not None:
+        return float(metadata.seeing_fwhm)
+
+    if metadata.header_reading is None:
+        return None
+
+    quantity = metadata.header_reading["psf_fwhm"]
+    value = quantity.raw_value
+
+    if quantity.status != "ambiguous" or isinstance(value, bool):
+        return None
+
+    if not isinstance(value, (int, float)) or not np.isfinite(value):
+        return None
+
+    return float(value)
 
 
 def _format_optional(value: str | None) -> str:

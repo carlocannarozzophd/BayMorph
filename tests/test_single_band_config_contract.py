@@ -84,6 +84,29 @@ def test_unsupported_external_data_paths_are_rejected(
         resolve_config(config)
 
 
+def test_declared_calibration_is_checked() -> None:
+    """data.calibration accepts the declarable quantities and refuses the rest."""
+    config = _minimal_config()
+    config["data"]["calibration"] = {
+        "image_unit": "electron/s",
+        "zeropoint": 25.94,
+        "photometric_system": "AB",
+        "saturation": 80.0,
+    }
+
+    assert resolve_config(config)["data"]["calibration"]["zeropoint"] == 25.94
+
+    config["data"]["calibration"] = {"photometric_system": "AB"}
+
+    with pytest.raises(ValueError, match="data.calibration.photometric_system"):
+        resolve_config(config)
+
+    config["data"]["calibration"] = {"seeing": 0.8}
+
+    with pytest.raises(ValueError, match="cannot declare"):
+        resolve_config(config)
+
+
 def test_the_retired_external_mask_path_is_rejected() -> None:
     """data.external_mask_path is refused for every use of a configuration."""
     config = _minimal_config()
