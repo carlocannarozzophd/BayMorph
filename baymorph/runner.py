@@ -33,6 +33,8 @@ from baymorph.pipeline.multi_observation_fit import (
 from baymorph.pipeline.psf_candidates import (
     load_psf_candidates,
     psf_candidates_exist,
+    psf_candidates_provenance_exists,
+    validate_psf_candidates_provenance,
 )
 from baymorph.pipeline.psf_construction import (
     empirical_psf_exists,
@@ -597,13 +599,25 @@ class BayMorphRunner:
         """Select candidates, reusing an accepted candidate set when present.
 
         Candidates are the provenance of an accepted PSF, so they are reused
-        rather than rewritten.
+        rather than rewritten, but only when they were selected from the
+        current image and settings; otherwise the stage fails closed.
         """
         if self._reuses_products(
             config
         ) and psf_candidates_exist(
             config
         ):
+            if psf_candidates_provenance_exists(
+                config
+            ):
+                validate_psf_candidates_provenance(
+                    config
+                )
+            else:
+                self._validate_candidates_without_provenance(
+                    config
+                )
+
             return (
                 load_psf_candidates(
                     config
@@ -617,6 +631,47 @@ class BayMorphRunner:
             ),
             False,
         )
+
+    @staticmethod
+    def _validate_candidates_without_provenance(
+        config: Mapping[str, Any],
+    ) -> None:
+        """Accept candidates of an earlier release only through their PSF.
+
+        Candidates saved by BayMorph 0.5.1 and earlier record no
+        provenance. They are bound to the inputs only through the accepted
+        PSF built from them, whose provenance records their digest and the
+        settings of their selection, so they are reused only while that PSF
+        validates against the current configuration.
+
+        Raises
+        ------
+        ValueError
+            If no accepted PSF exists or it does not validate.
+        """
+        remedy = (
+            "Use a new output namespace, or set outputs.overwrite: true to "
+            "select them again."
+        )
+
+        if not empirical_psf_exists(
+            config
+        ):
+            raise ValueError(
+                "The saved PSF candidates record no provenance and no "
+                f"accepted PSF binds them to the current inputs. {remedy}"
+            )
+
+        try:
+            load_empirical_psf(
+                config
+            )
+        except ValueError as error:
+            raise ValueError(
+                "The saved PSF candidates record no provenance, and the "
+                f"accepted PSF built from them does not match the current "
+                f"inputs: {error} {remedy}"
+            ) from error
 
     def select_psf_candidates(self) -> Any:
         """Run empirical-PSF candidate selection.

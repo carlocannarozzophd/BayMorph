@@ -425,9 +425,9 @@ def test_build_sky_parameter_transforms_uses_each_cutout_wcs(
     }
 
     monkeypatch.setattr(
-        multi_observation_fit.Observation,
-        "from_fits",
-        lambda path: observations[path],
+        multi_observation_fit,
+        "open_observation",
+        lambda path, hdu=None: observations[path],
     )
 
     transforms = (
@@ -499,9 +499,9 @@ def test_build_sky_parameter_transforms_requires_wcs(
     }
 
     monkeypatch.setattr(
-        multi_observation_fit.Observation,
-        "from_fits",
-        lambda path: SimpleNamespace(
+        multi_observation_fit,
+        "open_observation",
+        lambda path, hdu=None: SimpleNamespace(
             metadata=SimpleNamespace(
                 wcs=None
             )
@@ -562,9 +562,9 @@ def test_build_sky_parameter_transforms_requires_cutout_bounds(
     }
 
     monkeypatch.setattr(
-        multi_observation_fit.Observation,
-        "from_fits",
-        lambda path: SimpleNamespace(
+        multi_observation_fit,
+        "open_observation",
+        lambda path, hdu=None: SimpleNamespace(
             metadata=SimpleNamespace(
                 wcs=wcs
             )

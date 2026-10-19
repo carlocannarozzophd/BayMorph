@@ -17,9 +17,16 @@ from baymorph.pipeline.config import (
     resolve_config,
     resolve_runtime_config,
 )
+from baymorph.pipeline.opening import (
+    REUSE_MIN_BYTES,
+    file_state,
+    open_observation,
+)
 
 
 PREPARED_INPUT_IDENTITY_VERSION = 2
+
+_CONTENT_IDENTITIES: dict[tuple, dict[str, Any]] = {}
 
 
 def sha256_file(path: str | Path) -> str:
@@ -34,33 +41,37 @@ def sha256_file(path: str | Path) -> str:
 
 
 def file_content_identity(path: Path) -> dict[str, Any]:
-    """Hash a file and reject mutation during fingerprinting."""
-    before = path.stat()
+    """Hash a file and reject mutation during fingerprinting.
+
+    The digest of a file of at least
+    :data:`baymorph.pipeline.opening.REUSE_MIN_BYTES` is computed once per
+    process and reused while the state of the file is unchanged; a smaller
+    file is hashed at every call.
+    """
+    before_state = file_state(path)
+    key = (str(path), *before_state)
+    reusable = before_state[2] >= REUSE_MIN_BYTES
+
+    if reusable and key in _CONTENT_IDENTITIES:
+        return dict(_CONTENT_IDENTITIES[key])
+
     digest = sha256_file(path)
-    after = path.stat()
+    after_state = file_state(path)
 
-    before_state = (
-        before.st_dev,
-        before.st_ino,
-        before.st_size,
-        before.st_mtime_ns,
-    )
-    after_state = (
-        after.st_dev,
-        after.st_ino,
-        after.st_size,
-        after.st_mtime_ns,
-    )
-
-    if before_state != after_state:
+    if before_state[:4] != after_state[:4]:
         raise RuntimeError(
             f"File changed while its immutable identity was built: {path}"
         )
 
-    return {
-        "size_bytes": int(after.st_size),
+    identity = {
+        "size_bytes": int(after_state[2]),
         "sha256": digest,
     }
+
+    if reusable:
+        _CONTENT_IDENTITIES[key] = identity
+
+    return dict(identity)
 
 
 def _file_identity(path: Path) -> dict[str, Any]:
@@ -122,6 +133,15 @@ def _canonical_json(value: Any) -> bytes:
         separators=(",", ":"),
         sort_keys=True,
     ).encode("utf-8")
+
+
+def canonical_json_sha256(value: Any) -> str:
+    """Return the SHA-256 digest of JSON-compatible data in canonical form.
+
+    Mappings are sorted by key and paths written as text, so equal settings
+    give equal digests whatever the order in which they were written.
+    """
+    return hashlib.sha256(_canonical_json(value)).hexdigest()
 
 
 def _array_sha256(array: np.ndarray) -> str:
@@ -330,7 +350,7 @@ def build_prepared_input_identity(
     )
 
     file_identity_before = _file_identity(image_path)
-    disk_observation = Observation.from_fits(
+    disk_observation = open_observation(
         image_path,
         hdu=resolved["data"].get("hdu"),
     )
@@ -561,6 +581,8 @@ def validate_generator_identity(
 __all__ = [
     "PREPARED_INPUT_IDENTITY_VERSION",
     "build_prepared_input_identity",
+    "canonical_json_sha256",
+    "file_content_identity",
     "validate_generator_identity",
     "validate_prepared_input_identity",
 ]

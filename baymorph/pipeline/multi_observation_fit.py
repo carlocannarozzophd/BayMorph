@@ -11,7 +11,6 @@ from typing import Any
 import numpy as np
 import yaml
 
-from baymorph.core.observation import Observation
 from baymorph.fitting import make_sampler
 from baymorph.fitting.model_factories import ObservedModelFactory
 from baymorph.fitting.multi_observation_problem import (
@@ -71,6 +70,7 @@ from baymorph.pipeline.multi_observation_config import (
     multi_observation_parameter_frame,
     resolve_multi_observation_config,
 )
+from baymorph.pipeline.opening import open_observation
 from baymorph.pipeline.real_fit import (
     _compute_fit_statistics,
     _load_psf_from_config,
@@ -914,7 +914,7 @@ def _build_sky_parameter_transforms(
                 f"observation '{observation_name}'."
             )
 
-        observation = Observation.from_fits(
+        observation = open_observation(
             image_path
         )
 

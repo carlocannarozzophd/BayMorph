@@ -16,6 +16,20 @@ and the project follows Semantic Versioning in spirit.
   FITS. Options that are invalid or do not go together still exit with
   status 2, now after the usage of their own command rather than of
   `baymorph`.
+* A FITS file of 16 MiB or more is read and hashed once per session and
+  shared by every stage, instead of five times and eight times for one
+  saved preparation. The shared image is read-only.
+
+### Fixed
+
+* The stars selected for an empirical PSF are reused only when the image,
+  its HDU and the detection and selection settings are unchanged; they
+  record them in `psf/psf_candidates_provenance.json`. Before, a run
+  reused the saved stars after any change of these settings. Stars saved
+  by an earlier release are reused only while the accepted PSF built from
+  them still matches the current inputs.
+* An accepted PSF records a declared `data.hdu`, so it is no longer reused
+  for another HDU of the same file.
 
 ---
 

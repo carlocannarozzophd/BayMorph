@@ -57,6 +57,7 @@ from baymorph.pipeline.cutout import (
     validate_plateau_cutout_containment,
 )
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
+from baymorph.pipeline.opening import open_observation
 from baymorph.pipeline.outputs import (
     make_output_tree,
     pipeline_paths,
@@ -383,7 +384,7 @@ def _validate_products_against_current_sources(
 ) -> None:
     """Verify cutout and mask semantics against immutable current sources."""
     if observation is None:
-        observation = Observation.from_fits(
+        observation = open_observation(
             config["data"]["image_path"],
             hdu=config["data"].get("hdu"),
         )
@@ -1383,7 +1384,7 @@ def prepare_real_image_from_config(
 
     make_output_tree(resolved)
 
-    observation = Observation.from_fits(
+    observation = open_observation(
         resolved["data"]["image_path"],
         hdu=resolved["data"].get("hdu"),
     )

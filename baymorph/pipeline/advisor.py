@@ -31,6 +31,7 @@ from baymorph.pipeline.image_preparation import (
     prepare_real_fits_image,
     prepare_real_image_from_config,
 )
+from baymorph.pipeline.opening import open_observation
 from baymorph.pipeline.prior_proposals import (
     ANGULAR_RANGE_ARCSEC,
     BACKGROUND_SKY_SCALE_MULTIPLE,
@@ -977,7 +978,7 @@ class ObservationAdvisor:
         tuple of float
             Validated ``(x, y)`` target position.
         """
-        observation = Observation.from_fits(self.fits_path, hdu=self.hdu)
+        observation = open_observation(self.fits_path, hdu=self.hdu)
         data = np.asarray(
             observation.image.data,
             dtype=float,
@@ -1063,7 +1064,7 @@ class ObservationAdvisor:
         """
         from baymorph.plotting.target_selector import TargetSelector
 
-        observation = Observation.from_fits(self.fits_path, hdu=self.hdu)
+        observation = open_observation(self.fits_path, hdu=self.hdu)
         data = np.asarray(
             observation.image.data,
             dtype=float,
@@ -1139,7 +1140,7 @@ class ObservationAdvisor:
         self,
     ) -> ObservationInspection:
         """Inspect metadata, image scales, and optional target morphology."""
-        observation = Observation.from_fits(self.fits_path, hdu=self.hdu)
+        observation = open_observation(self.fits_path, hdu=self.hdu)
 
         data = np.asarray(
             observation.image.data,
@@ -2416,7 +2417,7 @@ class ObservationAdvisor:
         self,
     ) -> HeaderReading:
         """Return the reading of the header of the image HDU."""
-        return Observation.from_fits(
+        return open_observation(
             self.fits_path,
             hdu=self.hdu,
         ).metadata.header_reading

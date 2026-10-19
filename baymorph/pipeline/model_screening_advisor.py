@@ -16,13 +16,13 @@ from baymorph.analysis.model_screening_features import (
     extract_model_screening_features,
 )
 from baymorph.core.observation import (
-    Observation,
     ObservationMetadata,
 )
 from baymorph.pipeline.advisor import ObservationAdvisor
 from baymorph.analysis.model_screening_classifier import (
     LinearDiscriminantScreeningClassifier,
 )
+from baymorph.pipeline.opening import open_observation
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,7 +103,7 @@ class SingleObservationModelAdvisor(ObservationAdvisor):
         ``psf_fwhm_pixels`` directly or declare whether the header value is
         expressed in ``"arcsec"`` or ``"pixels"``.
         """
-        observation = Observation.from_fits(self.fits_path, hdu=self.hdu)
+        observation = open_observation(self.fits_path, hdu=self.hdu)
         data = np.asarray(
             observation.image.data,
             dtype=float,

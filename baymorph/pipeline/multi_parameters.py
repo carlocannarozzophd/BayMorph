@@ -21,6 +21,7 @@ from baymorph.observation.background import (
     background_parameter_names,
 )
 from baymorph.pipeline.config import DEFAULT_CONFIG
+from baymorph.pipeline.opening import open_observation
 from baymorph.pipeline.prior_config import parse_prior_config
 
 
@@ -796,7 +797,7 @@ def make_multi_parameters(
 
     if parameter_frame == "sky":
         loaded_observations = {
-            observation_id: Observation.from_fits(
+            observation_id: open_observation(
                 Path(
                     observations[
                         observation_id

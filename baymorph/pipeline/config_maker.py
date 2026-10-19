@@ -20,6 +20,7 @@ from baymorph.core.observation import (
     Observation,
     resolve_seeing_fwhm_pixels,
 )
+from baymorph.pipeline.opening import open_observation
 from baymorph.pipeline.prior_config import parse_prior_config
 from baymorph.pipeline.config import (
     resolve_config,
@@ -671,7 +672,7 @@ def make_config_from_fits(
             f"FITS file not found: {fits_path}"
         )
 
-    observation = Observation.from_fits(
+    observation = open_observation(
         fits_path,
         hdu=hdu,
     )
@@ -1108,7 +1109,7 @@ def _validate_sky_frame_wcs(
 ) -> None:
     """Require a WCS for every sky-frame observation."""
     for name, fits_path in observations.items():
-        observation = Observation.from_fits(
+        observation = open_observation(
             fits_path
         )
 

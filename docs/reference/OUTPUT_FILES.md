@@ -40,6 +40,7 @@ The directory also holds intermediate arrays used by the diagnostics.
 | `psf.fits` | the PSF kernel; its `SUBPIXEL` extension holds the kernel at eleven sub-pixel phases per axis |
 | `psf_metadata.json` | how the kernel was built, and its properties |
 | `psf_candidates.json` | the stars selected for the PSF |
+| `psf_candidates_provenance.json` | the image, its HDU when declared, and the detection and selection settings the stars were selected with; a later run reuses the stars only when these are unchanged |
 | `diagnostics/` | the stamps of the stars and the profile of the kernel |
 
 ## `fits/<model>/`

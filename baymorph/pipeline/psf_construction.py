@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy.io import fits
 
-from baymorph.core.observation import Observation
 from baymorph.pipeline.config import load_resolved_config
 from baymorph.pipeline.empirical_psf_builder import (
     BuilderSettings,
@@ -20,8 +19,12 @@ from baymorph.pipeline.empirical_psf_builder import (
 )
 from baymorph.pipeline.image_preparation import detect_real_fits_sources
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
+from baymorph.pipeline.opening import open_observation
 from baymorph.pipeline.outputs import make_output_tree, pipeline_paths
-from baymorph.pipeline.prepared_identity import sha256_file as _file_sha256
+from baymorph.pipeline.prepared_identity import (
+    file_content_identity,
+    sha256_file as _file_sha256,
+)
 from baymorph.pipeline.psf_candidates import load_psf_candidates
 from baymorph.plotting.style import make_plot
 from baymorph.rendering.effective_psf import (
@@ -228,13 +231,20 @@ def build_empirical_psf_provenance(
         config.get("psf", {})
         .get("empirical", {})
     )
+    input_fits = {
+        "path": str(image_path),
+        "sha256": file_content_identity(image_path)["sha256"],
+    }
+
+    # A declared HDU binds the PSF to the image it was built from; it enters
+    # only when declared, so the PSF of an image read by default keeps its
+    # provenance.
+    if config["data"].get("hdu") is not None:
+        input_fits["hdu"] = config["data"]["hdu"]
 
     return {
         "schema_version": EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION,
-        "input_fits": {
-            "path": str(image_path),
-            "sha256": _file_sha256(image_path),
-        },
+        "input_fits": input_fits,
         "candidate_catalog": {
             "path": str(candidates_path),
             "sha256": _file_sha256(candidates_path),
@@ -1102,7 +1112,7 @@ def run_psf_construction_from_config(
     else:
         resolved = config
 
-    observation = Observation.from_fits(
+    observation = open_observation(
         resolved["data"]["image_path"],
         hdu=resolved["data"].get("hdu"),
     )

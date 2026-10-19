@@ -13,8 +13,8 @@ import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.wcs.utils import proj_plane_pixel_scales
 
-from baymorph.core.observation import Observation
 from baymorph.observation.geometry import slice_wcs_to_cutout
+from baymorph.pipeline.opening import open_observation
 
 
 @dataclass(frozen=True)
@@ -619,7 +619,7 @@ def _cutout_wcs(
     }:
         return None
 
-    observation = Observation.from_fits(
+    observation = open_observation(
         image_path
     )
 

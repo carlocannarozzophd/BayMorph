@@ -55,6 +55,7 @@ from baymorph.pipeline.likelihood_state import (
     require_complete_likelihood_normalization,
 )
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
+from baymorph.pipeline.opening import open_observation
 from baymorph.pipeline.outputs import (
     make_output_tree,
     pipeline_paths,
@@ -102,7 +103,7 @@ def run_real_fit_from_config(
         ) from exc
 
     try:
-        observation = Observation.from_fits(
+        observation = open_observation(
             resolved["data"]["image_path"],
             hdu=resolved["data"].get("hdu"),
         )

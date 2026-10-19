@@ -9,10 +9,17 @@ from typing import Any
 
 import numpy as np
 
-from baymorph.core.image import ImageData
 from baymorph.pipeline.config import load_resolved_config
 from baymorph.pipeline.image_preparation import detect_real_fits_sources
+from baymorph.pipeline.opening import open_observation
 from baymorph.pipeline.outputs import make_output_tree, pipeline_paths
+from baymorph.pipeline.prepared_identity import (
+    canonical_json_sha256,
+    file_content_identity,
+)
+
+
+PSF_CANDIDATES_PROVENANCE_SCHEMA_VERSION = 1
 
 
 @dataclass
@@ -96,6 +103,115 @@ def save_psf_candidates(
     return path
 
 
+def build_psf_candidates_provenance(
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    """Fingerprint the image and the settings that select the PSF candidates.
+
+    Parameters
+    ----------
+    config : dict
+        Resolved pipeline configuration.
+
+    Returns
+    -------
+    dict
+        The FITS file, with its HDU when one is declared, and the digests of
+        the detection and candidate-selection settings.
+    """
+    image_path = Path(config["data"]["image_path"]).expanduser().resolve()
+    input_fits = {
+        "path": str(image_path),
+        "sha256": file_content_identity(image_path)["sha256"],
+    }
+
+    if config["data"].get("hdu") is not None:
+        input_fits["hdu"] = config["data"]["hdu"]
+
+    return {
+        "schema_version": PSF_CANDIDATES_PROVENANCE_SCHEMA_VERSION,
+        "input_fits": input_fits,
+        "detection_config_sha256": canonical_json_sha256(
+            config["preparation"]["detection"]
+        ),
+        "candidate_selection_config_sha256": canonical_json_sha256(
+            config["psf"]["empirical"]["candidate_selection"]
+        ),
+    }
+
+
+def save_psf_candidates_provenance(
+    config: dict[str, Any],
+) -> Path:
+    """Record the image and settings from which the PSF candidates were selected.
+
+    Parameters
+    ----------
+    config : dict
+        Resolved pipeline configuration.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the saved provenance file.
+    """
+    path = pipeline_paths(config)["psf"]["candidates_provenance"]
+    path.write_text(
+        json.dumps(build_psf_candidates_provenance(config), indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    return path
+
+
+def psf_candidates_provenance_exists(
+    config: dict[str, Any],
+) -> bool:
+    """Return whether the saved PSF candidates record their provenance.
+
+    Candidates saved by BayMorph 0.5.1 and earlier have none.
+
+    Parameters
+    ----------
+    config : dict
+        Resolved pipeline configuration.
+
+    Returns
+    -------
+    bool
+        True when the provenance file of the candidates is present.
+    """
+    return pipeline_paths(config)["psf"]["candidates_provenance"].is_file()
+
+
+def validate_psf_candidates_provenance(
+    config: dict[str, Any],
+) -> None:
+    """Reject saved PSF candidates selected from other inputs or settings.
+
+    Parameters
+    ----------
+    config : dict
+        Resolved pipeline configuration.
+
+    Raises
+    ------
+    ValueError
+        If the recorded provenance differs from that of the current image,
+        HDU, detection settings or candidate-selection settings.
+    """
+    path = pipeline_paths(config)["psf"]["candidates_provenance"]
+    recorded = json.loads(path.read_text(encoding="utf-8"))
+
+    if recorded != build_psf_candidates_provenance(config):
+        raise ValueError(
+            "The saved PSF candidates were selected from another image, HDU, "
+            "detection or candidate-selection setting than the current "
+            f"configuration ({path}). Use a new output namespace, or set "
+            "outputs.overwrite: true to select them again."
+        )
+
+
 def psf_candidates_exist(
     config: str | Path | dict[str, Any],
 ) -> bool:
@@ -174,10 +290,10 @@ def run_psf_candidate_selection_from_config(
 
     make_output_tree(resolved)
 
-    image = ImageData.from_fits(
+    image = open_observation(
         resolved["data"]["image_path"],
         hdu=resolved["data"].get("hdu"),
-    )
+    ).image
 
     detection_cfg = resolved["preparation"]["detection"]
 
@@ -221,6 +337,7 @@ def run_psf_candidate_selection_from_config(
     )
 
     save_psf_candidates(resolved, candidates)
+    save_psf_candidates_provenance(resolved)
 
     return candidates
 

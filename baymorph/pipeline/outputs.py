@@ -211,6 +211,9 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
             "psf_fits": base / "psf" / "psf.fits",
             "metadata": base / "psf" / "psf_metadata.json",
             "candidates": base / "psf" / "psf_candidates.json",
+            "candidates_provenance": (
+                base / "psf" / "psf_candidates_provenance.json"
+            ),
         },
         "fits": {
             "dir": base / "fits",
