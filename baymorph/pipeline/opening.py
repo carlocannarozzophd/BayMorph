@@ -17,7 +17,6 @@ from pathlib import Path
 
 from baymorph.core.observation import Observation
 
-
 REUSE_MIN_BYTES = 16 * 1024**2
 """Size from which a file is read once per process and then reused."""
 
@@ -55,11 +54,7 @@ def file_state(path: Path) -> tuple[int, int, int, int, int]:
     )
 
 
-def open_observation(
-    path: str | Path,
-    *,
-    hdu: int | str | None = None,
-) -> Observation:
+def open_observation(path: str | Path, *, hdu: int | str | None = None) -> Observation:
     """Open the image of an observation.
 
     A file of at least :data:`REUSE_MIN_BYTES` is read once per process and
@@ -98,10 +93,7 @@ def open_observation(
         _OPENED.move_to_end(key)
         return _OPENED[key]
 
-    observation = Observation.from_fits(
-        resolved,
-        hdu=hdu,
-    )
+    observation = Observation.from_fits(resolved, hdu=hdu)
     observation.image.data.flags.writeable = False
 
     if reusable:

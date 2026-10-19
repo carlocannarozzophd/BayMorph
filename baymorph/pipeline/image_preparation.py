@@ -22,10 +22,7 @@ from baymorph.core.detection import (
     detect_sources_segmentation,
     segments_above_level,
 )
-from baymorph.core.noise import (
-    estimate_noise_map,
-    make_constant_noise_map,
-)
+from baymorph.core.noise import estimate_noise_map, make_constant_noise_map
 from baymorph.core import (
     build_fitting_mask,
     load_external_mask,
@@ -40,9 +37,7 @@ from baymorph.core.sky import (
     build_elliptical_radius_map,
     build_sky_region,
 )
-from baymorph.pipeline.checkpoint_signing import (
-    write_json_atomic as _write_json_atomic,
-)
+from baymorph.pipeline.checkpoint_signing import write_json_atomic as _write_json_atomic
 from baymorph.pipeline.config import (
     DEFAULT_CONFIG,
     default_contaminant_growth_pixels,
@@ -80,10 +75,7 @@ from baymorph.pipeline.runtime_report import (
     build_runtime_report,
     save_runtime_report,
 )
-from baymorph.pipeline.segmentation import (
-    select_segment_near_position,
-)
-
+from baymorph.pipeline.segmentation import select_segment_near_position
 
 _PREPARATION_BUNDLE_SCHEMA_VERSION = 1
 _PREPARATION_MANIFEST_NAME = "image_preparation_artifacts.json"
@@ -154,15 +146,12 @@ def _resolve_fitting_mask_mode(data_cfg: dict[str, Any]) -> str:
     mode = str(data_cfg.get("mask_mode", "union")).strip().lower()
     if mode not in {"union", "exact", "replace"}:
         raise ValueError(
-            "Config data.mask_mode must be one of 'union', 'exact', or "
-            "'replace'."
+            "Config data.mask_mode must be one of 'union', 'exact', or " "'replace'."
         )
     return mode
 
 
-def _configured_external_mask_path(
-    data_cfg: Mapping[str, Any],
-) -> str | Path | None:
+def _configured_external_mask_path(data_cfg: Mapping[str, Any]) -> str | Path | None:
     """Return the configured curated-mask path, if any."""
     if "external_mask_path" in data_cfg:
         raise ValueError(
@@ -173,11 +162,7 @@ def _configured_external_mask_path(
     return data_cfg.get("mask_path")
 
 
-def _validate_prepared_arrays(
-    *,
-    prepared_data: np.ndarray,
-    noise: np.ndarray,
-) -> None:
+def _validate_prepared_arrays(*, prepared_data: np.ndarray, noise: np.ndarray) -> None:
     """Fail before persistence when final inference arrays are invalid."""
     if not np.all(np.isfinite(prepared_data)):
         raise RuntimeError(
@@ -206,82 +191,51 @@ def _build_geometry_target_segment(
     establish semantic ownership of unmasked automatic contaminants.
     Geometry therefore remains anchored to the detected target segment.
     """
-    target = np.asarray(
-        target_segment,
-        dtype=bool,
-    ).copy()
+    target = np.asarray(target_segment, dtype=bool).copy()
 
-    exclusions = np.asarray(
-        fitting_mask,
-        dtype=bool,
-    )
+    exclusions = np.asarray(fitting_mask, dtype=bool)
 
     if target.shape != exclusions.shape:
+        raise ValueError("Target and fitting masks must have the same shape.")
+
+    mode = str(fitting_mask_mode).strip().lower()
+
+    if mode not in {"union", "exact", "replace"}:
         raise ValueError(
-            "Target and fitting masks must have the same shape."
+            "Fitting-mask mode must be one of 'union', 'exact', or " "'replace'."
         )
 
-    mode = str(
-        fitting_mask_mode
-    ).strip().lower()
-
-    if mode not in {
-        "union",
-        "exact",
-        "replace",
-    }:
-        raise ValueError(
-            "Fitting-mask mode must be one of 'union', 'exact', or "
-            "'replace'."
-        )
-
-    if mode in {
-        "exact",
-        "replace",
-    }:
+    if mode in {"exact", "replace"}:
         if contaminant_mask is None:
             raise ValueError(
                 "Automatic contaminant support is required to construct "
                 "geometry in exact fitting-mask mode."
             )
 
-        contaminants = np.asarray(
-            contaminant_mask,
-            dtype=bool,
-        )
+        contaminants = np.asarray(contaminant_mask, dtype=bool)
 
         if contaminants.shape != target.shape:
             raise ValueError(
-                "Target and automatic contaminant masks must have the same "
-                "shape."
+                "Target and automatic contaminant masks must have the same " "shape."
             )
 
     target &= ~exclusions
 
-    return np.asarray(
-        target,
-        dtype=bool,
-    )
+    return np.asarray(target, dtype=bool)
+
 
 def _validate_products_for_persistence(products: PreparedObservation) -> None:
     """Validate persisted preparation products before the first write."""
     prepared_data = _as_finite_image(
-        products.prepared_data,
-        context="persisted prepared image",
+        products.prepared_data, context="persisted prepared image"
     )
     _validate_prepared_arrays(
-        prepared_data=prepared_data,
-        noise=np.asarray(products.noise, dtype=float),
+        prepared_data=prepared_data, noise=np.asarray(products.noise, dtype=float)
     )
 
-    cutout = _as_finite_image(
-        products.cutout,
-        context="persisted science cutout",
-    )
+    cutout = _as_finite_image(products.cutout, context="persisted science cutout")
     if cutout.shape != prepared_data.shape:
-        raise ValueError(
-            "The science cutout shape must match the prepared image."
-        )
+        raise ValueError("The science cutout shape must match the prepared image.")
 
     for name in (
         "automatic_mask",
@@ -291,25 +245,18 @@ def _validate_products_for_persistence(products: PreparedObservation) -> None:
     ):
         mask = build_fitting_mask(getattr(products, name))
         if mask.shape != prepared_data.shape:
-            raise ValueError(
-                f"'{name}' shape must match the prepared image."
-            )
+            raise ValueError(f"'{name}' shape must match the prepared image.")
 
     if products.external_mask is not None:
         external_mask = build_fitting_mask(products.external_mask)
         if external_mask.shape != prepared_data.shape:
-            raise ValueError(
-                "'external_mask' shape must match the prepared image."
-            )
+            raise ValueError("'external_mask' shape must match the prepared image.")
 
     segmentation = _as_finite_image(
-        products.segmentation,
-        context="persisted segmentation",
+        products.segmentation, context="persisted segmentation"
     )
     if segmentation.shape != prepared_data.shape:
-        raise ValueError(
-            "The segmentation shape must match the prepared image."
-        )
+        raise ValueError("The segmentation shape must match the prepared image.")
     if not np.isfinite(float(products.background)):
         raise ValueError("The persisted background level must be finite.")
 
@@ -338,12 +285,7 @@ def _normalized_cutout_bounds(
                 "Saved image-preparation products have no cutout bounds and "
                 "do not cover the complete source FITS image."
             )
-        return {
-            "xmin": 0,
-            "xmax": source_nx,
-            "ymin": 0,
-            "ymax": source_ny,
-        }
+        return {"xmin": 0, "xmax": source_nx, "ymin": 0, "ymax": source_ny}
 
     if not isinstance(bounds, Mapping):
         raise RuntimeError("Saved cutout bounds must be a mapping.")
@@ -352,9 +294,7 @@ def _normalized_cutout_bounds(
     for name in ("xmin", "xmax", "ymin", "ymax"):
         value = bounds.get(name)
         if isinstance(value, bool) or not isinstance(value, (int, np.integer)):
-            raise RuntimeError(
-                f"Saved cutout bound {name!r} must be an integer."
-            )
+            raise RuntimeError(f"Saved cutout bound {name!r} must be an integer.")
         normalized[name] = int(value)
 
     if not (
@@ -385,26 +325,18 @@ def _validate_products_against_current_sources(
     """Verify cutout and mask semantics against immutable current sources."""
     if observation is None:
         observation = open_observation(
-            config["data"]["image_path"],
-            hdu=config["data"].get("hdu"),
+            config["data"]["image_path"], hdu=config["data"].get("hdu")
         )
 
     source = _as_finite_image(
-        observation.image.data,
-        context="current source FITS image",
+        observation.image.data, context="current source FITS image"
     )
-    cutout = _as_finite_image(
-        products.cutout,
-        context="persisted source cutout",
-    )
+    cutout = _as_finite_image(products.cutout, context="persisted source cutout")
     bounds = _normalized_cutout_bounds(
-        products.cutout_bounds,
-        source_shape=source.shape,
-        cutout_shape=cutout.shape,
+        products.cutout_bounds, source_shape=source.shape, cutout_shape=cutout.shape
     )
     expected_cutout = source[
-        bounds["ymin"]:bounds["ymax"],
-        bounds["xmin"]:bounds["xmax"],
+        bounds["ymin"] : bounds["ymax"], bounds["xmin"] : bounds["xmax"]
     ]
     if not np.array_equal(cutout, expected_cutout):
         raise RuntimeError(
@@ -414,8 +346,7 @@ def _validate_products_against_current_sources(
 
     if products.original_image is not None:
         original_image = _as_finite_image(
-            products.original_image,
-            context="persisted original image",
+            products.original_image, context="persisted original image"
         )
         if not np.array_equal(original_image, source):
             raise RuntimeError(
@@ -428,20 +359,17 @@ def _validate_products_against_current_sources(
     saved_mode = str(products.fitting_mask_mode).strip().lower()
     if saved_mode != mode:
         raise RuntimeError(
-            "Persisted fitting-mask mode does not match the current "
-            "configuration."
+            "Persisted fitting-mask mode does not match the current " "configuration."
         )
 
     configured_mask_path = _configured_external_mask_path(data_config)
     current_mask_crop = None
     if configured_mask_path is not None:
         full_mask = load_external_mask(
-            configured_mask_path,
-            expected_shape=source.shape,
+            configured_mask_path, expected_shape=source.shape
         )
         current_mask_crop = full_mask[
-            bounds["ymin"]:bounds["ymax"],
-            bounds["xmin"]:bounds["xmax"],
+            bounds["ymin"] : bounds["ymax"], bounds["xmin"] : bounds["xmax"]
         ].astype(bool, copy=True)
 
     if current_mask_crop is None:
@@ -450,19 +378,16 @@ def _validate_products_against_current_sources(
                 "Persisted external mask has no current configured source."
             )
     elif products.external_mask is None or not np.array_equal(
-        np.asarray(products.external_mask, dtype=bool),
-        current_mask_crop,
+        np.asarray(products.external_mask, dtype=bool), current_mask_crop
     ):
         raise RuntimeError(
-            "Persisted external mask does not match the current curated "
-            "mask crop."
+            "Persisted external mask does not match the current curated " "mask crop."
         )
 
     rule = _contaminant_rule(config)
     if products.contaminant_rule != rule:
         raise RuntimeError(
-            "Persisted contaminant rule does not match the current "
-            "configuration."
+            "Persisted contaminant rule does not match the current " "configuration."
         )
 
     growth = _contaminant_growth_pixels(config)
@@ -473,9 +398,7 @@ def _validate_products_against_current_sources(
         )
 
     segmentation = np.asarray(products.segmentation)
-    candidates = (segmentation > 0) & (
-        segmentation != int(products.target_label)
-    )
+    candidates = (segmentation > 0) & (segmentation != int(products.target_label))
     released = np.asarray(products.released_labels, dtype=int)
     if released.size and (
         rule == "all_segments"
@@ -495,9 +418,7 @@ def _validate_products_against_current_sources(
         )
 
     composition_mask = build_fitting_mask(
-        expected_contaminants,
-        external_mask=current_mask_crop,
-        mode=mode,
+        expected_contaminants, external_mask=current_mask_crop, mode=mode
     )
     support_mask = composition_mask
     if growth:
@@ -527,8 +448,7 @@ def _validate_products_against_current_sources(
         fitting_mask_mode=mode,
     )
     if not np.array_equal(
-        np.asarray(products.target_segment, dtype=bool),
-        expected_target_segment,
+        np.asarray(products.target_segment, dtype=bool), expected_target_segment
     ):
         raise RuntimeError(
             "Persisted target support does not match the current fitting-mask "
@@ -541,10 +461,7 @@ def _sha256_file(path: Path) -> str:
     return file_content_identity(path)["sha256"]
 
 
-def _artifact_manifest(
-    directory: Path,
-    artifact_paths: list[Path],
-) -> dict[str, Any]:
+def _artifact_manifest(directory: Path, artifact_paths: list[Path]) -> dict[str, Any]:
     """Build a content manifest for a complete preparation bundle."""
     artifacts = {}
     for artifact_path in artifact_paths:
@@ -571,9 +488,7 @@ def _artifact_manifest(
 def _load_and_verify_preparation_bundle(directory: Path) -> frozenset[str]:
     """Verify completion, manifest, and every artifact before loading."""
     if not directory.is_dir() or not any(directory.iterdir()):
-        raise FileNotFoundError(
-            "Image-preparation products do not exist."
-        )
+        raise FileNotFoundError("Image-preparation products do not exist.")
 
     marker_path = directory / _PREPARATION_COMPLETE_NAME
     manifest_path = directory / _PREPARATION_MANIFEST_NAME
@@ -639,8 +554,7 @@ def _load_and_verify_preparation_bundle(directory: Path) -> frozenset[str]:
     for name, expected in manifest["artifacts"].items():
         if not isinstance(name, str) or not isinstance(expected, Mapping):
             raise RuntimeError(
-                "Image-preparation artifact manifest contains an invalid "
-                "entry."
+                "Image-preparation artifact manifest contains an invalid " "entry."
             )
         candidate = (root / name).resolve(strict=False)
         try:
@@ -656,8 +570,7 @@ def _load_and_verify_preparation_bundle(directory: Path) -> frozenset[str]:
             or expected.get("sha256") != _sha256_file(candidate)
         ):
             raise RuntimeError(
-                "Image-preparation artifact integrity check failed for "
-                f"{name!r}."
+                "Image-preparation artifact integrity check failed for " f"{name!r}."
             )
 
     return artifact_names
@@ -693,10 +606,7 @@ def detect_real_fits_sources(
         Segmentation, detection mask and source catalogue.
     """
     return detect_sources_segmentation(
-        _as_finite_image(
-            data,
-            context="source detection",
-        ),
+        _as_finite_image(data, context="source detection"),
         n_sigma=detection_sigma,
         n_pixels=detection_n_pixels,
         n_levels=detection_n_levels,
@@ -747,10 +657,7 @@ def prepare_real_fits_image(
         unmasked pixels in every mesh box. There is no fallback to a
         background estimate that ignores the detection mask.
     """
-    data = _as_finite_image(
-        data,
-        context="source detection",
-    )
+    data = _as_finite_image(data, context="source detection")
 
     detection = detect_real_fits_sources(
         data,
@@ -775,15 +682,9 @@ def prepare_real_fits_image(
             f"{float(np.mean(mask)):.0%} of the image. {exc}"
         ) from exc
 
-    background_subtracted = subtract_background(
-        data,
-        background_result.background,
-    )
+    background_subtracted = subtract_background(data, background_result.background)
 
-    noise = estimate_noise_map(
-        background_subtracted,
-        mask=mask,
-    )
+    noise = estimate_noise_map(background_subtracted, mask=mask)
 
     return RealFITSPreparation(
         data=background_subtracted,
@@ -867,8 +768,7 @@ def _contaminant_growth_pixels(config: Mapping[str, Any]) -> int:
 
 
 def _grown_contaminant_mask(
-    contaminant_mask: np.ndarray,
-    growth_pixels: int,
+    contaminant_mask: np.ndarray, growth_pixels: int
 ) -> np.ndarray:
     """Return the pixels within ``growth_pixels`` of a contaminant pixel.
 
@@ -884,8 +784,7 @@ def _grown_contaminant_mask(
 
 
 def _target_light_level(
-    image: np.ndarray,
-    target_detection: _TargetDetection,
+    image: np.ndarray, target_detection: _TargetDetection
 ) -> np.ndarray:
     """Return the background plus the smooth light of the target, per pixel.
 
@@ -897,13 +796,10 @@ def _target_light_level(
     """
     detection = target_detection.detection
     geometry = estimate_target_geometry_from_image(
-        image,
-        target_detection.target_segment,
+        image, target_detection.target_segment
     )
     profile = build_target_radial_profile(
-        detection.detection_image,
-        geometry,
-        mask=target_detection.contaminant_mask,
+        detection.detection_image, geometry, mask=target_detection.contaminant_mask
     )
     valid = np.isfinite(profile.profile)
 
@@ -913,17 +809,9 @@ def _target_light_level(
             "annulus; the contaminant rule cannot be applied."
         )
 
-    level = np.interp(
-        profile.radius,
-        profile.radius[valid],
-        profile.profile[valid],
-    )
+    level = np.interp(profile.radius, profile.radius[valid], profile.profile[valid])
     radius_map = build_elliptical_radius_map(
-        image.shape,
-        x0=geometry.x0,
-        y0=geometry.y0,
-        q=geometry.q,
-        theta=geometry.theta,
+        image.shape, x0=geometry.x0, y0=geometry.y0, q=geometry.q, theta=geometry.theta
     )
 
     return level[np.floor(radius_map).astype(int)]
@@ -978,21 +866,16 @@ def _apply_contaminant_rule(
     return replace(
         target_detection,
         contaminant_mask=(
-            target_detection.contaminant_mask
-            & ~np.isin(segmentation, released)
+            target_detection.contaminant_mask & ~np.isin(segmentation, released)
         ),
         released_labels=tuple(int(value) for value in released),
     )
 
 
-def _negative_threshold_sigma(
-    config: Mapping[str, Any],
-) -> float | None:
+def _negative_threshold_sigma(config: Mapping[str, Any]) -> float | None:
     """Return the configured negative-artifact threshold, or None."""
     threshold = (
-        config.get("preparation", {})
-        .get("masking", {})
-        .get("negative_threshold_sigma")
+        config.get("preparation", {}).get("masking", {}).get("negative_threshold_sigma")
     )
 
     return None if threshold is None else float(threshold)
@@ -1021,27 +904,13 @@ def _apply_negative_outlier_mask(
         outlier mask itself.
     """
     if threshold_sigma is None:
-        return (
-            fitting_mask,
-            np.zeros(
-                fitting_mask.shape,
-                dtype=bool,
-            ),
-        )
+        return (fitting_mask, np.zeros(fitting_mask.shape, dtype=bool))
 
     negative_outliers = negative_outlier_mask(
-        prepared_data,
-        noise,
-        threshold_sigma=threshold_sigma,
+        prepared_data, noise, threshold_sigma=threshold_sigma
     )
 
-    return (
-        union(
-            fitting_mask,
-            negative_outliers,
-        ),
-        negative_outliers,
-    )
+    return (union(fitting_mask, negative_outliers), negative_outliers)
 
 
 def _detect_target_in_image(
@@ -1064,11 +933,7 @@ def _detect_target_in_image(
     if segmentation is None:
         raise RuntimeError(f"No segmentation map was produced during {context}.")
 
-    target_label = select_segment_near_position(
-        segmentation,
-        x=target_x,
-        y=target_y,
-    )
+    target_label = select_segment_near_position(segmentation, x=target_x, y=target_y)
 
     target_segment = segmentation.data == target_label
 
@@ -1129,10 +994,7 @@ def _resolve_auto_cutout(
         max_size=cutout_cfg.get("max_size"),
     )
 
-    preliminary_cutout = make_target_cutout(
-        image,
-        preliminary_definition,
-    )
+    preliminary_cutout = make_target_cutout(image, preliminary_definition)
 
     preliminary_detection = _apply_contaminant_rule(
         preliminary_cutout,
@@ -1148,10 +1010,7 @@ def _resolve_auto_cutout(
     )
 
     preliminary_external_mask = (
-        make_target_cutout(
-            external_mask,
-            preliminary_definition,
-        ).astype(bool)
+        make_target_cutout(external_mask, preliminary_definition).astype(bool)
         if external_mask is not None
         else None
     )
@@ -1327,10 +1186,7 @@ class PreparedObservation:
     contaminant_growth_pixels: int = 0
 
 
-def make_target_cutout(
-    data: np.ndarray,
-    cutout: CutoutDefinition,
-) -> np.ndarray:
+def make_target_cutout(data: np.ndarray, cutout: CutoutDefinition) -> np.ndarray:
     """Extract a target cutout from an image.
 
     Parameters
@@ -1345,16 +1201,11 @@ def make_target_cutout(
     ndarray
         Extracted image cutout.
     """
-    return data[
-        cutout.ymin : cutout.ymax,
-        cutout.xmin : cutout.xmax,
-    ]
+    return data[cutout.ymin : cutout.ymax, cutout.xmin : cutout.xmax]
 
 
 def prepare_real_image_from_config(
-    config: str | Path | dict[str, Any],
-    *,
-    save: bool = True,
+    config: str | Path | dict[str, Any], *, save: bool = True
 ) -> PreparedObservation:
     """Prepare a real galaxy image from a BayMorph configuration.
 
@@ -1385,26 +1236,16 @@ def prepare_real_image_from_config(
     make_output_tree(resolved)
 
     observation = open_observation(
-        resolved["data"]["image_path"],
-        hdu=resolved["data"].get("hdu"),
+        resolved["data"]["image_path"], hdu=resolved["data"].get("hdu")
     )
 
-    resolved = resolve_runtime_config(
-        resolved,
-        observation,
-    )
+    resolved = resolve_runtime_config(resolved, observation)
 
-    input_identity = build_prepared_input_identity(
-        resolved,
-        observation=observation,
-    )
+    input_identity = build_prepared_input_identity(resolved, observation=observation)
 
     image = observation.image
 
-    _as_finite_image(
-        image.data,
-        context="input FITS image",
-    )
+    _as_finite_image(image.data, context="input FITS image")
 
     target_position = resolved["data"]["target_position"]
     if target_position is None:
@@ -1422,8 +1263,7 @@ def prepare_real_image_from_config(
     external_mask_path = _configured_external_mask_path(resolved["data"])
     if external_mask_path is not None:
         external_mask = load_external_mask(
-            external_mask_path,
-            expected_shape=image.data.shape,
+            external_mask_path, expected_shape=image.data.shape
         )
     elif fitting_mask_mode in {"exact", "replace"}:
         raise ValueError(
@@ -1459,16 +1299,12 @@ def prepare_real_image_from_config(
     else:
         raise ValueError(f"Unsupported cutout mode: {cutout_mode!r}.")
 
-    cutout = make_target_cutout(
-        image.data,
-        cutout_definition,
-    )
+    cutout = make_target_cutout(image.data, cutout_definition)
 
     full_external_mask = external_mask
     if full_external_mask is not None:
         external_mask = make_target_cutout(
-            full_external_mask,
-            cutout_definition,
+            full_external_mask, cutout_definition
         ).astype(bool)
 
     seed_target_x = float(target_position["x"]) - cutout_definition.xmin
@@ -1493,9 +1329,7 @@ def prepare_real_image_from_config(
     contaminant_mask = final_detection.contaminant_mask
 
     fitting_mask = build_fitting_mask(
-        contaminant_mask,
-        external_mask=external_mask,
-        mode=fitting_mask_mode,
+        contaminant_mask, external_mask=external_mask, mode=fitting_mask_mode
     )
 
     target_segment = _build_geometry_target_segment(
@@ -1539,10 +1373,7 @@ def prepare_real_image_from_config(
                 f"{fitting_mask_mode!r} does not use."
             )
         fitting_mask = build_fitting_mask(
-            _grown_contaminant_mask(
-                contaminant_mask,
-                contaminant_growth_pixels,
-            ),
+            _grown_contaminant_mask(contaminant_mask, contaminant_growth_pixels),
             external_mask=external_mask,
             mode=fitting_mask_mode,
         )
@@ -1556,26 +1387,14 @@ def prepare_real_image_from_config(
     )
 
     background_result = estimate_background_constant(
-        cutout,
-        mask=~sky_region.mask,
-        noise_method="corrected_std",
-        detrend=True,
+        cutout, mask=~sky_region.mask, noise_method="corrected_std", detrend=True
     )
 
-    prepared_data = subtract_background(
-        cutout,
-        background_result.background_level,
-    )
+    prepared_data = subtract_background(cutout, background_result.background_level)
 
-    noise = make_constant_noise_map(
-        prepared_data.shape,
-        background_result.sigma,
-    )
+    noise = make_constant_noise_map(prepared_data.shape, background_result.sigma)
 
-    _validate_prepared_arrays(
-        prepared_data=prepared_data,
-        noise=noise,
-    )
+    _validate_prepared_arrays(prepared_data=prepared_data, noise=noise)
 
     # Applied to the final likelihood support, after the sky region, the
     # background level and the noise scale have been estimated. Those
@@ -1603,8 +1422,7 @@ def prepare_real_image_from_config(
             None
             if background_result.parameters is None
             else {
-                key: float(value)
-                for key, value in background_result.parameters.items()
+                key: float(value) for key, value in background_result.parameters.items()
             }
         ),
         target_x=target_x,
@@ -1641,29 +1459,17 @@ def prepare_real_image_from_config(
 
     if save:
         save_image_preparation_products(
-            resolved,
-            products,
-            observation=observation,
-            input_identity=input_identity,
+            resolved, products, observation=observation, input_identity=input_identity
         )
         save_resolved_config(resolved)
 
         runtime = build_image_preparation_runtime(
-            products,
-            observation=observation_metadata_dict(
-                observation,
-            ),
+            products, observation=observation_metadata_dict(observation)
         )
 
-        report = build_runtime_report(
-            resolved,
-            runtime=runtime,
-        )
+        report = build_runtime_report(resolved, runtime=runtime)
 
-        save_runtime_report(
-            resolved,
-            report,
-        )
+        save_runtime_report(resolved, report)
 
     return products
 
@@ -1702,20 +1508,11 @@ def save_image_preparation_products(
     _validate_products_for_persistence(products)
 
     if input_identity is None:
-        input_identity = build_prepared_input_identity(
-            config,
-            observation=observation,
-        )
+        input_identity = build_prepared_input_identity(config, observation=observation)
 
-    validate_prepared_input_identity(
-        input_identity,
-        config,
-        observation=observation,
-    )
+    validate_prepared_input_identity(input_identity, config, observation=observation)
     _validate_products_against_current_sources(
-        config,
-        products,
-        observation=observation,
+        config, products, observation=observation
     )
 
     paths = pipeline_paths(config)["image_preparation"]
@@ -1741,10 +1538,7 @@ def save_image_preparation_products(
     optional_artifacts = (
         (products.external_mask, directory / "external_mask.npy"),
         (products.preliminary_cutout, directory / "preliminary_cutout.npy"),
-        (
-            products.preliminary_segmentation,
-            directory / "preliminary_segmentation.npy",
-        ),
+        (products.preliminary_segmentation, directory / "preliminary_segmentation.npy"),
         (products.radial_profile, directory / "radial_profile.npz"),
         (products.sky_region, directory / "sky_region.npz"),
         (products.original_image, directory / "original_image.npy"),
@@ -1758,11 +1552,7 @@ def save_image_preparation_products(
     if not overwrite:
         existing = [
             artifact_path
-            for artifact_path in (
-                *artifact_paths,
-                manifest_path,
-                completion_path,
-            )
+            for artifact_path in (*artifact_paths, manifest_path, completion_path)
             if artifact_path.exists()
         ]
         if existing:
@@ -1773,20 +1563,10 @@ def save_image_preparation_products(
     else:
         completion_path.unlink(missing_ok=True)
 
+    fits.writeto(paths["prepared_image"], products.prepared_data, overwrite=overwrite)
+    fits.writeto(paths["noise_map"], products.noise, overwrite=overwrite)
     fits.writeto(
-        paths["prepared_image"],
-        products.prepared_data,
-        overwrite=overwrite,
-    )
-    fits.writeto(
-        paths["noise_map"],
-        products.noise,
-        overwrite=overwrite,
-    )
-    fits.writeto(
-        paths["mask"],
-        products.contaminant_mask.astype(np.uint8),
-        overwrite=overwrite,
+        paths["mask"], products.contaminant_mask.astype(np.uint8), overwrite=overwrite
     )
     fits.writeto(
         paths["fitting_mask"],
@@ -1798,27 +1578,15 @@ def save_image_preparation_products(
     np.save(paths["dir"] / "target_segment.npy", products.target_segment)
     np.save(paths["dir"] / "segmentation.npy", products.segmentation)
 
-    np.save(
-        paths["dir"] / "automatic_mask.npy",
-        products.automatic_mask,
-    )
+    np.save(paths["dir"] / "automatic_mask.npy", products.automatic_mask)
 
-    np.save(
-        paths["dir"] / "fitting_mask.npy",
-        products.fitting_mask,
-    )
+    np.save(paths["dir"] / "fitting_mask.npy", products.fitting_mask)
 
     if products.external_mask is not None:
-        np.save(
-            paths["dir"] / "external_mask.npy",
-            products.external_mask,
-        )
+        np.save(paths["dir"] / "external_mask.npy", products.external_mask)
 
     if products.preliminary_cutout is not None:
-        np.save(
-            paths["dir"] / "preliminary_cutout.npy",
-            products.preliminary_cutout,
-        )
+        np.save(paths["dir"] / "preliminary_cutout.npy", products.preliminary_cutout)
 
     if products.preliminary_segmentation is not None:
         np.save(
@@ -1852,10 +1620,7 @@ def save_image_preparation_products(
 
     negative_threshold = _negative_threshold_sigma(config)
     _, persisted_negative_outliers = _apply_negative_outlier_mask(
-        np.zeros(
-            np.asarray(products.fitting_mask).shape,
-            dtype=bool,
-        ),
+        np.zeros(np.asarray(products.fitting_mask).shape, dtype=bool),
         prepared_data=products.prepared_data,
         noise=products.noise,
         threshold_sigma=negative_threshold,
@@ -1865,9 +1630,7 @@ def save_image_preparation_products(
         "input_identity": input_identity,
         "negative_outliers": {
             "threshold_sigma": negative_threshold,
-            "excluded_pixels": int(
-                np.count_nonzero(persisted_negative_outliers)
-            ),
+            "excluded_pixels": int(np.count_nonzero(persisted_negative_outliers)),
         },
         "observation": (
             observation_metadata_dict(observation) if observation is not None else None
@@ -1917,15 +1680,9 @@ def save_image_preparation_products(
         },
     }
 
-    validate_prepared_input_identity(
-        input_identity,
-        config,
-        observation=observation,
-    )
+    validate_prepared_input_identity(input_identity, config, observation=observation)
     _validate_products_against_current_sources(
-        config,
-        products,
-        observation=observation,
+        config, products, observation=observation
     )
     _write_json_atomic(metadata_path, metadata)
 
@@ -1933,11 +1690,7 @@ def save_image_preparation_products(
     _write_json_atomic(manifest_path, manifest)
     manifest_sha256 = _sha256_file(manifest_path)
 
-    validate_prepared_input_identity(
-        input_identity,
-        config,
-        observation=observation,
-    )
+    validate_prepared_input_identity(input_identity, config, observation=observation)
     _write_json_atomic(
         completion_path,
         {
@@ -1948,9 +1701,7 @@ def save_image_preparation_products(
     )
 
 
-def image_preparation_is_complete(
-    config: str | Path | dict[str, Any],
-) -> bool:
+def image_preparation_is_complete(config: str | Path | dict[str, Any]) -> bool:
     """Return whether a completed image preparation exists on disk.
 
     Parameters
@@ -2017,23 +1768,13 @@ def load_image_preparation_products(
     with open(paths["dir"] / _PREPARATION_METADATA_NAME, "r") as f:
         metadata = json.load(f)
 
-    validate_prepared_input_identity(
-        metadata.get("input_identity"),
-        resolved,
-    )
+    validate_prepared_input_identity(metadata.get("input_identity"), resolved)
 
-    prepared_data = np.asarray(
-        fits.getdata(paths["prepared_image"]),
-        dtype=float,
-    )
+    prepared_data = np.asarray(fits.getdata(paths["prepared_image"]), dtype=float)
     noise = np.asarray(fits.getdata(paths["noise_map"]), dtype=float)
-    _validate_prepared_arrays(
-        prepared_data=prepared_data,
-        noise=noise,
-    )
+    _validate_prepared_arrays(prepared_data=prepared_data, noise=noise)
     contaminant_mask = load_external_mask(
-        paths["mask"],
-        expected_shape=prepared_data.shape,
+        paths["mask"], expected_shape=prepared_data.shape
     )
 
     cutout = np.load(paths["dir"] / "large_cutout.npy")
@@ -2051,12 +1792,9 @@ def load_image_preparation_products(
             "canonical fitting mask is missing."
         )
     fitting_mask = load_external_mask(
-        fitting_mask_fits_path,
-        expected_shape=prepared_data.shape,
+        fitting_mask_fits_path, expected_shape=prepared_data.shape
     )
-    fitting_mask_npy = build_fitting_mask(
-        np.load(fitting_mask_npy_path)
-    )
+    fitting_mask_npy = build_fitting_mask(np.load(fitting_mask_npy_path))
     if not np.array_equal(fitting_mask, fitting_mask_npy):
         raise RuntimeError(
             "The persisted fitting-mask FITS and NPY artifacts disagree."
@@ -2083,9 +1821,7 @@ def load_image_preparation_products(
 
     original_image_path = paths["dir"] / "original_image.npy"
     original_image = (
-        np.load(original_image_path)
-        if "original_image.npy" in artifact_names
-        else None
+        np.load(original_image_path) if "original_image.npy" in artifact_names else None
     )
 
     external_mask_path = paths["dir"] / "external_mask.npy"
@@ -2151,8 +1887,7 @@ def load_image_preparation_products(
 
     # Bundles written before the contaminant rule masked every segment.
     contaminant_masking = metadata.get(
-        "contaminant_masking",
-        {"rule": "all_segments", "released_labels": []},
+        "contaminant_masking", {"rule": "all_segments", "released_labels": []}
     )
 
     products = PreparedObservation(
@@ -2171,10 +1906,7 @@ def load_image_preparation_products(
         cutout_mode=metadata.get("cutout_mode", "fixed"),
         original_image=original_image,
         external_mask=external_mask,
-        fitting_mask_mode=metadata.get(
-            "fitting_mask_mode",
-            "union",
-        ),
+        fitting_mask_mode=metadata.get("fitting_mask_mode", "union"),
         cutout_bounds=metadata.get("cutout_bounds"),
         geometry=geometry,
         radial_profile=radial_profile,
@@ -2188,13 +1920,8 @@ def load_image_preparation_products(
             int(value) for value in contaminant_masking["released_labels"]
         ),
         # Bundles written before AD-051 did not grow the masks.
-        contaminant_growth_pixels=int(
-            contaminant_masking.get("growth_pixels", 0)
-        ),
+        contaminant_growth_pixels=int(contaminant_masking.get("growth_pixels", 0)),
     )
     _validate_products_for_persistence(products)
-    _validate_products_against_current_sources(
-        resolved,
-        products,
-    )
+    _validate_products_against_current_sources(resolved, products)
     return products

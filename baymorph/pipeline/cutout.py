@@ -60,11 +60,7 @@ def _resolve_centered_cutout(
     if ny <= 0 or nx <= 0:
         raise ValueError("Image dimensions must be positive.")
 
-    size = min(
-        int(size),
-        ny,
-        nx,
-    )
+    size = min(int(size), ny, nx)
 
     cx = int(round(center_x))
     cy = int(round(center_y))
@@ -108,10 +104,7 @@ def _resolve_centered_cutout(
 
 
 def _apply_size_limits(
-    size: int,
-    *,
-    min_size: int | None = None,
-    max_size: int | None = None,
+    size: int, *, min_size: int | None = None, max_size: int | None = None
 ) -> int:
     """Apply optional lower and upper limits to a cutout size."""
     resolved_size = int(size)
@@ -120,38 +113,22 @@ def _apply_size_limits(
         if min_size <= 0:
             raise ValueError("'min_size' must be positive.")
 
-        resolved_size = max(
-            resolved_size,
-            int(min_size),
-        )
+        resolved_size = max(resolved_size, int(min_size))
 
     if max_size is not None:
         if max_size <= 0:
             raise ValueError("'max_size' must be positive.")
 
-        resolved_size = min(
-            resolved_size,
-            int(max_size),
-        )
+        resolved_size = min(resolved_size, int(max_size))
 
-    if (
-        min_size is not None
-        and max_size is not None
-        and min_size > max_size
-    ):
-        raise ValueError(
-            "'min_size' cannot be greater than 'max_size'."
-        )
+    if min_size is not None and max_size is not None and min_size > max_size:
+        raise ValueError("'min_size' cannot be greater than 'max_size'.")
 
     return resolved_size
 
 
 def resolve_fixed_cutout(
-    *,
-    image_shape: tuple[int, int],
-    center_x: float,
-    center_y: float,
-    size: int,
+    *, image_shape: tuple[int, int], center_x: float, center_y: float, size: int
 ) -> CutoutDefinition:
     """Resolve a fixed-size cutout centered on a target position.
 
@@ -233,10 +210,7 @@ def resolve_preliminary_auto_cutout(
     if not np.isfinite(center_x) or not np.isfinite(center_y):
         raise ValueError("Target coordinates must be finite.")
 
-    segment = np.asarray(
-        target_segment,
-        dtype=bool,
-    )
+    segment = np.asarray(target_segment, dtype=bool)
 
     if segment.shape != tuple(image_shape):
         raise ValueError(
@@ -256,19 +230,12 @@ def resolve_preliminary_auto_cutout(
     segment_width = xmax_segment - xmin_segment + 1
     segment_height = ymax_segment - ymin_segment + 1
 
-    segment_size = max(
-        segment_width,
-        segment_height,
-    )
+    segment_size = max(segment_width, segment_height)
 
-    requested_size = int(
-        np.ceil(initial_factor * segment_size)
-    )
+    requested_size = int(np.ceil(initial_factor * segment_size))
 
     requested_size = _apply_size_limits(
-        requested_size,
-        min_size=min_size,
-        max_size=max_size,
+        requested_size, min_size=min_size, max_size=max_size
     )
 
     return _resolve_centered_cutout(
@@ -334,9 +301,7 @@ def resolve_plateau_cutout(
     requested_size = 2 * int(np.ceil(half_size)) + 1
 
     requested_size = _apply_size_limits(
-        requested_size,
-        min_size=min_size,
-        max_size=max_size,
+        requested_size, min_size=min_size, max_size=max_size
     )
 
     return _resolve_centered_cutout(
@@ -346,7 +311,6 @@ def resolve_plateau_cutout(
         size=requested_size,
         mode="auto",
     )
-
 
 
 def validate_plateau_cutout_containment(
@@ -401,8 +365,7 @@ def validate_plateau_cutout_containment(
 
     if failing:
         available = ", ".join(
-            f"{edge}={distance:.3f}"
-            for edge, distance in failing.items()
+            f"{edge}={distance:.3f}" for edge, distance in failing.items()
         )
         raise RuntimeError(
             "Automatic cutout does not contain the final plateau radius "
@@ -413,11 +376,7 @@ def validate_plateau_cutout_containment(
 
 
 def resolve_cutout(
-    *,
-    image_shape: tuple[int, int],
-    center_x: float,
-    center_y: float,
-    config: dict,
+    *, image_shape: tuple[int, int], center_x: float, center_y: float, config: dict
 ) -> CutoutDefinition:
     """Resolve a directly constructible cutout from configuration.
 
@@ -461,6 +420,4 @@ def resolve_cutout(
             "pipeline after target segmentation."
         )
 
-    raise ValueError(
-        f"Unsupported cutout mode: {mode!r}"
-    )
+    raise ValueError(f"Unsupported cutout mode: {mode!r}")

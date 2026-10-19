@@ -18,7 +18,6 @@ from baymorph.pipeline.prepared_identity import (
     file_content_identity,
 )
 
-
 PSF_CANDIDATES_PROVENANCE_SCHEMA_VERSION = 1
 
 
@@ -70,10 +69,7 @@ class PSFCandidate:
     half_size: int | None = None
 
 
-def save_psf_candidates(
-    config: dict[str, Any],
-    candidates: list[PSFCandidate],
-) -> Path:
+def save_psf_candidates(config: dict[str, Any], candidates: list[PSFCandidate]) -> Path:
     """Save PSF candidates to the configured pipeline output path.
 
     Parameters
@@ -93,8 +89,7 @@ def save_psf_candidates(
 
     if path.exists() and not bool(config["outputs"].get("overwrite", False)):
         raise FileExistsError(
-            "PSF candidate output already exists and overwrite is disabled: "
-            f"{path}"
+            "PSF candidate output already exists and overwrite is disabled: " f"{path}"
         )
 
     with path.open("w") as f:
@@ -103,9 +98,7 @@ def save_psf_candidates(
     return path
 
 
-def build_psf_candidates_provenance(
-    config: dict[str, Any],
-) -> dict[str, Any]:
+def build_psf_candidates_provenance(config: dict[str, Any]) -> dict[str, Any]:
     """Fingerprint the image and the settings that select the PSF candidates.
 
     Parameters
@@ -140,9 +133,7 @@ def build_psf_candidates_provenance(
     }
 
 
-def save_psf_candidates_provenance(
-    config: dict[str, Any],
-) -> Path:
+def save_psf_candidates_provenance(config: dict[str, Any]) -> Path:
     """Record the image and settings from which the PSF candidates were selected.
 
     Parameters
@@ -164,9 +155,7 @@ def save_psf_candidates_provenance(
     return path
 
 
-def psf_candidates_provenance_exists(
-    config: dict[str, Any],
-) -> bool:
+def psf_candidates_provenance_exists(config: dict[str, Any]) -> bool:
     """Return whether the saved PSF candidates record their provenance.
 
     Candidates saved by BayMorph 0.5.1 and earlier have none.
@@ -184,9 +173,7 @@ def psf_candidates_provenance_exists(
     return pipeline_paths(config)["psf"]["candidates_provenance"].is_file()
 
 
-def validate_psf_candidates_provenance(
-    config: dict[str, Any],
-) -> None:
+def validate_psf_candidates_provenance(config: dict[str, Any]) -> None:
     """Reject saved PSF candidates selected from other inputs or settings.
 
     Parameters
@@ -212,9 +199,7 @@ def validate_psf_candidates_provenance(
         )
 
 
-def psf_candidates_exist(
-    config: str | Path | dict[str, Any],
-) -> bool:
+def psf_candidates_exist(config: str | Path | dict[str, Any]) -> bool:
     """Return whether saved PSF candidates exist on disk.
 
     Parameters
@@ -235,9 +220,7 @@ def psf_candidates_exist(
     return pipeline_paths(resolved)["psf"]["candidates"].is_file()
 
 
-def load_psf_candidates(
-    config: str | Path | dict[str, Any],
-) -> list[PSFCandidate]:
+def load_psf_candidates(config: str | Path | dict[str, Any]) -> list[PSFCandidate]:
     """Load saved PSF candidates from disk.
 
     Parameters
@@ -291,8 +274,7 @@ def run_psf_candidate_selection_from_config(
     make_output_tree(resolved)
 
     image = open_observation(
-        resolved["data"]["image_path"],
-        hdu=resolved["data"].get("hdu"),
+        resolved["data"]["image_path"], hdu=resolved["data"].get("hdu")
     ).image
 
     detection_cfg = resolved["preparation"]["detection"]
@@ -343,12 +325,7 @@ def run_psf_candidate_selection_from_config(
 
 
 def is_isolated_candidate(
-    segmentation: np.ndarray,
-    *,
-    label: int,
-    x: float,
-    y: float,
-    half_size: int,
+    segmentation: np.ndarray, *, label: int, x: float, y: float, half_size: int
 ) -> bool:
     """Check whether a candidate is isolated within a local segmentation window.
 
@@ -522,11 +499,7 @@ def select_psf_candidates_from_rows(
     return selected[:target_n_candidates]
 
 
-def is_inside_exclusion_box(
-    x: float,
-    y: float,
-    box: dict[str, float] | None,
-) -> bool:
+def is_inside_exclusion_box(x: float, y: float, box: dict[str, float] | None) -> bool:
     """Return whether a position lies inside an exclusion box.
 
     Parameters
@@ -544,10 +517,7 @@ def is_inside_exclusion_box(
     if box is None:
         return False
 
-    return (
-        box["xmin"] <= x <= box["xmax"]
-        and box["ymin"] <= y <= box["ymax"]
-    )
+    return box["xmin"] <= x <= box["xmax"] and box["ymin"] <= y <= box["ymax"]
 
 
 def estimate_candidate_half_size_from_sigmas(

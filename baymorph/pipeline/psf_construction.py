@@ -13,10 +13,7 @@ import numpy as np
 from astropy.io import fits
 
 from baymorph.pipeline.config import load_resolved_config
-from baymorph.pipeline.empirical_psf_builder import (
-    BuilderSettings,
-    build_empirical_psf,
-)
+from baymorph.pipeline.empirical_psf_builder import BuilderSettings, build_empirical_psf
 from baymorph.pipeline.image_preparation import detect_real_fits_sources
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
 from baymorph.pipeline.opening import open_observation
@@ -27,17 +24,13 @@ from baymorph.pipeline.prepared_identity import (
 )
 from baymorph.pipeline.psf_candidates import load_psf_candidates
 from baymorph.plotting.style import make_plot
-from baymorph.rendering.effective_psf import (
-    RENDERING_CONVENTION,
-    SUBPIXEL_FACTOR,
-)
+from baymorph.rendering.effective_psf import RENDERING_CONVENTION, SUBPIXEL_FACTOR
 from baymorph.simulation.psf import (
     EmpiricalPSF,
     GaussianPSF,
     validate_finite_nonnegative_kernel,
 )
 from baymorph.stats.robust import robust_sigma
-
 
 EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION = 1
 EMPIRICAL_PSF_PRODUCT_SCHEMA_VERSION = 2
@@ -49,27 +42,18 @@ EMPIRICAL_PSF_NORMALIZATION_ATOL = 1.0e-8
 def _canonical_json_sha256(value: Any) -> str:
     """Return a stable SHA-256 digest for JSON-compatible settings."""
     payload = json.dumps(
-        value,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-        default=str,
+        value, sort_keys=True, separators=(",", ":"), allow_nan=False, default=str
     ).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
 
-def empirical_psf_centroid_tolerance_pixels(
-    config: Mapping[str, Any],
-) -> float:
+def empirical_psf_centroid_tolerance_pixels(config: Mapping[str, Any]) -> float:
     """Return the explicit empirical-PSF centroid tolerance in pixels."""
     value = (
         config.get("psf", {})
         .get("empirical", {})
         .get("construction", {})
-        .get(
-            "centroid_tolerance_pixels",
-            EMPIRICAL_PSF_CENTROID_TOLERANCE_PIXELS,
-        )
+        .get("centroid_tolerance_pixels", EMPIRICAL_PSF_CENTROID_TOLERANCE_PIXELS)
     )
 
     try:
@@ -89,18 +73,12 @@ def empirical_psf_centroid_tolerance_pixels(
     return tolerance
 
 
-def empirical_psf_builder_settings(
-    config: Mapping[str, Any],
-) -> BuilderSettings:
+def empirical_psf_builder_settings(config: Mapping[str, Any]) -> BuilderSettings:
     """Return the radii of the empirical-PSF builder from the configuration.
 
     Absent keys take the values validated with AD-046.
     """
-    construction = (
-        config.get("psf", {})
-        .get("empirical", {})
-        .get("construction", {})
-    )
+    construction = config.get("psf", {}).get("empirical", {}).get("construction", {})
     defaults = BuilderSettings()
 
     return BuilderSettings(
@@ -111,24 +89,16 @@ def empirical_psf_builder_settings(
             construction.get("sky_outer_radius", defaults.sky_outer_radius)
         ),
         mask_growth_pixels=int(
-            construction.get(
-                "mask_growth_pixels",
-                defaults.mask_growth_pixels,
-            )
+            construction.get("mask_growth_pixels", defaults.mask_growth_pixels)
         ),
         support_half_size=int(
-            construction.get(
-                "support_half_size",
-                defaults.support_half_size,
-            )
+            construction.get("support_half_size", defaults.support_half_size)
         ),
     )
 
 
 def validate_empirical_psf(
-    psf: np.ndarray,
-    *,
-    centroid_tolerance_pixels: float,
+    psf: np.ndarray, *, centroid_tolerance_pixels: float
 ) -> dict[str, Any]:
     """Validate a production empirical PSF without repairing its pixels.
 
@@ -137,15 +107,10 @@ def validate_empirical_psf(
     the declared flux-centroid tolerance. Invalid kernels fail closed rather
     than relying on ``EmpiricalPSF`` to sanitize them at inference time.
     """
-    data = validate_finite_nonnegative_kernel(
-        psf,
-        label="Production empirical PSF",
-    )
+    data = validate_finite_nonnegative_kernel(psf, label="Production empirical PSF")
 
     if data.size == 0 or 0 in data.shape:
-        raise ValueError(
-            "Production empirical PSF must not be empty."
-        )
+        raise ValueError("Production empirical PSF must not be empty.")
 
     if data.shape[0] % 2 == 0 or data.shape[1] % 2 == 0:
         raise ValueError(
@@ -158,16 +123,9 @@ def validate_empirical_psf(
     total = float(np.sum(data))
 
     if not np.isfinite(total) or total <= 0.0:
-        raise ValueError(
-            "Production empirical PSF must have positive finite flux."
-        )
+        raise ValueError("Production empirical PSF must have positive finite flux.")
 
-    if not np.isclose(
-        total,
-        1.0,
-        rtol=0.0,
-        atol=EMPIRICAL_PSF_NORMALIZATION_ATOL,
-    ):
+    if not np.isclose(total, 1.0, rtol=0.0, atol=EMPIRICAL_PSF_NORMALIZATION_ATOL):
         raise ValueError(
             "Production empirical PSF must be normalized to unit sum "
             f"within {EMPIRICAL_PSF_NORMALIZATION_ATOL:g}; got {total:.17g}."
@@ -190,12 +148,7 @@ def validate_empirical_psf(
     centroid_y = float(np.sum(data * yy) / total)
     center_x = 0.5 * (data.shape[1] - 1)
     center_y = 0.5 * (data.shape[0] - 1)
-    centroid_offset = float(
-        np.hypot(
-            centroid_x - center_x,
-            centroid_y - center_y,
-        )
-    )
+    centroid_offset = float(np.hypot(centroid_x - center_x, centroid_y - center_y))
 
     if centroid_offset > tolerance:
         raise ValueError(
@@ -219,18 +172,13 @@ def validate_empirical_psf(
     }
 
 
-def build_empirical_psf_provenance(
-    config: Mapping[str, Any],
-) -> dict[str, Any]:
+def build_empirical_psf_provenance(config: Mapping[str, Any]) -> dict[str, Any]:
     """Fingerprint the PSF and every file/config input used to build it."""
     paths = pipeline_paths(dict(config))
     image_path = Path(config["data"]["image_path"]).expanduser().resolve()
     candidates_path = paths["psf"]["candidates"].resolve()
     psf_path = paths["psf"]["psf_fits"].resolve()
-    empirical_config = (
-        config.get("psf", {})
-        .get("empirical", {})
-    )
+    empirical_config = config.get("psf", {}).get("empirical", {})
     input_fits = {
         "path": str(image_path),
         "sha256": file_content_identity(image_path)["sha256"],
@@ -249,19 +197,13 @@ def build_empirical_psf_provenance(
             "path": str(candidates_path),
             "sha256": _file_sha256(candidates_path),
         },
-        "psf_fits": {
-            "path": str(psf_path),
-            "sha256": _file_sha256(psf_path),
-        },
-        "empirical_config_sha256": _canonical_json_sha256(
-            empirical_config
-        ),
+        "psf_fits": {"path": str(psf_path), "sha256": _file_sha256(psf_path)},
+        "empirical_config_sha256": _canonical_json_sha256(empirical_config),
     }
 
 
 def validate_empirical_psf_provenance(
-    config: Mapping[str, Any],
-    metadata: Mapping[str, Any],
+    config: Mapping[str, Any], metadata: Mapping[str, Any]
 ) -> None:
     """Reject a PSF whose sidecar does not bind the current inputs."""
     recorded = metadata.get("provenance")
@@ -281,9 +223,7 @@ def validate_empirical_psf_provenance(
         )
         raise ValueError(
             "Empirical PSF provenance does not match the current immutable "
-            "inputs; rebuild the PSF. Mismatched fields: "
-            + ", ".join(mismatched)
-            + "."
+            "inputs; rebuild the PSF. Mismatched fields: " + ", ".join(mismatched) + "."
         )
 
 
@@ -325,29 +265,20 @@ def save_empirical_psf(
     data = np.asarray(psf, dtype=float)
     validate_empirical_psf(
         data,
-        centroid_tolerance_pixels=(
-            empirical_psf_centroid_tolerance_pixels(config)
-        ),
+        centroid_tolerance_pixels=(empirical_psf_centroid_tolerance_pixels(config)),
     )
     hdus = [fits.PrimaryHDU(data)]
 
     if subpixel_kernels is not None:
-        cube = EmpiricalPSF(
-            data,
-            subpixel_kernels=subpixel_kernels,
-        ).subpixel_kernels
-        hdus.append(
-            fits.ImageHDU(cube, name=EMPIRICAL_PSF_SUBPIXEL_EXTENSION)
-        )
+        cube = EmpiricalPSF(data, subpixel_kernels=subpixel_kernels).subpixel_kernels
+        hdus.append(fits.ImageHDU(cube, name=EMPIRICAL_PSF_SUBPIXEL_EXTENSION))
 
     fits.HDUList(hdus).writeto(path, overwrite=overwrite)
 
     return path
 
 
-def empirical_psf_exists(
-    config: str | Path | dict[str, Any],
-) -> bool:
+def empirical_psf_exists(config: str | Path | dict[str, Any]) -> bool:
     """Return whether a saved empirical PSF image exists on disk.
 
     Parameters
@@ -369,9 +300,7 @@ def empirical_psf_exists(
     return pipeline_paths(resolved)["psf"]["psf_fits"].is_file()
 
 
-def load_empirical_psf(
-    config: str | Path | dict[str, Any],
-) -> EmpiricalPSF:
+def load_empirical_psf(config: str | Path | dict[str, Any]) -> EmpiricalPSF:
     """Load a saved empirical PSF from disk.
 
     Parameters
@@ -394,9 +323,7 @@ def load_empirical_psf(
     data = fits.getdata(path, ext=0)
     validation = validate_empirical_psf(
         data,
-        centroid_tolerance_pixels=(
-            empirical_psf_centroid_tolerance_pixels(resolved)
-        ),
+        centroid_tolerance_pixels=(empirical_psf_centroid_tolerance_pixels(resolved)),
     )
 
     metadata_path = paths["metadata"]
@@ -411,13 +338,10 @@ def load_empirical_psf(
         metadata = json.load(stream)
 
     if not isinstance(metadata, Mapping):
-        raise ValueError(
-            "Empirical PSF metadata must be a JSON mapping."
-        )
+        raise ValueError("Empirical PSF metadata must be a JSON mapping.")
 
     if (
-        metadata.get("schema_version")
-        == EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION
+        metadata.get("schema_version") == EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION
         and metadata.get("type") == "empirical"
     ):
         raise ValueError(
@@ -428,8 +352,7 @@ def load_empirical_psf(
         )
 
     if (
-        metadata.get("schema_version")
-        != EMPIRICAL_PSF_PRODUCT_SCHEMA_VERSION
+        metadata.get("schema_version") != EMPIRICAL_PSF_PRODUCT_SCHEMA_VERSION
         or metadata.get("type") != "empirical"
     ):
         raise ValueError(
@@ -450,10 +373,7 @@ def load_empirical_psf(
             "kernel or frozen tolerance. Rebuild the PSF."
         )
 
-    validate_empirical_psf_provenance(
-        resolved,
-        metadata,
-    )
+    validate_empirical_psf_provenance(resolved, metadata)
 
     with fits.open(path) as hdus:
         if EMPIRICAL_PSF_SUBPIXEL_EXTENSION not in hdus:
@@ -463,15 +383,10 @@ def load_empirical_psf(
 
         cube = np.array(hdus[EMPIRICAL_PSF_SUBPIXEL_EXTENSION].data)
 
-    return EmpiricalPSF(
-        np.asarray(data, dtype=float),
-        subpixel_kernels=cube,
-    )
+    return EmpiricalPSF(np.asarray(data, dtype=float), subpixel_kernels=cube)
 
 
-def estimate_psf_equivalent_gaussian_fwhm(
-    psf: np.ndarray,
-) -> float | None:
+def estimate_psf_equivalent_gaussian_fwhm(psf: np.ndarray) -> float | None:
     """Estimate the moment-based Gaussian-equivalent PSF FWHM.
 
     The estimate is derived from the intensity-weighted second moments
@@ -499,11 +414,7 @@ def estimate_psf_equivalent_gaussian_fwhm(
     if data.ndim != 2 or not np.all(np.isfinite(data)):
         return None
 
-    weights = np.clip(
-        data,
-        a_min=0.0,
-        a_max=None,
-    )
+    weights = np.clip(data, a_min=0.0, a_max=None)
     total = float(weights.sum())
 
     if not np.isfinite(total) or total <= 0.0:
@@ -514,12 +425,8 @@ def estimate_psf_equivalent_gaussian_fwhm(
     x_centroid = float(np.sum(weights * xx) / total)
     y_centroid = float(np.sum(weights * yy) / total)
 
-    variance_x = float(
-        np.sum(weights * (xx - x_centroid) ** 2) / total
-    )
-    variance_y = float(
-        np.sum(weights * (yy - y_centroid) ** 2) / total
-    )
+    variance_x = float(np.sum(weights * (xx - x_centroid) ** 2) / total)
+    variance_y = float(np.sum(weights * (yy - y_centroid) ** 2) / total)
 
     if (
         not np.isfinite(variance_x)
@@ -532,17 +439,11 @@ def estimate_psf_equivalent_gaussian_fwhm(
     sigma_equivalent = (variance_x * variance_y) ** 0.25
     gaussian_fwhm_factor = 2.0 * np.sqrt(2.0 * np.log(2.0))
 
-    return float(
-        gaussian_fwhm_factor * sigma_equivalent
-    )
-
+    return float(gaussian_fwhm_factor * sigma_equivalent)
 
 
 def estimate_psf_core_fwhm(
-    psf: np.ndarray,
-    *,
-    radial_step: float = 0.05,
-    n_angles: int = 360,
+    psf: np.ndarray, *, radial_step: float = 0.05, n_angles: int = 360
 ) -> float | None:
     """Estimate the circularized half-maximum core FWHM of a PSF.
 
@@ -577,144 +478,70 @@ def estimate_psf_core_fwhm(
     from scipy.ndimage import map_coordinates
 
     if radial_step <= 0.0:
-        raise ValueError(
-            "radial_step must be positive."
-        )
+        raise ValueError("radial_step must be positive.")
 
     if n_angles < 8:
-        raise ValueError(
-            "n_angles must be at least 8."
-        )
+        raise ValueError("n_angles must be at least 8.")
 
-    data = np.asarray(
-        psf,
-        dtype=float,
-    )
+    data = np.asarray(psf, dtype=float)
 
-    if (
-        data.ndim != 2
-        or not np.all(np.isfinite(data))
-    ):
+    if data.ndim != 2 or not np.all(np.isfinite(data)):
         return None
 
-    peak = float(
-        np.max(data)
-    )
+    peak = float(np.max(data))
 
-    if (
-        not np.isfinite(peak)
-        or peak <= 0.0
-    ):
+    if not np.isfinite(peak) or peak <= 0.0:
         return None
 
-    y0, x0 = np.unravel_index(
-        np.argmax(data),
-        data.shape,
-    )
+    y0, x0 = np.unravel_index(np.argmax(data), data.shape)
 
-    max_radius = float(
-        min(
-            x0,
-            y0,
-            data.shape[1] - 1 - x0,
-            data.shape[0] - 1 - y0,
-        )
-    )
+    max_radius = float(min(x0, y0, data.shape[1] - 1 - x0, data.shape[0] - 1 - y0))
 
     if max_radius <= radial_step:
         return None
 
-    radii = np.arange(
-        0.0,
-        max_radius + 0.5 * radial_step,
-        radial_step,
-    )
+    radii = np.arange(0.0, max_radius + 0.5 * radial_step, radial_step)
 
-    angles = np.linspace(
-        0.0,
-        2.0 * np.pi,
-        n_angles,
-        endpoint=False,
-    )
+    angles = np.linspace(0.0, 2.0 * np.pi, n_angles, endpoint=False)
 
-    radial_grid = radii[
-        None,
-        :
-    ]
+    radial_grid = radii[None, :]
 
-    y_coordinates = (
-        float(y0)
-        + np.sin(angles)[:, None]
-        * radial_grid
-    )
+    y_coordinates = float(y0) + np.sin(angles)[:, None] * radial_grid
 
-    x_coordinates = (
-        float(x0)
-        + np.cos(angles)[:, None]
-        * radial_grid
-    )
+    x_coordinates = float(x0) + np.cos(angles)[:, None] * radial_grid
 
     samples = map_coordinates(
-        data,
-        [
-            y_coordinates,
-            x_coordinates,
-        ],
-        order=3,
-        mode="nearest",
-        prefilter=True,
+        data, [y_coordinates, x_coordinates], order=3, mode="nearest", prefilter=True
     )
 
-    profile = np.median(
-        samples,
-        axis=0,
-    )
+    profile = np.median(samples, axis=0)
 
-    peak_profile = float(
-        profile[0]
-    )
+    peak_profile = float(profile[0])
 
-    if (
-        not np.isfinite(peak_profile)
-        or peak_profile <= 0.0
-    ):
+    if not np.isfinite(peak_profile) or peak_profile <= 0.0:
         return None
 
     half_maximum = 0.5 * peak_profile
 
-    crossings = np.flatnonzero(
-        profile <= half_maximum
-    )
+    crossings = np.flatnonzero(profile <= half_maximum)
 
-    if (
-        crossings.size == 0
-        or crossings[0] == 0
-    ):
+    if crossings.size == 0 or crossings[0] == 0:
         return None
 
-    index = int(
-        crossings[0]
-    )
+    index = int(crossings[0])
 
     half_maximum_radius = float(
         np.interp(
             half_maximum,
-            [
-                profile[index],
-                profile[index - 1],
-            ],
-            [
-                radii[index],
-                radii[index - 1],
-            ],
+            [profile[index], profile[index - 1]],
+            [radii[index], radii[index - 1]],
         )
     )
 
     return 2.0 * half_maximum_radius
 
-def psf_radial_profile(
-    psf: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
+
+def psf_radial_profile(psf: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Compute a median radial profile of a PSF image.
 
     Parameters
@@ -733,51 +560,27 @@ def psf_radial_profile(
 
     yy, xx = np.indices(data.shape)
 
-    y0, x0 = np.unravel_index(
-        np.nanargmax(data),
-        data.shape,
-    )
+    y0, x0 = np.unravel_index(np.nanargmax(data), data.shape)
 
-    radius = np.sqrt(
-        (xx - x0) ** 2
-        + (yy - y0) ** 2
-    )
+    radius = np.sqrt((xx - x0) ** 2 + (yy - y0) ** 2)
 
     max_radius = 0.5 * min(data.shape)
 
-    radii = np.arange(
-        0.0,
-        max_radius + 1.0,
-        1.0,
-    )
+    radii = np.arange(0.0, max_radius + 1.0, 1.0)
 
-    radius_mid = 0.5 * (
-        radii[:-1]
-        + radii[1:]
-    )
+    radius_mid = 0.5 * (radii[:-1] + radii[1:])
 
-    profile = np.full(
-        radius_mid.shape,
-        np.nan,
-        dtype=float,
-    )
+    profile = np.full(radius_mid.shape, np.nan, dtype=float)
 
     valid = np.isfinite(data)
 
     for i in range(radii.size - 1):
-        annulus = (
-            (radius >= radii[i])
-            & (radius < radii[i + 1])
-            & valid
-        )
+        annulus = (radius >= radii[i]) & (radius < radii[i + 1]) & valid
 
         if np.any(annulus):
-            profile[i] = np.nanmedian(
-                data[annulus]
-            )
+            profile[i] = np.nanmedian(data[annulus])
 
     return radius_mid, profile
-
 
 
 def _psf_grid_shape(n_items: int) -> tuple[int, int]:
@@ -822,66 +625,29 @@ def save_psf_diagnostics(
     """
     paths = pipeline_paths(config)["psf"]
 
-    diagnostics_dir = (
-        paths["dir"]
-        / "diagnostics"
-    )
+    diagnostics_dir = paths["dir"] / "diagnostics"
 
-    diagnostics_dir.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    diagnostics_dir.mkdir(parents=True, exist_ok=True)
 
-    psf = np.asarray(
-        psf,
-        dtype=float,
-    )
+    psf = np.asarray(psf, dtype=float)
 
-    core_fwhm = estimate_psf_core_fwhm(
-        psf,
-    )
+    core_fwhm = estimate_psf_core_fwhm(psf)
 
-    equivalent_gaussian_fwhm = (
-        estimate_psf_equivalent_gaussian_fwhm(
-            psf,
-        )
-    )
+    equivalent_gaussian_fwhm = estimate_psf_equivalent_gaussian_fwhm(psf)
 
-    fig, axes = make_plot(
-        nrows=1,
-        ncols=2,
-        constrained_layout=True,
-    )
+    fig, axes = make_plot(nrows=1, ncols=2, constrained_layout=True)
 
-    axes[0].imshow(
-        psf,
-        origin="lower",
-        cmap="gist_stern",
-    )
+    axes[0].imshow(psf, origin="lower", cmap="gist_stern")
 
-    axes[0].set_title(
-        title,
-    )
+    axes[0].set_title(title)
 
-    axes[0].set_xlabel(
-        r"$x\ [{\rm pix}]$",
-    )
+    axes[0].set_xlabel(r"$x\ [{\rm pix}]$")
 
-    axes[0].set_ylabel(
-        r"$y\ [{\rm pix}]$",
-    )
+    axes[0].set_ylabel(r"$y\ [{\rm pix}]$")
 
-    radius, profile = psf_radial_profile(
-        psf,
-    )
+    radius, profile = psf_radial_profile(psf)
 
-    axes[1].plot(
-        radius,
-        profile,
-        color="black",
-        lw=3,
-        label="Measured profile",
-    )
+    axes[1].plot(radius, profile, color="black", lw=3, label="Measured profile")
 
     if core_fwhm is not None:
         axes[1].axvline(
@@ -919,102 +685,55 @@ def save_psf_diagnostics(
             ),
         )
 
-    axes[1].set_xlabel(
-        r"$R\ [{\rm pix}]$",
-    )
+    axes[1].set_xlabel(r"$R\ [{\rm pix}]$")
 
-    axes[1].set_ylabel(
-        r"$I_{\rm PSF}$",
-    )
+    axes[1].set_ylabel(r"$I_{\rm PSF}$")
 
-    axes[1].set_title(
-        "PSF radial profile",
-    )
+    axes[1].set_title("PSF radial profile")
 
-    axes[1].legend(
-        frameon=False,
-    )
+    axes[1].legend(frameon=False)
 
-    fig.savefig(
-        diagnostics_dir
-        / "empirical_psf_diagnostic.pdf",
-        bbox_inches="tight",
-    )
+    fig.savefig(diagnostics_dir / "empirical_psf_diagnostic.pdf", bbox_inches="tight")
 
-    plt.close(
-        fig,
-    )
+    plt.close(fig)
 
     if not cutouts:
         return
 
-    nrows, ncols = _psf_grid_shape(
-        len(cutouts)
-    )
+    nrows, ncols = _psf_grid_shape(len(cutouts))
 
     fig, axes = make_plot(
-        nrows=nrows,
-        ncols=ncols,
-        flatten=False,
-        squeeze=False,
-        constrained_layout=True,
+        nrows=nrows, ncols=ncols, flatten=False, squeeze=False, constrained_layout=True
     )
 
-    axes_flat = np.ravel(
-        axes
-    )
+    axes_flat = np.ravel(axes)
 
     for ax in axes_flat:
         ax.axis("off")
 
-    for index, cutout in enumerate(
-        cutouts
-    ):
-        ax = axes_flat[
-            index
-        ]
+    for index, cutout in enumerate(cutouts):
+        ax = axes_flat[index]
 
         ax.axis("on")
 
-        ax.imshow(
-            cutout,
-            origin="lower",
-            cmap="gist_stern",
-        )
+        ax.imshow(cutout, origin="lower", cmap="gist_stern")
 
-        ax.set_title(
-            rf"$\mathrm{{PSF\ cutout}}\ {index + 1}$",
-        )
+        ax.set_title(rf"$\mathrm{{PSF\ cutout}}\ {index + 1}$")
 
-    fig.savefig(
-        diagnostics_dir
-        / "empirical_psf_cutouts.pdf",
-        bbox_inches="tight",
-    )
+    fig.savefig(diagnostics_dir / "empirical_psf_cutouts.pdf", bbox_inches="tight")
 
-    plt.close(
-        fig,
-    )
+    plt.close(fig)
+
 
 def save_empirical_psf_diagnostics(
-    config: dict[str, Any],
-    psf: np.ndarray,
-    cutouts: list[np.ndarray],
+    config: dict[str, Any], psf: np.ndarray, cutouts: list[np.ndarray]
 ) -> None:
     """Save empirical PSF diagnostics."""
-    save_psf_diagnostics(
-        config,
-        psf,
-        cutouts,
-        title="Empirical PSF",
-    )
+    save_psf_diagnostics(config, psf, cutouts, title="Empirical PSF")
 
 
 def save_simulated_psf_products(
-    config: dict[str, Any],
-    *,
-    fwhm: float,
-    size: int = 25,
+    config: dict[str, Any], *, fwhm: float, size: int = 25
 ) -> np.ndarray:
     """Create and save products for a simulated Gaussian PSF.
 
@@ -1032,18 +751,11 @@ def save_simulated_psf_products(
     ndarray
         Unit-normalized Gaussian PSF kernel.
     """
-    psf_model = GaussianPSF(
-        fwhm=float(fwhm),
-    )
+    psf_model = GaussianPSF(fwhm=float(fwhm))
 
-    kernel = psf_model.kernel(
-        size=int(size),
-    )
+    kernel = psf_model.kernel(size=int(size))
 
-    save_empirical_psf(
-        config,
-        kernel,
-    )
+    save_empirical_psf(config, kernel)
 
     save_psf_diagnostics(
         config,
@@ -1059,13 +771,9 @@ def save_simulated_psf_products(
             "type": "gaussian",
             "source": "simulation",
             "fwhm_pix": float(fwhm),
-            "psf_core_fwhm_pix": estimate_psf_core_fwhm(
-                kernel
-            ),
+            "psf_core_fwhm_pix": estimate_psf_core_fwhm(kernel),
             "psf_equivalent_gaussian_fwhm_pix": (
-                estimate_psf_equivalent_gaussian_fwhm(
-                    kernel
-                )
+                estimate_psf_equivalent_gaussian_fwhm(kernel)
             ),
             "kernel_size": int(size),
             "psf_shape": list(kernel.shape),
@@ -1077,9 +785,7 @@ def save_simulated_psf_products(
     return kernel
 
 
-def run_psf_construction_from_config(
-    config: str | Path | dict[str, Any],
-) -> np.ndarray:
+def run_psf_construction_from_config(config: str | Path | dict[str, Any]) -> np.ndarray:
     """Construct an empirical PSF from selected candidates.
 
     Candidates are validated using a local robust peak signal-to-noise
@@ -1113,8 +819,7 @@ def run_psf_construction_from_config(
         resolved = config
 
     observation = open_observation(
-        resolved["data"]["image_path"],
-        hdu=resolved["data"].get("hdu"),
+        resolved["data"]["image_path"], hdu=resolved["data"].get("hdu")
     )
     image = observation.image
 
@@ -1124,54 +829,26 @@ def run_psf_construction_from_config(
         raise ValueError("No PSF candidates available.")
 
     candidate_cfg = (
-        resolved.get(
-            "psf",
-            {},
-        )
-        .get(
-            "empirical",
-            {},
-        )
-        .get(
-            "candidate_selection",
-            {},
-        )
+        resolved.get("psf", {}).get("empirical", {}).get("candidate_selection", {})
     )
 
-    min_peak_snr = float(
-        candidate_cfg.get(
-            "min_peak_snr",
-            30.0,
-        )
-    )
+    min_peak_snr = float(candidate_cfg.get("min_peak_snr", 30.0))
 
-    if (
-        not np.isfinite(min_peak_snr)
-        or min_peak_snr < 0.0
-    ):
-        raise ValueError(
-            "min_peak_snr must be finite and non-negative."
-        )
+    if not np.isfinite(min_peak_snr) or min_peak_snr < 0.0:
+        raise ValueError("min_peak_snr must be finite and non-negative.")
 
     used_candidates = []
     rejected_candidates = []
 
     for candidate in candidates:
         if candidate.half_size is None:
-            raise ValueError(
-                "PSF candidate is missing half_size."
-            )
+            raise ValueError("PSF candidate is missing half_size.")
 
         cutout = extract_centered_cutout(
-            image.data,
-            x=candidate.x,
-            y=candidate.y,
-            half_size=candidate.half_size,
+            image.data, x=candidate.x, y=candidate.y, half_size=candidate.half_size
         )
 
-        peak_snr = estimate_cutout_peak_snr(
-            cutout
-        )
+        peak_snr = estimate_cutout_peak_snr(cutout)
 
         candidate_metadata = {
             "label": candidate.label,
@@ -1181,10 +858,7 @@ def run_psf_construction_from_config(
             "peak_snr": peak_snr,
         }
 
-        if (
-            peak_snr is None
-            or peak_snr < min_peak_snr
-        ):
+        if peak_snr is None or peak_snr < min_peak_snr:
             rejected_candidates.append(
                 {
                     **candidate_metadata,
@@ -1197,74 +871,40 @@ def run_psf_construction_from_config(
             )
             continue
 
-        used_candidates.append(
-            candidate_metadata
-        )
+        used_candidates.append(candidate_metadata)
 
     if len(used_candidates) == 0:
-        raise ValueError(
-            "No PSF candidates satisfy "
-            f"min_peak_snr={min_peak_snr:g}."
-        )
+        raise ValueError("No PSF candidates satisfy " f"min_peak_snr={min_peak_snr:g}.")
 
-    settings = empirical_psf_builder_settings(
-        resolved
-    )
-    detection = detect_real_fits_sources(
-        image.data
-    )
+    settings = empirical_psf_builder_settings(resolved)
+    detection = detect_real_fits_sources(image.data)
     labels = (
         np.zeros(image.data.shape, dtype=int)
         if detection.segmentation is None
         else np.asarray(detection.segmentation.data)
     )
-    build = build_empirical_psf(
-        image.data,
-        used_candidates,
-        labels,
-        settings,
-    )
+    build = build_empirical_psf(image.data, used_candidates, labels, settings)
     psf = build.native
 
     validation = validate_empirical_psf(
         psf,
-        centroid_tolerance_pixels=(
-            empirical_psf_centroid_tolerance_pixels(resolved)
-        ),
+        centroid_tolerance_pixels=(empirical_psf_centroid_tolerance_pixels(resolved)),
     )
 
-    psf_core_fwhm = estimate_psf_core_fwhm(
-        psf,
-    )
+    psf_core_fwhm = estimate_psf_core_fwhm(psf)
 
-    psf_equivalent_gaussian_fwhm = (
-        estimate_psf_equivalent_gaussian_fwhm(
-            psf,
-        )
-    )
+    psf_equivalent_gaussian_fwhm = estimate_psf_equivalent_gaussian_fwhm(psf)
 
-    save_empirical_psf_diagnostics(
-        resolved,
-        psf,
-        build.windows,
-    )
+    save_empirical_psf_diagnostics(resolved, psf, build.windows)
 
-    save_empirical_psf(
-        resolved,
-        psf,
-        subpixel_kernels=build.subpixel_kernels,
-    )
+    save_empirical_psf(resolved, psf, subpixel_kernels=build.subpixel_kernels)
 
-    provenance = build_empirical_psf_provenance(
-        resolved
-    )
+    provenance = build_empirical_psf_provenance(resolved)
 
     save_empirical_psf_metadata(
         resolved,
         {
-            "schema_version": (
-                EMPIRICAL_PSF_PRODUCT_SCHEMA_VERSION
-            ),
+            "schema_version": (EMPIRICAL_PSF_PRODUCT_SCHEMA_VERSION),
             "type": "empirical",
             "builder": {
                 "name": "phase_regression_extended_wings",
@@ -1281,14 +921,10 @@ def run_psf_construction_from_config(
                 for key, values in build.wing_profile.items()
             },
             "stars": build.stars,
-            "observation": observation_metadata_dict(
-                observation
-            ),
+            "observation": observation_metadata_dict(observation),
             "n_candidates_input": len(candidates),
             "n_candidates_used": len(build.stars),
-            "n_candidates_rejected_snr": len(
-                rejected_candidates
-            ),
+            "n_candidates_rejected_snr": len(rejected_candidates),
             "min_peak_snr": min_peak_snr,
             "psf_shape": list(psf.shape),
             "psf_sum": float(np.sum(psf)),
@@ -1296,9 +932,7 @@ def run_psf_construction_from_config(
             "psf_min": float(np.nanmin(psf)),
             "psf_max": float(np.nanmax(psf)),
             "psf_core_fwhm_pix": psf_core_fwhm,
-            "psf_equivalent_gaussian_fwhm_pix": (
-                psf_equivalent_gaussian_fwhm
-            ),
+            "psf_equivalent_gaussian_fwhm_pix": (psf_equivalent_gaussian_fwhm),
             "validation": validation,
             "provenance": provenance,
             "used_candidates": used_candidates,
@@ -1306,14 +940,13 @@ def run_psf_construction_from_config(
             "warnings": _empirical_psf_warnings(
                 psf,
                 n_candidates_used=len(build.stars),
-                psf_equivalent_gaussian_fwhm_pix=(
-                    psf_equivalent_gaussian_fwhm
-                ),
+                psf_equivalent_gaussian_fwhm_pix=(psf_equivalent_gaussian_fwhm),
             ),
         },
     )
 
     return psf
+
 
 def normalize_psf(psf: np.ndarray) -> np.ndarray:
     """Normalize a PSF image to unit sum.
@@ -1342,10 +975,7 @@ def normalize_psf(psf: np.ndarray) -> np.ndarray:
 
 
 def extract_centered_cutout(
-    image: np.ndarray,
-    x: float,
-    y: float,
-    half_size: int,
+    image: np.ndarray, x: float, y: float, half_size: int
 ) -> np.ndarray:
     """Extract a square cutout centered on a source position.
 
@@ -1382,33 +1012,18 @@ def extract_centered_cutout(
     return image[y_min:y_max, x_min:x_max]
 
 
-def _outer_border_pixels(
-    cutout: np.ndarray,
-    *,
-    border_width: int,
-) -> np.ndarray:
+def _outer_border_pixels(cutout: np.ndarray, *, border_width: int) -> np.ndarray:
     """Return pixels in the outer border of a two-dimensional cutout."""
-    data = np.asarray(
-        cutout,
-        dtype=float,
-    )
+    data = np.asarray(cutout, dtype=float)
 
     if data.ndim != 2:
-        raise ValueError(
-            "PSF cutout must be 2D."
-        )
+        raise ValueError("PSF cutout must be 2D.")
 
     if border_width <= 0:
-        raise ValueError(
-            "border_width must be positive."
-        )
+        raise ValueError("border_width must be positive.")
 
-    if 2 * border_width >= min(
-        data.shape
-    ):
-        raise ValueError(
-            "border_width is too large for this cutout."
-        )
+    if 2 * border_width >= min(data.shape):
+        raise ValueError("border_width is too large for this cutout.")
 
     return np.concatenate(
         [
@@ -1421,9 +1036,7 @@ def _outer_border_pixels(
 
 
 def estimate_cutout_peak_snr(
-    cutout: np.ndarray,
-    *,
-    border_width: int = 3,
+    cutout: np.ndarray, *, border_width: int = 3
 ) -> float | None:
     """Estimate robust local peak signal-to-noise for a PSF candidate.
 
@@ -1443,74 +1056,36 @@ def estimate_cutout_peak_snr(
         Peak signal-to-noise ratio, or ``None`` when a finite positive
         local noise scale cannot be measured.
     """
-    data = np.asarray(
-        cutout,
-        dtype=float,
-    )
+    data = np.asarray(cutout, dtype=float)
 
-    border = _outer_border_pixels(
-        data,
-        border_width=border_width,
-    )
+    border = _outer_border_pixels(data, border_width=border_width)
 
-    finite_border = border[
-        np.isfinite(
-            border
-        )
-    ]
+    finite_border = border[np.isfinite(border)]
 
     if finite_border.size == 0:
         return None
 
-    background = float(
-        np.median(
-            finite_border
-        )
-    )
+    background = float(np.median(finite_border))
 
-    local_sigma = robust_sigma(
-        finite_border,
-        center=background,
-    )
+    local_sigma = robust_sigma(finite_border, center=background)
 
-    if (
-        not np.isfinite(local_sigma)
-        or local_sigma <= 0.0
-    ):
+    if not np.isfinite(local_sigma) or local_sigma <= 0.0:
         return None
 
-    finite_data = data[
-        np.isfinite(
-            data
-        )
-    ]
+    finite_data = data[np.isfinite(data)]
 
     if finite_data.size == 0:
         return None
 
-    peak_signal = float(
-        np.max(
-            finite_data
-        )
-        - background
-    )
+    peak_signal = float(np.max(finite_data) - background)
 
-    if (
-        not np.isfinite(peak_signal)
-        or peak_signal <= 0.0
-    ):
+    if not np.isfinite(peak_signal) or peak_signal <= 0.0:
         return None
 
-    return float(
-        peak_signal
-        / local_sigma
-    )
+    return float(peak_signal / local_sigma)
 
 
-def subtract_outer_background(
-    cutout: np.ndarray,
-    border_width: int = 3,
-) -> np.ndarray:
+def subtract_outer_background(cutout: np.ndarray, border_width: int = 3) -> np.ndarray:
     """Subtract a border-based background estimate from a PSF cutout.
 
     Parameters
@@ -1530,14 +1105,9 @@ def subtract_outer_background(
     ValueError
         If ``border_width`` is not positive or is too large for the cutout.
     """
-    border_pixels = _outer_border_pixels(
-        cutout,
-        border_width=border_width,
-    )
+    border_pixels = _outer_border_pixels(cutout, border_width=border_width)
 
-    background = np.nanmedian(
-        border_pixels
-    )
+    background = np.nanmedian(border_pixels)
 
     return cutout - background
 
@@ -1570,52 +1140,26 @@ def clean_empirical_psf(
     ValueError
         If ``psf`` is not two-dimensional.
     """
-    data = np.asarray(
-        psf,
-        dtype=float,
-    ).copy()
+    data = np.asarray(psf, dtype=float).copy()
 
     if data.ndim != 2:
-        raise ValueError(
-            "PSF must be 2D."
-        )
+        raise ValueError("PSF must be 2D.")
 
-    if not np.all(
-        np.isfinite(data)
-    ):
-        data = np.nan_to_num(
-            data,
-            nan=0.0,
-            posinf=0.0,
-            neginf=0.0,
-        )
+    if not np.all(np.isfinite(data)):
+        data = np.nan_to_num(data, nan=0.0, posinf=0.0, neginf=0.0)
 
-    y0, x0 = np.unravel_index(
-        np.nanargmax(data),
-        data.shape,
-    )
+    y0, x0 = np.unravel_index(np.nanargmax(data), data.shape)
 
-    yy, xx = np.indices(
-        data.shape,
-    )
+    yy, xx = np.indices(data.shape)
 
-    radius = np.sqrt(
-        (xx - x0) ** 2
-        + (yy - y0) ** 2
-    )
+    radius = np.sqrt((xx - x0) ** 2 + (yy - y0) ** 2)
 
-    max_radius = 0.5 * min(
-        data.shape
-    )
+    max_radius = 0.5 * min(data.shape)
 
-    background_mask = (
-        radius >= background_radius_fraction * max_radius
-    )
+    background_mask = radius >= background_radius_fraction * max_radius
 
     if np.any(background_mask):
-        background = np.nanmedian(
-            data[background_mask]
-        )
+        background = np.nanmedian(data[background_mask])
     else:
         background = 0.0
 
@@ -1625,29 +1169,19 @@ def clean_empirical_psf(
     taper_start = taper_start_fraction * max_radius
     taper_end = max_radius
 
-    taper = np.ones_like(
-        data,
-        dtype=float,
-    )
+    taper = np.ones_like(data, dtype=float)
 
     outer = radius > taper_start
 
     taper[outer] = 0.5 * (
-        1.0
-        + np.cos(
-            np.pi
-            * (radius[outer] - taper_start)
-            / (taper_end - taper_start)
-        )
+        1.0 + np.cos(np.pi * (radius[outer] - taper_start) / (taper_end - taper_start))
     )
 
     taper[radius >= taper_end] = 0.0
 
     data = data * taper
 
-    return normalize_psf(
-        data
-    )
+    return normalize_psf(data)
 
 
 def stack_psf_cutouts(cutouts: list[np.ndarray]) -> np.ndarray:
@@ -1671,38 +1205,17 @@ def stack_psf_cutouts(cutouts: list[np.ndarray]) -> np.ndarray:
     if len(cutouts) == 0:
         raise ValueError("At least one PSF cutout is required.")
 
-    half_sizes = [
-        min(cutout.shape) // 2
-        for cutout in cutouts
-    ]
+    half_sizes = [min(cutout.shape) // 2 for cutout in cutouts]
 
-    common_half_size = int(
-        np.min(half_sizes)
-    )
+    common_half_size = int(np.min(half_sizes))
 
-    cropped_cutouts = [
-        crop_center(
-            cutout,
-            common_half_size,
-        )
-        for cutout in cutouts
-    ]
+    cropped_cutouts = [crop_center(cutout, common_half_size) for cutout in cutouts]
 
-    stack = np.nanmedian(
-        np.stack(
-            cropped_cutouts,
-            axis=0,
-        ),
-        axis=0,
-    )
+    stack = np.nanmedian(np.stack(cropped_cutouts, axis=0), axis=0)
 
-    psf = normalize_psf(
-        stack
-    )
+    psf = normalize_psf(stack)
 
-    psf = clean_empirical_psf(
-        psf,
-    )
+    psf = clean_empirical_psf(psf)
 
     return psf
 
@@ -1716,10 +1229,7 @@ def _empirical_psf_warnings(
     """Build quality-control warnings for an empirical PSF."""
     warnings = []
 
-    data = np.asarray(
-        psf,
-        dtype=float,
-    )
+    data = np.asarray(psf, dtype=float)
 
     if n_candidates_used < 5:
         warnings.append(
@@ -1736,39 +1246,23 @@ def _empirical_psf_warnings(
             "Empirical PSF is based on fewer than 20 stars; validation is recommended."
         )
 
-    psf_sum = np.nansum(
-        data,
-    )
+    psf_sum = np.nansum(data)
 
     if not np.isfinite(psf_sum) or not np.isclose(psf_sum, 1.0, rtol=1e-3):
-        warnings.append(
-            "PSF is not normalized to unit sum."
-        )
+        warnings.append("PSF is not normalized to unit sum.")
 
-    if not np.all(
-        np.isfinite(data)
-    ):
-        warnings.append(
-            "PSF contains non-finite values."
-        )
+    if not np.all(np.isfinite(data)):
+        warnings.append("PSF contains non-finite values.")
 
-    peak = np.nanmax(
-        data,
-    )
+    peak = np.nanmax(data)
 
     if not np.isfinite(peak) or peak <= 0:
-        warnings.append(
-            "PSF peak is not positive."
-        )
+        warnings.append("PSF peak is not positive.")
 
     if psf_equivalent_gaussian_fwhm_pix is None:
-        warnings.append(
-            "Could not estimate empirical PSF FWHM."
-        )
+        warnings.append("Could not estimate empirical PSF FWHM.")
     elif psf_equivalent_gaussian_fwhm_pix <= 0:
-        warnings.append(
-            "Empirical PSF FWHM is non-positive."
-        )
+        warnings.append("Empirical PSF FWHM is non-positive.")
 
     return warnings
 
@@ -1808,10 +1302,7 @@ def centroid_from_flux(cutout: np.ndarray) -> tuple[float, float]:
 
 
 def recenter_cutout(
-    cutout: np.ndarray,
-    *,
-    target_x: float | None = None,
-    target_y: float | None = None,
+    cutout: np.ndarray, *, target_x: float | None = None, target_y: float | None = None
 ) -> np.ndarray:
     """Recenter a cutout using its flux-weighted centroid.
 
@@ -1846,18 +1337,11 @@ def recenter_cutout(
     dx = target_x - x_centroid
     dy = target_y - y_centroid
 
-    return shift(
-        cutout,
-        shift=(dy, dx),
-        order=3,
-        mode="nearest",
-        prefilter=True,
-    )
+    return shift(cutout, shift=(dy, dx), order=3, mode="nearest", prefilter=True)
 
 
 def save_empirical_psf_metadata(
-    config: dict[str, Any],
-    metadata: dict[str, Any],
+    config: dict[str, Any], metadata: dict[str, Any]
 ) -> Path:
     """Save empirical PSF metadata to disk.
 
@@ -1882,10 +1366,7 @@ def save_empirical_psf_metadata(
     return path
 
 
-def crop_center(
-    image: np.ndarray,
-    half_size: int,
-) -> np.ndarray:
+def crop_center(image: np.ndarray, half_size: int) -> np.ndarray:
     """Crop the central square region of an image.
 
     Parameters

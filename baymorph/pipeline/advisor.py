@@ -46,22 +46,15 @@ from baymorph.pipeline.prior_proposals import (
     propose_model_priors,
     propose_psf_max_peak,
 )
-from baymorph.pipeline.psf_candidates import (
-    run_psf_candidate_selection_from_config,
-)
+from baymorph.pipeline.psf_candidates import run_psf_candidate_selection_from_config
 from baymorph.pipeline.psf_construction import (
     estimate_psf_core_fwhm,
     run_psf_construction_from_config,
 )
 from baymorph.observation.background import background_parameter_names
-from baymorph.pipeline.real_fit import (
-    _load_psf_from_config,
-)
-from baymorph.pipeline.preparation_steps import (
-    estimate_target_geometry_from_image,
-)
+from baymorph.pipeline.real_fit import _load_psf_from_config
+from baymorph.pipeline.preparation_steps import estimate_target_geometry_from_image
 from baymorph.pipeline.segmentation import select_segment_near_position
-
 
 InputFunction = Callable[[str], str]
 TargetPosition = str | Mapping[str, float] | Sequence[float] | None
@@ -166,40 +159,19 @@ class FixedInputs:
         }
 
 
-_STAGE_SECTIONS = (
-    "object",
-    "data",
-    "preparation",
-    "psf",
-    "outputs",
-)
+_STAGE_SECTIONS = ("object", "data", "preparation", "psf", "outputs")
 """Configuration sections that the preparation and the PSF depend on."""
 
-_NON_STAGE_OPTIONS = (
-    "likelihood",
-    "background",
-    "sampler",
-)
+_NON_STAGE_OPTIONS = ("likelihood", "background", "sampler")
 """Options of the configuration maker that leave the stages unchanged."""
 
 
-def _stage_identity(
-    resolved: Mapping[str, Any],
-) -> str:
+def _stage_identity(resolved: Mapping[str, Any]) -> str:
     """Return the fingerprint of the sections the stages depend on."""
-    sections = {
-        name: resolved.get(name)
-        for name in _STAGE_SECTIONS
-    }
-    text = json.dumps(
-        sections,
-        sort_keys=True,
-        default=str,
-    )
+    sections = {name: resolved.get(name) for name in _STAGE_SECTIONS}
+    text = json.dumps(sections, sort_keys=True, default=str)
 
-    return hashlib.sha256(
-        text.encode("utf-8")
-    ).hexdigest()
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _baymorph_version() -> str:
@@ -217,14 +189,9 @@ def _baymorph_version() -> str:
 PRIOR_WIDTH_WARNING_DEX = 6.0
 
 
-def _numeric_prior_bound(
-    value: Any,
-) -> float | None:
+def _numeric_prior_bound(value: Any) -> float | None:
     """Resolve numeric and supported symbolic prior bounds."""
-    if isinstance(
-        value,
-        (int, float, np.integer, np.floating),
-    ):
+    if isinstance(value, (int, float, np.integer, np.floating)):
         result = float(value)
 
         return result if np.isfinite(result) else None
@@ -237,20 +204,11 @@ def _numeric_prior_bound(
         "pi": np.pi,
     }
 
-    return symbolic.get(
-        str(value)
-        .strip()
-        .lower()
-        .replace(
-            " ",
-            "",
-        )
-    )
+    return symbolic.get(str(value).strip().lower().replace(" ", ""))
 
 
 def _prior_volume_position(
-    prior: Mapping[str, Any],
-    observed_scale: float | None,
+    prior: Mapping[str, Any], observed_scale: float | None
 ) -> float | None:
     """Return an observed scale's position in the declared prior measure."""
     if observed_scale is None:
@@ -264,16 +222,7 @@ def _prior_volume_position(
     if lower is None or upper is None or not np.isfinite(value) or not lower < upper:
         return None
 
-    prior_type = (
-        str(
-            prior.get(
-                "type",
-                "uniform",
-            )
-        )
-        .strip()
-        .lower()
-    )
+    prior_type = str(prior.get("type", "uniform")).strip().lower()
 
     if prior_type == "log_uniform":
         if value <= 0.0 or lower <= 0.0:
@@ -294,10 +243,7 @@ def _flux_prior_requires_review(
     edge_fraction: float = 0.05,
 ) -> bool:
     """Return whether a flux diagnostic lies near or outside a prior edge."""
-    position = _prior_volume_position(
-        prior,
-        observed_scale,
-    )
+    position = _prior_volume_position(prior, observed_scale)
 
     if position is None:
         return False
@@ -315,20 +261,13 @@ _OBSERVED_SCALE_NOTES = {
         "scale, not a prior bound."
     ),
     "q": "The image-moment estimate of the axis ratio is diagnostic only.",
-    "theta": (
-        "The image-moment estimate of the position angle is diagnostic only."
-    ),
+    "theta": ("The image-moment estimate of the position angle is diagnostic only."),
 }
 """Meaning of the scale measured on the target, for each parameter that
 describes the whole target."""
 
 
-def _guidance_rule(
-    name: str,
-    kind: str,
-    *,
-    one_component: bool,
-) -> tuple[str, str]:
+def _guidance_rule(name: str, kind: str, *, one_component: bool) -> tuple[str, str]:
     """Return the prior family of a parameter and the rule that proposes it."""
     if kind == "flux":
         return "log_uniform", (
@@ -386,8 +325,7 @@ def _guidance_rule(
 
 
 def _settle_psf_max_peak(
-    reading: HeaderReading,
-    config_options: dict[str, Any],
+    reading: HeaderReading, config_options: dict[str, Any]
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Settle the ceiling on the peak of the PSF stars in ``config_options``.
 
@@ -403,12 +341,7 @@ def _settle_psf_max_peak(
         The provenance record of the ceiling, or None for a Gaussian PSF,
         and a warning when the BayMorph default applies, or None.
     """
-    psf_type = str(
-        config_options.get(
-            "psf_type",
-            "empirical",
-        )
-    ).strip().lower()
+    psf_type = str(config_options.get("psf_type", "empirical")).strip().lower()
 
     if psf_type != "empirical":
         return None, None
@@ -420,24 +353,14 @@ def _settle_psf_max_peak(
             "detail": "declared by the user",
         }, None
 
-    peak, peak_detail = propose_psf_max_peak(
-        reading
-    )
+    peak, peak_detail = propose_psf_max_peak(reading)
 
     if peak is not None:
         config_options["psf_max_peak"] = peak
 
-        return {
-            "value": peak,
-            "source": "header",
-            "detail": peak_detail,
-        }, None
+        return {"value": peak, "source": "header", "detail": peak_detail}, None
 
-    return {
-        "value": None,
-        "source": "default",
-        "detail": peak_detail,
-    }, (
+    return {"value": None, "source": "default", "detail": peak_detail}, (
         "No empirical-PSF candidate peak ceiling was declared, and the "
         f"header gives none ({peak_detail}). BayMorph will use its default "
         "max_peak, which is not checked against the detector saturation "
@@ -458,19 +381,11 @@ def _chosen_models(
     model to such a mapping. Without either, the model is ``single_sersic``.
     """
     if model_name is not None and models is not None:
-        raise ValueError(
-            "Supply model_name or models, not both."
-        )
+        raise ValueError("Supply model_name or models, not both.")
 
     if models is None:
-        chosen = [
-            str(
-                "single_sersic" if model_name is None else model_name
-            ).strip()
-        ]
-        keyed = {
-            chosen[0]: model_priors or {},
-        }
+        chosen = [str("single_sersic" if model_name is None else model_name).strip()]
+        keyed = {chosen[0]: model_priors or {}}
     else:
         if isinstance(models, str) or not isinstance(models, Sequence):
             raise TypeError(
@@ -478,36 +393,18 @@ def _chosen_models(
                 "['single_sersic', 'bulge_disk']."
             )
 
-        chosen = [
-            str(name).strip()
-            for name in models
-        ]
+        chosen = [str(name).strip() for name in models]
 
         if not chosen:
-            raise ValueError(
-                "models must name at least one model."
-            )
+            raise ValueError("models must name at least one model.")
 
-        duplicates = sorted(
-            {
-                name
-                for name in chosen
-                if chosen.count(name) > 1
-            }
-        )
+        duplicates = sorted({name for name in chosen if chosen.count(name) > 1})
 
         if duplicates:
-            raise ValueError(
-                f"models names {duplicates} more than once."
-            )
+            raise ValueError(f"models names {duplicates} more than once.")
 
-        keyed = dict(
-            model_priors or {}
-        )
-        foreign = sorted(
-            str(name)
-            for name in set(keyed) - set(chosen)
-        )
+        keyed = dict(model_priors or {})
+        foreign = sorted(str(name) for name in set(keyed) - set(chosen))
 
         if foreign:
             raise ValueError(
@@ -520,38 +417,29 @@ def _chosen_models(
 
     for name in chosen:
         if name not in PARAMETER_KINDS:
-            raise ValueError(
-                f"Unknown model: {name}"
-            )
+            raise ValueError(f"Unknown model: {name}")
 
         priors = keyed.get(name) or {}
 
         if not isinstance(priors, Mapping):
             raise TypeError(
-                f"The declared priors of {name!r} must map parameters to "
-                "priors."
+                f"The declared priors of {name!r} must map parameters to " "priors."
             )
 
-        unknown = sorted(
-            set(map(str, priors)) - set(PARAMETER_KINDS[name])
-        )
+        unknown = sorted(set(map(str, priors)) - set(PARAMETER_KINDS[name]))
 
         if unknown:
-            raise ValueError(
-                f"Model {name!r} has no parameters {unknown}."
-            )
+            raise ValueError(f"Model {name!r} has no parameters {unknown}.")
 
         declared[name] = {
-            str(parameter): dict(prior)
-            for parameter, prior in priors.items()
+            str(parameter): dict(prior) for parameter, prior in priors.items()
         }
 
     return chosen, declared
 
 
 def _undecided_parameters(
-    decided: Mapping[str, Mapping[str, Any]],
-    kind: str,
+    decided: Mapping[str, Mapping[str, Any]], kind: str
 ) -> list[str]:
     """Return the parameters of one kind that have no decided prior.
 
@@ -596,40 +484,27 @@ class ObservationConfigProposal:
     models: tuple[str, ...] = ()
 
     @property
-    def chosen_models(
-        self,
-    ) -> tuple[str, ...]:
+    def chosen_models(self) -> tuple[str, ...]:
         """Return the chosen models, in the order of ``fit.models``."""
         return self.models or (self.starting_model,)
 
     @property
-    def report_path(
-        self,
-    ) -> Path:
+    def report_path(self) -> Path:
         """Return the path of the provenance report beside the YAML."""
-        return self.output_path.with_name(
-            f"{self.output_path.stem}.advisor.json"
-        )
+        return self.output_path.with_name(f"{self.output_path.stem}.advisor.json")
 
-    def summary(
-        self,
-    ) -> str:
+    def summary(self) -> str:
         """Return a concise proposal summary for human review."""
         target = self.config["data"]["target_position"]
-        sampler_name = str(
-            self.config.get(
-                "fit",
-                {},
+        sampler_name = (
+            str(
+                self.config.get("fit", {})
+                .get("sampler", {})
+                .get("name", "not specified")
             )
-            .get(
-                "sampler",
-                {},
-            )
-            .get(
-                "name",
-                "not specified",
-            )
-        ).strip().lower()
+            .strip()
+            .lower()
+        )
         sampler_scope = f"Selected sampler: {sampler_name}."
         comparison_scope = (
             "A preferred model can be established only through "
@@ -637,10 +512,7 @@ class ObservationConfigProposal:
         )
 
         if isinstance(target, Mapping):
-            target_text = (
-                f"X={float(target['x']):.3f}, "
-                f"Y={float(target['y']):.3f}"
-            )
+            target_text = f"X={float(target['x']):.3f}, " f"Y={float(target['y']):.3f}"
         else:
             target_text = str(target)
 
@@ -662,10 +534,7 @@ class ObservationConfigProposal:
         ]
 
         if self.flux_prior is not None:
-            lines.append(
-                "Flux prior: "
-                + _format_prior(self.flux_prior)
-            )
+            lines.append("Flux prior: " + _format_prior(self.flux_prior))
 
         lines.extend(
             [
@@ -678,11 +547,7 @@ class ObservationConfigProposal:
         )
 
         if self.provenance is not None:
-            lines.extend(
-                _provenance_summary(
-                    self.provenance
-                )
-            )
+            lines.extend(_provenance_summary(self.provenance))
 
         lines.extend(
             [
@@ -701,20 +566,10 @@ class ObservationConfigProposal:
         )
 
         if self.warnings:
-            lines.extend(
-                [
-                    "",
-                    "WARNINGS",
-                ]
-            )
+            lines.extend(["", "WARNINGS"])
             lines.extend(f"- {warning}" for warning in self.warnings)
 
-        lines.extend(
-            [
-                "",
-                "No file has been written.",
-            ]
-        )
+        lines.extend(["", "No file has been written."])
 
         if self.requires_flux_review:
             lines.extend(
@@ -723,33 +578,21 @@ class ObservationConfigProposal:
                         "Writing is blocked until a reviewed scientific "
                         "flux prior is supplied."
                     ),
-                    (
-                        "Build a new proposal with flux_prior=... "
-                        "before writing."
-                    ),
+                    ("Build a new proposal with flux_prior=... " "before writing."),
                 ]
             )
         else:
-            lines.append(
-                "Write only after review with proposal.write(accept=True)."
-            )
+            lines.append("Write only after review with proposal.write(accept=True).")
 
         return "\n".join(lines)
 
-    def _repr_html_(
-        self,
-    ) -> str:
+    def _repr_html_(self) -> str:
         """Return a readable notebook representation."""
         from html import escape
 
         return "<pre>" + escape(self.summary()) + "</pre>"
 
-    def write(
-        self,
-        *,
-        accept: bool = False,
-        overwrite: bool = False,
-    ) -> Path:
+    def write(self, *, accept: bool = False, overwrite: bool = False) -> Path:
         """Write the proposed YAML after explicit user acceptance.
 
         Parameters
@@ -789,25 +632,14 @@ class ObservationConfigProposal:
         destination = self.output_path.expanduser()
 
         documents = [
-            (
-                destination,
-                yaml.safe_dump(
-                    self.config,
-                    sort_keys=False,
-                ),
-                "Configuration",
-            ),
+            (destination, yaml.safe_dump(self.config, sort_keys=False), "Configuration")
         ]
 
         if self.provenance is not None:
             documents.append(
                 (
                     self.report_path.expanduser(),
-                    json.dumps(
-                        self.provenance,
-                        indent=2,
-                    )
-                    + "\n",
+                    json.dumps(self.provenance, indent=2) + "\n",
                     "Provenance report",
                 )
             )
@@ -829,14 +661,8 @@ class ObservationConfigProposal:
             if path.exists() and path.read_text(encoding="utf-8") == text:
                 continue
 
-            path.parent.mkdir(
-                parents=True,
-                exist_ok=True,
-            )
-            path.write_text(
-                text,
-                encoding="utf-8",
-            )
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
 
         return destination.resolve()
 
@@ -912,10 +738,7 @@ class ObservationAdvisor:
             Path.cwd() if start is None else Path(start).expanduser()
         ).resolve()
 
-        search_directories = (
-            search_start,
-            *search_start.parents,
-        )
+        search_directories = (search_start, *search_start.parents)
 
         if supplied_path.is_absolute():
             resolved_fits_path = supplied_path.resolve()
@@ -951,20 +774,12 @@ class ObservationAdvisor:
                     "or any parent directory."
                 )
 
-        advisor = cls(
-            resolved_fits_path,
-            target_position=target_position,
-            hdu=hdu,
-        )
+        advisor = cls(resolved_fits_path, target_position=target_position, hdu=hdu)
         advisor.project_root = project_root
 
         return advisor
 
-    def set_target_position(
-        self,
-        x: float,
-        y: float,
-    ) -> tuple[float, float]:
+    def set_target_position(self, x: float, y: float) -> tuple[float, float]:
         """Set an explicit zero-based target position inside the FITS image.
 
         Parameters
@@ -979,10 +794,7 @@ class ObservationAdvisor:
             Validated ``(x, y)`` target position.
         """
         observation = open_observation(self.fits_path, hdu=self.hdu)
-        data = np.asarray(
-            observation.image.data,
-            dtype=float,
-        )
+        data = np.asarray(observation.image.data, dtype=float)
 
         if data.ndim != 2:
             raise ValueError("Target selection requires a two-dimensional FITS image.")
@@ -990,14 +802,7 @@ class ObservationAdvisor:
         x = float(x)
         y = float(y)
 
-        if not np.all(
-            np.isfinite(
-                [
-                    x,
-                    y,
-                ]
-            )
-        ):
+        if not np.all(np.isfinite([x, y])):
             raise ValueError("Target coordinates must be finite.")
 
         height, width = data.shape
@@ -1009,19 +814,14 @@ class ObservationAdvisor:
                 f"0 <= y <= {height - 1}."
             )
 
-        position = (
-            x,
-            y,
-        )
+        position = (x, y)
 
         self.target_position = position
         self._inspection = None
 
         return position
 
-    def clear_target_position(
-        self,
-    ) -> None:
+    def clear_target_position(self) -> None:
         """Clear the target position and any cached target inspection."""
         self.target_position = None
         self._inspection = None
@@ -1065,10 +865,7 @@ class ObservationAdvisor:
         from baymorph.plotting.target_selector import TargetSelector
 
         observation = open_observation(self.fits_path, hdu=self.hdu)
-        data = np.asarray(
-            observation.image.data,
-            dtype=float,
-        )
+        data = np.asarray(observation.image.data, dtype=float)
 
         if data.ndim != 2:
             raise ValueError(
@@ -1079,14 +876,9 @@ class ObservationAdvisor:
             target_x, target_y = self._resolve_target(observation)
 
             if target_x is not None and target_y is not None:
-                initial_position = (
-                    float(target_x),
-                    float(target_y),
-                )
+                initial_position = (float(target_x), float(target_y))
 
-        def confirm_target(
-            position: tuple[float, float],
-        ) -> None:
+        def confirm_target(position: tuple[float, float]) -> None:
             self.set_target_position(*position)
 
         self.clear_target_position()
@@ -1104,9 +896,7 @@ class ObservationAdvisor:
 
         return selector
 
-    def header_report(
-        self,
-    ) -> str:
+    def header_report(self) -> str:
         """Return the table of the quantities read from the FITS header.
 
         Each row gives a quantity, its value, its unit, its status and the
@@ -1120,11 +910,7 @@ class ObservationAdvisor:
         str
             The report, ready to print.
         """
-        hdu_text = (
-            "selected by BayMorph"
-            if self.hdu is None
-            else repr(self.hdu)
-        )
+        hdu_text = "selected by BayMorph" if self.hdu is None else repr(self.hdu)
         lines = [
             "BayMorph Header Reading",
             "",
@@ -1136,16 +922,11 @@ class ObservationAdvisor:
 
         return "\n".join(lines)
 
-    def inspect(
-        self,
-    ) -> ObservationInspection:
+    def inspect(self) -> ObservationInspection:
         """Inspect metadata, image scales, and optional target morphology."""
         observation = open_observation(self.fits_path, hdu=self.hdu)
 
-        data = np.asarray(
-            observation.image.data,
-            dtype=float,
-        )
+        data = np.asarray(observation.image.data, dtype=float)
 
         if data.ndim != 2:
             raise ValueError(
@@ -1173,19 +954,14 @@ class ObservationAdvisor:
         segmentation = prepared.detection.segmentation
 
         if target_x is not None and segmentation is not None:
-            label = select_segment_near_position(
-                segmentation,
-                x=target_x,
-                y=target_y,
-            )
+            label = select_segment_near_position(segmentation, x=target_x, y=target_y)
 
             target_segment = segmentation.data == label
 
             target_area_pixels = int(np.count_nonzero(target_segment))
 
             geometry = estimate_target_geometry_from_image(
-                prepared.data,
-                target_segment,
+                prepared.data, target_segment
             )
 
             target_axis_ratio = float(geometry.q)
@@ -1193,13 +969,7 @@ class ObservationAdvisor:
             target_position_angle = float(geometry.theta)
 
             source_signal = np.where(
-                target_segment,
-                np.clip(
-                    prepared.data,
-                    0.0,
-                    None,
-                ),
-                0.0,
+                target_segment, np.clip(prepared.data, 0.0, None), 0.0
             )
 
             flux = float(np.sum(source_signal))
@@ -1219,10 +989,7 @@ class ObservationAdvisor:
 
         inspection = ObservationInspection(
             path=self.fits_path.resolve(),
-            shape=(
-                int(data.shape[0]),
-                int(data.shape[1]),
-            ),
+            shape=(int(data.shape[0]), int(data.shape[1])),
             finite_fraction=float(np.mean(finite)),
             minimum=float(np.nanmin(data)),
             maximum=float(np.nanmax(data)),
@@ -1248,8 +1015,7 @@ class ObservationAdvisor:
         return inspection
 
     def prior_guidance(
-        self,
-        model_name: str = "single_sersic",
+        self, model_name: str = "single_sersic"
     ) -> dict[str, PriorGuidance]:
         """Return evidence-aware prior guidance for every parameter of a model.
 
@@ -1270,14 +1036,10 @@ class ObservationAdvisor:
         dict of str to PriorGuidance
             One entry per parameter, in the order of the model.
         """
-        model_name = str(
-            model_name
-        ).strip()
+        model_name = str(model_name).strip()
 
         if model_name not in PARAMETER_KINDS:
-            raise ValueError(
-                f"Unknown model: {model_name}"
-            )
+            raise ValueError(f"Unknown model: {model_name}")
 
         inspection = self._inspection or self.inspect()
 
@@ -1303,11 +1065,7 @@ class ObservationAdvisor:
         guidance: dict[str, PriorGuidance] = {}
 
         for name, kind in PARAMETER_KINDS[model_name].items():
-            family, rationale = _guidance_rule(
-                name,
-                kind,
-                one_component=one_component,
-            )
+            family, rationale = _guidance_rule(name, kind, one_component=one_component)
 
             if name in observed_scales:
                 guidance[name] = PriorGuidance(
@@ -1319,16 +1077,12 @@ class ObservationAdvisor:
                 )
             else:
                 guidance[name] = PriorGuidance(
-                    parameter=name,
-                    family=family,
-                    rationale=rationale,
+                    parameter=name, family=family, rationale=rationale
                 )
 
         return guidance
 
-    def summary(
-        self,
-    ) -> str:
+    def summary(self) -> str:
         """Return a concise human-readable inspection summary."""
         inspection = self._inspection or self.inspect()
 
@@ -1341,16 +1095,12 @@ class ObservationAdvisor:
             f"Finite pixels: {inspection.finite_fraction:.3%}",
             (
                 "Pixel scale: "
-                + _format_optional(
-                    inspection.pixel_scale,
-                    "arcsec/pixel",
-                )
+                + _format_optional(inspection.pixel_scale, "arcsec/pixel")
             ),
             (
                 "Header FWHM: "
                 + _format_header_fwhm(
-                    inspection.seeing_fwhm,
-                    inspection.seeing_fwhm_unit,
+                    inspection.seeing_fwhm, inspection.seeing_fwhm_unit
                 )
             ),
             f"Image units (BUNIT): {inspection.bunit or 'unavailable'}",
@@ -1365,20 +1115,13 @@ class ObservationAdvisor:
                     )
                 )
             ),
-            (
-                "Background (whole-image diagnostic): "
-                f"{inspection.background:.6g}"
-            ),
-            (
-                "Noise sigma (whole-image diagnostic): "
-                f"{inspection.noise_sigma:.6g}"
-            ),
+            ("Background (whole-image diagnostic): " f"{inspection.background:.6g}"),
+            ("Noise sigma (whole-image diagnostic): " f"{inspection.noise_sigma:.6g}"),
         ]
 
         if inspection.target_x is not None:
             radius_text = _format_optional(
-                inspection.target_half_light_radius,
-                "pixels",
+                inspection.target_half_light_radius, "pixels"
             )
 
             if (
@@ -1415,10 +1158,7 @@ class ObservationAdvisor:
                     ("Segmented half-light radius scale: " + radius_text),
                     (
                         "Axis-ratio moment estimate: "
-                        + _format_optional(
-                            inspection.target_axis_ratio,
-                            "",
-                        )
+                        + _format_optional(inspection.target_axis_ratio, "")
                     ),
                     ("Position-angle moment estimate: " + theta_text),
                 ]
@@ -1440,16 +1180,10 @@ class ObservationAdvisor:
         return "\n".join(lines)
 
     def make_config(
-        self,
-        *,
-        model_priors: Mapping[str, Any] | None = None,
-        **config_options: Any,
+        self, *, model_priors: Mapping[str, Any] | None = None, **config_options: Any
     ) -> dict[str, Any]:
         """Create a config using the canonical BayMorph config maker."""
-        target_position = config_options.pop(
-            "target_position",
-            self.target_position,
-        )
+        target_position = config_options.pop("target_position", self.target_position)
 
         if target_position is None:
             raise ValueError("target_position is required to create a configuration.")
@@ -1535,12 +1269,7 @@ class ObservationAdvisor:
         footprint, mask, detector metadata, and calibration policy.
         """
         if config is None:
-            model_name = str(
-                config_options.pop(
-                    "model_name",
-                    "single_sersic",
-                )
-            )
+            model_name = str(config_options.pop("model_name", "single_sersic"))
 
             if model_name != "single_sersic":
                 raise NotImplementedError(
@@ -1550,9 +1279,7 @@ class ObservationAdvisor:
             # Resolve relative output paths before make_config() can bind
             # them to the notebook kernel's working directory.
             project_root = getattr(self, "project_root", None)
-            output_root = Path(
-                config_options.get("outputs_root", "runs")
-            ).expanduser()
+            output_root = Path(config_options.get("outputs_root", "runs")).expanduser()
 
             if project_root is not None and not output_root.is_absolute():
                 config_options["outputs_root"] = str(
@@ -1561,12 +1288,7 @@ class ObservationAdvisor:
 
             workspace = self.make_config(
                 model_name=model_name,
-                model_priors={
-                    "flux": {
-                        "type": "fixed",
-                        "value": 1.0,
-                    },
-                },
+                model_priors={"flux": {"type": "fixed", "value": 1.0}},
                 **config_options,
             )
 
@@ -1578,29 +1300,17 @@ class ObservationAdvisor:
                     "Configuration options may be supplied only when config=None."
                 )
 
-            if isinstance(
-                config,
-                (str, Path),
-            ):
+            if isinstance(config, (str, Path)):
                 resolved = load_resolved_config(config)
             else:
                 resolved = resolve_config(dict(config))
 
         if prepare:
-            products = prepare_real_image_from_config(
-                resolved,
-                save=True,
-            )
+            products = prepare_real_image_from_config(resolved, save=True)
         else:
             products = load_image_preparation_products(resolved)
 
-        psf_type = resolved.get(
-            "psf",
-            {},
-        ).get(
-            "type",
-            "empirical",
-        )
+        psf_type = resolved.get("psf", {}).get("type", "empirical")
 
         if build_psf and psf_type == "empirical":
             run_psf_candidate_selection_from_config(resolved)
@@ -1626,10 +1336,7 @@ class ObservationAdvisor:
         # Flux support is the quantity being calibrated. Any flux prior
         # present in the workspace or an existing scientific configuration
         # must therefore not influence the calibration.
-        priors.pop(
-            "flux",
-            None,
-        )
+        priors.pop("flux", None)
 
         references = {
             "target_x": float(products.target_x),
@@ -1656,10 +1363,7 @@ class ObservationAdvisor:
         )
 
     def _stage_config(
-        self,
-        *,
-        model_name: str,
-        **config_options: Any,
+        self, *, model_name: str, **config_options: Any
     ) -> dict[str, Any]:
         """Return the resolved configuration that the stages run on.
 
@@ -1674,22 +1378,11 @@ class ObservationAdvisor:
             for key, value in config_options.items()
             if key not in _NON_STAGE_OPTIONS
         }
-        project_root = getattr(
-            self,
-            "project_root",
-            None,
-        )
-        output_root = Path(
-            options.get(
-                "outputs_root",
-                "runs",
-            )
-        ).expanduser()
+        project_root = getattr(self, "project_root", None)
+        output_root = Path(options.get("outputs_root", "runs")).expanduser()
 
         if project_root is not None and not output_root.is_absolute():
-            options["outputs_root"] = str(
-                (Path(project_root) / output_root).resolve()
-            )
+            options["outputs_root"] = str((Path(project_root) / output_root).resolve())
 
         config = self.make_config(
             output_path=None,
@@ -1701,10 +1394,7 @@ class ObservationAdvisor:
 
         return resolve_config(config)
 
-    def _run_fixed_input_stages(
-        self,
-        resolved: Mapping[str, Any],
-    ) -> tuple[Any, Any]:
+    def _run_fixed_input_stages(self, resolved: Mapping[str, Any]) -> tuple[Any, Any]:
         """Run the preparation and PSF stages of the runner.
 
         The stages reuse products already accepted for this configuration,
@@ -1720,9 +1410,7 @@ class ObservationAdvisor:
         # keeps the pipeline modules independent of the public entry point.
         from baymorph.runner import BayMorphRunner
 
-        runner = BayMorphRunner(
-            dict(resolved)
-        )
+        runner = BayMorphRunner(dict(resolved))
         products = runner.prepare_image()
         psf = None
 
@@ -1733,10 +1421,7 @@ class ObservationAdvisor:
         return products, psf
 
     def measure_fixed_inputs(
-        self,
-        *,
-        model_name: str = "single_sersic",
-        **config_options: Any,
+        self, *, model_name: str = "single_sersic", **config_options: Any
     ) -> FixedInputs:
         """Prepare the image and build its PSF, and return the fixed inputs.
 
@@ -1771,88 +1456,51 @@ class ObservationAdvisor:
         """
         if self.target_position is None:
             raise ValueError(
-                "A confirmed target position is required before preparing "
-                "the image."
+                "A confirmed target position is required before preparing " "the image."
             )
 
-        _settle_psf_max_peak(
-            self._header_reading(),
-            config_options,
-        )
+        _settle_psf_max_peak(self._header_reading(), config_options)
 
-        resolved = self._stage_config(
-            model_name=model_name,
-            **config_options,
-        )
-        products, psf = self._run_fixed_input_stages(
-            resolved
-        )
+        resolved = self._stage_config(model_name=model_name, **config_options)
+        products, psf = self._run_fixed_input_stages(resolved)
 
-        noise = np.asarray(
-            products.noise,
-            dtype=float,
-        )
+        noise = np.asarray(products.noise, dtype=float)
         finite_noise = noise[np.isfinite(noise)]
 
         if finite_noise.size == 0:
-            raise ValueError(
-                "The preparation gave no finite sky scale."
-            )
+            raise ValueError("The preparation gave no finite sky scale.")
 
-        sky_scale = float(
-            np.median(finite_noise)
-        )
+        sky_scale = float(np.median(finite_noise))
 
         psf_config = resolved["psf"]
 
         if str(psf_config["type"]).strip().lower() == "gaussian":
-            psf_fwhm = float(
-                psf_config["gaussian"]["fwhm"]
-            )
+            psf_fwhm = float(psf_config["gaussian"]["fwhm"])
             psf_fwhm_source = "FWHM of the declared Gaussian PSF"
         else:
             if psf is None:
-                raise ValueError(
-                    "The PSF stage returned no empirical PSF."
-                )
+                raise ValueError("The PSF stage returned no empirical PSF.")
 
-            psf_fwhm = float(
-                estimate_psf_core_fwhm(
-                    np.asarray(
-                        psf,
-                        dtype=float,
-                    )
-                )
-            )
+            psf_fwhm = float(estimate_psf_core_fwhm(np.asarray(psf, dtype=float)))
             psf_fwhm_source = "core FWHM of the empirical PSF"
 
         if not (np.isfinite(sky_scale) and sky_scale > 0.0):
-            raise ValueError(
-                "The prepared sky scale must be positive and finite."
-            )
+            raise ValueError("The prepared sky scale must be positive and finite.")
 
         if not (np.isfinite(psf_fwhm) and psf_fwhm > 0.0):
-            raise ValueError(
-                "The FWHM of the PSF must be positive and finite."
-            )
+            raise ValueError("The FWHM of the PSF must be positive and finite.")
 
-        rows, columns = np.shape(
-            products.prepared_data
-        )
+        rows, columns = np.shape(products.prepared_data)
 
         return FixedInputs(
             sky_scale=sky_scale,
             measured_sky_level=float(products.background),
-            cutout_shape=(
-                int(rows),
-                int(columns),
-            ),
+            cutout_shape=(int(rows), int(columns)),
             psf_fwhm_pixels=psf_fwhm,
             psf_fwhm_source=psf_fwhm_source,
             stage_identity=_stage_identity(resolved),
             run_directory=str(
-                Path(resolved["outputs"]["root"])
-                / str(resolved["object"]["name"])
+                Path(resolved["outputs"]["root"]) / str(resolved["object"]["name"])
             ),
         )
 
@@ -1952,17 +1600,11 @@ class ObservationAdvisor:
                 "a configuration."
             )
 
-        chosen, declared = _chosen_models(
-            model_name,
-            models,
-            model_priors,
-        )
+        chosen, declared = _chosen_models(model_name, models, model_priors)
         several = len(chosen) > 1
         first = chosen[0]
 
-        if several and (
-            flux_calibration is not None or flux_prior is not None
-        ):
+        if several and (flux_calibration is not None or flux_prior is not None):
             raise ValueError(
                 "flux_calibration and flux_prior apply to a proposal of one "
                 "model; with several models, declare each flux through "
@@ -1971,11 +1613,7 @@ class ObservationAdvisor:
 
         supplied_sources = sum(
             source is not None
-            for source in (
-                flux_calibration,
-                flux_prior,
-                declared[first].get("flux"),
-            )
+            for source in (flux_calibration, flux_prior, declared[first].get("flux"))
         )
 
         if supplied_sources > 1:
@@ -1998,22 +1636,13 @@ class ObservationAdvisor:
             config_options.get("background") is not None
             and background_model is not None
         ):
-            raise ValueError(
-                "Supply background or background_model, not both."
-            )
+            raise ValueError("Supply background or background_model, not both.")
 
         likelihood = config_options.get("likelihood")
 
         if (
-            isinstance(
-                likelihood,
-                Mapping,
-            )
-            and likelihood.get(
-                "include_normalization",
-                True,
-            )
-            is False
+            isinstance(likelihood, Mapping)
+            and likelihood.get("include_normalization", True) is False
         ):
             raise ValueError(
                 "ObservationAdvisor.propose_config() requires a normalized "
@@ -2060,19 +1689,10 @@ class ObservationAdvisor:
             )
 
         reading = self._header_reading()
-        zeropoint = _finite_or_none(
-            reading.value("zeropoint")
-        )
-        pixel_scale = _finite_or_none(
-            reading.value("pixel_scale")
-        )
-        photometric_system = reading.value(
-            "photometric_system"
-        )
-        undecided_fluxes = _undecided_parameters(
-            decided,
-            "flux",
-        )
+        zeropoint = _finite_or_none(reading.value("zeropoint"))
+        pixel_scale = _finite_or_none(reading.value("pixel_scale"))
+        photometric_system = reading.value("photometric_system")
+        undecided_fluxes = _undecided_parameters(decided, "flux")
 
         if undecided_fluxes and zeropoint is None:
             raise ValueError(
@@ -2089,10 +1709,7 @@ class ObservationAdvisor:
                 )
             )
 
-        undecided_lengths = _undecided_parameters(
-            decided,
-            "length",
-        )
+        undecided_lengths = _undecided_parameters(decided, "length")
 
         if pixel_scale is None and undecided_lengths:
             warnings.append(
@@ -2104,26 +1721,17 @@ class ObservationAdvisor:
 
         # The ceiling on the peak of the PSF stars shapes the PSF, so it is
         # settled before the stages run, as measure_fixed_inputs settles it.
-        max_peak_record, peak_warning = _settle_psf_max_peak(
-            reading,
-            config_options,
-        )
+        max_peak_record, peak_warning = _settle_psf_max_peak(reading, config_options)
 
         if peak_warning is not None:
             warnings.append(peak_warning)
 
         stage_identity = _stage_identity(
-            self._stage_config(
-                model_name=first,
-                **config_options,
-            )
+            self._stage_config(model_name=first, **config_options)
         )
 
         if fixed_inputs is None:
-            fixed_inputs = self.measure_fixed_inputs(
-                model_name=first,
-                **config_options,
-            )
+            fixed_inputs = self.measure_fixed_inputs(model_name=first, **config_options)
 
         if fixed_inputs.stage_identity != stage_identity:
             raise ValueError(
@@ -2140,24 +1748,20 @@ class ObservationAdvisor:
                 psf_fwhm_pixels=fixed_inputs.psf_fwhm_pixels,
                 decided=decided[name],
                 photometric_system=(
-                    None
-                    if photometric_system is None
-                    else str(photometric_system)
+                    None if photometric_system is None else str(photometric_system)
                 ),
             )
             for name in chosen
         }
 
         if config_options.get("background") is not None:
-            background_record = {
-                "source": "user",
-                "detail": "declared by the user",
-            }
+            background_record = {"source": "user", "detail": "declared by the user"}
         else:
-            chosen_background = str(
-                background_model
-                or DEFAULT_CONFIG["fit"]["background"]["model"]
-            ).strip().lower()
+            chosen_background = (
+                str(background_model or DEFAULT_CONFIG["fit"]["background"]["model"])
+                .strip()
+                .lower()
+            )
             config_options["background"] = {
                 "model": chosen_background,
                 "priors": background_priors(
@@ -2182,10 +1786,14 @@ class ObservationAdvisor:
 
         likelihood = config_options.get("likelihood")
         likelihood_type = (
-            str(likelihood.get("type", "correlated_gaussian"))
-            if isinstance(likelihood, Mapping)
-            else "correlated_gaussian"
-        ).strip().lower()
+            (
+                str(likelihood.get("type", "correlated_gaussian"))
+                if isinstance(likelihood, Mapping)
+                else "correlated_gaussian"
+            )
+            .strip()
+            .lower()
+        )
 
         if isinstance(likelihood, Mapping) and "effective_gain" in likelihood:
             gain_record: dict[str, Any] = {
@@ -2215,29 +1823,22 @@ class ObservationAdvisor:
             )
 
             if gain.declaration is not None:
-                declared_likelihood["effective_gain"] = deepcopy(
-                    gain.declaration
-                )
+                declared_likelihood["effective_gain"] = deepcopy(gain.declaration)
 
             config_options["likelihood"] = declared_likelihood
             gain_record = {
                 "source": (
-                    None
-                    if gain.declaration is None
-                    else "header and fixed_inputs"
+                    None if gain.declaration is None else "header and fixed_inputs"
                 ),
                 **gain.as_dict(),
             }
 
-        sampler = config_options.get(
-            "sampler",
-            "nautilus",
+        sampler = config_options.get("sampler", "nautilus")
+        sampler_name = (
+            str(sampler.get("name", "") if isinstance(sampler, Mapping) else sampler)
+            .strip()
+            .lower()
         )
-        sampler_name = str(
-            sampler.get("name", "")
-            if isinstance(sampler, Mapping)
-            else sampler
-        ).strip().lower()
 
         if sampler_name == "pocomc" and any(
             proposal.prior.get("type") == "log_uniform"
@@ -2256,8 +1857,7 @@ class ObservationAdvisor:
             for name in chosen
             if "flux" in proposals[name]
             and _flux_prior_requires_review(
-                proposals[name]["flux"].prior,
-                inspection.target_flux_scale,
+                proposals[name]["flux"].prior, inspection.target_flux_scale
             )
         ]
         requires_flux_review = bool(flux_review_models)
@@ -2308,9 +1908,7 @@ class ObservationAdvisor:
         validate_fit_priors(resolved)
         config["fit"]["priors"] = {
             name: {
-                parameter: deepcopy(
-                    resolved["fit"]["priors"][name][parameter]
-                )
+                parameter: deepcopy(resolved["fit"]["priors"][name][parameter])
                 for parameter in PARAMETER_KINDS[name]
             }
             for name in chosen
@@ -2327,11 +1925,7 @@ class ObservationAdvisor:
         }
 
         destination = Path(output_path).expanduser()
-        project_root = getattr(
-            self,
-            "project_root",
-            None,
-        )
+        project_root = getattr(self, "project_root", None)
 
         if project_root is not None and not destination.is_absolute():
             destination = Path(project_root) / destination
@@ -2362,9 +1956,7 @@ class ObservationAdvisor:
                 "angular_range_arcsec": list(ANGULAR_RANGE_ARCSEC),
                 "physical_length_models": sorted(PHYSICAL_LENGTH_MODELS),
                 "centre_fwhm_multiple": CENTRE_FWHM_MULTIPLE,
-                "background_sky_scale_multiple": (
-                    BACKGROUND_SKY_SCALE_MULTIPLE
-                ),
+                "background_sky_scale_multiple": (BACKGROUND_SKY_SCALE_MULTIPLE),
                 "psf_peak_saturation_fraction": PSF_PEAK_SATURATION_FRACTION,
                 "gain_ratio_tolerance": GAIN_RATIO_TOLERANCE,
             },
@@ -2387,20 +1979,14 @@ class ObservationAdvisor:
             "warnings": list(warnings),
         }
 
-        flux_proposal = (
-            None
-            if several
-            else proposals[first].get("flux")
-        )
+        flux_proposal = None if several else proposals[first].get("flux")
 
         return ObservationConfigProposal(
             config=config,
             output_path=destination,
             starting_model=first,
             flux_prior=(
-                None
-                if flux_proposal is None
-                else deepcopy(flux_proposal.prior)
+                None if flux_proposal is None else deepcopy(flux_proposal.prior)
             ),
             flux_prior_source=(
                 "see the priors of each flux"
@@ -2413,32 +1999,20 @@ class ObservationAdvisor:
             models=tuple(chosen),
         )
 
-    def _header_reading(
-        self,
-    ) -> HeaderReading:
+    def _header_reading(self) -> HeaderReading:
         """Return the reading of the header of the image HDU."""
-        return open_observation(
-            self.fits_path,
-            hdu=self.hdu,
-        ).metadata.header_reading
+        return open_observation(self.fits_path, hdu=self.hdu).metadata.header_reading
 
     def _resolve_target(
-        self,
-        observation: Observation,
-    ) -> tuple[
-        float | None,
-        float | None,
-    ]:
+        self, observation: Observation
+    ) -> tuple[float | None, float | None]:
         """Resolve the optional target seed for inspection."""
         target = self.target_position
 
         if target is None:
             return None, None
 
-        if isinstance(
-            target,
-            str,
-        ):
+        if isinstance(target, str):
             if target.strip().lower() != "center":
                 raise ValueError("String target_position must be exactly 'center'.")
 
@@ -2447,45 +2021,25 @@ class ObservationAdvisor:
                 float(observation.metadata.center_y),
             )
 
-        if isinstance(
-            target,
-            Mapping,
-        ):
-            if set(target) != {
-                "x",
-                "y",
-            }:
+        if isinstance(target, Mapping):
+            if set(target) != {"x", "y"}:
                 raise ValueError(
                     "Target-position mappings must contain exactly 'x' and 'y'."
                 )
 
-            return (
-                float(target["x"]),
-                float(target["y"]),
-            )
+            return (float(target["x"]), float(target["y"]))
 
         if len(target) != 2:
             raise ValueError("target_position must contain exactly two coordinates.")
 
-        return (
-            float(target[0]),
-            float(target[1]),
-        )
+        return (float(target[0]), float(target[1]))
 
 
 def _half_light_radius(
-    source_signal: np.ndarray,
-    *,
-    x0: float,
-    y0: float,
-    q: float,
-    theta: float,
+    source_signal: np.ndarray, *, x0: float, y0: float, q: float, theta: float
 ) -> float | None:
     """Estimate an elliptical half-light radius from positive signal."""
-    y, x = np.indices(
-        source_signal.shape,
-        dtype=float,
-    )
+    y, x = np.indices(source_signal.shape, dtype=float)
 
     dx = x - float(x0)
     dy = y - float(y0)
@@ -2497,17 +2051,11 @@ def _half_light_radius(
 
     minor = -sine * dx + cosine * dy
 
-    safe_q = max(
-        float(q),
-        np.finfo(float).eps,
-    )
+    safe_q = max(float(q), np.finfo(float).eps)
 
     radius = np.sqrt(major**2 + (minor / safe_q) ** 2)
 
-    signal = np.asarray(
-        source_signal,
-        dtype=float,
-    )
+    signal = np.asarray(source_signal, dtype=float)
 
     valid = np.isfinite(signal) & (signal > 0.0)
 
@@ -2524,27 +2072,12 @@ def _half_light_radius(
 
     half_total = 0.5 * cumulative[-1]
 
-    index = int(
-        np.searchsorted(
-            cumulative,
-            half_total,
-            side="left",
-        )
-    )
+    index = int(np.searchsorted(cumulative, half_total, side="left"))
 
-    return float(
-        ordered_radius[
-            min(
-                index,
-                ordered_radius.size - 1,
-            )
-        ]
-    )
+    return float(ordered_radius[min(index, ordered_radius.size - 1)])
 
 
-def _finite_or_none(
-    value: Any,
-) -> float | None:
+def _finite_or_none(value: Any) -> float | None:
     """Return a finite float or None."""
     if value is None:
         return None
@@ -2557,10 +2090,7 @@ def _finite_or_none(
     return result
 
 
-def _format_header_fwhm(
-    value: float | None,
-    unit: str | None,
-) -> str:
+def _format_header_fwhm(value: float | None, unit: str | None) -> str:
     """Format raw header FWHM metadata without inventing a unit."""
     if value is None:
         return "unavailable"
@@ -2573,16 +2103,10 @@ def _format_header_fwhm(
     if unit == "pixels":
         return f"{value_text} pixels"
 
-    return (
-        f"{value_text} "
-        "(unit unresolved; not converted)"
-    )
+    return f"{value_text} " "(unit unresolved; not converted)"
 
 
-def _format_optional(
-    value: float | None,
-    unit: str,
-) -> str:
+def _format_optional(value: float | None, unit: str) -> str:
     """Format an optional scalar quantity."""
     if value is None:
         return "unavailable"
@@ -2592,22 +2116,17 @@ def _format_optional(
     return f"{value:.6g}{suffix}"
 
 
-def _format_bound(
-    value: Any,
-) -> str:
+def _format_bound(value: Any) -> str:
     """Format a prior bound, numeric or symbolic."""
     if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
-        value,
-        bool,
+        value, bool
     ):
         return f"{float(value):.6g}"
 
     return str(value)
 
 
-def _format_prior(
-    prior: Mapping[str, Any],
-) -> str:
+def _format_prior(prior: Mapping[str, Any]) -> str:
     """Format one prior declaration for a human reader."""
     prior_type = str(prior.get("type", "unspecified"))
 
@@ -2628,14 +2147,9 @@ def _format_prior(
     return text
 
 
-def _provenance_summary(
-    provenance: Mapping[str, Any],
-) -> list[str]:
+def _provenance_summary(provenance: Mapping[str, Any]) -> list[str]:
     """Return the summary lines of the provenance of a proposal."""
-    lines = [
-        "",
-        "PRIORS AND THEIR SOURCES",
-    ]
+    lines = ["", "PRIORS AND THEIR SOURCES"]
 
     for model_name, entries in provenance.get("priors", {}).items():
         lines.append(f"{model_name}:")
@@ -2663,12 +2177,7 @@ def _provenance_summary(
             for name, prior in background["priors"].items()
         )
 
-    lines.extend(
-        [
-            "",
-            "OBSERVATION",
-        ]
-    )
+    lines.extend(["", "OBSERVATION"])
 
     gain = provenance.get("effective_gain") or {}
     declaration = gain.get("declaration")
@@ -2686,12 +2195,7 @@ def _provenance_summary(
     else:
         lines.append(
             "Effective gain: not proposed; "
-            + str(
-                gain.get(
-                    "detail",
-                    "declare it before running the fit",
-                )
-            )
+            + str(gain.get("detail", "declare it before running the fit"))
         )
 
     if gain.get("ratio") is not None:

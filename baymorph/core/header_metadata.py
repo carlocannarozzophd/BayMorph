@@ -48,14 +48,7 @@ from astropy.io import fits
 from astropy.wcs import WCS, FITSFixedWarning
 from astropy.wcs.utils import proj_plane_pixel_scales
 
-STATUSES = (
-    "explicit",
-    "convention",
-    "derived",
-    "ambiguous",
-    "conflicting",
-    "missing",
-)
+STATUSES = ("explicit", "convention", "derived", "ambiguous", "conflicting", "missing")
 """Statuses of a quantity read from a header, from the most to the least
 certain."""
 
@@ -94,26 +87,18 @@ QUANTITIES: dict[str, QuantityDefinition] = {
         QuantityDefinition("telescope", "string", "Telescope."),
         QuantityDefinition("instrument", "string", "Instrument."),
         QuantityDefinition("filter", "string", "Filter."),
-        QuantityDefinition(
-            "pipeline", "string", "Software that produced the image."
-        ),
+        QuantityDefinition("pipeline", "string", "Software that produced the image."),
         QuantityDefinition("image_unit", "string", "Unit of the pixel values."),
-        QuantityDefinition(
-            "exposure_time", "number", "Exposure time of the image."
-        ),
+        QuantityDefinition("exposure_time", "number", "Exposure time of the image."),
         QuantityDefinition(
             "total_exposure_time",
             "number",
             "Sum of the exposure times of the combined exposures.",
         ),
-        QuantityDefinition(
-            "n_combined", "integer", "Number of combined exposures."
-        ),
+        QuantityDefinition("n_combined", "integer", "Number of combined exposures."),
         QuantityDefinition("gain", "number", "Gain of the detector or coadd."),
         QuantityDefinition("read_noise", "number", "Read noise."),
-        QuantityDefinition(
-            "saturation", "number", "Level at which pixels saturate."
-        ),
+        QuantityDefinition("saturation", "number", "Level at which pixels saturate."),
         QuantityDefinition("zeropoint", "number", "Photometric zeropoint."),
         QuantityDefinition(
             "zeropoint_error",
@@ -187,16 +172,14 @@ _SPEC_KEYS = frozenset(
 _FORMULA_FUNCTIONS: Mapping[str, Callable[[float], float]] = MappingProxyType(
     {"log10": math.log10, "ln": math.log, "exp": math.exp, "sqrt": math.sqrt}
 )
-_FORMULA_OPERATORS: Mapping[type, Callable[[float, float], float]] = (
-    MappingProxyType(
-        {
-            ast.Add: operator.add,
-            ast.Sub: operator.sub,
-            ast.Mult: operator.mul,
-            ast.Div: operator.truediv,
-            ast.Pow: operator.pow,
-        }
-    )
+_FORMULA_OPERATORS: Mapping[type, Callable[[float, float], float]] = MappingProxyType(
+    {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.Pow: operator.pow,
+    }
 )
 _CONVENTION_KEYS = frozenset(
     {"name", "title", "priority", "references", "match", "quantities"}
@@ -331,8 +314,7 @@ def _check_formula_node(node: ast.AST, keywords: list[str], text: str) -> None:
 
     raise ValueError(
         f"formula {text!r} may use only numbers, keywords, the operators "
-        "+ - * / **, parentheses and the functions "
-        + ", ".join(_FORMULA_FUNCTIONS)
+        "+ - * / **, parentheses and the functions " + ", ".join(_FORMULA_FUNCTIONS)
     )
 
 
@@ -600,8 +582,7 @@ class HeaderReading:
         return {
             "conventions": list(self.conventions),
             "quantities": {
-                name: quantity.as_dict()
-                for name, quantity in self.quantities.items()
+                name: quantity.as_dict() for name, quantity in self.quantities.items()
             },
         }
 
@@ -630,10 +611,7 @@ class HeaderReading:
             )
 
         widths = [max(len(row[index]) for row in rows) for index in range(5)]
-        lines = [
-            "Conventions: " + (", ".join(self.conventions) or "none"),
-            "",
-        ]
+        lines = ["Conventions: " + (", ".join(self.conventions) or "none"), ""]
         lines.extend(
             "  ".join(cell.ljust(width) for cell, width in zip(row, widths)).rstrip()
             for row in rows
@@ -665,16 +643,11 @@ class _HeaderLookup:
     """Keyword lookup in an image header, then in its primary header."""
 
     def __init__(
-        self,
-        header: fits.Header | None,
-        primary_header: fits.Header | None,
+        self, header: fits.Header | None, primary_header: fits.Header | None
     ) -> None:
         self._headers = tuple(
             (source, candidate)
-            for source, candidate in (
-                ("image", header),
-                ("primary", primary_header),
-            )
+            for source, candidate in (("image", header), ("primary", primary_header))
             if candidate is not None
         )
 
@@ -1073,10 +1046,7 @@ def _resolve_number(
     if definition.kind == "integer":
         # A count has no unit: the header states it as it is.
         return HeaderQuantity(
-            status="explicit",
-            value=first_number,
-            note=spec.note,
-            **common,
+            status="explicit", value=first_number, note=spec.note, **common
         )
 
     if spec.unit is not None:
@@ -1107,9 +1077,7 @@ def _resolve_number(
         )
 
         return HeaderQuantity(
-            status="ambiguous",
-            note=_join_notes(spec.note, reason),
-            **common,
+            status="ambiguous", note=_join_notes(spec.note, reason), **common
         )
 
     return HeaderQuantity(
@@ -1120,9 +1088,7 @@ def _resolve_number(
 
 
 def _declared_units(
-    spec: QuantitySpec,
-    card: _Found,
-    lookup: _HeaderLookup,
+    spec: QuantitySpec, card: _Found, lookup: _HeaderLookup
 ) -> set[str]:
     """Return the units that the header declares for one keyword."""
     declarations = set()
@@ -1146,11 +1112,7 @@ def _declared_units(
     return declarations
 
 
-def normalize_declared_unit(
-    text: Any,
-    *,
-    allowed: Sequence[str],
-) -> str | None:
+def normalize_declared_unit(text: Any, *, allowed: Sequence[str]) -> str | None:
     """Return the one unit among ``allowed`` that a text declares, or None.
 
     The text is split into alphabetic tokens; a unit is recognized when one
@@ -1310,8 +1272,7 @@ def load_header_conventions(
         path = Path(path).expanduser()
         conventions.append(
             _parse_convention(
-                yaml.safe_load(path.read_text(encoding="utf-8")),
-                source=str(path),
+                yaml.safe_load(path.read_text(encoding="utf-8")), source=str(path)
             )
         )
 
@@ -1381,9 +1342,7 @@ def _parse_convention(document: Any, *, source: str) -> HeaderConvention:
     quantities = document["quantities"]
 
     if not isinstance(quantities, Mapping) or not quantities:
-        raise ValueError(
-            f"Header convention {source} must read at least one quantity."
-        )
+        raise ValueError(f"Header convention {source} must read at least one quantity.")
 
     specs = {}
 
@@ -1395,9 +1354,7 @@ def _parse_convention(document: Any, *, source: str) -> HeaderConvention:
             )
 
         specs[quantity] = _parse_spec(
-            spec,
-            definition=QUANTITIES[quantity],
-            source=f"{source}: {quantity}",
+            spec, definition=QUANTITIES[quantity], source=f"{source}: {quantity}"
         )
 
     return HeaderConvention(
@@ -1461,10 +1418,7 @@ def _parse_rule(rule: Any, *, source: str) -> MatchRule:
 
 
 def _parse_spec(
-    spec: Any,
-    *,
-    definition: QuantityDefinition,
-    source: str,
+    spec: Any, *, definition: QuantityDefinition, source: str
 ) -> QuantitySpec:
     """Validate how a convention reads one quantity."""
     if not isinstance(spec, Mapping) or set(spec) - _SPEC_KEYS:
@@ -1564,17 +1518,13 @@ def _parse_spec(
 
 
 def _parse_value(
-    value: Any,
-    definition: QuantityDefinition,
-    unit: str | None,
-    source: str,
+    value: Any, definition: QuantityDefinition, unit: str | None, source: str
 ) -> str | float | int:
     """Validate a value that a convention states."""
     if definition.kind == "string":
         if not isinstance(value, str) or not value.strip():
             raise ValueError(
-                f"Header convention {source}: the value must be a non-empty "
-                "string."
+                f"Header convention {source}: the value must be a non-empty " "string."
             )
 
         if unit is not None:
@@ -1582,9 +1532,7 @@ def _parse_value(
 
         return value.strip()
 
-    number = (
-        None if isinstance(value, str) else _finite_number(value, definition.kind)
-    )
+    number = None if isinstance(value, str) else _finite_number(value, definition.kind)
 
     if number is None:
         raise ValueError(

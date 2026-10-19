@@ -66,8 +66,7 @@ class BuilderSettings:
 
     def __post_init__(self) -> None:
         if not (
-            0 < self.support_half_size < self.sky_inner_radius
-            < self.sky_outer_radius
+            0 < self.support_half_size < self.sky_inner_radius < self.sky_outer_radius
         ):
             raise ValueError(
                 "The PSF builder needs 0 < support_half_size < "
@@ -77,9 +76,7 @@ class BuilderSettings:
         if int(self.mask_growth_pixels) != self.mask_growth_pixels or (
             self.mask_growth_pixels < 0
         ):
-            raise ValueError(
-                "mask_growth_pixels must be a non-negative integer."
-            )
+            raise ValueError("mask_growth_pixels must be a non-negative integer.")
 
     @property
     def ring_edges(self) -> FloatArray:
@@ -124,11 +121,7 @@ class EmpiricalPSFBuild:
 
 
 def window_centroid(
-    stamp: FloatArray,
-    x: float,
-    y: float,
-    *,
-    sigma: float = WINDOW_SIGMA,
+    stamp: FloatArray, x: float, y: float, *, sigma: float = WINDOW_SIGMA
 ) -> tuple[float, float]:
     """Iterate a Gaussian-windowed centroid on a sky-subtracted stamp.
 
@@ -139,9 +132,7 @@ def window_centroid(
     yy, xx = np.indices(data.shape, dtype=float)
 
     for _ in range(CENTROID_MAX_ITERATIONS):
-        weights = data * np.exp(
-            -((xx - x) ** 2 + (yy - y) ** 2) / (2.0 * sigma**2)
-        )
+        weights = data * np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2.0 * sigma**2))
         total = weights.sum()
 
         if not np.isfinite(total) or total <= 0.0:
@@ -160,16 +151,12 @@ def window_centroid(
 
 def _disk(radius: int) -> NDArray[np.bool_]:
     """Return a boolean disk of ``radius`` pixels."""
-    yy, xx = np.mgrid[-radius:radius + 1, -radius:radius + 1]
+    yy, xx = np.mgrid[-radius : radius + 1, -radius : radius + 1]
     return xx**2 + yy**2 <= radius**2
 
 
 def other_sources(
-    labels: NDArray[np.integer],
-    x: float,
-    y: float,
-    reach: float,
-    growth: int,
+    labels: NDArray[np.integer], x: float, y: float, reach: float, growth: int
 ) -> tuple[slice, slice, NDArray[np.bool_]]:
     """Return a region about ``(x, y)`` and the mask of other sources in it.
 
@@ -200,11 +187,7 @@ def far_sky(
 ) -> tuple[float, float]:
     """Return the sigma-clipped sky and noise in the far ring of a star."""
     rows, columns, masked = other_sources(
-        labels,
-        x,
-        y,
-        settings.sky_outer_radius,
-        settings.mask_growth_pixels,
+        labels, x, y, settings.sky_outer_radius, settings.mask_growth_pixels
     )
     yy, xx = np.mgrid[rows, columns]
     radius = np.hypot(xx - x, yy - y)
@@ -216,23 +199,18 @@ def far_sky(
 
     if ring.sum() < MIN_RING_PIXELS:
         raise ValueError(
-            f"The sky ring of the star at ({x:.1f}, {y:.1f}) has no free "
-            "pixels."
+            f"The sky ring of the star at ({x:.1f}, {y:.1f}) has no free " "pixels."
         )
 
     _, median, deviation = sigma_clipped_stats(
-        np.asarray(image[rows, columns], dtype=float)[ring],
-        sigma=SIGMA_CLIP,
+        np.asarray(image[rows, columns], dtype=float)[ring], sigma=SIGMA_CLIP
     )
 
     return float(median), float(deviation)
 
 
 def star_window(
-    image: FloatArray,
-    candidate: dict,
-    half: int,
-    sky: tuple[float, float],
+    image: FloatArray, candidate: dict, half: int, sky: tuple[float, float]
 ) -> dict | None:
     """Return one star on the common footprint, or ``None`` when unusable.
 
@@ -253,17 +231,18 @@ def star_window(
     ):
         return None
 
-    stamp = np.asarray(
-        image[
-            y_pixel - centre:y_pixel + centre + 1,
-            x_pixel - centre:x_pixel + centre + 1,
-        ],
-        dtype=float,
-    ) - sky[0]
+    stamp = (
+        np.asarray(
+            image[
+                y_pixel - centre : y_pixel + centre + 1,
+                x_pixel - centre : x_pixel + centre + 1,
+            ],
+            dtype=float,
+        )
+        - sky[0]
+    )
     x, y = window_centroid(
-        stamp,
-        centre + candidate["x"] - x_pixel,
-        centre + candidate["y"] - y_pixel,
+        stamp, centre + candidate["x"] - x_pixel, centre + candidate["y"] - y_pixel
     )
     window_x = int(round(x))
     window_y = int(round(y))
@@ -275,8 +254,7 @@ def star_window(
         return None
 
     window = stamp[
-        window_y - half:window_y + half + 1,
-        window_x - half:window_x + half + 1,
+        window_y - half : window_y + half + 1, window_x - half : window_x + half + 1
     ]
     flux = float(window.sum())
 
@@ -294,10 +272,7 @@ def star_window(
     }
 
 
-def phase_coefficients(
-    phases: FloatArray,
-    weights: FloatArray,
-) -> FloatArray:
+def phase_coefficients(phases: FloatArray, weights: FloatArray) -> FloatArray:
     """Return the star weights of the six coefficients of a local quadratic.
 
     Row ``k`` combines the stars into the coefficient of
@@ -306,9 +281,7 @@ def phase_coefficients(
     """
     dx = phases[:, 0]
     dy = phases[:, 1]
-    design = np.column_stack(
-        [np.ones_like(dx), dx, dy, dx**2, dx * dy, dy**2]
-    )
+    design = np.column_stack([np.ones_like(dx), dx, dy, dx**2, dx * dy, dy**2])
     normal = design.T @ (weights[:, None] * design)
 
     return np.linalg.solve(normal, design.T * weights)
@@ -331,17 +304,13 @@ def ring_profile(
     x = float(star["x"])
     y = float(star["y"])
     rows, columns, masked = other_sources(
-        labels,
-        x,
-        y,
-        edges[-1],
-        settings.mask_growth_pixels,
+        labels, x, y, edges[-1], settings.mask_growth_pixels
     )
     yy, xx = np.mgrid[rows, columns]
     radius = np.hypot(xx - x, yy - y)
-    values = (
-        np.asarray(image[rows, columns], dtype=float) - star["sky"]
-    ) / star["flux"]
+    values = (np.asarray(image[rows, columns], dtype=float) - star["sky"]) / star[
+        "flux"
+    ]
     noise = star["noise"] / star["flux"]
     count = len(edges) - 1
     result = {
@@ -351,11 +320,7 @@ def ring_profile(
     }
 
     for index in range(count):
-        ring = (
-            (radius >= edges[index])
-            & (radius < edges[index + 1])
-            & ~masked
-        )
+        ring = (radius >= edges[index]) & (radius < edges[index + 1]) & ~masked
 
         if ring.sum() < MIN_RING_PIXELS:
             continue
@@ -377,9 +342,7 @@ def combine_profiles(profiles: list[dict]) -> dict[str, FloatArray]:
     value = np.array([profile["value"] for profile in profiles])
     measured = np.isfinite(value)
     weight = np.where(
-        measured,
-        1.0 / np.array([profile["error"] for profile in profiles]) ** 2,
-        0.0,
+        measured, 1.0 / np.array([profile["error"] for profile in profiles]) ** 2, 0.0
     )
     total = weight.sum(axis=0)
     rings = total > 0.0
@@ -451,14 +414,12 @@ def subpixel_kernels(
                 )
 
             core = np.zeros((size, size))
-            core[start:start + core_size, start:start + core_size] = (
+            core[start : start + core_size, start : start + core_size] = (
                 quadratic / total
             )
             distance = np.hypot(xx - half + dx, yy - half + dy)
             wings = np.where(
-                distance < end,
-                np.interp(distance, ring_radius, ring_value),
-                0.0,
+                distance < end, np.interp(distance, ring_radius, ring_value), 0.0
             )
             blend = np.clip((distance - WING_START) / WING_BLEND, 0.0, 1.0)
             kernel = np.clip((1.0 - blend) * core + blend * wings, 0.0, None)
@@ -505,11 +466,7 @@ def build_empirical_psf(
 
     for candidate in candidates:
         sky = far_sky(
-            data,
-            labels,
-            float(candidate["x"]),
-            float(candidate["y"]),
-            settings,
+            data, labels, float(candidate["x"]), float(candidate["y"]), settings
         )
         star = star_window(data, candidate, half, sky)
 
@@ -539,13 +496,9 @@ def build_empirical_psf(
         )
 
     phases = np.array([star["phase"] for star in stars])
-    weights = np.array(
-        [(star["flux"] / star["noise"]) ** 2 for star in stars]
-    )
+    weights = np.array([(star["flux"] / star["noise"]) ** 2 for star in stars])
     coefficients = np.tensordot(
-        phase_coefficients(phases, weights),
-        np.asarray(windows),
-        axes=1,
+        phase_coefficients(phases, weights), np.asarray(windows), axes=1
     )
     profile = combine_profiles(profiles)
     kernels = subpixel_kernels(coefficients, profile, settings)

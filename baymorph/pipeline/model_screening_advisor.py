@@ -8,16 +8,12 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from baymorph.analysis.model_screening import (
-    ModelScreeningReport,
-)
+from baymorph.analysis.model_screening import ModelScreeningReport
 from baymorph.analysis.model_screening_features import (
     ModelScreeningFeatureVector,
     extract_model_screening_features,
 )
-from baymorph.core.observation import (
-    ObservationMetadata,
-)
+from baymorph.core.observation import ObservationMetadata
 from baymorph.pipeline.advisor import ObservationAdvisor
 from baymorph.analysis.model_screening_classifier import (
     LinearDiscriminantScreeningClassifier,
@@ -104,10 +100,7 @@ class SingleObservationModelAdvisor(ObservationAdvisor):
         expressed in ``"arcsec"`` or ``"pixels"``.
         """
         observation = open_observation(self.fits_path, hdu=self.hdu)
-        data = np.asarray(
-            observation.image.data,
-            dtype=float,
-        )
+        data = np.asarray(observation.image.data, dtype=float)
 
         if data.ndim != 2:
             raise ValueError("Model screening requires a two-dimensional FITS image.")
@@ -138,10 +131,7 @@ class SingleObservationModelAdvisor(ObservationAdvisor):
 
         return SingleObservationScreeningResult(
             path=self.fits_path.resolve(),
-            shape=(
-                int(data.shape[0]),
-                int(data.shape[1]),
-            ),
+            shape=(int(data.shape[0]), int(data.shape[1])),
             target_x=float(target_x),
             target_y=float(target_y),
             metadata=observation.metadata,
@@ -210,9 +200,7 @@ def _resolve_psf_fwhm_pixels(
     return value, source
 
 
-def _format_optional(
-    value: str | None,
-) -> str:
+def _format_optional(value: str | None) -> str:
     """Format optional textual metadata."""
     if value is None:
         return "unavailable"
@@ -220,9 +208,7 @@ def _format_optional(
     return value
 
 
-def _format_number(
-    value: float | None,
-) -> str:
+def _format_number(value: float | None) -> str:
     """Format optional numerical metadata."""
     if value is None:
         return "unavailable"
@@ -230,7 +216,4 @@ def _format_number(
     return f"{value:.8g}"
 
 
-__all__ = [
-    "SingleObservationModelAdvisor",
-    "SingleObservationScreeningResult",
-]
+__all__ = ["SingleObservationModelAdvisor", "SingleObservationScreeningResult"]

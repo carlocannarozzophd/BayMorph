@@ -7,9 +7,7 @@ from typing import Any
 from baymorph.core.observation import Observation
 
 
-def observation_metadata_dict(
-    observation: Observation,
-) -> dict[str, Any]:
+def observation_metadata_dict(observation: Observation) -> dict[str, Any]:
     """Convert an Observation into JSON-serializable metadata.
 
     Parameters
@@ -34,9 +32,7 @@ def observation_metadata_dict(
         "seeing_fwhm": metadata.seeing_fwhm,
         "seeing_fwhm_unit": metadata.seeing_fwhm_unit,
         "seeing_fwhm_arcsec": (
-            metadata.seeing_fwhm
-            if metadata.seeing_fwhm_unit == "arcsec"
-            else None
+            metadata.seeing_fwhm if metadata.seeing_fwhm_unit == "arcsec" else None
         ),
         "zeropoint": metadata.zeropoint,
         "gain": metadata.gain,
@@ -48,10 +44,7 @@ def observation_metadata_dict(
         "hdu": (
             None
             if image is None
-            else {
-                "index": image.hdu_index,
-                "name": image.hdu_name,
-            }
+            else {"index": image.hdu_index, "name": image.hdu_name}
         ),
         "header_reading": (
             None

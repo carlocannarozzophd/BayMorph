@@ -36,10 +36,7 @@ from baymorph.pipeline.psf_candidates import (
     psf_candidates_provenance_exists,
     validate_psf_candidates_provenance,
 )
-from baymorph.pipeline.psf_construction import (
-    empirical_psf_exists,
-    load_empirical_psf,
-)
+from baymorph.pipeline.psf_construction import empirical_psf_exists, load_empirical_psf
 from baymorph.pipeline.noise_calibration import (
     build_correlated_noise_calibration,
     correlated_noise_calibration_path,
@@ -51,15 +48,10 @@ from baymorph.pipeline.vecchia_factorization import (
     ensure_vecchia_factorization_artifact,
 )
 
-WorkflowMode = Literal[
-    "single",
-    "multi_observation",
-]
+WorkflowMode = Literal["single", "multi_observation"]
 
 
-def _workflow_mode_from_config(
-    config: Mapping[str, Any],
-) -> WorkflowMode:
+def _workflow_mode_from_config(config: Mapping[str, Any]) -> WorkflowMode:
     """Return the workflow mode implied by a raw configuration.
 
     Parameters
@@ -81,13 +73,7 @@ def _workflow_mode_from_config(
     if "observations" in config:
         observations = config["observations"]
 
-        if (
-            not isinstance(
-                observations,
-                Mapping,
-            )
-            or not observations
-        ):
+        if not isinstance(observations, Mapping) or not observations:
             raise ValueError(
                 "Multi-observation configuration requires a non-empty "
                 "'observations' mapping."
@@ -98,9 +84,7 @@ def _workflow_mode_from_config(
     return "single"
 
 
-def _locate_config_path(
-    config: str | Path,
-) -> Path:
+def _locate_config_path(config: str | Path) -> Path:
     """Locate a project-root-relative configuration path.
 
     Relative paths are checked from the current directory upward through its
@@ -108,57 +92,30 @@ def _locate_config_path(
     relative to the current directory is returned so the normal configuration
     loader can report the missing file.
     """
-    requested = Path(
-        config
-    ).expanduser()
+    requested = Path(config).expanduser()
 
     if requested.is_absolute():
         return requested.resolve()
 
     search_start = Path.cwd().resolve()
 
-    for directory in (
-        search_start,
-        *search_start.parents,
-    ):
-        candidate = (
-            directory
-            / requested
-        ).resolve()
+    for directory in (search_start, *search_start.parents):
+        candidate = (directory / requested).resolve()
 
         if candidate.is_file():
             return candidate
 
-    return (
-        search_start
-        / requested
-    ).resolve()
+    return (search_start / requested).resolve()
 
 
-def _observation_psf_type(
-    config: Mapping[str, Any],
-) -> str:
+def _observation_psf_type(config: Mapping[str, Any]) -> str:
     """Return the declared PSF type of one observation configuration."""
-    return str(
-        config.get(
-            "psf",
-            {},
-        ).get(
-            "type",
-            "empirical",
-        )
-    ).strip().lower()
+    return str(config.get("psf", {}).get("type", "empirical")).strip().lower()
 
 
-def _require_empirical_psf(
-    config: Mapping[str, Any],
-    *,
-    action: str,
-) -> None:
+def _require_empirical_psf(config: Mapping[str, Any], *, action: str) -> None:
     """Raise a clear error when PSF construction is requested for a non-empirical PSF."""
-    psf_type = _observation_psf_type(
-        config
-    )
+    psf_type = _observation_psf_type(config)
 
     if psf_type != "empirical":
         raise ValueError(
@@ -189,55 +146,29 @@ class BayMorphRunner:
     """
 
     def __init__(
-        self,
-        config: str | Path | dict[str, Any],
-        *,
-        verbose: bool = True,
+        self, config: str | Path | dict[str, Any], *, verbose: bool = True
     ) -> None:
         self.config_path: Path | None = None
         self.config_base_dir: Path | None = None
         self.project_root: Path | None = None
 
-        if isinstance(
-            config,
-            (str, Path),
-        ):
-            self.config_path = _locate_config_path(
-                config
-            )
-            self.config_base_dir = (
-                self.config_path.parent
-            )
+        if isinstance(config, (str, Path)):
+            self.config_path = _locate_config_path(config)
+            self.config_base_dir = self.config_path.parent
 
-            raw_config = load_config(
-                self.config_path
-            )
-            self.workflow_mode = (
-                _workflow_mode_from_config(
-                    raw_config
-                )
-            )
+            raw_config = load_config(self.config_path)
+            self.workflow_mode = _workflow_mode_from_config(raw_config)
 
             if self.workflow_mode == "single":
-                self.config = load_resolved_config(
-                    self.config_path,
-                )
+                self.config = load_resolved_config(self.config_path)
             else:
-                self.config = dict(
-                    raw_config
-                )
+                self.config = dict(raw_config)
         else:
             raw_config = dict(config)
-            self.workflow_mode = (
-                _workflow_mode_from_config(
-                    raw_config
-                )
-            )
+            self.workflow_mode = _workflow_mode_from_config(raw_config)
 
             if self.workflow_mode == "single":
-                self.config = resolve_config(
-                    raw_config
-                )
+                self.config = resolve_config(raw_config)
             else:
                 self.config = raw_config
 
@@ -246,9 +177,7 @@ class BayMorphRunner:
             and self.config_path is not None
             and self.config_path.parent.name == "configs"
         ):
-            self.project_root = (
-                self.config_path.parent.parent
-            )
+            self.project_root = self.config_path.parent.parent
             self._anchor_project_paths()
 
         self.verbose = bool(verbose)
@@ -262,10 +191,7 @@ class BayMorphRunner:
 
     @classmethod
     def from_config(
-        cls,
-        config: str | Path | dict[str, Any],
-        *,
-        verbose: bool = True,
+        cls, config: str | Path | dict[str, Any], *, verbose: bool = True
     ) -> BayMorphRunner:
         """Create a runner from a configuration source.
 
@@ -281,69 +207,37 @@ class BayMorphRunner:
         BayMorphRunner
             Initialized workflow runner.
         """
-        return cls(
-            config,
-            verbose=verbose,
-        )
+        return cls(config, verbose=verbose)
 
     def _anchor_project_paths(self) -> None:
         """Anchor primary relative paths to the discovered project root."""
         if self.project_root is None:
             return
 
-        for section_name, key in (
-            (
-                "outputs",
-                "root",
-            ),
-            (
-                "data",
-                "image_path",
-            ),
-        ):
-            section = self.config.get(
-                section_name
-            )
+        for section_name, key in (("outputs", "root"), ("data", "image_path")):
+            section = self.config.get(section_name)
 
-            if not isinstance(
-                section,
-                dict,
-            ):
+            if not isinstance(section, dict):
                 continue
 
-            value = section.get(
-                key
-            )
+            value = section.get(key)
 
             if value is None:
                 continue
 
-            path_value = Path(
-                value
-            ).expanduser()
+            path_value = Path(value).expanduser()
 
             if path_value.is_absolute():
                 continue
 
-            section[key] = str(
-                (
-                    self.project_root
-                    / path_value
-                ).resolve()
-            )
+            section[key] = str((self.project_root / path_value).resolve())
 
     @property
     def is_multi_observation(self) -> bool:
         """Return whether this runner represents multiple observations."""
-        return (
-            self.workflow_mode
-            == "multi_observation"
-        )
+        return self.workflow_mode == "multi_observation"
 
-    def _require_single_observation(
-        self,
-        operation: str,
-    ) -> None:
+    def _require_single_observation(self, operation: str) -> None:
         """Reject not-yet-integrated multi-observation workflow stages."""
         if self.is_multi_observation:
             raise NotImplementedError(
@@ -354,25 +248,16 @@ class BayMorphRunner:
     @property
     def output_dir(self) -> Path:
         """Return the configured output root directory."""
-        self._require_single_observation(
-            "output_dir"
-        )
+        self._require_single_observation("output_dir")
 
-        return Path(
-            self.config["outputs"]["root"]
-        )
+        return Path(self.config["outputs"]["root"])
 
     @property
     def run_dir(self) -> Path:
         """Return the output directory for the configured object."""
-        self._require_single_observation(
-            "run_dir"
-        )
+        self._require_single_observation("run_dir")
 
-        return (
-            self.output_dir
-            / str(self.config["object"]["name"])
-        )
+        return self.output_dir / str(self.config["object"]["name"])
 
     @property
     def simulation(self) -> Any:
@@ -399,25 +284,15 @@ class BayMorphRunner:
         """Return the Bayesian fitting results."""
         return self.fit_result
 
-    def _status(
-        self,
-        message: str,
-    ) -> None:
+    def _status(self, message: str) -> None:
         """Print a completed-step status message when verbosity is enabled."""
         if self.verbose:
-            print(
-                f"✓ {message}"
-            )
+            print(f"✓ {message}")
 
-    def _require_fit_result(
-        self,
-        diagnostic_name: str,
-    ) -> None:
+    def _require_fit_result(self, diagnostic_name: str) -> None:
         """Require a completed fit before running a diagnostic."""
         if self.fit_result is None:
-            raise RuntimeError(
-                f"Run fit() before {diagnostic_name}()."
-            )
+            raise RuntimeError(f"Run fit() before {diagnostic_name}().")
 
     def simulate(self) -> Any:
         """Generate and persist the configured synthetic observation.
@@ -432,108 +307,57 @@ class BayMorphRunner:
         ValueError
             If the configuration does not define a simulation.
         """
-        self._require_single_observation(
-            "simulate"
-        )
+        self._require_single_observation("simulate")
 
         if "simulation" not in self.config:
             raise ValueError(
-                "simulate() requires a top-level 'simulation' "
-                "configuration."
+                "simulate() requires a top-level 'simulation' " "configuration."
             )
 
-        self.simulation_observation = (
-            run_simulation_from_config(
-                self.config
-            )
-        )
+        self.simulation_observation = run_simulation_from_config(self.config)
 
-        self._status(
-            "Synthetic observation generated"
-        )
+        self._status("Synthetic observation generated")
 
         return self.simulation_observation
 
     @staticmethod
-    def _reuses_products(
-        config: Mapping[str, Any],
-    ) -> bool:
+    def _reuses_products(config: Mapping[str, Any]) -> bool:
         """Return whether accepted products may be reused for this config.
 
         A configuration without a resolved ``outputs`` section cannot address
         persisted products, so its stages always rebuild.
         """
-        outputs = config.get(
-            "outputs"
-        )
+        outputs = config.get("outputs")
 
-        if not isinstance(
-            outputs,
-            Mapping,
-        ):
+        if not isinstance(outputs, Mapping):
             return False
 
-        return not bool(
-            outputs.get(
-                "overwrite",
-                False,
-            )
-        )
+        return not bool(outputs.get("overwrite", False))
 
     def _stage_status(
-        self,
-        message: str,
-        *,
-        reused: bool,
-        observation_name: str | None = None,
+        self, message: str, *, reused: bool, observation_name: str | None = None
     ) -> None:
         """Report a completed stage, naming reuse of accepted products."""
         suffix = (
-            ""
-            if observation_name is None
-            else f" for observation '{observation_name}'"
+            "" if observation_name is None else f" for observation '{observation_name}'"
         )
 
         if reused:
-            self._status(
-                f"Accepted {message} reused" + suffix
-            )
+            self._status(f"Accepted {message} reused" + suffix)
         else:
-            self._status(
-                message[0].upper()
-                + message[1:]
-                + " completed"
-                + suffix
-            )
+            self._status(message[0].upper() + message[1:] + " completed" + suffix)
 
-    def _prepare_one_observation(
-        self,
-        config: Mapping[str, Any],
-    ) -> tuple[Any, bool]:
+    def _prepare_one_observation(self, config: Mapping[str, Any]) -> tuple[Any, bool]:
         """Prepare one observation, reusing accepted products when present.
 
         Reuse never bypasses validation: the loader accepts persisted products
         only when their immutable inputs still match this configuration, and
         fails closed otherwise.
         """
-        if self._reuses_products(
-            config
-        ) and image_preparation_is_complete(
-            config
-        ):
-            return (
-                load_image_preparation_products(
-                    config
-                ),
-                True,
-            )
+        if self._reuses_products(config) and image_preparation_is_complete(config):
+            return (load_image_preparation_products(config), True)
 
-        return (
-            run_image_preparation(
-                config
-            ),
-            False,
-        )
+        return (run_image_preparation(config), False)
 
     def prepare_image(self) -> Any:
         """Run image preparation for the configured observations.
@@ -549,52 +373,35 @@ class BayMorphRunner:
             observation name to preparation products.
         """
         if self.is_multi_observation:
-            observation_configs = (
-                resolve_multi_observation_observation_configs(
-                    self.config,
-                    base_dir=self.config_base_dir,
-                )
+            observation_configs = resolve_multi_observation_observation_configs(
+                self.config, base_dir=self.config_base_dir
             )
 
             products = {}
 
-            for name, observation_config in (
-                observation_configs.items()
-            ):
-                (
-                    products[name],
-                    reused,
-                ) = self._prepare_one_observation(
+            for name, observation_config in observation_configs.items():
+                products[name], reused = self._prepare_one_observation(
                     observation_config
                 )
 
                 self._stage_status(
-                    "image preparation",
-                    reused=reused,
-                    observation_name=name,
+                    "image preparation", reused=reused, observation_name=name
                 )
 
             self.image_preparation_products = products
 
             return self.image_preparation_products
 
-        (
-            self.image_preparation_products,
-            reused,
-        ) = self._prepare_one_observation(
+        self.image_preparation_products, reused = self._prepare_one_observation(
             self.config
         )
 
-        self._stage_status(
-            "image preparation",
-            reused=reused,
-        )
+        self._stage_status("image preparation", reused=reused)
 
         return self.image_preparation_products
 
     def _select_one_psf_candidate_set(
-        self,
-        config: Mapping[str, Any],
+        self, config: Mapping[str, Any]
     ) -> tuple[Any, bool]:
         """Select candidates, reusing an accepted candidate set when present.
 
@@ -602,40 +409,18 @@ class BayMorphRunner:
         rather than rewritten, but only when they were selected from the
         current image and settings; otherwise the stage fails closed.
         """
-        if self._reuses_products(
-            config
-        ) and psf_candidates_exist(
-            config
-        ):
-            if psf_candidates_provenance_exists(
-                config
-            ):
-                validate_psf_candidates_provenance(
-                    config
-                )
+        if self._reuses_products(config) and psf_candidates_exist(config):
+            if psf_candidates_provenance_exists(config):
+                validate_psf_candidates_provenance(config)
             else:
-                self._validate_candidates_without_provenance(
-                    config
-                )
+                self._validate_candidates_without_provenance(config)
 
-            return (
-                load_psf_candidates(
-                    config
-                ),
-                True,
-            )
+            return (load_psf_candidates(config), True)
 
-        return (
-            run_psf_candidate_selection(
-                config
-            ),
-            False,
-        )
+        return (run_psf_candidate_selection(config), False)
 
     @staticmethod
-    def _validate_candidates_without_provenance(
-        config: Mapping[str, Any],
-    ) -> None:
+    def _validate_candidates_without_provenance(config: Mapping[str, Any]) -> None:
         """Accept candidates of an earlier release only through their PSF.
 
         Candidates saved by BayMorph 0.5.1 and earlier record no
@@ -654,18 +439,14 @@ class BayMorphRunner:
             "select them again."
         )
 
-        if not empirical_psf_exists(
-            config
-        ):
+        if not empirical_psf_exists(config):
             raise ValueError(
                 "The saved PSF candidates record no provenance and no "
                 f"accepted PSF binds them to the current inputs. {remedy}"
             )
 
         try:
-            load_empirical_psf(
-                config
-            )
+            load_empirical_psf(config)
         except ValueError as error:
             raise ValueError(
                 "The saved PSF candidates record no provenance, and the "
@@ -687,105 +468,59 @@ class BayMorphRunner:
             name to candidate products.
         """
         if self.is_multi_observation:
-            observation_configs = (
-                resolve_multi_observation_observation_configs(
-                    self.config,
-                    base_dir=self.config_base_dir,
-                )
+            observation_configs = resolve_multi_observation_observation_configs(
+                self.config, base_dir=self.config_base_dir
             )
 
             empirical_configs = {
                 name: observation_config
-                for name, observation_config
-                in observation_configs.items()
-                if _observation_psf_type(
-                    observation_config
-                )
-                == "empirical"
+                for name, observation_config in observation_configs.items()
+                if _observation_psf_type(observation_config) == "empirical"
             }
 
             candidates = {}
 
-            for name, observation_config in (
-                empirical_configs.items()
-            ):
-                (
-                    candidates[name],
-                    reused,
-                ) = self._select_one_psf_candidate_set(
+            for name, observation_config in empirical_configs.items():
+                candidates[name], reused = self._select_one_psf_candidate_set(
                     observation_config
                 )
 
                 self._stage_status(
-                    "PSF candidate selection",
-                    reused=reused,
-                    observation_name=name,
+                    "PSF candidate selection", reused=reused, observation_name=name
                 )
 
             self.psf_candidate_products = candidates
 
             return self.psf_candidate_products
 
-        _require_empirical_psf(
-            self.config,
-            action="PSF candidate selection",
-        )
+        _require_empirical_psf(self.config, action="PSF candidate selection")
 
-        (
-            self.psf_candidate_products,
-            reused,
-        ) = self._select_one_psf_candidate_set(
+        self.psf_candidate_products, reused = self._select_one_psf_candidate_set(
             self.config
         )
 
         try:
-            n_candidates = len(
-                self.psf_candidate_products
-            )
+            n_candidates = len(self.psf_candidate_products)
         except TypeError:
-            self._stage_status(
-                "PSF candidate selection",
-                reused=reused,
-            )
+            self._stage_status("PSF candidate selection", reused=reused)
         else:
-            selection = (
-                "reused" if reused else "selected"
-            )
+            selection = "reused" if reused else "selected"
 
-            self._status(
-                f"{n_candidates} PSF candidates {selection}"
-            )
+            self._status(f"{n_candidates} PSF candidates {selection}")
 
         return self.psf_candidate_products
 
-    def _build_one_psf(
-        self,
-        config: Mapping[str, Any],
-    ) -> tuple[Any, bool]:
+    def _build_one_psf(self, config: Mapping[str, Any]) -> tuple[Any, bool]:
         """Build one PSF, reusing an accepted kernel when present.
 
         The loader validates the persisted kernel and its provenance before
         returning it, and fails closed otherwise. Both paths return the PSF
         image itself.
         """
-        if self._reuses_products(
-            config
-        ) and empirical_psf_exists(
-            config
-        ):
-            return (
-                load_empirical_psf(
-                    config
-                ).kernel_array,
-                True,
-            )
+        if self._reuses_products(config) and empirical_psf_exists(config):
+            return (load_empirical_psf(config).kernel_array, True)
 
-        return (
-            run_psf_construction(
-                config
-            ),
-            False,
-        )
+        return (run_psf_construction(config), False)
 
     def build_psf(self) -> Any:
         """Build empirical PSFs for the configured observations.
@@ -800,85 +535,48 @@ class BayMorphRunner:
             name to PSF products.
         """
         if self.is_multi_observation:
-            observation_configs = (
-                resolve_multi_observation_observation_configs(
-                    self.config,
-                    base_dir=self.config_base_dir,
-                )
+            observation_configs = resolve_multi_observation_observation_configs(
+                self.config, base_dir=self.config_base_dir
             )
 
             empirical_configs = {
                 name: observation_config
-                for name, observation_config
-                in observation_configs.items()
-                if _observation_psf_type(
-                    observation_config
-                )
-                == "empirical"
+                for name, observation_config in observation_configs.items()
+                if _observation_psf_type(observation_config) == "empirical"
             }
 
             psfs = {}
 
-            for name, observation_config in (
-                empirical_configs.items()
-            ):
-                (
-                    psfs[name],
-                    reused,
-                ) = self._build_one_psf(
-                    observation_config
-                )
+            for name, observation_config in empirical_configs.items():
+                psfs[name], reused = self._build_one_psf(observation_config)
 
                 self._stage_status(
-                    "empirical PSF",
-                    reused=reused,
-                    observation_name=name,
+                    "empirical PSF", reused=reused, observation_name=name
                 )
 
             self.psf_products = psfs
 
             return self.psf_products
 
-        _require_empirical_psf(
-            self.config,
-            action="PSF construction",
-        )
+        _require_empirical_psf(self.config, action="PSF construction")
 
-        (
-            self.psf_products,
-            reused,
-        ) = self._build_one_psf(
-            self.config
-        )
+        self.psf_products, reused = self._build_one_psf(self.config)
 
-        self._stage_status(
-            "empirical PSF",
-            reused=reused,
-        )
+        self._stage_status("empirical PSF", reused=reused)
 
         return self.psf_products
 
     def _ensure_observation_noise_calibration(
-        self,
-        config: Mapping[str, Any],
-        *,
-        observation_name: str | None = None,
+        self, config: Mapping[str, Any], *, observation_name: str | None = None
     ) -> None:
         """Build or validate immutable correlated-noise fit artifacts."""
-        likelihood_config = resolve_likelihood_config(
-            config["fit"].get("likelihood")
-        )
+        likelihood_config = resolve_likelihood_config(config["fit"].get("likelihood"))
         if isinstance(likelihood_config, str):
             likelihood_type = likelihood_config
         elif isinstance(likelihood_config, Mapping):
-            likelihood_type = likelihood_config.get(
-                "type",
-                "correlated_gaussian",
-            )
+            likelihood_type = likelihood_config.get("type", "correlated_gaussian")
         else:
-            raise TypeError(
-                "fit.likelihood must be a string or mapping."
-            )
+            raise TypeError("fit.likelihood must be a string or mapping.")
 
         if normalize_likelihood_type(likelihood_type) != "correlated_gaussian":
             return
@@ -891,34 +589,21 @@ class BayMorphRunner:
         reject_correlated_noise_calibration_settings(config)
         calibration_path = correlated_noise_calibration_path(config)
         if not calibration_path.is_file():
-            build_correlated_noise_calibration(
-                config,
-                save=True,
-                overwrite=False,
-            )
+            build_correlated_noise_calibration(config, save=True, overwrite=False)
 
         suffix = (
-            ""
-            if observation_name is None
-            else f" for observation '{observation_name}'"
+            "" if observation_name is None else f" for observation '{observation_name}'"
         )
-        self._status(
-            "Ready: correlated-noise calibration" + suffix
-        )
+        self._status("Ready: correlated-noise calibration" + suffix)
 
         factorization_config = likelihood_config.get("factorization")
         if factorization_config is None:
             return
         if not isinstance(factorization_config, Mapping):
-            raise TypeError(
-                "fit.likelihood.factorization must be a mapping."
-            )
+            raise TypeError("fit.likelihood.factorization must be a mapping.")
 
         factorization_type = (
-            str(factorization_config.get("type", ""))
-            .strip()
-            .lower()
-            .replace("-", "_")
+            str(factorization_config.get("type", "")).strip().lower().replace("-", "_")
         )
         if factorization_type != "nearest_neighbor":
             raise ValueError(
@@ -929,39 +614,25 @@ class BayMorphRunner:
         ensure_vecchia_factorization_artifact(
             config,
             max_neighbors=int(
-                factorization_config.get(
-                    "max_neighbors",
-                    PRODUCTION_VECCHIA_NEIGHBORS,
-                )
+                factorization_config.get("max_neighbors", PRODUCTION_VECCHIA_NEIGHBORS)
             ),
             min_conditional_variance=float(
                 factorization_config.get(
-                    "min_conditional_variance",
-                    DEFAULT_MIN_CONDITIONAL_VARIANCE,
+                    "min_conditional_variance", DEFAULT_MIN_CONDITIONAL_VARIANCE
                 )
             ),
         )
-        self._status(
-            "Ready: nearest-neighbour factorization" + suffix
-        )
+        self._status("Ready: nearest-neighbour factorization" + suffix)
 
-    def _ensure_multi_observation_noise_calibrations(
-        self,
-    ) -> None:
+    def _ensure_multi_observation_noise_calibrations(self) -> None:
         """Build required noise calibrations for all observations."""
-        observation_configs = (
-            resolve_multi_observation_observation_configs(
-                self.config,
-                base_dir=self.config_base_dir,
-            )
+        observation_configs = resolve_multi_observation_observation_configs(
+            self.config, base_dir=self.config_base_dir
         )
 
-        for observation_name, observation_config in (
-            observation_configs.items()
-        ):
+        for observation_name, observation_config in observation_configs.items():
             self._ensure_observation_noise_calibration(
-                observation_config,
-                observation_name=observation_name,
+                observation_config, observation_name=observation_name
             )
 
     def fit(self) -> Any:
@@ -976,146 +647,83 @@ class BayMorphRunner:
             self._ensure_multi_observation_noise_calibrations()
 
             config_source = (
-                self.config_path
-                if self.config_path is not None
-                else self.config
+                self.config_path if self.config_path is not None else self.config
             )
 
-            self.fit_result = (
-                run_multi_observation_fit_from_config(
-                    config_source
-                )
-            )
+            self.fit_result = run_multi_observation_fit_from_config(config_source)
 
             self.profile_bands = None
 
-            self._status(
-                "Multi-observation Bayesian fitting completed"
-            )
+            self._status("Multi-observation Bayesian fitting completed")
 
             return self.fit_result
 
-        self._ensure_observation_noise_calibration(
-            self.config
-        )
+        self._ensure_observation_noise_calibration(self.config)
 
-        self.fit_result = run_real_fit(
-            self.config,
-        )
+        self.fit_result = run_real_fit(self.config)
 
         self.profile_bands = None
 
-        self._status(
-            "Bayesian fitting completed"
-        )
+        self._status("Bayesian fitting completed")
 
         return self.fit_result
 
     def corner(self) -> None:
         """Generate corner-plot diagnostics."""
-        self._require_fit_result(
-            "corner"
-        )
+        self._require_fit_result("corner")
 
         from baymorph.pipeline import run_corner_diagnostics
 
-        run_corner_diagnostics(
-            self.config,
-            self.fit_result,
-        )
+        run_corner_diagnostics(self.config, self.fit_result)
 
-        self._status(
-            "Corner plots generated"
-        )
+        self._status("Corner plots generated")
 
     def residual_maps(self) -> None:
         """Generate residual-map diagnostics."""
-        self._require_fit_result(
-            "residual_maps"
-        )
+        self._require_fit_result("residual_maps")
 
         from baymorph.pipeline import run_residual_map_diagnostics
 
-        run_residual_map_diagnostics(
-            self.config,
-            self.fit_result,
-        )
+        run_residual_map_diagnostics(self.config, self.fit_result)
 
-        self._status(
-            "Residual maps generated"
-        )
+        self._status("Residual maps generated")
 
     def radial_profile(self) -> Any:
         """Generate radial-profile diagnostics."""
-        self._require_fit_result(
-            "radial_profile"
-        )
+        self._require_fit_result("radial_profile")
 
         from baymorph.pipeline import run_radial_profile_diagnostics
 
-        self.profile_bands = (
-            run_radial_profile_diagnostics(
-                self.config,
-                self.fit_result,
-            )
+        self.profile_bands = run_radial_profile_diagnostics(
+            self.config, self.fit_result
         )
 
-        self._status(
-            "Radial profiles generated"
-        )
+        self._status("Radial profiles generated")
 
         return self.profile_bands
 
     def diagnostics(self) -> Any:
         """Generate the diagnostics enabled by the configuration."""
-        self._require_fit_result(
-            "diagnostics"
-        )
+        self._require_fit_result("diagnostics")
 
-        diagnostics_config = self.config.get(
-            "diagnostics",
-            {},
-        )
+        diagnostics_config = self.config.get("diagnostics", {})
 
         if diagnostics_config is None:
             diagnostics_config = {}
 
-        if not isinstance(
-            diagnostics_config,
-            Mapping,
-        ):
-            raise TypeError(
-                "diagnostics must be a mapping."
-            )
+        if not isinstance(diagnostics_config, Mapping):
+            raise TypeError("diagnostics must be a mapping.")
 
-        corner_enabled = bool(
-            diagnostics_config.get(
-                "corner",
-                True,
-            )
-        )
+        corner_enabled = bool(diagnostics_config.get("corner", True))
 
-        residual_enabled = bool(
-            diagnostics_config.get(
-                "residual",
-                True,
-            )
-        )
+        residual_enabled = bool(diagnostics_config.get("residual", True))
 
-        radial_setting = diagnostics_config.get(
-            "radial_profile",
-            True,
-        )
+        radial_setting = diagnostics_config.get("radial_profile", True)
 
-        if isinstance(
-            radial_setting,
-            Mapping,
-        ):
+        if isinstance(radial_setting, Mapping):
             radial_enabled = True
         else:
-            radial_enabled = bool(
-                radial_setting
-            )
+            radial_enabled = bool(radial_setting)
 
         if corner_enabled:
             self.corner()
@@ -1129,17 +737,11 @@ class BayMorphRunner:
             self.profile_bands = None
             profile_bands = None
 
-        self._status(
-            "Configured diagnostics generated"
-        )
+        self._status("Configured diagnostics generated")
 
         return profile_bands
 
-    def run(
-        self,
-        *,
-        diagnostics: bool = False,
-    ) -> Any:
+    def run(self, *, diagnostics: bool = False) -> Any:
         """Run the configured BayMorph workflow.
 
         Parameters
@@ -1152,10 +754,7 @@ class BayMorphRunner:
         Any
             Fitting products for the configured analysis.
         """
-        if (
-            not self.is_multi_observation
-            and "simulation" in self.config
-        ):
+        if not self.is_multi_observation and "simulation" in self.config:
             self.simulate()
 
         self.prepare_image()

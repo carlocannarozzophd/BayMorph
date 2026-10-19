@@ -88,39 +88,18 @@ def detect_sources_segmentation(
         Container holding the segmentation image, detection mask, and source
         catalog when available.
     """
-    data = np.asarray(
-        data,
-        dtype=float,
-    )
+    data = np.asarray(data, dtype=float)
 
-    detection_image = gaussian_filter(
-        data,
-        sigma=2.0,
-    )
+    detection_image = gaussian_filter(data, sigma=2.0)
 
-    threshold = detect_threshold(
-        detection_image,
-        n_sigma=n_sigma,
-    )
-    background_level = float(
-        detect_threshold(
-            detection_image,
-            n_sigma=0.0,
-        ).flat[0]
-    )
+    threshold = detect_threshold(detection_image, n_sigma=n_sigma)
+    background_level = float(detect_threshold(detection_image, n_sigma=0.0).flat[0])
     threshold_level = float(threshold.flat[0])
 
-    segmentation = detect_sources(
-        detection_image,
-        threshold,
-        n_pixels=n_pixels,
-    )
+    segmentation = detect_sources(detection_image, threshold, n_pixels=n_pixels)
 
     if segmentation is None:
-        mask = np.zeros(
-            data.shape,
-            dtype=bool,
-        )
+        mask = np.zeros(data.shape, dtype=bool)
 
         return DetectionResult(
             segmentation=None,
@@ -143,10 +122,7 @@ def detect_sources_segmentation(
 
     mask = segmentation.data > 0
 
-    catalog = SourceCatalog(
-        data,
-        segmentation,
-    )
+    catalog = SourceCatalog(data, segmentation)
 
     return DetectionResult(
         segmentation=segmentation,
@@ -218,8 +194,7 @@ def segments_above_level(
         raise ValueError("'detection_image' must be a two-dimensional array.")
     if segments.shape != image.shape or local_level.shape != image.shape:
         raise ValueError(
-            "'detection_image', 'segmentation' and 'level' must have the "
-            "same shape."
+            "'detection_image', 'segmentation' and 'level' must have the " "same shape."
         )
     if not np.issubdtype(segments.dtype, np.integer):
         raise ValueError("'segmentation' must hold integer labels.")

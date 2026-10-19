@@ -16,22 +16,15 @@ import yaml
 from astropy.stats import sigma_clipped_stats
 
 from baymorph.core.effective_gain import SKY_LEVEL_GUARD
-from baymorph.core.observation import (
-    Observation,
-    resolve_seeing_fwhm_pixels,
-)
+from baymorph.core.observation import Observation, resolve_seeing_fwhm_pixels
 from baymorph.pipeline.opening import open_observation
 from baymorph.pipeline.prior_config import parse_prior_config
-from baymorph.pipeline.config import (
-    resolve_config,
-    validate_fit_priors,
-)
+from baymorph.pipeline.config import resolve_config, validate_fit_priors
 from baymorph.pipeline.multi_observation_config import (
     build_multi_observation_parameter_layout,
     resolve_multi_observation_observation_configs,
 )
 from baymorph.observation.background import background_parameter_names
-
 
 TargetPosition = str | Mapping[str, float] | Sequence[float]
 
@@ -47,29 +40,17 @@ _OBSERVATION_OPTION_KEYS = {
 }
 
 
-def _finite_positive(
-    value: Any,
-) -> float | None:
+def _finite_positive(value: Any) -> float | None:
     """Return a finite positive float or None."""
     if value is None:
         return None
 
     try:
-        result = float(
-            value
-        )
-    except (
-        TypeError,
-        ValueError,
-    ):
+        result = float(value)
+    except (TypeError, ValueError):
         return None
 
-    if (
-        not math.isfinite(
-            result
-        )
-        or result <= 0.0
-    ):
+    if not math.isfinite(result) or result <= 0.0:
         return None
 
     return result
@@ -85,65 +66,31 @@ def _normalize_target_position(
             "'x' and 'y', or the explicit value 'center'."
         )
 
-    if isinstance(
-        target_position,
-        str,
-    ):
+    if isinstance(target_position, str):
         value = target_position.strip().lower()
 
         if value != "center":
-            raise ValueError(
-                "String target_position must be exactly 'center'."
-            )
+            raise ValueError("String target_position must be exactly 'center'.")
 
         return "center"
 
-    if isinstance(
-        target_position,
-        Mapping,
-    ):
-        if set(
-            target_position
-        ) != {
-            "x",
-            "y",
-        }:
+    if isinstance(target_position, Mapping):
+        if set(target_position) != {"x", "y"}:
             raise ValueError(
                 "Target-position mappings must contain exactly 'x' and 'y'."
             )
 
-        x = float(
-            target_position[
-                "x"
-            ]
-        )
-        y = float(
-            target_position[
-                "y"
-            ]
-        )
+        x = float(target_position["x"])
+        y = float(target_position["y"])
 
-    elif isinstance(
-        target_position,
-        Sequence,
-    ):
-        if len(
-            target_position
-        ) != 2:
+    elif isinstance(target_position, Sequence):
+        if len(target_position) != 2:
             raise ValueError(
                 "Target-position sequences must contain exactly two values."
             )
 
-        x = float(
-            target_position[
-                0
-            ]
-        )
-        y = float(
-            target_position[
-                1
-            ]
-        )
+        x = float(target_position[0])
+        y = float(target_position[1])
 
     else:
         raise TypeError(
@@ -151,27 +98,13 @@ def _normalize_target_position(
             "or a two-element sequence."
         )
 
-    if not (
-        math.isfinite(
-            x
-        )
-        and math.isfinite(
-            y
-        )
-    ):
-        raise ValueError(
-            "Target-position coordinates must be finite."
-        )
+    if not (math.isfinite(x) and math.isfinite(y)):
+        raise ValueError("Target-position coordinates must be finite.")
 
-    return {
-        "x": x,
-        "y": y,
-    }
+    return {"x": x, "y": y}
 
 
-def image_sky_gives_the_gain(
-    image: np.ndarray,
-) -> bool:
+def image_sky_gives_the_gain(image: np.ndarray) -> bool:
     """Return whether the sky of an image may give the effective gain.
 
     The sky level and scale are the median and the standard deviation of the
@@ -179,24 +112,13 @@ def image_sky_gives_the_gain(
     gain only when its level is at least ``SKY_LEVEL_GUARD`` times its scale;
     the fit repeats the test with the level and scale of the preparation.
     """
-    values = np.asarray(
-        image,
-        dtype=float,
-    )
-    finite = values[
-        np.isfinite(
-            values
-        )
-    ]
+    values = np.asarray(image, dtype=float)
+    finite = values[np.isfinite(values)]
 
     if finite.size < 2:
         return False
 
-    _, level, scale = sigma_clipped_stats(
-        finite,
-        sigma=3.0,
-        maxiters=10,
-    )
+    _, level, scale = sigma_clipped_stats(finite, sigma=3.0, maxiters=10)
 
     return bool(
         np.isfinite(level)
@@ -206,21 +128,13 @@ def image_sky_gives_the_gain(
     )
 
 
-def _cutout_config(
-    mode: str,
-    *,
-    fixed_size: int | None,
-) -> dict[str, Any]:
+def _cutout_config(mode: str, *, fixed_size: int | None) -> dict[str, Any]:
     """Build a standard cutout configuration."""
-    mode = str(
-        mode
-    ).strip().lower()
+    mode = str(mode).strip().lower()
 
     if mode == "auto":
         if fixed_size is not None:
-            raise ValueError(
-                "fixed_size cannot be supplied when cutout_mode='auto'."
-            )
+            raise ValueError("fixed_size cannot be supplied when cutout_mode='auto'.")
 
         return {
             "mode": "auto",
@@ -232,34 +146,19 @@ def _cutout_config(
 
     if mode == "fixed":
         if fixed_size is None:
-            raise ValueError(
-                "fixed_size is required when cutout_mode='fixed'."
-            )
+            raise ValueError("fixed_size is required when cutout_mode='fixed'.")
 
-        fixed_size = int(
-            fixed_size
-        )
+        fixed_size = int(fixed_size)
 
         if fixed_size <= 0:
-            raise ValueError(
-                "fixed_size must be positive."
-            )
+            raise ValueError("fixed_size must be positive.")
 
-        return {
-            "mode": "fixed",
-            "size": fixed_size,
-        }
+        return {"mode": "fixed", "size": fixed_size}
 
-    raise ValueError(
-        "cutout_mode must be 'auto' or 'fixed'."
-    )
+    raise ValueError("cutout_mode must be 'auto' or 'fixed'.")
 
 
-
-def _empirical_psf_config(
-    *,
-    max_peak: float | None = None,
-) -> dict[str, Any]:
+def _empirical_psf_config(*, max_peak: float | None = None) -> dict[str, Any]:
     """Build empirical-PSF configuration without unit assumptions.
 
     FITS saturation keywords are intentionally not converted into a
@@ -274,15 +173,11 @@ def _empirical_psf_config(
 
     return {
         "type": "empirical",
-        "empirical": {
-            "candidate_selection": candidate_selection,
-        },
+        "empirical": {"candidate_selection": candidate_selection},
     }
 
 
-def _normalize_psf_max_peak(
-    max_peak: Any,
-) -> float | None:
+def _normalize_psf_max_peak(max_peak: Any) -> float | None:
     """Normalize an explicit PSF-candidate peak ceiling.
 
     Finiteness and positivity are enforced by configuration resolution; this
@@ -292,20 +187,10 @@ def _normalize_psf_max_peak(
     if max_peak is None:
         return None
 
-    if isinstance(
-        max_peak,
-        bool,
-    ) or not isinstance(
-        max_peak,
-        Real,
-    ):
-        raise TypeError(
-            "psf_max_peak must be a real number in science-image units."
-        )
+    if isinstance(max_peak, bool) or not isinstance(max_peak, Real):
+        raise TypeError("psf_max_peak must be a real number in science-image units.")
 
-    return float(
-        max_peak
-    )
+    return float(max_peak)
 
 
 def _normalize_background_config(
@@ -320,17 +205,10 @@ def _normalize_background_config(
     if background is None:
         return None
 
-    if not isinstance(
-        background,
-        Mapping,
-    ):
-        raise TypeError(
-            "background must be a mapping or None."
-        )
+    if not isinstance(background, Mapping):
+        raise TypeError("background must be a mapping or None.")
 
-    unknown_keys = sorted(
-        set(background) - {"model", "priors"}
-    )
+    unknown_keys = sorted(set(background) - {"model", "priors"})
 
     if unknown_keys:
         raise ValueError(
@@ -339,27 +217,16 @@ def _normalize_background_config(
         )
 
     if "model" not in background or "priors" not in background:
-        raise ValueError(
-            "background must declare both 'model' and 'priors'."
-        )
+        raise ValueError("background must declare both 'model' and 'priors'.")
 
-    model = str(
-        background["model"]
-    ).strip().lower()
+    model = str(background["model"]).strip().lower()
 
-    parameter_names = background_parameter_names(
-        model
-    )
+    parameter_names = background_parameter_names(model)
 
     priors = background["priors"]
 
-    if not isinstance(
-        priors,
-        Mapping,
-    ):
-        raise TypeError(
-            "background['priors'] must be a mapping."
-        )
+    if not isinstance(priors, Mapping):
+        raise TypeError("background['priors'] must be a mapping.")
 
     if "sky" in priors:
         raise ValueError(
@@ -381,28 +248,16 @@ def _normalize_background_config(
     for name in parameter_names:
         prior_config = priors[name]
 
-        if not isinstance(
-            prior_config,
-            Mapping,
-        ):
-            raise TypeError(
-                f"Background prior for {name!r} must be a mapping."
-            )
+        if not isinstance(prior_config, Mapping):
+            raise TypeError(f"Background prior for {name!r} must be a mapping.")
 
-        prior_mapping = dict(
-            prior_config
-        )
+        prior_mapping = dict(prior_config)
 
-        parse_prior_config(
-            prior_mapping
-        )
+        parse_prior_config(prior_mapping)
 
         normalized_priors[name] = prior_mapping
 
-    return {
-        "model": model,
-        "priors": normalized_priors,
-    }
+    return {"model": model, "priors": normalized_priors}
 
 
 def _gaussian_psf_config(
@@ -413,18 +268,13 @@ def _gaussian_psf_config(
 ) -> dict[str, Any]:
     """Build an explicitly requested Gaussian-PSF configuration."""
     if gaussian_fwhm_pixels is not None:
-        fwhm_pixels = _finite_positive(
-            gaussian_fwhm_pixels
-        )
+        fwhm_pixels = _finite_positive(gaussian_fwhm_pixels)
 
         if fwhm_pixels is None:
-            raise ValueError(
-                "gaussian_fwhm_pixels must be finite and positive."
-            )
+            raise ValueError("gaussian_fwhm_pixels must be finite and positive.")
     else:
         fwhm_pixels = resolve_seeing_fwhm_pixels(
-            observation.metadata,
-            pixel_scale_arcsec=pixel_scale,
+            observation.metadata, pixel_scale_arcsec=pixel_scale
         )
 
         if fwhm_pixels is None:
@@ -441,37 +291,15 @@ def _gaussian_psf_config(
                 f"because {reason}."
             )
 
-    return {
-        "type": "gaussian",
-        "gaussian": {
-            "fwhm": float(
-                fwhm_pixels
-            ),
-        },
-    }
+    return {"type": "gaussian", "gaussian": {"fwhm": float(fwhm_pixels)}}
 
 
-def _write_yaml(
-    path: Path,
-    config: Mapping[str, Any],
-) -> None:
+def _write_yaml(path: Path, config: Mapping[str, Any]) -> None:
     """Write one YAML configuration."""
-    path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    path.parent.mkdir(parents=True, exist_ok=True)
 
-    with path.open(
-        "w",
-        encoding="utf-8",
-    ) as stream:
-        yaml.safe_dump(
-            dict(
-                config
-            ),
-            stream,
-            sort_keys=False,
-        )
+    with path.open("w", encoding="utf-8") as stream:
+        yaml.safe_dump(dict(config), stream, sort_keys=False)
 
 
 def _normalize_sampler_config(
@@ -481,44 +309,24 @@ def _normalize_sampler_config(
     if sampler is None:
         return None
 
-    if isinstance(
-        sampler,
-        str,
-    ):
+    if isinstance(sampler, str):
         name = sampler.strip().lower()
 
         if not name:
-            raise ValueError(
-                "sampler must be a non-empty string."
-            )
+            raise ValueError("sampler must be a non-empty string.")
 
-        return {
-            "name": name,
-        }
+        return {"name": name}
 
-    if not isinstance(
-        sampler,
-        Mapping,
-    ):
-        raise TypeError(
-            "sampler must be a string, mapping, or None."
-        )
+    if not isinstance(sampler, Mapping):
+        raise TypeError("sampler must be a string, mapping, or None.")
 
-    config = deepcopy(
-        dict(
-            sampler
-        )
-    )
+    config = deepcopy(dict(sampler))
 
     if "name" in config:
-        name = str(
-            config["name"]
-        ).strip().lower()
+        name = str(config["name"]).strip().lower()
 
         if not name:
-            raise ValueError(
-                "sampler.name must be non-empty."
-            )
+            raise ValueError("sampler.name must be non-empty.")
 
         config["name"] = name
 
@@ -533,9 +341,7 @@ def _normalize_model_priors(
         return {}
 
     if not isinstance(priors, Mapping):
-        raise TypeError(
-            "model_priors must be a mapping."
-        )
+        raise TypeError("model_priors must be a mapping.")
 
     normalized: dict[str, dict[str, Any]] = {}
 
@@ -543,14 +349,10 @@ def _normalize_model_priors(
         name = str(parameter_name).strip()
 
         if not name:
-            raise ValueError(
-                "Model-prior parameter names must be non-empty."
-            )
+            raise ValueError("Model-prior parameter names must be non-empty.")
 
         if not isinstance(prior_config, Mapping):
-            raise TypeError(
-                f"Prior configuration for {name!r} must be a mapping."
-            )
+            raise TypeError(f"Prior configuration for {name!r} must be a mapping.")
 
         prior_mapping = dict(prior_config)
         relative_to = prior_mapping.get("relative_to")
@@ -561,10 +363,7 @@ def _normalize_model_priors(
         elif relative_to == "target_y":
             references = {"target_y": 0.0}
 
-        parse_prior_config(
-            prior_mapping,
-            references=references,
-        )
+        parse_prior_config(prior_mapping, references=references)
 
         normalized[name] = prior_mapping
 
@@ -663,58 +462,30 @@ def make_config_from_fits(
     detected source BayMorph should analyse. Using ``"center"`` is therefore
     an explicit assumption by the caller, not target detection.
     """
-    fits_path = Path(
-        fits_path
-    )
+    fits_path = Path(fits_path)
 
     if not fits_path.exists():
-        raise FileNotFoundError(
-            f"FITS file not found: {fits_path}"
-        )
+        raise FileNotFoundError(f"FITS file not found: {fits_path}")
 
-    observation = open_observation(
-        fits_path,
-        hdu=hdu,
-    )
+    observation = open_observation(fits_path, hdu=hdu)
 
-    resolved_name = (
-        fits_path.stem
-        if object_name is None
-        else str(
-            object_name
-        ).strip()
-    )
+    resolved_name = fits_path.stem if object_name is None else str(object_name).strip()
 
     if not resolved_name:
-        raise ValueError(
-            "object_name must be non-empty."
-        )
+        raise ValueError("object_name must be non-empty.")
 
-    pixel_scale = _finite_positive(
-        observation.metadata.pixel_scale
-    )
+    pixel_scale = _finite_positive(observation.metadata.pixel_scale)
 
-    normalized_target = _normalize_target_position(
-        target_position
-    )
+    normalized_target = _normalize_target_position(target_position)
 
-    cutout = _cutout_config(
-        cutout_mode,
-        fixed_size=fixed_size,
-    )
+    cutout = _cutout_config(cutout_mode, fixed_size=fixed_size)
 
-    normalized_psf_type = str(
-        psf_type
-    ).strip().lower()
+    normalized_psf_type = str(psf_type).strip().lower()
 
-    normalized_max_peak = _normalize_psf_max_peak(
-        psf_max_peak
-    )
+    normalized_max_peak = _normalize_psf_max_peak(psf_max_peak)
 
     if normalized_psf_type == "empirical":
-        psf = _empirical_psf_config(
-            max_peak=normalized_max_peak,
-        )
+        psf = _empirical_psf_config(max_peak=normalized_max_peak)
 
     elif normalized_psf_type == "gaussian":
         if normalized_max_peak is not None:
@@ -730,69 +501,40 @@ def make_config_from_fits(
         )
 
     else:
-        raise ValueError(
-            "psf_type must be 'empirical' or 'gaussian'."
-        )
+        raise ValueError("psf_type must be 'empirical' or 'gaussian'.")
 
-    model_name = str(
-        model_name
-    ).strip()
+    model_name = str(model_name).strip()
 
     if not model_name:
-        raise ValueError(
-            "model_name must be non-empty."
-        )
+        raise ValueError("model_name must be non-empty.")
 
-    sampler_config = _normalize_sampler_config(
-        sampler
-    )
+    sampler_config = _normalize_sampler_config(sampler)
 
-    normalized_model_priors = _normalize_model_priors(
-        model_priors
-    )
+    normalized_model_priors = _normalize_model_priors(model_priors)
 
-    if preparation is not None and not isinstance(
-        preparation,
-        Mapping,
-    ):
-        raise TypeError(
-            "preparation must be a mapping or None."
-        )
+    if preparation is not None and not isinstance(preparation, Mapping):
+        raise TypeError("preparation must be a mapping or None.")
 
-    fit_config: dict[str, Any] = {
-        "models": [
-            model_name,
-        ],
-    }
+    fit_config: dict[str, Any] = {"models": [model_name]}
 
     if normalized_model_priors:
-        fit_config["priors"] = {
-            model_name: normalized_model_priors,
-        }
+        fit_config["priors"] = {model_name: normalized_model_priors}
 
     if likelihood is not None:
         if not isinstance(likelihood, Mapping):
-            raise TypeError(
-                "likelihood must be a mapping or None."
-            )
+            raise TypeError("likelihood must be a mapping or None.")
 
-        fit_config["likelihood"] = deepcopy(
-            dict(likelihood)
-        )
+        fit_config["likelihood"] = deepcopy(dict(likelihood))
     elif image_sky_gives_the_gain(observation.image.data):
         # AD-047: the measured sky is written only when the image passes the
         # guard; otherwise the gain stays undeclared and the fit refuses to
         # start until it is declared.
         fit_config["likelihood"] = {
             "type": "correlated_gaussian",
-            "effective_gain": {
-                "source": "measured_sky",
-            },
+            "effective_gain": {"source": "measured_sky"},
         }
 
-    normalized_background = _normalize_background_config(
-        background
-    )
+    normalized_background = _normalize_background_config(background)
 
     if normalized_background is not None:
         fit_config["background"] = normalized_background
@@ -801,134 +543,63 @@ def make_config_from_fits(
         fit_config["sampler"] = sampler_config
 
     config: dict[str, Any] = {
-        "object": {
-            "name": resolved_name,
-        },
+        "object": {"name": resolved_name},
         "data": {
-            "image_path": str(
-                fits_path
-            ),
+            "image_path": str(fits_path),
             **({} if hdu is None else {"hdu": hdu}),
             "pixel_scale": pixel_scale,
             "target_position": normalized_target,
             "cutout": cutout,
         },
-        "outputs": {
-            "root": str(
-                Path(
-                    outputs_root
-                )
-            ),
-            "overwrite": bool(
-                overwrite
-            ),
-        },
-        **(
-            {}
-            if preparation is None
-            else {
-                "preparation": deepcopy(
-                    dict(preparation)
-                ),
-            }
-        ),
+        "outputs": {"root": str(Path(outputs_root)), "overwrite": bool(overwrite)},
+        **({} if preparation is None else {"preparation": deepcopy(dict(preparation))}),
         "psf": psf,
         "fit": fit_config,
     }
 
-    resolved = resolve_config(
-        config
-    )
+    resolved = resolve_config(config)
 
     if _require_complete_priors:
-        validate_fit_priors(
-            resolved
-        )
+        validate_fit_priors(resolved)
 
     if output_path is not None:
-        serialized_config = deepcopy(
-            config
-        )
+        serialized_config = deepcopy(config)
 
-        serialized_config[
-            "data"
-        ][
-            "image_path"
-        ] = str(
-            fits_path.resolve()
-        )
+        serialized_config["data"]["image_path"] = str(fits_path.resolve())
 
-        serialized_outputs_root = Path(
-            outputs_root
-        )
+        serialized_outputs_root = Path(outputs_root)
 
         if not serialized_outputs_root.is_absolute():
-            serialized_outputs_root = (
-                Path.cwd()
-                / serialized_outputs_root
-            )
+            serialized_outputs_root = Path.cwd() / serialized_outputs_root
 
-        serialized_config[
-            "outputs"
-        ][
-            "root"
-        ] = str(
-            serialized_outputs_root.resolve()
-        )
+        serialized_config["outputs"]["root"] = str(serialized_outputs_root.resolve())
 
-        _write_yaml(
-            Path(
-                output_path
-            ),
-            serialized_config,
-        )
+        _write_yaml(Path(output_path), serialized_config)
 
         config = serialized_config
 
     return config
 
 
-def _normalize_observations(
-    observations: Mapping[str, str | Path],
-) -> dict[str, Path]:
+def _normalize_observations(observations: Mapping[str, str | Path]) -> dict[str, Path]:
     """Validate and normalize a multi-observation FITS mapping."""
-    if (
-        not isinstance(
-            observations,
-            Mapping,
-        )
-        or not observations
-    ):
-        raise ValueError(
-            "observations must be a non-empty mapping."
-        )
+    if not isinstance(observations, Mapping) or not observations:
+        raise ValueError("observations must be a non-empty mapping.")
 
     normalized: dict[str, Path] = {}
 
     for name, fits_path in observations.items():
-        if (
-            not isinstance(
-                name,
-                str,
-            )
-            or not name
-        ):
-            raise ValueError(
-                "Observation identifiers must be non-empty strings."
-            )
+        if not isinstance(name, str) or not name:
+            raise ValueError("Observation identifiers must be non-empty strings.")
 
-        path = Path(
-            fits_path
-        )
+        path = Path(fits_path)
 
         if not path.exists():
             raise FileNotFoundError(
                 f"FITS file not found for observation '{name}': {path}"
             )
 
-        normalized[
-            name
-        ] = path
+        normalized[name] = path
 
     return normalized
 
@@ -939,44 +610,22 @@ def _normalize_target_positions(
     observation_names: tuple[str, ...],
 ) -> dict[str, TargetPosition]:
     """Require exactly one explicit target seed per observation."""
-    if not isinstance(
-        target_positions,
-        Mapping,
-    ):
-        raise TypeError(
-            "target_positions must be a mapping."
-        )
+    if not isinstance(target_positions, Mapping):
+        raise TypeError("target_positions must be a mapping.")
 
-    supplied = set(
-        target_positions
-    )
-    expected = set(
-        observation_names
-    )
+    supplied = set(target_positions)
+    expected = set(observation_names)
 
     if supplied != expected:
-        missing = sorted(
-            expected.difference(
-                supplied
-            )
-        )
-        extra = sorted(
-            supplied.difference(
-                expected
-            )
-        )
+        missing = sorted(expected.difference(supplied))
+        extra = sorted(supplied.difference(expected))
 
         raise ValueError(
             "target_positions must define exactly the configured "
             f"observations. Missing: {missing}. Extra: {extra}."
         )
 
-    return {
-        name: target_positions[
-            name
-        ]
-        for name in observation_names
-    }
+    return {name: target_positions[name] for name in observation_names}
 
 
 def _normalize_observation_options(
@@ -986,25 +635,13 @@ def _normalize_observation_options(
 ) -> dict[str, dict[str, Any]]:
     """Normalize optional per-observation configuration overrides."""
     if observation_options is None:
-        return {
-            name: {}
-            for name in observation_names
-        }
+        return {name: {} for name in observation_names}
 
-    if not isinstance(
-        observation_options,
-        Mapping,
-    ):
-        raise TypeError(
-            "observation_options must be a mapping."
-        )
+    if not isinstance(observation_options, Mapping):
+        raise TypeError("observation_options must be a mapping.")
 
     unknown_observations = sorted(
-        set(
-            observation_options
-        ).difference(
-            observation_names
-        )
+        set(observation_options).difference(observation_names)
     )
 
     if unknown_observations:
@@ -1013,54 +650,27 @@ def _normalize_observation_options(
             f"{unknown_observations}."
         )
 
-    normalized = {
-        name: {}
-        for name in observation_names
-    }
+    normalized = {name: {} for name in observation_names}
 
     for name, options in observation_options.items():
-        if not isinstance(
-            options,
-            Mapping,
-        ):
-            raise TypeError(
-                f"Options for observation '{name}' must be a mapping."
-            )
+        if not isinstance(options, Mapping):
+            raise TypeError(f"Options for observation '{name}' must be a mapping.")
 
-        unknown_keys = sorted(
-            set(
-                options
-            ).difference(
-                _OBSERVATION_OPTION_KEYS
-            )
-        )
+        unknown_keys = sorted(set(options).difference(_OBSERVATION_OPTION_KEYS))
 
         if unknown_keys:
             raise ValueError(
-                f"Unsupported options for observation '{name}': "
-                f"{unknown_keys}."
+                f"Unsupported options for observation '{name}': " f"{unknown_keys}."
             )
 
-        normalized[
-            name
-        ] = dict(
-            options
-        )
+        normalized[name] = dict(options)
 
     return normalized
 
 
-def _safe_observation_config_filename(
-    observation_name: str,
-) -> str:
+def _safe_observation_config_filename(observation_name: str) -> str:
     """Return a filesystem-safe YAML filename for one observation."""
-    stem = re.sub(
-        r"[^A-Za-z0-9_.-]+",
-        "_",
-        observation_name,
-    ).strip(
-        "._"
-    )
+    stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", observation_name).strip("._")
 
     if not stem:
         stem = "observation"
@@ -1069,33 +679,17 @@ def _safe_observation_config_filename(
 
 
 def _observation_config_paths(
-    observation_names: tuple[str, ...],
-    *,
-    output_dir: Path,
+    observation_names: tuple[str, ...], *, output_dir: Path
 ) -> dict[str, Path]:
     """Return collision-free observation YAML paths."""
     paths = {
-        name: (
-            output_dir
-            / _safe_observation_config_filename(
-                name
-            )
-        )
+        name: (output_dir / _safe_observation_config_filename(name))
         for name in observation_names
     }
 
-    filenames = [
-        path.name
-        for path in paths.values()
-    ]
+    filenames = [path.name for path in paths.values()]
 
-    if len(
-        filenames
-    ) != len(
-        set(
-            filenames
-        )
-    ):
+    if len(filenames) != len(set(filenames)):
         raise ValueError(
             "Observation identifiers produce colliding configuration "
             "filenames. Rename the affected observation identifiers."
@@ -1104,14 +698,10 @@ def _observation_config_paths(
     return paths
 
 
-def _validate_sky_frame_wcs(
-    observations: Mapping[str, Path],
-) -> None:
+def _validate_sky_frame_wcs(observations: Mapping[str, Path]) -> None:
     """Require a WCS for every sky-frame observation."""
     for name, fits_path in observations.items():
-        observation = open_observation(
-            fits_path
-        )
+        observation = open_observation(fits_path)
 
         if observation.metadata.wcs is None:
             raise ValueError(
@@ -1120,20 +710,11 @@ def _validate_sky_frame_wcs(
             )
 
 
-def _relative_config_path(
-    path: Path,
-    *,
-    joint_directory: Path,
-) -> str:
+def _relative_config_path(path: Path, *, joint_directory: Path) -> str:
     """Return a YAML path relative to the declaring joint configuration."""
-    relative = os.path.relpath(
-        path,
-        start=joint_directory,
-    )
+    relative = os.path.relpath(path, start=joint_directory)
 
-    return Path(
-        relative
-    ).as_posix()
+    return Path(relative).as_posix()
 
 
 def make_multi_observation_config(
@@ -1213,160 +794,76 @@ def make_multi_observation_config(
     valid WCS because the production inference problem transforms the shared
     physical geometry onto each native detector grid.
     """
-    normalized_observations = _normalize_observations(
-        observations
-    )
+    normalized_observations = _normalize_observations(observations)
 
-    observation_names = tuple(
-        normalized_observations
-    )
+    observation_names = tuple(normalized_observations)
 
     normalized_targets = _normalize_target_positions(
-        target_positions,
-        observation_names=observation_names,
+        target_positions, observation_names=observation_names
     )
 
     normalized_options = _normalize_observation_options(
-        observation_options,
-        observation_names=observation_names,
+        observation_options, observation_names=observation_names
     )
 
-    if not isinstance(
-        parameters,
-        Mapping,
-    ):
-        raise TypeError(
-            "parameters must be a mapping."
-        )
+    if not isinstance(parameters, Mapping):
+        raise TypeError("parameters must be a mapping.")
 
-    analysis_name = str(
-        analysis_name
-    ).strip()
+    analysis_name = str(analysis_name).strip()
 
     if not analysis_name:
-        raise ValueError(
-            "analysis_name must be non-empty."
-        )
-    model_name = str(
-        model_name
-    ).strip()
+        raise ValueError("analysis_name must be non-empty.")
+    model_name = str(model_name).strip()
 
     if not model_name:
-        raise ValueError(
-            "model_name must be non-empty."
-        )
+        raise ValueError("model_name must be non-empty.")
 
-    normalized_sampler = _normalize_sampler_config(
-        sampler
-    )
+    normalized_sampler = _normalize_sampler_config(sampler)
 
+    parameter_frame = str(parameter_frame).strip().lower()
 
-    parameter_frame = str(
-        parameter_frame
-    ).strip().lower()
-
-    if parameter_frame not in {
-        "sky",
-        "detector",
-    }:
-        raise ValueError(
-            "parameter_frame must be 'sky' or 'detector'."
-        )
+    if parameter_frame not in {"sky", "detector"}:
+        raise ValueError("parameter_frame must be 'sky' or 'detector'.")
 
     if parameter_frame == "sky":
-        _validate_sky_frame_wcs(
-            normalized_observations
-        )
+        _validate_sky_frame_wcs(normalized_observations)
 
-    output_dir = Path(
-        output_dir
-    )
+    output_dir = Path(output_dir)
 
     joint_path = (
-        output_dir
-        / "joint.yaml"
+        output_dir / "joint.yaml"
         if joint_output_path is None
-        else Path(
-            joint_output_path
-        )
+        else Path(joint_output_path)
     )
 
     observation_paths = _observation_config_paths(
-        observation_names,
-        output_dir=output_dir,
+        observation_names, output_dir=output_dir
     )
 
-    observation_configs: dict[
-        str,
-        dict[str, Any],
-    ] = {}
+    observation_configs: dict[str, dict[str, Any]] = {}
 
     for name in observation_names:
-        options = normalized_options[
-            name
-        ]
+        options = normalized_options[name]
 
-        observation_configs[
-            name
-        ] = make_config_from_fits(
-            normalized_observations[
-                name
-            ],
-            target_position=normalized_targets[
-                name
-            ],
-            object_name=options.get(
-                "object_name"
-            ),
+        observation_configs[name] = make_config_from_fits(
+            normalized_observations[name],
+            target_position=normalized_targets[name],
+            object_name=options.get("object_name"),
             model_name=model_name,
-            likelihood=options.get(
-                "likelihood"
-            ),
+            likelihood=options.get("likelihood"),
             sampler=normalized_sampler,
             _require_complete_priors=False,
             outputs_root=outputs_root,
-            overwrite=bool(
-                options.get(
-                    "overwrite",
-                    overwrite,
-                )
-            ),
-            cutout_mode=str(
-                options.get(
-                    "cutout_mode",
-                    "auto",
-                )
-            ),
-            fixed_size=options.get(
-                "fixed_size"
-            ),
-            psf_type=str(
-                options.get(
-                    "psf_type",
-                    "empirical",
-                )
-            ),
-            gaussian_fwhm_pixels=options.get(
-                "gaussian_fwhm_pixels"
-            ),
+            overwrite=bool(options.get("overwrite", overwrite)),
+            cutout_mode=str(options.get("cutout_mode", "auto")),
+            fixed_size=options.get("fixed_size"),
+            psf_type=str(options.get("psf_type", "empirical")),
+            gaussian_fwhm_pixels=options.get("gaussian_fwhm_pixels"),
         )
 
-    object_names = [
-        config[
-            "object"
-        ][
-            "name"
-        ]
-        for config in observation_configs.values()
-    ]
+    object_names = [config["object"]["name"] for config in observation_configs.values()]
 
-    if len(
-        object_names
-    ) != len(
-        set(
-            object_names
-        )
-    ):
+    if len(object_names) != len(set(object_names)):
         raise ValueError(
             "Individual observation configurations must have distinct "
             "object names so their preparation products do not collide. "
@@ -1374,28 +871,14 @@ def make_multi_observation_config(
         )
 
     if normalized_sampler is None:
-        first_config = observation_configs[
-            observation_names[
-                0
-            ]
-        ]
+        first_config = observation_configs[observation_names[0]]
 
-        resolved_first = resolve_config(
-            first_config
-        )
+        resolved_first = resolve_config(first_config)
 
-        sampler_config = deepcopy(
-            resolved_first[
-                "fit"
-            ][
-                "sampler"
-            ]
-        )
+        sampler_config = deepcopy(resolved_first["fit"]["sampler"])
 
     else:
-        sampler_config = deepcopy(
-            normalized_sampler
-        )
+        sampler_config = deepcopy(normalized_sampler)
 
     if likelihood is None:
         # Each observation declares its own effective gain (AD-047).
@@ -1405,88 +888,44 @@ def make_multi_observation_config(
         }
 
     else:
-        if not isinstance(
-            likelihood,
-            Mapping,
-        ):
-            raise TypeError(
-                "likelihood must be a mapping."
-            )
+        if not isinstance(likelihood, Mapping):
+            raise TypeError("likelihood must be a mapping.")
 
-        likelihood_config = deepcopy(
-            dict(
-                likelihood
-            )
-        )
+        likelihood_config = deepcopy(dict(likelihood))
 
     joint_config: dict[str, Any] = {
         "observations": {
             name: {
                 "config_path": _relative_config_path(
-                    observation_paths[
-                        name
-                    ],
-                    joint_directory=joint_path.parent,
-                ),
+                    observation_paths[name], joint_directory=joint_path.parent
+                )
             }
             for name in observation_names
         },
-        "outputs": {
-            "root": str(
-                Path(
-                    outputs_root
-                )
-            ),
-            "analysis_name": analysis_name,
-        },
+        "outputs": {"root": str(Path(outputs_root)), "analysis_name": analysis_name},
         "fit": {
-            "models": [
-                str(
-                    model_name
-                )
-            ],
+            "models": [str(model_name)],
             "likelihood": likelihood_config,
-            "background": {
-                "model": str(
-                    background_model
-                ).strip().lower(),
-            },
+            "background": {"model": str(background_model).strip().lower()},
             "sampler": sampler_config,
             "multi_observation": {
                 "parameter_frame": parameter_frame,
-                "parameters": deepcopy(
-                    dict(
-                        parameters
-                    )
-                ),
+                "parameters": deepcopy(dict(parameters)),
             },
         },
     }
 
     # Validate the complete statistical contract before creating any YAML file.
-    build_multi_observation_parameter_layout(
-        joint_config
-    )
+    build_multi_observation_parameter_layout(joint_config)
 
     for name in observation_names:
-        _write_yaml(
-            observation_paths[
-                name
-            ],
-            observation_configs[
-                name
-            ],
-        )
+        _write_yaml(observation_paths[name], observation_configs[name])
 
-    _write_yaml(
-        joint_path,
-        joint_config,
-    )
+    _write_yaml(joint_path, joint_config)
 
     # Verify that all relative paths are consumable from the joint YAML.
     resolve_multi_observation_observation_configs(
-        joint_config,
-        base_dir=joint_path.parent,
+        joint_config, base_dir=joint_path.parent
     )
 
     return joint_config

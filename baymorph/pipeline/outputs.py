@@ -71,16 +71,10 @@ def make_output_tree(config: dict[str, Any]) -> Path:
         base / "model_comparison",
     ]
 
-    subdirs.extend(
-        base / "fits" / model_name
-        for model_name in config["fit"]["models"]
-    )
+    subdirs.extend(base / "fits" / model_name for model_name in config["fit"]["models"])
 
     for path in subdirs:
-        path.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
+        path.mkdir(parents=True, exist_ok=True)
 
     return base
 
@@ -107,18 +101,13 @@ def save_resolved_config(config: dict[str, Any]) -> Path:
     return path
 
 
-def save_fit_resolved_config(
-    config: dict[str, Any],
-    model_name: str,
-) -> Path:
+def save_fit_resolved_config(config: dict[str, Any], model_name: str) -> Path:
     """Save one resolved inference configuration inside its model directory."""
     resolved = resolve_config(config)
     paths = pipeline_paths(resolved)["fits"]
 
     if model_name not in paths:
-        raise ValueError(
-            f"Model {model_name!r} is not present in fit.models."
-        )
+        raise ValueError(f"Model {model_name!r} is not present in fit.models.")
 
     path = paths[model_name]["config_resolved"]
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -142,15 +131,7 @@ def diagnostic_format(config: dict[str, Any]) -> str:
     str
         Lowercase diagnostic file extension.
     """
-    return str(
-        config.get(
-            "diagnostics",
-            {},
-        ).get(
-            "format",
-            "pdf",
-        )
-    ).lower()
+    return str(config.get("diagnostics", {}).get("format", "pdf")).lower()
 
 
 def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
@@ -195,10 +176,7 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
         "base": base,
         "config_resolved": base / "config_resolved.yaml",
         "runtime_report": base / "runtime_report.yaml",
-        "truth": {
-            "dir": base / "truth",
-            "truth_json": simulation_truth_path(config),
-        },
+        "truth": {"dir": base / "truth", "truth_json": simulation_truth_path(config)},
         "image_preparation": {
             "dir": base / "image_preparation",
             "prepared_image": base / "image_preparation" / "prepared_image.fits",
@@ -211,14 +189,9 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
             "psf_fits": base / "psf" / "psf.fits",
             "metadata": base / "psf" / "psf_metadata.json",
             "candidates": base / "psf" / "psf_candidates.json",
-            "candidates_provenance": (
-                base / "psf" / "psf_candidates_provenance.json"
-            ),
+            "candidates_provenance": (base / "psf" / "psf_candidates_provenance.json"),
         },
-        "fits": {
-            "dir": base / "fits",
-            **fit_paths,
-        },
+        "fits": {"dir": base / "fits", **fit_paths},
         "model_comparison": {
             "dir": base / "model_comparison",
             "bayes_factor": base / "model_comparison" / "bayes_factor.json",

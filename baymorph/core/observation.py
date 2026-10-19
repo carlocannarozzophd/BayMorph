@@ -148,10 +148,7 @@ class ObservationMetadata:
             If valid image dimensions cannot be obtained from either the
             header or ``image_shape``.
         """
-        width, height = _resolve_image_dimensions(
-            header,
-            image_shape=image_shape,
-        )
+        width, height = _resolve_image_dimensions(header, image_shape=image_shape)
 
         center_x = (width - 1) / 2.0
         center_y = (height - 1) / 2.0
@@ -209,16 +206,12 @@ class ObservationMetadata:
             Metadata associated with the image.
         """
         return cls.from_header(
-            image.header,
-            image_shape=image.shape,
-            primary_header=image.primary_header,
+            image.header, image_shape=image.shape, primary_header=image.primary_header
         )
 
 
 def resolve_seeing_fwhm_pixels(
-    metadata: ObservationMetadata,
-    *,
-    pixel_scale_arcsec: float | None,
+    metadata: ObservationMetadata, *, pixel_scale_arcsec: float | None
 ) -> float | None:
     """Resolve an explicitly unit-tagged seeing FWHM in pixels.
 
@@ -244,14 +237,8 @@ def resolve_seeing_fwhm_pixels(
     """
     unit = metadata.seeing_fwhm_unit
 
-    if unit not in {
-        None,
-        "arcsec",
-        "pixels",
-    }:
-        raise ValueError(
-            "seeing_fwhm_unit must be 'arcsec', 'pixels', or None."
-        )
+    if unit not in {None, "arcsec", "pixels"}:
+        raise ValueError("seeing_fwhm_unit must be 'arcsec', 'pixels', or None.")
 
     if metadata.seeing_fwhm is None or unit is None:
         return None
@@ -323,16 +310,11 @@ class Observation:
             Observation containing the image and metadata inferred from its
             FITS header and array shape.
         """
-        return cls(
-            image=image,
-            metadata=ObservationMetadata.from_image(image),
-        )
+        return cls(image=image, metadata=ObservationMetadata.from_image(image))
 
     @classmethod
     def from_fits(
-        cls,
-        filename: str | Path,
-        hdu: int | str | None = None,
+        cls, filename: str | Path, hdu: int | str | None = None
     ) -> Observation:
         """Load an astronomical observation from a FITS file.
 
@@ -365,9 +347,7 @@ class Observation:
 
 
 def _resolve_image_dimensions(
-    header: fits.Header | None,
-    *,
-    image_shape: tuple[int, int] | None,
+    header: fits.Header | None, *, image_shape: tuple[int, int] | None
 ) -> tuple[int, int]:
     """Resolve image width and height from a header or array shape."""
     width = _optional_positive_int(header, "NAXIS1")
@@ -406,9 +386,7 @@ def _resolve_image_dimensions(
     return width, height
 
 
-def _validate_image_shape(
-    image_shape: tuple[int, int],
-) -> tuple[int, int]:
+def _validate_image_shape(image_shape: tuple[int, int]) -> tuple[int, int]:
     """Validate and normalize an image shape as ``(height, width)``."""
     if len(image_shape) != 2:
         raise ValueError(
@@ -430,10 +408,7 @@ def _validate_image_shape(
     return height, width
 
 
-def _optional_positive_int(
-    header: fits.Header | None,
-    keyword: str,
-) -> int | None:
+def _optional_positive_int(header: fits.Header | None, keyword: str) -> int | None:
     """Read an optional positive integer FITS keyword."""
     if header is None or keyword not in header:
         return None

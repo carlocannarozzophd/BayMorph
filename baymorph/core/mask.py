@@ -5,17 +5,12 @@ from pathlib import Path
 
 import numpy as np
 from astropy.io import fits
-from photutils.segmentation import (
-    detect_sources,
-    detect_threshold,
-)
+from photutils.segmentation import detect_sources, detect_threshold
 from scipy.ndimage import binary_dilation
 
 
 def load_external_mask(
-    filename: str | Path,
-    *,
-    expected_shape: tuple[int, int] | None = None,
+    filename: str | Path, *, expected_shape: tuple[int, int] | None = None
 ) -> np.ndarray:
     """Load and validate an external exclusion mask from a FITS file.
 
@@ -48,9 +43,7 @@ def load_external_mask(
     if not path.exists():
         raise FileNotFoundError(f"External mask file not found: {path}")
 
-    data = np.asarray(
-        fits.getdata(path),
-    )
+    data = np.asarray(fits.getdata(path))
 
     if data.ndim != 2:
         raise ValueError(
@@ -70,11 +63,7 @@ def load_external_mask(
     return data != 0
 
 
-def _as_boolean_mask(
-    mask,
-    *,
-    name: str = "mask",
-) -> np.ndarray:
+def _as_boolean_mask(mask, *, name: str = "mask") -> np.ndarray:
     """Return a validated two-dimensional boolean mask."""
 
     array = np.asarray(mask)
@@ -92,11 +81,7 @@ def _as_boolean_mask(
     if not np.all(finite):
         raise ValueError(f"'{name}' contains non-finite pixel values.")
 
-    return np.array(
-        array,
-        dtype=bool,
-        copy=True,
-    )
+    return np.array(array, dtype=bool, copy=True)
 
 
 def _validate_mask_collection(*masks) -> list[np.ndarray]:
@@ -106,10 +91,7 @@ def _validate_mask_collection(*masks) -> list[np.ndarray]:
         raise ValueError("At least two masks are required.")
 
     validated = [
-        _as_boolean_mask(
-            mask,
-            name=f"masks[{index}]",
-        )
+        _as_boolean_mask(mask, name=f"masks[{index}]")
         for index, mask in enumerate(masks)
     ]
 
@@ -124,47 +106,27 @@ def _validate_mask_collection(*masks) -> list[np.ndarray]:
 
 def union(*masks) -> np.ndarray:
     """Return the logical union of two or more masks."""
-    validated = _validate_mask_collection(
-        *masks,
-    )
+    validated = _validate_mask_collection(*masks)
 
-    return reduce(
-        np.logical_or,
-        validated,
-    )
+    return reduce(np.logical_or, validated)
 
 
 def intersection(*masks) -> np.ndarray:
     """Return the logical intersection of two or more masks."""
-    validated = _validate_mask_collection(
-        *masks,
-    )
+    validated = _validate_mask_collection(*masks)
 
-    return reduce(
-        np.logical_and,
-        validated,
-    )
+    return reduce(np.logical_and, validated)
 
 
-def build_fitting_mask(
-    automatic_mask,
-    *,
-    external_mask=None,
-    mode: str = "union",
-):
+def build_fitting_mask(automatic_mask, *, external_mask=None, mode: str = "union"):
     """Construct a union mask or use a curated mask verbatim."""
 
-    mask = _as_boolean_mask(
-        automatic_mask,
-        name="automatic_mask",
-    )
+    mask = _as_boolean_mask(automatic_mask, name="automatic_mask")
 
     resolved_mode = str(mode).strip().lower()
 
     if resolved_mode not in {"union", "exact", "replace"}:
-        raise ValueError(
-            "'mode' must be one of 'union', 'exact', or 'replace'."
-        )
+        raise ValueError("'mode' must be one of 'union', 'exact', or 'replace'.")
 
     if external_mask is None:
         if resolved_mode in {"exact", "replace"}:
@@ -174,32 +136,20 @@ def build_fitting_mask(
             )
         return mask
 
-    curated = _as_boolean_mask(
-        external_mask,
-        name="external_mask",
-    )
+    curated = _as_boolean_mask(external_mask, name="external_mask")
 
     if curated.shape != mask.shape:
         raise ValueError(
-            "The external mask must have the same shape as the automatic "
-            "mask."
+            "The external mask must have the same shape as the automatic " "mask."
         )
 
     if resolved_mode in {"exact", "replace"}:
         return curated
 
-    return union(
-        mask,
-        curated,
-    )
+    return union(mask, curated)
 
 
-def negative_outlier_mask(
-    data,
-    noise,
-    *,
-    threshold_sigma: float,
-) -> np.ndarray:
+def negative_outlier_mask(data, noise, *, threshold_sigma: float) -> np.ndarray:
     """Flag pixels that are impossibly negative for background-subtracted data.
 
     Source detection thresholds positive excursions, so a one-sided criterion
@@ -230,66 +180,38 @@ def negative_outlier_mask(
     ndarray of bool
         Exclusion mask following the ``True = excluded`` convention.
     """
-    values = np.asarray(
-        data,
-        dtype=float,
-    )
+    values = np.asarray(data, dtype=float)
 
     if values.ndim != 2:
-        raise ValueError(
-            "'data' must be a two-dimensional array."
-        )
+        raise ValueError("'data' must be a two-dimensional array.")
 
     if not np.all(np.isfinite(values)):
-        raise ValueError(
-            "'data' contains non-finite pixel values."
-        )
+        raise ValueError("'data' contains non-finite pixel values.")
 
-    scale = np.asarray(
-        noise,
-        dtype=float,
-    )
+    scale = np.asarray(noise, dtype=float)
 
     if scale.ndim not in (0, 2):
-        raise ValueError(
-            "'noise' must be a scalar or a two-dimensional array."
-        )
+        raise ValueError("'noise' must be a scalar or a two-dimensional array.")
 
     if scale.ndim == 2 and scale.shape != values.shape:
-        raise ValueError(
-            "'noise' must have the same shape as 'data'."
-        )
+        raise ValueError("'noise' must have the same shape as 'data'.")
 
     if not np.all(np.isfinite(scale)):
-        raise ValueError(
-            "'noise' contains non-finite values."
-        )
+        raise ValueError("'noise' contains non-finite values.")
 
     if np.any(scale <= 0.0):
-        raise ValueError(
-            "'noise' must be strictly positive."
-        )
+        raise ValueError("'noise' must be strictly positive.")
 
-    threshold = float(
-        threshold_sigma
-    )
+    threshold = float(threshold_sigma)
 
     if not np.isfinite(threshold) or threshold <= 0.0:
-        raise ValueError(
-            "'threshold_sigma' must be finite and positive."
-        )
+        raise ValueError("'threshold_sigma' must be finite and positive.")
 
     return values < -threshold * scale
 
 
 def connected_source_mask(
-    image,
-    x,
-    y,
-    threshold_sigma=2.0,
-    n_pixels=5,
-    dilation_iterations=0,
-    box_size=101,
+    image, x, y, threshold_sigma=2.0, n_pixels=5, dilation_iterations=0, box_size=101
 ):
     """Create a mask for the connected source containing a seed position.
 
@@ -330,16 +252,9 @@ def connected_source_mask(
 
     local = image[y0:y1, x0:x1]
 
-    threshold = detect_threshold(
-        local,
-        n_sigma=threshold_sigma,
-    )
+    threshold = detect_threshold(local, n_sigma=threshold_sigma)
 
-    segmentation = detect_sources(
-        local,
-        threshold,
-        n_pixels=n_pixels,
-    )
+    segmentation = detect_sources(local, threshold, n_pixels=n_pixels)
 
     if segmentation is None:
         return np.zeros_like(image, dtype=bool)
@@ -347,10 +262,7 @@ def connected_source_mask(
     x_local = int(round(x)) - x0
     y_local = int(round(y)) - y0
 
-    label = segmentation.data[
-        y_local,
-        x_local,
-    ]
+    label = segmentation.data[y_local, x_local]
 
     if label == 0:
         return np.zeros_like(image, dtype=bool)
@@ -358,32 +270,17 @@ def connected_source_mask(
     local_mask = segmentation.data == label
 
     if dilation_iterations > 0:
-        local_mask = binary_dilation(
-            local_mask,
-            iterations=dilation_iterations,
-        )
+        local_mask = binary_dilation(local_mask, iterations=dilation_iterations)
 
-    mask = np.zeros_like(
-        image,
-        dtype=bool,
-    )
+    mask = np.zeros_like(image, dtype=bool)
 
-    mask[
-        y0:y1,
-        x0:x1,
-    ] = local_mask
+    mask[y0:y1, x0:x1] = local_mask
 
     return mask
 
 
 def star_halo_mask(
-    image,
-    x,
-    y,
-    radius=50,
-    threshold_sigma=2.0,
-    n_pixels=5,
-    dilation_iterations=10,
+    image, x, y, radius=50, threshold_sigma=2.0, n_pixels=5, dilation_iterations=10
 ):
     """Create an aggressive mask around a bright star.
 
@@ -424,18 +321,13 @@ def star_halo_mask(
         dilation_iterations=0,
     )
 
-    yy, xx = np.indices(
-        image.shape,
-    )
+    yy, xx = np.indices(image.shape)
 
     circular_mask = ((xx - x) ** 2 + (yy - y) ** 2) <= radius**2
 
     mask = source_mask | circular_mask
 
     if dilation_iterations > 0:
-        mask = binary_dilation(
-            mask,
-            iterations=dilation_iterations,
-        )
+        mask = binary_dilation(mask, iterations=dilation_iterations)
 
     return mask

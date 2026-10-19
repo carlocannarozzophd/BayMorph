@@ -13,16 +13,8 @@ from typing import Any
 import numpy as np
 
 from baymorph.core.observation import Observation
-from baymorph.pipeline.config import (
-    resolve_config,
-    resolve_runtime_config,
-)
-from baymorph.pipeline.opening import (
-    REUSE_MIN_BYTES,
-    file_state,
-    open_observation,
-)
-
+from baymorph.pipeline.config import resolve_config, resolve_runtime_config
+from baymorph.pipeline.opening import REUSE_MIN_BYTES, file_state, open_observation
 
 PREPARED_INPUT_IDENTITY_VERSION = 2
 
@@ -63,10 +55,7 @@ def file_content_identity(path: Path) -> dict[str, Any]:
             f"File changed while its immutable identity was built: {path}"
         )
 
-    identity = {
-        "size_bytes": int(after_state[2]),
-        "sha256": digest,
-    }
+    identity = {"size_bytes": int(after_state[2]), "sha256": digest}
 
     if reusable:
         _CONTENT_IDENTITIES[key] = identity
@@ -76,10 +65,7 @@ def file_content_identity(path: Path) -> dict[str, Any]:
 
 def _file_identity(path: Path) -> dict[str, Any]:
     """Return canonical path and content identity for one file."""
-    return {
-        "path": str(path),
-        **file_content_identity(path),
-    }
+    return {"path": str(path), **file_content_identity(path)}
 
 
 def _canonical_file(value: str | Path, *, context: str) -> Path:
@@ -97,16 +83,10 @@ def _json_value(value: Any) -> Any:
     if isinstance(value, Mapping):
         return {
             str(key): _json_value(item)
-            for key, item in sorted(
-                value.items(),
-                key=lambda pair: str(pair[0]),
-            )
+            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
         }
 
-    if isinstance(value, Sequence) and not isinstance(
-        value,
-        (str, bytes, bytearray),
-    ):
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         return [_json_value(item) for item in value]
 
     if isinstance(value, Path):
@@ -148,10 +128,7 @@ def _array_sha256(array: np.ndarray) -> str:
     """Fingerprint array shape, dtype, and canonical contiguous bytes."""
     contiguous = np.ascontiguousarray(np.asarray(array))
     descriptor = _canonical_json(
-        {
-            "shape": list(contiguous.shape),
-            "dtype": contiguous.dtype.str,
-        }
+        {"shape": list(contiguous.shape), "dtype": contiguous.dtype.str}
     )
     digest = hashlib.sha256()
     digest.update(descriptor)
@@ -167,11 +144,9 @@ def _header_sha256(observation: Observation) -> str | None:
     if header is None:
         return None
 
-    serialized = header.tostring(
-        sep="\n",
-        endcard=False,
-        padding=False,
-    ).encode("ascii", errors="strict")
+    serialized = header.tostring(sep="\n", endcard=False, padding=False).encode(
+        "ascii", errors="strict"
+    )
 
     return hashlib.sha256(serialized).hexdigest()
 
@@ -183,11 +158,11 @@ def _wcs_sha256(observation: Observation) -> str | None:
     if wcs is None:
         return None
 
-    serialized = wcs.to_header(relax=True).tostring(
-        sep="\n",
-        endcard=False,
-        padding=False,
-    ).encode("ascii", errors="strict")
+    serialized = (
+        wcs.to_header(relax=True)
+        .tostring(sep="\n", endcard=False, padding=False)
+        .encode("ascii", errors="strict")
+    )
 
     return hashlib.sha256(serialized).hexdigest()
 
@@ -201,9 +176,7 @@ def _package_generator_identity() -> dict[str, Any]:
         relative_path = source_path.relative_to(package_root).as_posix()
         source_manifest[relative_path] = file_content_identity(source_path)
 
-    manifest_sha256 = hashlib.sha256(
-        _canonical_json(source_manifest)
-    ).hexdigest()
+    manifest_sha256 = hashlib.sha256(_canonical_json(source_manifest)).hexdigest()
 
     try:
         package_version = metadata.version("baymorph")
@@ -218,22 +191,16 @@ def _package_generator_identity() -> dict[str, Any]:
     }
 
 
-def _mask_identity(
-    data_config: Mapping[str, Any],
-) -> dict[str, Any] | None:
+def _mask_identity(data_config: Mapping[str, Any]) -> dict[str, Any] | None:
     """Return the identity of the optional curated mask."""
-    configured_path = (
-        data_config.get("mask_path")
-        or data_config.get("external_mask_path")
+    configured_path = data_config.get("mask_path") or data_config.get(
+        "external_mask_path"
     )
 
     if configured_path is None:
         return None
 
-    path = _canonical_file(
-        configured_path,
-        context="Configured image-preparation mask",
-    )
+    path = _canonical_file(configured_path, context="Configured image-preparation mask")
 
     return _file_identity(path)
 
@@ -263,9 +230,7 @@ def _preparation_config_identity(
         and masking.get("contaminant_rule") == "all_segments"
     ):
         preparation["masking"] = {
-            key: value
-            for key, value in masking.items()
-            if key != "contaminant_rule"
+            key: value for key, value in masking.items() if key != "contaminant_rule"
         }
 
     # The growth of the contaminant masks and the sky-correlation estimator
@@ -284,9 +249,7 @@ def _preparation_config_identity(
             and not isinstance(entries[key], bool)
         ):
             preparation[section] = {
-                name: value
-                for name, value in entries.items()
-                if name != key
+                name: value for name, value in entries.items() if name != key
             }
 
     canonical = _json_value(
@@ -295,14 +258,8 @@ def _preparation_config_identity(
             "data": {
                 **data_identity,
                 "image_path": str(image_path),
-                "mask_path": (
-                    None
-                    if mask_identity is None
-                    else mask_identity["path"]
-                ),
-                "mask_mode": str(
-                    data_config.get("mask_mode", "union")
-                ).strip().lower(),
+                "mask_path": (None if mask_identity is None else mask_identity["path"]),
+                "mask_mode": str(data_config.get("mask_mode", "union")).strip().lower(),
                 "pixel_scale": data_config.get("pixel_scale"),
                 "target_position": data_config.get("target_position"),
                 "cutout": data_config.get("cutout"),
@@ -311,17 +268,13 @@ def _preparation_config_identity(
         }
     )
 
-    digest = hashlib.sha256(
-        _canonical_json(canonical)
-    ).hexdigest()
+    digest = hashlib.sha256(_canonical_json(canonical)).hexdigest()
 
     return canonical, digest
 
 
 def build_prepared_input_identity(
-    config: Mapping[str, Any],
-    *,
-    observation: Observation | None = None,
+    config: Mapping[str, Any], *, observation: Observation | None = None
 ) -> dict[str, Any]:
     """Build the immutable identity required to reuse prepared products."""
     input_data = config.get("data")
@@ -334,9 +287,7 @@ def build_prepared_input_identity(
             input_mask_path is not None
             and input_external_mask_path is not None
             and Path(input_mask_path).expanduser().resolve(strict=False)
-            != Path(input_external_mask_path).expanduser().resolve(
-                strict=False
-            )
+            != Path(input_external_mask_path).expanduser().resolve(strict=False)
         ):
             raise ValueError(
                 "data.mask_path and data.external_mask_path identify "
@@ -345,15 +296,11 @@ def build_prepared_input_identity(
 
     resolved = resolve_config(dict(config))
     image_path = _canonical_file(
-        resolved["data"]["image_path"],
-        context="Configured image-preparation FITS",
+        resolved["data"]["image_path"], context="Configured image-preparation FITS"
     )
 
     file_identity_before = _file_identity(image_path)
-    disk_observation = open_observation(
-        image_path,
-        hdu=resolved["data"].get("hdu"),
-    )
+    disk_observation = open_observation(image_path, hdu=resolved["data"].get("hdu"))
     file_identity_after = _file_identity(image_path)
 
     if file_identity_before != file_identity_after:
@@ -366,13 +313,11 @@ def build_prepared_input_identity(
         observation = disk_observation
     else:
         if observation.image.path is None:
-            raise ValueError(
-                "A supplied Observation must retain its source FITS path."
-            )
+            raise ValueError("A supplied Observation must retain its source FITS path.")
 
-        observation_path = Path(
-            observation.image.path
-        ).expanduser().resolve(strict=False)
+        observation_path = (
+            Path(observation.image.path).expanduser().resolve(strict=False)
+        )
 
         if observation_path != image_path:
             raise ValueError(
@@ -407,12 +352,8 @@ def build_prepared_input_identity(
 
     runtime_config = resolve_runtime_config(resolved, observation)
     mask_identity = _mask_identity(runtime_config["data"])
-    preparation_config, preparation_config_sha256 = (
-        _preparation_config_identity(
-            runtime_config,
-            image_path=image_path,
-            mask_identity=mask_identity,
-        )
+    preparation_config, preparation_config_sha256 = _preparation_config_identity(
+        runtime_config, image_path=image_path, mask_identity=mask_identity
     )
 
     fits_identity = dict(file_identity_after)
@@ -482,10 +423,7 @@ def validate_prepared_input_identity(
             "Re-run image preparation in a new output namespace."
         )
 
-    current_identity = build_prepared_input_identity(
-        config,
-        observation=observation,
-    )
+    current_identity = build_prepared_input_identity(config, observation=observation)
 
     if dict(saved_identity) == current_identity:
         return

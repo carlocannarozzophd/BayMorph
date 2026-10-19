@@ -16,7 +16,6 @@ from baymorph.pipeline.advisor import ObservationAdvisor
 from baymorph.pipeline.config_maker import make_config_from_fits
 from baymorph.runner import BayMorphRunner
 
-
 _RESOURCE_PACKAGE = "baymorph.resources"
 
 
@@ -37,24 +36,17 @@ def _package_version() -> str:
 
 
 def _copy_resource_tree(
-    resource_name: str,
-    destination: Path,
-    *,
-    force: bool = False,
+    resource_name: str, destination: Path, *, force: bool = False
 ) -> None:
     """Copy a packaged resource directory to a filesystem destination."""
     source = resources.files(_RESOURCE_PACKAGE).joinpath(resource_name)
 
     if not source.is_dir():
         raise RuntimeError(
-            f"Packaged BayMorph resource directory not found: "
-            f"{resource_name!r}."
+            f"Packaged BayMorph resource directory not found: " f"{resource_name!r}."
         )
 
-    destination.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    destination.mkdir(parents=True, exist_ok=True)
 
     for resource in source.iterdir():
         output_path = destination / resource.name
@@ -67,33 +59,19 @@ def _copy_resource_tree(
 
         if resource.is_dir():
             with resources.as_file(resource) as source_path:
-                shutil.copytree(
-                    source_path,
-                    output_path,
-                    dirs_exist_ok=force,
-                )
+                shutil.copytree(source_path, output_path, dirs_exist_ok=force)
         else:
             with resources.as_file(resource) as source_path:
-                shutil.copy2(
-                    source_path,
-                    output_path,
-                )
+                shutil.copy2(source_path, output_path)
 
 
 def _command_examples(args: argparse.Namespace) -> int:
     """Copy packaged BayMorph example configurations."""
     destination = Path(args.destination).expanduser().resolve()
 
-    _copy_resource_tree(
-        "configs",
-        destination / "configs",
-        force=args.force,
-    )
+    _copy_resource_tree("configs", destination / "configs", force=args.force)
 
-    print(
-        "BayMorph example configurations copied to:"
-        f"\n{destination}"
-    )
+    print("BayMorph example configurations copied to:" f"\n{destination}")
     return 0
 
 
@@ -107,111 +85,58 @@ def _command_init(args: argparse.Namespace) -> int:
             "Use --force to continue."
         )
 
-    project_dir.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    project_dir.mkdir(parents=True, exist_ok=True)
 
-    for directory_name in (
-        "configs",
-        "notebooks",
-        "data",
-        "runs",
-    ):
-        (project_dir / directory_name).mkdir(
-            parents=True,
-            exist_ok=True,
-        )
+    for directory_name in ("configs", "notebooks", "data", "runs"):
+        (project_dir / directory_name).mkdir(parents=True, exist_ok=True)
 
-    _copy_resource_tree(
-        "configs",
-        project_dir / "configs",
-        force=args.force,
-    )
+    _copy_resource_tree("configs", project_dir / "configs", force=args.force)
 
     if resources.files(_RESOURCE_PACKAGE).joinpath("notebooks").is_dir():
-        _copy_resource_tree(
-            "notebooks",
-            project_dir / "notebooks",
-            force=args.force,
-        )
+        _copy_resource_tree("notebooks", project_dir / "notebooks", force=args.force)
 
     print(f"BayMorph project created at:\n{project_dir}")
     return 0
 
 
-def _target_position_from_args(
-    args: argparse.Namespace,
-):
+def _target_position_from_args(args: argparse.Namespace):
     """Return the explicit target seed requested on the command line."""
     if args.target_center:
-        if (
-            args.target_x is not None
-            or args.target_y is not None
-        ):
+        if args.target_x is not None or args.target_y is not None:
             raise UsageError(
-                "--target-center cannot be combined with "
-                "--target-x or --target-y."
+                "--target-center cannot be combined with " "--target-x or --target-y."
             )
 
         return "center"
 
-    if (
-        args.target_x is None
-        and args.target_y is None
-    ):
+    if args.target_x is None and args.target_y is None:
         raise UsageError(
-            "Specify either --target-center or both "
-            "--target-x and --target-y."
+            "Specify either --target-center or both " "--target-x and --target-y."
         )
 
-    if (
-        args.target_x is None
-        or args.target_y is None
-    ):
-        raise UsageError(
-            "--target-x and --target-y must be supplied together."
-        )
+    if args.target_x is None or args.target_y is None:
+        raise UsageError("--target-x and --target-y must be supplied together.")
 
-    return (
-        float(args.target_x),
-        float(args.target_y),
-    )
+    return (float(args.target_x), float(args.target_y))
 
 
-def _models_from_args(
-    args: argparse.Namespace,
-) -> list[str]:
+def _models_from_args(args: argparse.Namespace) -> list[str]:
     """Return the models requested on the command line, in order."""
-    models = [
-        str(name).strip()
-        for name in (args.model or ["single_sersic"])
-    ]
+    models = [str(name).strip() for name in (args.model or ["single_sersic"])]
 
     if any(not name for name in models):
-        raise UsageError(
-            "Model names must be non-empty."
-        )
+        raise UsageError("Model names must be non-empty.")
 
-    duplicates = sorted(
-        {
-            name
-            for name in models
-            if models.count(name) > 1
-        }
-    )
+    duplicates = sorted({name for name in models if models.count(name) > 1})
 
     if duplicates:
-        raise UsageError(
-            f"--model names {duplicates} more than once."
-        )
+        raise UsageError(f"--model names {duplicates} more than once.")
 
     return models
 
 
 def _model_priors_from_args(
-    args: argparse.Namespace,
-    models: list[str],
+    args: argparse.Namespace, models: list[str]
 ) -> dict[str, dict[str, dict[str, float | str]]] | None:
     """Build explicit uniform model priors supplied on the command line.
 
@@ -228,15 +153,10 @@ def _model_priors_from_args(
     if not entries:
         return None
 
-    priors: dict[
-        str,
-        dict[str, dict[str, float | str]],
-    ] = {}
+    priors: dict[str, dict[str, dict[str, float | str]]] = {}
 
     for qualified_name, lower, upper in entries:
-        text = str(
-            qualified_name
-        ).strip()
+        text = str(qualified_name).strip()
         model_name, separator, parameter_name = text.rpartition(".")
 
         if not separator:
@@ -256,14 +176,9 @@ def _model_priors_from_args(
         name = parameter_name.strip()
 
         if not name:
-            raise UsageError(
-                "Prior parameter names must be non-empty."
-            )
+            raise UsageError("Prior parameter names must be non-empty.")
 
-        model_priors = priors.setdefault(
-            model_name,
-            {},
-        )
+        model_priors = priors.setdefault(model_name, {})
 
         if name in model_priors:
             raise UsageError(
@@ -273,77 +188,44 @@ def _model_priors_from_args(
 
         model_priors[name] = {
             "type": "uniform",
-            "lower": float(
-                lower
-            ),
-            "upper": float(
-                upper
-            ),
+            "lower": float(lower),
+            "upper": float(upper),
         }
 
     return priors
 
 
-def _hdu_argument(
-    value: str,
-) -> int | str:
+def _hdu_argument(value: str) -> int | str:
     """Return an HDU index, or an ``EXTNAME`` given as text."""
-    text = str(
-        value
-    ).strip()
+    text = str(value).strip()
 
     if not text:
-        raise argparse.ArgumentTypeError(
-            "--hdu must be an HDU index or an EXTNAME."
-        )
+        raise argparse.ArgumentTypeError("--hdu must be an HDU index or an EXTNAME.")
 
     return int(text) if text.isdigit() else text
 
 
-def _preparation_from_args(
-    args: argparse.Namespace,
-) -> dict[str, Any] | None:
+def _preparation_from_args(args: argparse.Namespace) -> dict[str, Any] | None:
     """Return the preparation section requested on the command line."""
     if args.sky_correlation is None:
         return None
 
-    return {
-        "noise": {
-            "sky_correlation": args.sky_correlation,
-        },
-    }
+    return {"noise": {"sky_correlation": args.sky_correlation}}
 
 
-def _command_config(
-    args: argparse.Namespace,
-) -> int:
+def _command_config(args: argparse.Namespace) -> int:
     """Generate a BayMorph YAML configuration from one FITS image."""
-    fits_path = Path(
-        args.fits_path
-    ).expanduser()
+    fits_path = Path(args.fits_path).expanduser()
 
     if args.output is None:
-        output_path = Path(
-            f"{fits_path.stem}.yaml"
-        )
+        output_path = Path(f"{fits_path.stem}.yaml")
     else:
-        output_path = Path(
-            args.output
-        ).expanduser()
+        output_path = Path(args.output).expanduser()
 
-    target_position = _target_position_from_args(
-        args
-    )
-    models = _models_from_args(
-        args
-    )
-    model_priors = _model_priors_from_args(
-        args,
-        models,
-    )
-    preparation = _preparation_from_args(
-        args
-    )
+    target_position = _target_position_from_args(args)
+    models = _models_from_args(args)
+    model_priors = _model_priors_from_args(args, models)
+    preparation = _preparation_from_args(args)
 
     if args.advise:
         return _advise_config(
@@ -362,9 +244,7 @@ def _command_config(
         ("--resampling-variance-factor", args.resampling_variance_factor),
     ):
         if value is not None and value is not False:
-            raise UsageError(
-                f"{option} requires --advise."
-            )
+            raise UsageError(f"{option} requires --advise.")
 
     if len(models) > 1:
         raise UsageError(
@@ -379,11 +259,7 @@ def _command_config(
         output_path=output_path,
         object_name=args.object_name,
         model_name=models[0],
-        model_priors=(
-            None
-            if model_priors is None
-            else model_priors[models[0]]
-        ),
+        model_priors=(None if model_priors is None else model_priors[models[0]]),
         sampler=args.sampler,
         outputs_root=args.outputs_root,
         overwrite=args.overwrite,
@@ -395,10 +271,7 @@ def _command_config(
         preparation=preparation,
     )
 
-    print(
-        "BayMorph configuration written to:\n"
-        f"{output_path.resolve()}"
-    )
+    print("BayMorph configuration written to:\n" f"{output_path.resolve()}")
 
     if "effective_gain" not in config["fit"].get("likelihood", {}):
         print(
@@ -428,16 +301,12 @@ def _advise_config(
     and its report are written only with ``--accept``.
     """
     advisor = ObservationAdvisor(
-        fits_path.resolve(),
-        target_position=target_position,
-        hdu=args.hdu,
+        fits_path.resolve(), target_position=target_position, hdu=args.hdu
     )
 
     print(advisor.header_report())
     print()
-    print(
-        "Preparing the image and building its PSF, which the fit will reuse."
-    )
+    print("Preparing the image and building its PSF, which the fit will reuse.")
 
     # Absolute paths, as the configuration maker writes them, keep the
     # products of the advisor and of the fit in one run directory.
@@ -471,9 +340,7 @@ def _advise_config(
 
         return 0
 
-    written_path = proposal.write(
-        accept=True,
-    )
+    written_path = proposal.write(accept=True)
 
     print(
         "BayMorph configuration written to:\n"
@@ -485,112 +352,74 @@ def _advise_config(
     return 0
 
 
-def _command_run(
-    args: argparse.Namespace,
-) -> int:
+def _command_run(args: argparse.Namespace) -> int:
     """Run a BayMorph analysis from a YAML configuration."""
-    config_path = Path(
-        args.config_path
-    ).expanduser()
+    config_path = Path(args.config_path).expanduser()
 
-    runner = BayMorphRunner(
-        config_path,
-    )
+    runner = BayMorphRunner(config_path)
 
-    runner.run(
-        diagnostics=not args.no_diagnostics,
-    )
+    runner.run(diagnostics=not args.no_diagnostics)
 
-    print(
-        "BayMorph analysis completed."
-    )
+    print("BayMorph analysis completed.")
 
     return 0
-
 
 
 def _build_parser() -> argparse.ArgumentParser:
     """Build the BayMorph argument parser."""
     parser = argparse.ArgumentParser(
         prog="baymorph",
-        description=(
-            "Bayesian morphological modelling of astronomical images."
-        ),
+        description=("Bayesian morphological modelling of astronomical images."),
     )
 
     parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {_package_version()}",
+        "--version", action="version", version=f"%(prog)s {_package_version()}"
     )
 
-    subparsers = parser.add_subparsers(
-        dest="command",
-        required=True,
-    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
 
     examples_parser = subparsers.add_parser(
-        "examples",
-        help="Copy packaged example YAML configurations.",
+        "examples", help="Copy packaged example YAML configurations."
     )
     examples_parser.add_argument(
         "destination",
         nargs="?",
         default="baymorph_examples",
-        help=(
-            "Destination directory. "
-            "Default: ./baymorph_examples"
-        ),
+        help=("Destination directory. " "Default: ./baymorph_examples"),
     )
     examples_parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Overwrite existing example files.",
+        "--force", action="store_true", help="Overwrite existing example files."
     )
     examples_parser.set_defaults(
-        handler=_command_examples,
-        command_parser=examples_parser,
+        handler=_command_examples, command_parser=examples_parser
     )
 
     init_parser = subparsers.add_parser(
-        "init",
-        help="Create a new BayMorph project directory.",
+        "init", help="Create a new BayMorph project directory."
     )
-    init_parser.add_argument(
-        "project_name",
-        help="Project directory to create.",
-    )
+    init_parser.add_argument("project_name", help="Project directory to create.")
     init_parser.add_argument(
         "--force",
         action="store_true",
         help="Allow writing into an existing non-empty directory.",
     )
-    init_parser.set_defaults(
-        handler=_command_init,
-        command_parser=init_parser,
-    )
+    init_parser.set_defaults(handler=_command_init, command_parser=init_parser)
 
     config_parser = subparsers.add_parser(
-        "config",
-        help="Generate a BayMorph YAML configuration from a FITS image.",
+        "config", help="Generate a BayMorph YAML configuration from a FITS image."
     )
 
-    config_parser.add_argument(
-        "fits_path",
-        help="Input astronomical FITS image.",
-    )
+    config_parser.add_argument("fits_path", help="Input astronomical FITS image.")
 
     config_parser.add_argument(
         "--output",
         help=(
-            "Output YAML path. "
-            "Default: <FITS stem>.yaml in the current directory."
+            "Output YAML path. " "Default: <FITS stem>.yaml in the current directory."
         ),
     )
 
     config_parser.add_argument(
-        "--object-name",
-        help="Analysis object name. Default: FITS filename stem.",
+        "--object-name", help="Analysis object name. Default: FITS filename stem."
     )
 
     config_parser.add_argument(
@@ -615,21 +444,14 @@ def _build_parser() -> argparse.ArgumentParser:
     config_parser.add_argument(
         "--sampler",
         default="nautilus",
-        help=(
-            "Inference sampler name. "
-            "Default: nautilus."
-        ),
+        help=("Inference sampler name. " "Default: nautilus."),
     )
 
     config_parser.add_argument(
         "--uniform-prior",
         action="append",
         nargs=3,
-        metavar=(
-            "PARAMETER",
-            "LOWER",
-            "UPPER",
-        ),
+        metavar=("PARAMETER", "LOWER", "UPPER"),
         default=[],
         help=(
             "Explicit uniform scientific prior. "
@@ -655,16 +477,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--accept",
         action="store_true",
         help=(
-            "With --advise, write the reviewed proposal and its report "
-            "beside it."
+            "With --advise, write the reviewed proposal and its report " "beside it."
         ),
     )
 
     config_parser.add_argument(
         "--background-model",
-        choices=tuple(
-            BACKGROUND_PARAMETER_NAMES
-        ),
+        choices=tuple(BACKGROUND_PARAMETER_NAMES),
         help=(
             "With --advise, the residual background model whose priors are "
             "proposed. Default: constant."
@@ -685,8 +504,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--target-center",
         action="store_true",
         help=(
-            "Explicitly use the detector centre as the target-identification "
-            "seed."
+            "Explicitly use the detector centre as the target-identification " "seed."
         ),
     )
 
@@ -704,10 +522,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     config_parser.add_argument(
         "--cutout-mode",
-        choices=(
-            "auto",
-            "fixed",
-        ),
+        choices=("auto", "fixed"),
         default="auto",
         help="Cutout strategy. Default: auto.",
     )
@@ -720,10 +535,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     config_parser.add_argument(
         "--psf",
-        choices=(
-            "empirical",
-            "gaussian",
-        ),
+        choices=("empirical", "gaussian"),
         default="empirical",
         help="PSF strategy. Default: empirical.",
     )
@@ -750,9 +562,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     config_parser.add_argument(
         "--sky-correlation",
-        choices=tuple(
-            SKY_CORRELATION_ESTIMATORS
-        ),
+        choices=tuple(SKY_CORRELATION_ESTIMATORS),
         help=(
             "Estimator of the sky correlation of the noise model. "
             "Default: autocovariance."
@@ -760,9 +570,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     config_parser.add_argument(
-        "--outputs-root",
-        default="runs",
-        help="BayMorph output root. Default: runs.",
+        "--outputs-root", default="runs", help="BayMorph output root. Default: runs."
     )
 
     config_parser.add_argument(
@@ -771,41 +579,30 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Allow overwriting of existing BayMorph run products.",
     )
 
-    config_parser.set_defaults(
-        handler=_command_config,
-        command_parser=config_parser,
-    )
+    config_parser.set_defaults(handler=_command_config, command_parser=config_parser)
 
     run_parser = subparsers.add_parser(
-        "run",
-        help="Run a BayMorph analysis from a YAML configuration.",
+        "run", help="Run a BayMorph analysis from a YAML configuration."
     )
 
     run_parser.add_argument(
-        "config_path",
-        help="BayMorph YAML configuration to execute.",
+        "config_path", help="BayMorph YAML configuration to execute."
     )
 
     run_parser.add_argument(
         "--no-diagnostics",
         action="store_true",
         help=(
-            "Run inference without generating the configured "
-            "post-fit diagnostics."
+            "Run inference without generating the configured " "post-fit diagnostics."
         ),
     )
 
-    run_parser.set_defaults(
-        handler=_command_run,
-        command_parser=run_parser,
-    )
+    run_parser.set_defaults(handler=_command_run, command_parser=run_parser)
 
     return parser
 
 
-def main(
-    argv: Sequence[str] | None = None,
-) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     """Run the BayMorph command-line interface.
 
     Parameters
@@ -827,16 +624,8 @@ def main(
         return int(args.handler(args))
     except UsageError as error:
         args.command_parser.error(str(error))
-    except (
-        OSError,
-        RuntimeError,
-        TypeError,
-        ValueError,
-    ) as error:
-        print(
-            f"baymorph: error: {error}",
-            file=sys.stderr,
-        )
+    except (OSError, RuntimeError, TypeError, ValueError) as error:
+        print(f"baymorph: error: {error}", file=sys.stderr)
 
     return 1
 

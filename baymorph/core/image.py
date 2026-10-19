@@ -44,9 +44,7 @@ class ImageData:
 
     @classmethod
     def from_fits(
-        cls,
-        filename: str | Path,
-        hdu: int | str | None = None,
+        cls, filename: str | Path, hdu: int | str | None = None
     ) -> "ImageData":
         """Load an image from a FITS file.
 
@@ -102,11 +100,7 @@ class ImageData:
             primary_header=primary_header,
         )
 
-    def to_fits(
-        self,
-        filename: str | Path,
-        overwrite: bool = True,
-    ) -> None:
+    def to_fits(self, filename: str | Path, overwrite: bool = True) -> None:
         """Write the image to a FITS file.
 
         Parameters
@@ -118,15 +112,9 @@ class ImageData:
         """
         filename = Path(filename)
 
-        hdu = fits.PrimaryHDU(
-            data=self.data,
-            header=self.header,
-        )
+        hdu = fits.PrimaryHDU(data=self.data, header=self.header)
 
-        hdu.writeto(
-            filename,
-            overwrite=overwrite,
-        )
+        hdu.writeto(filename, overwrite=overwrite)
 
     @property
     def shape(self) -> tuple[int, int]:
@@ -134,10 +122,7 @@ class ImageData:
         return self.data.shape
 
 
-def select_image_hdu(
-    hdul: fits.HDUList,
-    hdu: int | str | None = None,
-) -> int:
+def select_image_hdu(hdul: fits.HDUList, hdu: int | str | None = None) -> int:
     """Return the index of the HDU that holds the image.
 
     Parameters
@@ -175,9 +160,7 @@ def select_image_hdu(
     images = [index for index in range(1, len(hdul)) if _holds_image(hdul[index])]
 
     for name in SCIENCE_EXTENSION_NAMES:
-        named = [
-            index for index in images if str(hdul[index].name).upper() == name
-        ]
+        named = [index for index in images if str(hdul[index].name).upper() == name]
 
         if len(named) == 1:
             return named[0]
