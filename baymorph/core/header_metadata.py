@@ -562,10 +562,15 @@ class HeaderReading:
         Matched conventions, in the order they were consulted.
     quantities : mapping of str to HeaderQuantity
         Every quantity of ``QUANTITIES`` and ``DERIVED_QUANTITIES``.
+    celestial_wcs : astropy.wcs.WCS, optional
+        Celestial WCS of the image header, from which the pixel scale is
+        derived; None when the header holds none. It is not part of
+        :meth:`as_dict`.
     """
 
     conventions: tuple[str, ...]
     quantities: Mapping[str, HeaderQuantity]
+    celestial_wcs: WCS | None = field(default=None, compare=False, repr=False)
 
     def __getitem__(self, name: str) -> HeaderQuantity:
         """Return one quantity by name."""
@@ -698,7 +703,8 @@ def read_header(
     Returns
     -------
     HeaderReading
-        Every quantity, with its provenance and status.
+        Every quantity, with its provenance and status, and the celestial
+        WCS of ``header``.
     """
     if conventions is None:
         conventions = load_header_conventions()
@@ -714,11 +720,13 @@ def read_header(
     for name, definition in QUANTITIES.items():
         quantities[name] = _read_quantity(definition, matched, lookup)
 
-    quantities["pixel_scale"] = _read_pixel_scale_quantity(header)
+    celestial_wcs = read_celestial_wcs(header)
+    quantities["pixel_scale"] = _read_pixel_scale_quantity(celestial_wcs)
 
     return HeaderReading(
         conventions=tuple(convention.name for convention in matched),
         quantities=quantities,
+        celestial_wcs=celestial_wcs,
     )
 
 
@@ -1147,9 +1155,9 @@ def normalize_declared_unit(text: Any, *, allowed: Sequence[str]) -> str | None:
     return recognized.pop()
 
 
-def _read_pixel_scale_quantity(header: fits.Header | None) -> HeaderQuantity:
+def _read_pixel_scale_quantity(celestial_wcs: WCS | None) -> HeaderQuantity:
     """Derive the mean pixel scale from the celestial WCS."""
-    scale_x, scale_y, scale_mean = read_pixel_scales(read_celestial_wcs(header))
+    scale_x, scale_y, scale_mean = read_pixel_scales(celestial_wcs)
 
     if scale_mean is None:
         return HeaderQuantity(name="pixel_scale", status="missing")

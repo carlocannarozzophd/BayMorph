@@ -509,6 +509,12 @@ def validate_config(config: dict[str, Any]) -> None:
             "supported by the single-band production workflow."
         )
 
+    if "external_mask_path" in config["data"]:
+        raise ValueError(
+            "Config data.external_mask_path is no longer supported. "
+            "Declare the curated mask under data.mask_path."
+        )
+
     hdu = config["data"].get("hdu")
 
     if hdu is not None and (

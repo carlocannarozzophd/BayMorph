@@ -151,17 +151,6 @@ def _resolve_fitting_mask_mode(data_cfg: dict[str, Any]) -> str:
     return mode
 
 
-def _configured_external_mask_path(data_cfg: Mapping[str, Any]) -> str | Path | None:
-    """Return the configured curated-mask path, if any."""
-    if "external_mask_path" in data_cfg:
-        raise ValueError(
-            "Config data.external_mask_path is no longer supported. "
-            "Declare the curated mask under data.mask_path."
-        )
-
-    return data_cfg.get("mask_path")
-
-
 def _validate_prepared_arrays(*, prepared_data: np.ndarray, noise: np.ndarray) -> None:
     """Fail before persistence when final inference arrays are invalid."""
     if not np.all(np.isfinite(prepared_data)):
@@ -362,7 +351,7 @@ def _validate_products_against_current_sources(
             "Persisted fitting-mask mode does not match the current " "configuration."
         )
 
-    configured_mask_path = _configured_external_mask_path(data_config)
+    configured_mask_path = data_config.get("mask_path")
     current_mask_crop = None
     if configured_mask_path is not None:
         full_mask = load_external_mask(
@@ -1260,7 +1249,7 @@ def prepare_real_image_from_config(
     fitting_mask_mode = _resolve_fitting_mask_mode(resolved["data"])
 
     external_mask = None
-    external_mask_path = _configured_external_mask_path(resolved["data"])
+    external_mask_path = resolved["data"].get("mask_path")
     if external_mask_path is not None:
         external_mask = load_external_mask(
             external_mask_path, expected_shape=image.data.shape

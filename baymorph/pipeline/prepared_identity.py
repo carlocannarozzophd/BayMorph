@@ -115,15 +115,6 @@ def _canonical_json(value: Any) -> bytes:
     ).encode("utf-8")
 
 
-def canonical_json_sha256(value: Any) -> str:
-    """Return the SHA-256 digest of JSON-compatible data in canonical form.
-
-    Mappings are sorted by key and paths written as text, so equal settings
-    give equal digests whatever the order in which they were written.
-    """
-    return hashlib.sha256(_canonical_json(value)).hexdigest()
-
-
 def _array_sha256(array: np.ndarray) -> str:
     """Fingerprint array shape, dtype, and canonical contiguous bytes."""
     contiguous = np.ascontiguousarray(np.asarray(array))
@@ -193,9 +184,7 @@ def _package_generator_identity() -> dict[str, Any]:
 
 def _mask_identity(data_config: Mapping[str, Any]) -> dict[str, Any] | None:
     """Return the identity of the optional curated mask."""
-    configured_path = data_config.get("mask_path") or data_config.get(
-        "external_mask_path"
-    )
+    configured_path = data_config.get("mask_path")
 
     if configured_path is None:
         return None
@@ -277,23 +266,6 @@ def build_prepared_input_identity(
     config: Mapping[str, Any], *, observation: Observation | None = None
 ) -> dict[str, Any]:
     """Build the immutable identity required to reuse prepared products."""
-    input_data = config.get("data")
-
-    if isinstance(input_data, Mapping):
-        input_mask_path = input_data.get("mask_path")
-        input_external_mask_path = input_data.get("external_mask_path")
-
-        if (
-            input_mask_path is not None
-            and input_external_mask_path is not None
-            and Path(input_mask_path).expanduser().resolve(strict=False)
-            != Path(input_external_mask_path).expanduser().resolve(strict=False)
-        ):
-            raise ValueError(
-                "data.mask_path and data.external_mask_path identify "
-                "different curated masks."
-            )
-
     resolved = resolve_config(dict(config))
     image_path = _canonical_file(
         resolved["data"]["image_path"], context="Configured image-preparation FITS"
@@ -519,7 +491,6 @@ def validate_generator_identity(
 __all__ = [
     "PREPARED_INPUT_IDENTITY_VERSION",
     "build_prepared_input_identity",
-    "canonical_json_sha256",
     "file_content_identity",
     "validate_generator_identity",
     "validate_prepared_input_identity",

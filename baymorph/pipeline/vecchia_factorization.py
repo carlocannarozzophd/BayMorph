@@ -44,7 +44,10 @@ from baymorph.pipeline.noise_calibration import (
     validate_correlated_noise_calibration_estimator,
     validate_correlated_noise_calibration_sources,
 )
-from baymorph.pipeline.prepared_identity import validate_generator_identity
+from baymorph.pipeline.prepared_identity import (
+    sha256_file,
+    validate_generator_identity,
+)
 
 
 DEFAULT_VECCHIA_FACTORIZATION_DIRECTORY = "correlated_gaussian_vecchia"
@@ -344,7 +347,7 @@ def _save_vecchia_bundle(
             "schema": VECCHIA_SCHEMA,
             "schema_version": VECCHIA_SCHEMA_VERSION,
             "manifest": VECCHIA_MANIFEST_FILENAME,
-            "manifest_sha256": _file_sha256(manifest_path),
+            "manifest_sha256": sha256_file(manifest_path),
         }
         _write_json(temporary / VECCHIA_COMPLETE_FILENAME, completion)
         for filename in (
@@ -772,7 +775,7 @@ def _array_spec(
         "shape": [int(value) for value in array.shape],
         "nbytes": int(array.nbytes),
         "array_sha256": _array_sha256(array),
-        "file_sha256": _file_sha256(path),
+        "file_sha256": sha256_file(path),
     }
 
 
@@ -788,14 +791,6 @@ def _array_sha256(array: np.ndarray) -> str:
     block_size = 8 * 1024 * 1024
     for start in range(0, len(view), block_size):
         digest.update(view[start : start + block_size])
-    return digest.hexdigest()
-
-
-def _file_sha256(path: str | Path) -> str:
-    digest = hashlib.sha256()
-    with Path(path).open("rb") as stream:
-        for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
-            digest.update(block)
     return digest.hexdigest()
 
 

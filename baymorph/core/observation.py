@@ -23,7 +23,6 @@ from astropy.wcs import WCS
 
 from baymorph.core.header_metadata import (
     HeaderReading,
-    read_celestial_wcs,
     read_header,
     read_pixel_scales,
 )
@@ -115,6 +114,7 @@ class ObservationMetadata:
         *,
         image_shape: tuple[int, int] | None = None,
         primary_header: fits.Header | None = None,
+        reading: HeaderReading | None = None,
     ) -> ObservationMetadata:
         """Construct normalized metadata from a FITS header.
 
@@ -136,6 +136,11 @@ class ObservationMetadata:
         primary_header : astropy.io.fits.Header, optional
             Primary header of a file whose image is stored in an extension.
             Its keywords are inherited where the image header lacks them.
+        reading : HeaderReading, optional
+            Reading of ``header`` and ``primary_header`` already made by
+            :func:`~baymorph.core.header_metadata.read_header`, with the
+            celestial WCS it derived. The headers are read when it is not
+            given.
 
         Returns
         -------
@@ -153,9 +158,11 @@ class ObservationMetadata:
         center_x = (width - 1) / 2.0
         center_y = (height - 1) / 2.0
 
-        celestial_wcs = read_celestial_wcs(header)
+        if reading is None:
+            reading = read_header(header, primary_header=primary_header)
+
+        celestial_wcs = reading.celestial_wcs
         scale_x, scale_y, scale_mean = read_pixel_scales(celestial_wcs)
-        reading = read_header(header, primary_header=primary_header)
 
         psf_fwhm = reading["psf_fwhm"]
         seeing_fwhm_unit = (
@@ -206,7 +213,10 @@ class ObservationMetadata:
             Metadata associated with the image.
         """
         return cls.from_header(
-            image.header, image_shape=image.shape, primary_header=image.primary_header
+            image.header,
+            image_shape=image.shape,
+            primary_header=image.primary_header,
+            reading=image.header_reading,
         )
 
 

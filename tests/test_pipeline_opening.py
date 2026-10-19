@@ -10,6 +10,9 @@ import numpy as np
 import pytest
 from astropy.io import fits
 
+import baymorph.core.header_metadata as header_metadata
+import baymorph.core.image as image_module
+import baymorph.core.observation as observation_module
 import baymorph.pipeline.image_preparation as image_preparation_module
 import baymorph.pipeline.opening as opening
 import baymorph.pipeline.prepared_identity as prepared_identity
@@ -150,6 +153,40 @@ def test_opened_arrays_are_read_only(tmp_path):
 
     with pytest.raises(ValueError, match="read-only"):
         observation.image.data[0, 0] = 1.0
+
+
+def test_an_opening_reads_the_header_and_builds_the_wcs_once(
+    tmp_path, monkeypatch
+):
+    """One opening reads the header once and builds its celestial WCS once."""
+    image_path = tmp_path / "coadd.fits"
+    _write_coadd(image_path)
+    calls = {"read_header": 0, "read_celestial_wcs": 0}
+    read_header = header_metadata.read_header
+    read_celestial_wcs = header_metadata.read_celestial_wcs
+
+    def counted_read_header(*args, **kwargs):
+        calls["read_header"] += 1
+        return read_header(*args, **kwargs)
+
+    def counted_read_celestial_wcs(*args, **kwargs):
+        calls["read_celestial_wcs"] += 1
+        return read_celestial_wcs(*args, **kwargs)
+
+    monkeypatch.setattr(image_module, "read_header", counted_read_header)
+    monkeypatch.setattr(observation_module, "read_header", counted_read_header)
+    monkeypatch.setattr(
+        header_metadata, "read_celestial_wcs", counted_read_celestial_wcs
+    )
+
+    observation = opening.open_observation(image_path)
+    metadata = observation.metadata
+
+    assert calls == {"read_header": 1, "read_celestial_wcs": 1}
+    assert metadata.header_reading is observation.image.header_reading
+    assert metadata.wcs is metadata.header_reading.celestial_wcs
+    assert metadata.pixel_scale == pytest.approx(0.21)
+    assert metadata.header_reading.value("pixel_scale") == pytest.approx(0.21)
 
 
 def test_a_small_file_is_read_at_every_opening(tmp_path):

@@ -26,6 +26,7 @@ from baymorph.pipeline.outputs import (
     pipeline_paths,
 )
 from baymorph.pipeline.prepared_identity import (
+    sha256_file,
     validate_generator_identity,
 )
 
@@ -469,7 +470,6 @@ def validate_correlated_noise_calibration_sources(
 def _correlated_noise_calibration_generator_identity(
 ) -> dict[str, Any]:
     """Return the calibration implementation and numerical identity."""
-    import hashlib
     import importlib.metadata
 
     import scipy
@@ -493,19 +493,12 @@ def _correlated_noise_calibration_generator_identity(
     except importlib.metadata.PackageNotFoundError:
         version = None
 
-    def file_sha256(
-        file_path: str | Path,
-    ) -> str:
-        return hashlib.sha256(
-            Path(file_path).read_bytes()
-        ).hexdigest()
-
     return {
         "estimators": sorted(SKY_CORRELATION_ESTIMATORS.values()),
-        "pipeline_source_sha256": file_sha256(
+        "pipeline_source_sha256": sha256_file(
             __file__
         ),
-        "core_source_sha256": file_sha256(
+        "core_source_sha256": sha256_file(
             core_source
         ),
         "baymorph_version": version,

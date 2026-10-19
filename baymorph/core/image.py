@@ -6,7 +6,11 @@ from pathlib import Path
 import numpy as np
 from astropy.io import fits
 
-from baymorph.core.header_metadata import ensure_linear_pixels, read_header
+from baymorph.core.header_metadata import (
+    HeaderReading,
+    ensure_linear_pixels,
+    read_header,
+)
 
 SCIENCE_EXTENSION_NAMES = ("SCI", "IMAGE")
 """Extension names that hold the science image, in order of preference."""
@@ -33,6 +37,10 @@ class ImageData:
         Primary header of the file, kept only when the image is stored in an
         extension. Its keywords are inherited where the image header lacks
         them (AD-049).
+    header_reading : HeaderReading, optional
+        Reading of ``header`` and ``primary_header`` made when the image was
+        read from a FITS file, so that the header is read once per opening.
+        None for an image built in memory.
     """
 
     data: np.ndarray
@@ -41,6 +49,7 @@ class ImageData:
     hdu_index: int = 0
     hdu_name: str | None = None
     primary_header: fits.Header | None = None
+    header_reading: HeaderReading | None = None
 
     @classmethod
     def from_fits(
@@ -85,9 +94,9 @@ class ImageData:
                 name = str(selected.name).strip() or None
                 primary_header = hdul[0].header.copy()
 
+            reading = read_header(header, primary_header=primary_header)
             ensure_linear_pixels(
-                read_header(header, primary_header=primary_header),
-                image=f"the image in HDU {index} of {filename}",
+                reading, image=f"the image in HDU {index} of {filename}"
             )
             data = selected.data.astype(float)
 
@@ -98,6 +107,7 @@ class ImageData:
             hdu_index=index,
             hdu_name=name,
             primary_header=primary_header,
+            header_reading=reading,
         )
 
     def to_fits(self, filename: str | Path, overwrite: bool = True) -> None:

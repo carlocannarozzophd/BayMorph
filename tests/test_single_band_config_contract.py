@@ -84,6 +84,15 @@ def test_unsupported_external_data_paths_are_rejected(
         resolve_config(config)
 
 
+def test_the_retired_external_mask_path_is_rejected() -> None:
+    """data.external_mask_path is refused for every use of a configuration."""
+    config = _minimal_config()
+    config["data"]["external_mask_path"] = "mask.fits"
+
+    with pytest.raises(ValueError, match="data.mask_path"):
+        resolve_config(config)
+
+
 def test_external_mask_path_remains_supported() -> None:
     """The implemented external-mask configuration must remain valid."""
     config = _minimal_config()

@@ -3,17 +3,25 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+from pathlib import Path
 
 import numpy as np
 import pytest
 from astropy.io import fits
 
+import baymorph.core.correlated_noise as correlated_noise
+import baymorph.pipeline.noise_calibration as noise_calibration
 from baymorph.core.image import ImageData
 from baymorph.core.observation import Observation
 from baymorph.pipeline.config import resolve_config
+from baymorph.pipeline.noise_calibration import (
+    _correlated_noise_calibration_generator_identity,
+)
 from baymorph.pipeline.prepared_identity import (
     PREPARED_INPUT_IDENTITY_VERSION,
     build_prepared_input_identity,
+    sha256_file,
     validate_generator_identity,
     validate_prepared_input_identity,
 )
@@ -254,8 +262,8 @@ def test_build_rejects_supplied_observation_from_different_path(tmp_path):
         )
 
 
-def test_build_rejects_conflicting_mask_paths(tmp_path):
-    """Two distinct curated-mask authorities must never be chosen silently."""
+def test_build_rejects_the_retired_external_mask_path(tmp_path):
+    """The retired key is refused, never read as a second curated mask."""
     image_path = tmp_path / "source.fits"
     primary_mask_path = tmp_path / "primary_mask.fits"
     legacy_mask_path = tmp_path / "legacy_mask.fits"
@@ -271,9 +279,32 @@ def test_build_rejects_conflicting_mask_paths(tmp_path):
 
     with pytest.raises(
         ValueError,
-        match=r"mask_path.*external_mask_path|external_mask_path.*mask_path",
+        match=r"external_mask_path is no longer supported",
     ):
         build_prepared_input_identity(config)
+
+
+def test_file_digests_are_the_digests_of_the_file_bytes(tmp_path):
+    """Saved products compare these digests, so their meaning must not change.
+
+    The correlated-noise calibration and the Vecchia factorization record the
+    SHA-256 of the bytes of their source and input files; a file larger than
+    one read block checks that the digest covers every byte.
+    """
+    path = tmp_path / "blocks.bin"
+    payload = np.random.default_rng(20261019).bytes(5 * 1024**2 + 17)
+    path.write_bytes(payload)
+
+    assert sha256_file(path) == hashlib.sha256(payload).hexdigest()
+
+    identity = _correlated_noise_calibration_generator_identity()
+
+    assert identity["core_source_sha256"] == hashlib.sha256(
+        Path(correlated_noise.__file__).read_bytes()
+    ).hexdigest()
+    assert identity["pipeline_source_sha256"] == hashlib.sha256(
+        Path(noise_calibration.__file__).read_bytes()
+    ).hexdigest()
 
 
 _CURRENT_GENERATOR = {

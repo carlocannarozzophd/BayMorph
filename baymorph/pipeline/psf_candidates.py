@@ -9,14 +9,12 @@ from typing import Any
 
 import numpy as np
 
+from baymorph.pipeline.checkpoint_signing import canonical_json_sha256
 from baymorph.pipeline.config import load_resolved_config
 from baymorph.pipeline.image_preparation import detect_real_fits_sources
 from baymorph.pipeline.opening import open_observation
 from baymorph.pipeline.outputs import make_output_tree, pipeline_paths
-from baymorph.pipeline.prepared_identity import (
-    canonical_json_sha256,
-    file_content_identity,
-)
+from baymorph.pipeline.prepared_identity import file_content_identity
 
 PSF_CANDIDATES_PROVENANCE_SCHEMA_VERSION = 1
 
