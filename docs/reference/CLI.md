@@ -57,6 +57,12 @@ together.
 | `--psf` | PSF strategy: `empirical` or `gaussian`. | `empirical` |
 | `--gaussian-fwhm-pixels` | FWHM of a Gaussian PSF in pixels, needed only when the FITS metadata do not provide it. | |
 | `--psf-max-peak` | Brightest peak pixel accepted for a star of the empirical PSF, in image units; keep it below the saturation level. | BayMorph default; with `--advise`, half the saturation level of the header when its unit is known |
+| `--image-unit` | Unit of the pixel values, such as `ADU/s` or `electron/s`, declared in `data.calibration`. | read from the header |
+| `--zeropoint` | Zeropoint in magnitudes, with m = zeropoint − 2.5 log10(flux in image units), declared in `data.calibration`. | read from the header |
+| `--photometric-system` | `AB` or `Vega`, the system of the declared zeropoint; only together with `--zeropoint`. | |
+| `--exposure-time` | Exposure time in seconds, declared in `data.calibration`. | read from the header |
+| `--gain` | Gain of the detector in electrons per ADU, the meaning of the `GAIN` keyword, declared in `data.calibration`; not the effective gain of the noise model. | read from the header |
+| `--saturation` | Saturation level in the units of the image, declared in `data.calibration`. | read from the header |
 | `--sky-correlation` | Estimator of the sky correlation of the noise model: `autocovariance`, or `field_separated` for a sky that holds a large-scale field; see [Noise Models](../models/NOISE.md). | `autocovariance` |
 | `--outputs-root` | Root directory of the run products. | `runs` |
 | `--overwrite` | Write `outputs.overwrite: true`, which allows products of existing runs to be replaced. | off |
@@ -76,11 +82,14 @@ is declared (see [Sky and Noise](../guide/SKY_AND_NOISE.md)).
 
 ### With the observation advisor
 
-With `--advise`, the command prints what the header holds, prepares the
+With `--advise`, the command prints what the header holds, with the
+calibration you declared in place of the header readings, prepares the
 image and builds its PSF in the run directory, where the fit reuses them,
 and prints a proposal of every prior of every `--model`, with its source:
-the header, the prepared sky scale and PSF, the BayMorph defaults, or a
-`--uniform-prior` you declared. It writes nothing; run the same command
+the header, a declared calibration, the prepared sky scale and PSF, the
+BayMorph defaults, or a `--uniform-prior` you declared. Without a zeropoint,
+read or declared, the flux priors come from the sky and the PSF, and the
+proposal states the rule and its numbers. It writes nothing; run the same command
 again with `--accept` to write the YAML and, beside it, a report
 `<stem>.advisor.json` of where every proposed value comes from. The rules
 of the proposal are those of

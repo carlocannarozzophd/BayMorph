@@ -726,6 +726,14 @@ def test_config_command_advises_several_models_with_qualified_priors(
             ["--advise", "--uniform-prior", "bulge_disk.flux_disk", "1", "2"],
             "not among the requested models",
         ),
+        (
+            ["--photometric-system", "AB"],
+            "--photometric-system qualifies a declared zeropoint",
+        ),
+        (["--zeropoint", "25", "--photometric-system", "ST"], "not one of AB, Vega"),
+        (["--gain", "-1"], "argument --gain: '-1' is not positive"),
+        (["--zeropoint", "nan"], "argument --zeropoint: 'nan' is not finite"),
+        (["--image-unit", " "], "The image unit must be non-empty"),
     ],
 )
 def test_config_command_rejects_ambiguous_options(
@@ -818,6 +826,7 @@ def test_config_command_writes_hdu_preparation_and_psf_ceiling(
     config = yaml.safe_load(output_path.read_text(encoding="utf-8"))
 
     assert config["data"]["hdu"] == "SCI"
+    assert "calibration" not in config["data"]
     assert config["preparation"] == {
         "noise": {"sky_correlation": "field_separated"},
     }
@@ -827,3 +836,98 @@ def test_config_command_writes_hdu_preparation_and_psf_ceiling(
         "lower": 1.0,
         "upper": 1000.0,
     }
+
+
+def test_config_command_declares_the_calibration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The calibration options must be written to data.calibration."""
+    fits_path = tmp_path / "galaxy.fits"
+    output_path = tmp_path / "galaxy.yaml"
+
+    _write_fits(fits_path)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "baymorph",
+            "config",
+            str(fits_path),
+            "--target-center",
+            "--image-unit",
+            "electron/s",
+            "--zeropoint",
+            "25.94",
+            "--photometric-system",
+            "ab",
+            "--exposure-time",
+            "1200",
+            "--gain",
+            "2",
+            "--saturation",
+            "50000",
+            "--uniform-prior",
+            "flux",
+            "1",
+            "1000",
+            "--output",
+            str(output_path),
+        ],
+    )
+
+    assert main() == 0
+
+    config = yaml.safe_load(output_path.read_text(encoding="utf-8"))
+
+    assert config["data"]["calibration"] == {
+        "image_unit": "electron/s",
+        "zeropoint": 25.94,
+        "photometric_system": "AB",
+        "exposure_time": 1200.0,
+        "gain": 2.0,
+        "saturation": 50000.0,
+    }
+
+
+def test_config_command_advises_with_the_declared_calibration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    advisor_stages: list[dict],
+) -> None:
+    """With --advise, a declared zeropoint sets the flux prior and is shown."""
+    fits_path = tmp_path / "coadd.fits"
+    output_path = tmp_path / "coadd.yaml"
+
+    _write_coadd(fits_path)
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            *_advise_arguments(tmp_path, fits_path, output_path),
+            "--zeropoint",
+            "28",
+            "--photometric-system",
+            "AB",
+            "--accept",
+        ],
+    )
+
+    assert main() == 0
+
+    printed = capsys.readouterr().out
+    config = yaml.safe_load(output_path.read_text(encoding="utf-8"))
+
+    assert "data.calibration" in printed
+    assert "Declared calibration (data.calibration): zeropoint 28 mag [user]" in (
+        printed
+    )
+    assert config["data"]["calibration"] == {
+        "zeropoint": 28.0,
+        "photometric_system": "AB",
+    }
+    assert advisor_stages[0]["data"]["calibration"] == config["data"]["calibration"]
+    assert config["fit"]["priors"]["single_sersic"]["flux"]["lower"] == (
+        pytest.approx(10.0 ** (0.4 * (28.0 - 30.0)))
+    )

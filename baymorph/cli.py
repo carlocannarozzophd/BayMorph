@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import shutil
 import sys
 from collections.abc import Sequence
@@ -11,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from baymorph.core.correlated_noise import SKY_CORRELATION_ESTIMATORS
+from baymorph.core.header_metadata import PHOTOMETRIC_SYSTEMS
 from baymorph.observation.background import BACKGROUND_PARAMETER_NAMES
 from baymorph.pipeline.advisor import ObservationAdvisor
 from baymorph.pipeline.config_maker import make_config_from_fits
@@ -205,6 +207,80 @@ def _hdu_argument(value: str) -> int | str:
     return int(text) if text.isdigit() else text
 
 
+def _finite_number(value: str) -> float:
+    """Return a finite number given on the command line."""
+    try:
+        number = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a number.") from None
+
+    if not math.isfinite(number):
+        raise argparse.ArgumentTypeError(f"{value!r} is not finite.")
+
+    return number
+
+
+def _positive_number(value: str) -> float:
+    """Return a positive finite number given on the command line."""
+    number = _finite_number(value)
+
+    if number <= 0.0:
+        raise argparse.ArgumentTypeError(f"{value!r} is not positive.")
+
+    return number
+
+
+def _photometric_system(value: str) -> str:
+    """Return a photometric system, whatever its case."""
+    systems = {system.lower(): system for system in PHOTOMETRIC_SYSTEMS}
+    system = systems.get(str(value).strip().lower())
+
+    if system is None:
+        raise argparse.ArgumentTypeError(
+            f"{value!r} is not one of " + ", ".join(PHOTOMETRIC_SYSTEMS) + "."
+        )
+
+    return system
+
+
+def _image_unit(value: str) -> str:
+    """Return a non-empty image unit."""
+    unit = str(value).strip()
+
+    if not unit:
+        raise argparse.ArgumentTypeError("The image unit must be non-empty.")
+
+    return unit
+
+
+_CALIBRATION_OPTIONS = (
+    ("image_unit", "--image-unit"),
+    ("zeropoint", "--zeropoint"),
+    ("photometric_system", "--photometric-system"),
+    ("exposure_time", "--exposure-time"),
+    ("gain", "--gain"),
+    ("saturation", "--saturation"),
+)
+"""Quantities of ``data.calibration`` and the options that declare them."""
+
+
+def _calibration_from_args(args: argparse.Namespace) -> dict[str, Any] | None:
+    """Return the calibration declared on the command line, or None."""
+    declared = {
+        name: getattr(args, name)
+        for name, _ in _CALIBRATION_OPTIONS
+        if getattr(args, name) is not None
+    }
+
+    if "photometric_system" in declared and "zeropoint" not in declared:
+        raise UsageError(
+            "--photometric-system qualifies a declared zeropoint; declare "
+            "--zeropoint with it."
+        )
+
+    return declared or None
+
+
 def _preparation_from_args(args: argparse.Namespace) -> dict[str, Any] | None:
     """Return the preparation section requested on the command line."""
     if args.sky_correlation is None:
@@ -226,6 +302,7 @@ def _command_config(args: argparse.Namespace) -> int:
     models = _models_from_args(args)
     model_priors = _model_priors_from_args(args, models)
     preparation = _preparation_from_args(args)
+    calibration = _calibration_from_args(args)
 
     if args.advise:
         return _advise_config(
@@ -236,6 +313,7 @@ def _command_config(args: argparse.Namespace) -> int:
             models=models,
             model_priors=model_priors,
             preparation=preparation,
+            calibration=calibration,
         )
 
     for option, value in (
@@ -256,6 +334,7 @@ def _command_config(args: argparse.Namespace) -> int:
         fits_path,
         target_position=target_position,
         hdu=args.hdu,
+        calibration=calibration,
         output_path=output_path,
         object_name=args.object_name,
         model_name=models[0],
@@ -293,15 +372,20 @@ def _advise_config(
     models: list[str],
     model_priors: dict[str, dict[str, dict[str, float | str]]] | None,
     preparation: dict[str, Any] | None,
+    calibration: dict[str, Any] | None,
 ) -> int:
     """Propose a configuration with the observation advisor.
 
-    The advisor prepares the image and builds its PSF in the run directory,
-    where the fit reuses them, and proposes every prior. The configuration
-    and its report are written only with ``--accept``.
+    The advisor reads the header with the declared calibration, prepares the
+    image and builds its PSF in the run directory, where the fit reuses
+    them, and proposes every prior. The configuration and its report are
+    written only with ``--accept``.
     """
     advisor = ObservationAdvisor(
-        fits_path.resolve(), target_position=target_position, hdu=args.hdu
+        fits_path.resolve(),
+        target_position=target_position,
+        hdu=args.hdu,
+        calibration=calibration,
     )
 
     print(advisor.header_report())
@@ -558,6 +642,58 @@ def _build_parser() -> argparse.ArgumentParser:
             "and without this option, half the saturation level of the "
             "header is proposed when its unit is established."
         ),
+    )
+
+    calibration_group = config_parser.add_argument_group(
+        "calibration declared in data.calibration",
+        "Quantities that the header does not give, or gives wrongly. A "
+        "declared value takes the place of the header reading, which stays "
+        "recorded beside it.",
+    )
+
+    calibration_group.add_argument(
+        "--image-unit",
+        dest="image_unit",
+        type=_image_unit,
+        help="Unit of the pixel values, such as ADU/s or electron/s.",
+    )
+
+    calibration_group.add_argument(
+        "--zeropoint",
+        type=_finite_number,
+        help=(
+            "Zeropoint in magnitudes, with m = zeropoint - 2.5 log10(flux in "
+            "image units)."
+        ),
+    )
+
+    calibration_group.add_argument(
+        "--photometric-system",
+        dest="photometric_system",
+        type=_photometric_system,
+        help="System of the declared zeropoint: AB or Vega.",
+    )
+
+    calibration_group.add_argument(
+        "--exposure-time",
+        dest="exposure_time",
+        type=_positive_number,
+        help="Exposure time in seconds.",
+    )
+
+    calibration_group.add_argument(
+        "--gain",
+        type=_positive_number,
+        help=(
+            "Gain of the detector in electrons per ADU, the meaning of the "
+            "GAIN keyword; not the effective gain of the noise model."
+        ),
+    )
+
+    calibration_group.add_argument(
+        "--saturation",
+        type=_positive_number,
+        help="Saturation level in the units of the image.",
     )
 
     config_parser.add_argument(

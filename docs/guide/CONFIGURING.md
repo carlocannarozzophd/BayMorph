@@ -134,7 +134,14 @@ proposal.write(accept=True)
 unit, status and source. A quantity whose unit or meaning the header does
 not establish is marked `ambiguous` and is never used: a unit is never
 guessed from a value. Declare such a quantity in `data.calibration` (see
-[The image](IMAGE.md)); its status then becomes `declared`.
+[The image](IMAGE.md)); its status then becomes `declared`. Give the
+declarations to the Advisor when you create it, for example
+`ObservationAdvisor.from_project(fits_path, calibration={"zeropoint": 25.94,
+"photometric_system": "AB"})`: every reading of the Advisor then uses them,
+and the proposed configuration carries them in `data.calibration`. On the
+command line the options `--image-unit`, `--zeropoint`,
+`--photometric-system`, `--exposure-time`, `--gain` and `--saturation` do the
+same (see [Command Line](../reference/CLI.md)).
 
 The Advisor first prepares the image and builds its PSF, the inputs of the
 observation model that come before any prior; the fit then reuses them. To
@@ -146,7 +153,7 @@ fit:
 
 | Parameter | Proposed prior |
 | --- | --- |
-| Fluxes | Magnitudes 8 to 30, converted through the zeropoint of the header: log-uniform in image units. |
+| Fluxes | Magnitudes 8 to 30, converted through the zeropoint, read from the header or declared: log-uniform in image units. Without a zeropoint, from the flux of a point source at signal-to-noise 1 on the prepared sky, the sky scale times the square root of the noise-equivalent area of the PSF, to 22 magnitudes above it: log-uniform in image units. |
 | Lengths of a model with one component | 0.1 to 120 arcsec, converted through the pixel scale: log-uniform in pixels, within the range where the rendering of the model is validated. |
 | Lengths of a model with several components | The default ranges, which tell the components apart, limited to 0.1 to 120 arcsec. |
 | Centre | Within three times the FWHM of the PSF of the target position. |
@@ -170,10 +177,10 @@ Anything you declare is kept as declared: a prior through `model_priors`
 or `flux_prior`, `background`, `likelihood` or `psf_max_peak`. With
 `models`, `model_priors` maps each model to its declared priors, for
 example `{"double_sersic": {"q_bulge": {...}}}`; `flux_prior` applies to a
-proposal of one model with one total flux. Without a zeropoint in the
-header, the flux priors must be declared in image units; without a pixel
-scale, the lengths keep the default ranges in pixels, and the summary says
-so.
+proposal of one model with one total flux. Each proposed flux prior states
+its rule and its numbers beside it, with or without a zeropoint; without a
+pixel scale, the lengths keep the default ranges in pixels, and the summary
+says so.
 
 Without the interactive widgets, `advisor.set_target_position(x, y)` sets
 the target instead of the click. Nothing is written until

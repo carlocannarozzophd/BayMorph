@@ -1,8 +1,9 @@
 """Image containers and FITS I/O."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import numpy as np
 from astropy.io import fits
@@ -121,7 +122,10 @@ class ImageData:
 
 
 def read_image_header(
-    filename: str | Path, hdu: int | str | None = None
+    filename: str | Path,
+    hdu: int | str | None = None,
+    *,
+    declarations: Mapping[str, Any] | None = None,
 ) -> HeaderReading:
     """Read the header of the image of a FITS file without reading its pixels.
 
@@ -136,6 +140,9 @@ def read_image_header(
     hdu : int or str, optional
         Index or ``EXTNAME`` of the HDU that holds the image. See
         :meth:`ImageData.from_fits` for the default.
+    declarations : mapping, optional
+        Values of ``data.calibration``, which take the place of the readings
+        of the header (AD-053).
 
     Returns
     -------
@@ -147,12 +154,15 @@ def read_image_header(
     ------
     ValueError
         As :meth:`ImageData.from_fits`, when the HDU cannot be chosen or the
-        pixel values are not linear in flux.
+        pixel values are not linear in flux, or the declarations are not
+        valid.
     """
     filename = Path(filename)
 
     with fits.open(filename) as hdul:
-        return _read_image_header(hdul, hdu, filename=filename).reading
+        return _read_image_header(
+            hdul, hdu, filename=filename, declarations=declarations
+        ).reading
 
 
 class _ImageHeader(NamedTuple):
@@ -166,7 +176,11 @@ class _ImageHeader(NamedTuple):
 
 
 def _read_image_header(
-    hdul: fits.HDUList, hdu: int | str | None, *, filename: Path
+    hdul: fits.HDUList,
+    hdu: int | str | None,
+    *,
+    filename: Path,
+    declarations: Mapping[str, Any] | None = None,
 ) -> _ImageHeader:
     """Choose the image HDU and read its headers, refusing non-linear pixels."""
     index = select_image_hdu(hdul, hdu)
@@ -179,7 +193,9 @@ def _read_image_header(
         name = str(selected.name).strip() or None
         primary_header = hdul[0].header.copy()
 
-    reading = read_header(header, primary_header=primary_header)
+    reading = read_header(
+        header, primary_header=primary_header, declarations=declarations
+    )
     ensure_linear_pixels(reading, image=f"the image in HDU {index} of {filename}")
 
     return _ImageHeader(

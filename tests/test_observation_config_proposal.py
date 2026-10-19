@@ -188,7 +188,11 @@ def test_proposal_blocks_required_flux_review(
 def test_proposal_requires_exactly_one_flux_prior_source(
     tmp_path: Path,
 ) -> None:
-    """Ambiguous or missing flux-prior provenance must be rejected."""
+    """Ambiguous flux-prior provenance must be rejected.
+
+    A missing flux prior is not ambiguous: without a zeropoint the advisor
+    proposes it from a point source at signal-to-noise 1.
+    """
     fits_path = write_observation(tmp_path)
 
     advisor = ObservationAdvisor(
@@ -199,16 +203,17 @@ def test_proposal_requires_exactly_one_flux_prior_source(
         ),
     )
 
-    with pytest.raises(
-        ValueError,
-        match="exactly one",
-    ):
-        advisor.propose_config(
-            output_path=(tmp_path / "config.yaml"),
-            outputs_root=(tmp_path / "runs"),
-            psf_type="gaussian",
-            gaussian_fwhm_pixels=2.0,
-        )
+    proposal = advisor.propose_config(
+        output_path=(tmp_path / "config.yaml"),
+        outputs_root=(tmp_path / "runs"),
+        psf_type="gaussian",
+        gaussian_fwhm_pixels=2.0,
+    )
+
+    assert proposal.provenance["priors"]["single_sersic"]["flux"]["source"] == (
+        "fixed_inputs"
+    )
+    assert proposal.flux_prior_source.startswith("no usable zeropoint: from ")
 
     with pytest.raises(
         ValueError,

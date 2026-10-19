@@ -15,7 +15,12 @@ from baymorph import ObservationAdvisor
 from baymorph.models.labels import PARAMETER_KINDS
 from baymorph.pipeline.advisor import FixedInputs
 from baymorph.pipeline.config import resolve_config, validate_fit_priors
+from baymorph.pipeline.prior_proposals import (
+    noise_equivalent_area,
+    point_source_flux_prior,
+)
 from baymorph.pipeline.psf_construction import estimate_psf_core_fwhm
+from baymorph.simulation.psf import GaussianPSF
 
 SKY_SCALE = 2.5
 SKY_LEVEL = 320.0
@@ -309,6 +314,9 @@ def test_fixed_inputs_must_match_the_configuration_of_the_proposal(
     assert inputs.sky_scale == pytest.approx(SKY_SCALE)
     assert inputs.measured_sky_level == pytest.approx(-0.4)
     assert inputs.psf_fwhm_pixels == pytest.approx(2.74)
+    assert inputs.psf_noise_equivalent_area == pytest.approx(
+        noise_equivalent_area(GaussianPSF(fwhm=2.74).kernel())
+    )
 
     reused = advisor.propose_config(
         output_path=tmp_path / "coadd.yaml",
@@ -435,6 +443,9 @@ def test_fixed_inputs_measured_first_settle_the_ceiling_of_the_proposal(
 
     assert stages[0]["psf"]["empirical"]["candidate_selection"]["max_peak"] == (
         pytest.approx(13000.0)
+    )
+    assert inputs.psf_noise_equivalent_area == pytest.approx(
+        noise_equivalent_area(_psf_kernel())
     )
 
     proposal = advisor.propose_config(
@@ -595,25 +606,114 @@ def test_choice_of_models_and_their_priors_must_be_explicit(
     assert stages == []
 
 
-def test_several_models_without_a_zeropoint_name_each_missing_flux(
+def test_without_a_zeropoint_each_flux_starts_from_a_point_source_at_snr_one(
     tmp_path: Path,
     stages: list[dict],
 ) -> None:
-    """Without a zeropoint, every undeclared flux must be named with its model."""
+    """Without a zeropoint, the fluxes come from the sky scale and the PSF."""
     fits_path = _write_coadd(tmp_path, saturation_unit_known=True)
     advisor = ObservationAdvisor(fits_path, target_position=(40.0, 40.0))
     flux = {"type": "log_uniform", "lower": 10.0, "upper": 1.0e7}
 
-    with pytest.raises(ValueError, match="bulge_disk.flux_disk") as error:
-        advisor.propose_config(
-            output_path=tmp_path / "coadd.yaml",
-            models=["single_sersic", "bulge_disk"],
-            model_priors={"single_sersic": {"flux": flux}},
-            outputs_root=tmp_path / "runs",
+    proposal = advisor.propose_config(
+        output_path=tmp_path / "coadd.yaml",
+        models=["single_sersic", "bulge_disk"],
+        model_priors={"single_sersic": {"flux": flux}},
+        outputs_root=tmp_path / "runs",
+    )
+
+    area = noise_equivalent_area(_psf_kernel())
+    expected = point_source_flux_prior(SKY_SCALE, area)
+    priors = proposal.config["fit"]["priors"]
+    sources = proposal.provenance["priors"]
+
+    assert priors["single_sersic"]["flux"] == flux
+    assert sources["single_sersic"]["flux"]["source"] == "user"
+
+    for name in ("flux_bulge", "flux_disk"):
+        assert priors["bulge_disk"][name]["lower"] == pytest.approx(
+            SKY_SCALE * np.sqrt(area)
+        )
+        assert priors["bulge_disk"][name] == pytest.approx(expected)
+        assert sources["bulge_disk"][name]["source"] == "fixed_inputs"
+        assert sources["bulge_disk"][name]["detail"].startswith(
+            "no usable zeropoint: from "
         )
 
-    assert "single_sersic.flux" not in str(error.value)
-    assert "keyed by model" in str(error.value)
+    assert proposal.provenance["rules"]["point_source_snr"] == 1.0
+    assert proposal.provenance["fixed_inputs"]["psf_noise_equivalent_area"] == (
+        pytest.approx(area)
+    )
+
+    summary = proposal.summary()
+
+    assert "flux_disk: log_uniform(" in summary
+    assert "[fixed_inputs] no usable zeropoint: from" in summary
+    assert "22 magnitudes brighter" in summary
+    assert "PSF noise-equivalent area:" in summary
+
+
+def test_declared_calibration_reaches_every_reading_and_the_configuration(
+    tmp_path: Path,
+    stages: list[dict],
+) -> None:
+    """Declarations made to the advisor must reach the proposal (AD-053)."""
+    fits_path = _write_coadd(tmp_path, saturation_unit_known=True)
+    advisor = ObservationAdvisor(
+        fits_path,
+        target_position=(40.0, 40.0),
+        calibration={
+            "zeropoint": 28.0,
+            "photometric_system": "ab",
+            "saturation": 20000.0,
+        },
+    )
+    declared = {"zeropoint": 28.0, "photometric_system": "AB", "saturation": 20000.0}
+
+    assert advisor.calibration == declared
+    assert "data.calibration" in advisor.header_report()
+    assert advisor.inspect().saturation == pytest.approx(20000.0)
+
+    proposal = advisor.propose_config(
+        output_path=tmp_path / "coadd.yaml",
+        outputs_root=tmp_path / "runs",
+    )
+
+    assert proposal.config["data"]["calibration"] == declared
+    assert stages[0]["data"]["calibration"] == declared
+
+    flux = proposal.provenance["priors"]["single_sersic"]["flux"]
+
+    assert flux["source"] == "declaration"
+    assert flux["prior"]["lower"] == pytest.approx(10.0 ** (0.4 * (28.0 - 30.0)))
+    assert "magnitudes 8 to 30 AB through the declared zeropoint 28" in flux["detail"]
+
+    provenance = proposal.provenance
+
+    assert provenance["calibration"]["zeropoint"] == {
+        "value": 28.0,
+        "unit": "mag",
+        "source": "user",
+    }
+    assert provenance["header"]["quantities"]["zeropoint"]["status"] == "declared"
+    assert provenance["psf_max_peak"] == {
+        "value": pytest.approx(10000.0),
+        "source": "declaration",
+        "detail": "0.5 times the saturation level 20000 (declared in data.calibration)",
+    }
+
+    summary = proposal.summary()
+
+    assert "Declared calibration (data.calibration): zeropoint 28 mag [user]" in (
+        summary
+    )
+    assert "saturation 20000 in the units of the image [user]" in summary
+
+    with pytest.raises(TypeError, match="when creating the advisor"):
+        advisor.make_config(calibration={"zeropoint": 25.0})
+
+    with pytest.raises(ValueError, match="cannot declare"):
+        ObservationAdvisor(fits_path, calibration={"pixel_scale": 0.2})
 
 
 def test_header_report_tables_what_the_header_holds(tmp_path: Path) -> None:

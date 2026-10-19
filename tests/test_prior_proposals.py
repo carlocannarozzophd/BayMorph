@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pytest
 from astropy.io import fits
 
@@ -19,6 +20,8 @@ from baymorph.pipeline.prior_proposals import (
     clipped_reference_length_prior,
     length_domain,
     magnitude_flux_prior,
+    noise_equivalent_area,
+    point_source_flux_prior,
     propose_effective_gain,
     propose_model_priors,
     propose_psf_max_peak,
@@ -91,6 +94,50 @@ def test_magnitude_flux_prior_converts_through_the_zeropoint() -> None:
 
     with pytest.raises(ValueError, match="finite"):
         magnitude_flux_prior(math.nan)
+
+
+def test_noise_equivalent_area_is_the_inverse_sum_of_the_squared_psf() -> None:
+    """A normalized kernel gives 1 / sum(p**2); the scale does not matter."""
+    y, x = np.indices((51, 51), dtype=float)
+    sigma = 2.0
+    kernel = np.exp(-0.5 * ((x - 25.0) ** 2 + (y - 25.0) ** 2) / sigma**2)
+
+    area = noise_equivalent_area(kernel)
+
+    # Continuous Gaussian: 4 pi sigma^2; the sampled one agrees for sigma >> 0.
+    assert area == pytest.approx(4.0 * math.pi * sigma**2, rel=1e-6)
+    assert noise_equivalent_area(7.0 * kernel) == pytest.approx(area)
+    assert noise_equivalent_area(np.pad(np.ones((1, 1)), 2)) == pytest.approx(1.0)
+    assert noise_equivalent_area(np.ones((3, 4))) == pytest.approx(12.0)
+
+    for invalid in (np.zeros((5, 5)), -kernel, np.ones(5), np.full((3, 3), np.nan)):
+        with pytest.raises(ValueError, match="PSF kernel"):
+            noise_equivalent_area(invalid)
+
+
+def test_point_source_flux_prior_spans_22_magnitudes_from_snr_one() -> None:
+    """The bounds must follow from the sky scale and the PSF alone."""
+    # Fixed inputs of a real r-band coadd at the zeropoint 30.
+    prior = point_source_flux_prior(2.598028, 36.14)
+
+    assert prior["type"] == "log_uniform"
+    assert prior["lower"] == pytest.approx(2.598028 * math.sqrt(36.14))
+    assert prior["lower"] == pytest.approx(15.62, abs=0.005)
+    assert prior["upper"] / prior["lower"] == pytest.approx(10.0**8.8)
+    assert prior["upper"] == pytest.approx(9.854e9, rel=5e-4)
+    assert 30.0 - 2.5 * math.log10(prior["lower"]) == pytest.approx(27.02, abs=0.005)
+
+    narrow = point_source_flux_prior(2.0, 4.0, magnitude_span=5.0, snr=3.0)
+
+    assert narrow["lower"] == pytest.approx(12.0)
+    assert narrow["upper"] == pytest.approx(1200.0)
+
+    for name, arguments in (
+        ("sky_scale", (0.0, 36.14)),
+        ("psf_noise_equivalent_area", (2.6, math.inf)),
+    ):
+        with pytest.raises(ValueError, match=name):
+            point_source_flux_prior(*arguments)
 
 
 def test_angular_length_prior_respects_the_validated_domain() -> None:
@@ -230,14 +277,63 @@ def test_decided_priors_are_kept_as_declared() -> None:
         )
 
 
+def test_flux_priors_state_their_rule_and_numbers() -> None:
+    """Both flux rules must say where the bounds come from, with numbers."""
+    from_header = propose_model_priors(
+        "single_sersic",
+        zeropoint=30.0,
+        pixel_scale=0.21,
+        psf_fwhm_pixels=2.74,
+        photometric_system="AB",
+    )["flux"]
+
+    assert from_header.source == "header"
+    assert from_header.detail.startswith(
+        "magnitudes 8 to 30 AB through the zeropoint 30"
+    )
+    assert "1 to 6.31e+08 in image units" in from_header.detail
+
+    declared = propose_model_priors(
+        "single_sersic",
+        zeropoint=25.0,
+        pixel_scale=0.21,
+        psf_fwhm_pixels=2.74,
+        zeropoint_declared=True,
+    )["flux"]
+
+    assert declared.source == "declaration"
+    assert "declared zeropoint 25" in declared.detail
+    assert declared.prior == magnitude_flux_prior(25.0)
+
+    proposals = propose_model_priors(
+        "bulge_disk",
+        zeropoint=None,
+        pixel_scale=0.21,
+        psf_fwhm_pixels=2.74,
+        sky_scale=2.598028,
+        psf_noise_equivalent_area=36.14,
+    )
+
+    for name in ("flux_bulge", "flux_disk"):
+        proposal = proposals[name]
+
+        assert proposal.source == "fixed_inputs"
+        assert proposal.prior == point_source_flux_prior(2.598028, 36.14)
+        assert proposal.detail.startswith("no usable zeropoint: from 15.62")
+        assert "signal-to-noise 1" in proposal.detail
+        assert "36.14 px^2" in proposal.detail
+        assert "22 magnitudes brighter, 9.855e+09" in proposal.detail
+
+
 def test_missing_inputs_are_reported_instead_of_defaulted() -> None:
-    """Without a zeropoint the user must declare the flux prior."""
-    with pytest.raises(ValueError, match="no usable zeropoint"):
+    """Without a zeropoint or the fixed inputs, a flux prior is not invented."""
+    with pytest.raises(ValueError, match="No usable zeropoint.*sky scale"):
         propose_model_priors(
             "single_sersic",
             zeropoint=None,
             pixel_scale=0.21,
             psf_fwhm_pixels=2.74,
+            sky_scale=2.6,
         )
 
     without_scale = propose_model_priors(

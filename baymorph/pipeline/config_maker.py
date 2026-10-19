@@ -16,6 +16,7 @@ import yaml
 from astropy.stats import sigma_clipped_stats
 
 from baymorph.core.effective_gain import SKY_LEVEL_GUARD
+from baymorph.core.header_metadata import validate_declarations
 from baymorph.core.observation import Observation, resolve_seeing_fwhm_pixels
 from baymorph.pipeline.opening import open_observation
 from baymorph.pipeline.prior_config import parse_prior_config
@@ -374,6 +375,7 @@ def make_config_from_fits(
     *,
     target_position: TargetPosition | None = None,
     hdu: int | str | None = None,
+    calibration: Mapping[str, Any] | None = None,
     output_path: str | Path | None = None,
     object_name: str | None = None,
     model_name: str = "single_sersic",
@@ -405,6 +407,14 @@ def make_config_from_fits(
         ``data.hdu``. By default BayMorph selects it as
         :meth:`baymorph.core.image.ImageData.from_fits` describes, and the
         configuration does not record it.
+    calibration : mapping, optional
+        Calibration quantities declared where the header does not give them,
+        or gives them wrongly, written to ``data.calibration`` (AD-053): any
+        of ``image_unit``, ``zeropoint``, ``photometric_system``,
+        ``exposure_time``, ``gain`` and ``saturation``. The image is opened
+        with them, so the metadata the configuration reads, such as the
+        FWHM of a Gaussian PSF, follow the declarations. The configuration
+        records the block only when it declares something.
     output_path : str or pathlib.Path, optional
         YAML path to write. If omitted, no file is written.
     object_name : str, optional
@@ -466,7 +476,8 @@ def make_config_from_fits(
     if not fits_path.exists():
         raise FileNotFoundError(f"FITS file not found: {fits_path}")
 
-    observation = open_observation(fits_path, hdu=hdu)
+    declarations = validate_declarations(calibration)
+    observation = open_observation(fits_path, hdu=hdu, declarations=declarations)
 
     resolved_name = fits_path.stem if object_name is None else str(object_name).strip()
 
@@ -546,6 +557,7 @@ def make_config_from_fits(
         "data": {
             "image_path": str(fits_path),
             **({} if hdu is None else {"hdu": hdu}),
+            **({"calibration": declarations} if declarations else {}),
             "pixel_scale": pixel_scale,
             "target_position": normalized_target,
             "cutout": cutout,

@@ -54,7 +54,11 @@ A declared unit also reaches the quantities that depend on it, so declaring
 `electron/s` lets the HST convention derive the zeropoint from `PHOTFLAM` and
 `PHOTPLAM` when they are valid. The quantities that may be declared are
 listed in the [configuration reference](../reference/CONFIGURATION.md).
-A joint fit does not accept `data.calibration` yet.
+`baymorph config` writes the block from its options `--image-unit`,
+`--zeropoint`, `--photometric-system`, `--exposure-time`, `--gain` and
+`--saturation`, and the observation advisor carries the declarations it is
+given into the configuration it proposes. A joint fit does not accept
+`data.calibration` yet.
 
 BayMorph fits pixel values that are linear in flux. It refuses an image
 whose header declares another encoding, such as a Pan-STARRS stack, whose

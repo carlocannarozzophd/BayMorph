@@ -19,9 +19,30 @@ and the project follows Semantic Versioning in spirit.
   and a declared unit reaches the quantities that depend on it, such as the
   zeropoint of an HST image. Declarations change no prepared product. A
   joint configuration does not accept them yet.
+* `baymorph config` declares them with the options `--image-unit`,
+  `--zeropoint`, `--photometric-system`, `--exposure-time`, `--gain` and
+  `--saturation`, with or without `--advise`, and `make_config_from_fits`
+  with its argument `calibration`.
+* `ObservationAdvisor(..., calibration=...)` and
+  `ObservationAdvisor.from_project(..., calibration=...)` take the same
+  declarations. The header report, the inspection and the proposal read the
+  header with them, and the proposed configuration and its report carry them,
+  each with its source.
+* Without a usable zeropoint, the advisor proposes every flux prior instead
+  of stopping: log-uniform in image units, from the flux of a point source at
+  signal-to-noise 1 on the prepared sky, the sky scale times the square root
+  of the noise-equivalent area of the PSF, to 22 magnitudes above it. The
+  noise-equivalent area of the PSF is a new fixed input
+  (`FixedInputs.psf_noise_equivalent_area`).
 
 ### Changed
 
+* Every flux prior that the advisor proposes states its rule and its numbers
+  in the summary and in the report: the zeropoint and the bounds in image
+  units, or, without a zeropoint, the sky scale, the noise-equivalent area of
+  the PSF and the bounds. A prior from a declared zeropoint, and a PSF
+  ceiling from a declared saturation level, have the source `declaration`.
+  The report of a proposal has `schema_version` 2.
 * The metadata of an observation (`ObservationMetadata`) hold only values
   that the header reading establishes or that are declared. A value whose
   unit or meaning the header leaves open, such as a saturation level in ADU

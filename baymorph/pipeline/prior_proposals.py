@@ -6,7 +6,13 @@ observation model, never from the intensities of the image being fitted.
 This module holds its rules, as functions of those inputs alone:
 
 - a flux takes a range of magnitudes, 8 to 30 by default, converted through
-  the zeropoint of the header into a log-uniform prior in image units;
+  the zeropoint, read from the header or declared in ``data.calibration``,
+  into a log-uniform prior in image units;
+- without a usable zeropoint, a flux is log-uniform in image units from the
+  flux of a point source at signal-to-noise 1, the prepared sky scale times
+  the square root of the noise-equivalent area of the PSF, to as many
+  magnitudes above it as the range of magnitudes spans, 22 by default; the
+  bounds come from the fixed inputs, never from the flux of the galaxy;
 - a length of a model with one extended component takes an angular range,
   0.1 to 120 arcsec by default, converted through the pixel scale into a
   log-uniform prior in pixels and intersected with the validated rendering
@@ -33,6 +39,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
+
 from baymorph.core.effective_gain import SKY_LEVEL_GUARD
 from baymorph.core.header_metadata import IMAGE_UNIT, HeaderReading
 from baymorph.models.labels import PARAMETER_KINDS, parameter_names
@@ -43,6 +51,10 @@ from baymorph.pipeline.prior_config import prior_config_for_parameter
 
 MAGNITUDE_RANGE = (8.0, 30.0)
 """Default range of magnitudes of a flux, brightest first."""
+
+POINT_SOURCE_SNR = 1.0
+"""Signal-to-noise ratio of the point source whose flux is the lower bound of
+a flux prior proposed without a zeropoint."""
 
 ANGULAR_RANGE_ARCSEC = (0.1, 120.0)
 """Default angular range of a length, in arcseconds."""
@@ -84,12 +96,14 @@ rendering of a Sérsic profile."""
 
 PRIOR_SOURCES = (
     "header",
+    "declaration",
     "fixed_inputs",
     "reference",
     "calibration",
     "user",
 )
-"""Sources of a proposed prior: the header together with a physical range,
+"""Sources of a proposed prior: the header together with a physical range, a
+quantity declared in ``data.calibration`` together with a physical range,
 the fixed inputs of the observation model, the reference priors of BayMorph,
 the calibration of detectability and saturation, or the user."""
 
@@ -257,6 +271,91 @@ def magnitude_flux_prior(
         "type": "log_uniform",
         "lower": 10.0 ** (0.4 * (point - faint)),
         "upper": 10.0 ** (0.4 * (point - bright)),
+    }
+
+
+def noise_equivalent_area(kernel: Any) -> float:
+    """Return the noise-equivalent area of a PSF, in square pixels.
+
+    The area is ``1 / sum(p**2)``, with ``p`` the kernel normalized to unit
+    sum. A point source of flux ``F`` measured with the weights of the PSF on
+    a sky of scale ``sigma`` per pixel has the signal-to-noise ratio
+    ``F / (sigma * sqrt(area))``.
+
+    Parameters
+    ----------
+    kernel : array_like
+        Two-dimensional PSF kernel, finite and non-negative, with a positive
+        sum; it need not be normalized.
+
+    Returns
+    -------
+    float
+        The noise-equivalent area, in square pixels.
+    """
+    array = np.asarray(kernel, dtype=float)
+
+    if array.ndim != 2 or array.size == 0:
+        raise ValueError("The PSF kernel must be a non-empty two-dimensional array.")
+
+    if not np.all(np.isfinite(array)) or np.any(array < 0.0):
+        raise ValueError("The PSF kernel must be finite and non-negative.")
+
+    total = float(array.sum())
+
+    if total <= 0.0:
+        raise ValueError("The PSF kernel must have a positive sum.")
+
+    return float(1.0 / np.sum((array / total) ** 2))
+
+
+def point_source_flux_prior(
+    sky_scale: float,
+    psf_noise_equivalent_area: float,
+    *,
+    magnitude_span: float = MAGNITUDE_RANGE[1] - MAGNITUDE_RANGE[0],
+    snr: float = POINT_SOURCE_SNR,
+) -> dict[str, Any]:
+    """Return the log-uniform flux prior proposed without a zeropoint.
+
+    The lower bound is the flux of a point source at the signal-to-noise
+    ratio ``snr`` on the prepared sky, ``snr * sky_scale *
+    sqrt(psf_noise_equivalent_area)``; the upper bound is ``magnitude_span``
+    magnitudes brighter, the lower bound times ``10**(0.4 * magnitude_span)``.
+    Both come from fixed inputs of the observation model, never from the flux
+    of the target.
+
+    Parameters
+    ----------
+    sky_scale : float
+        Prepared sky scale, in image units.
+    psf_noise_equivalent_area : float
+        Noise-equivalent area of the PSF, in square pixels; see
+        :func:`noise_equivalent_area`.
+    magnitude_span : float, default=22
+        Width of the prior in magnitudes, that of ``MAGNITUDE_RANGE``.
+    snr : float, default=1
+        Signal-to-noise ratio of the faintest point source.
+
+    Returns
+    -------
+    dict
+        ``{"type": "log_uniform", "lower": ..., "upper": ...}`` in image
+        units.
+    """
+    lower = (
+        _positive_finite(snr, "snr")
+        * _positive_finite(sky_scale, "sky_scale")
+        * math.sqrt(
+            _positive_finite(psf_noise_equivalent_area, "psf_noise_equivalent_area")
+        )
+    )
+    span = _positive_finite(magnitude_span, "magnitude_span")
+
+    return {
+        "type": "log_uniform",
+        "lower": lower,
+        "upper": lower * 10.0 ** (0.4 * span),
     }
 
 
@@ -498,6 +597,9 @@ def propose_model_priors(
     angular_range: Sequence[float] = ANGULAR_RANGE_ARCSEC,
     centre_multiple: float = CENTRE_FWHM_MULTIPLE,
     photometric_system: str | None = None,
+    zeropoint_declared: bool = False,
+    sky_scale: float | None = None,
+    psf_noise_equivalent_area: float | None = None,
 ) -> dict[str, PriorProposal]:
     """Propose a prior for every parameter of a model.
 
@@ -506,8 +608,10 @@ def propose_model_priors(
     model_name : str
         Name of the built-in model.
     zeropoint : float or None
-        Usable zeropoint of the header, required for every flux not in
-        ``decided``.
+        Usable zeropoint, from the header or declared. Without it, every flux
+        not in ``decided`` takes the prior of
+        :func:`point_source_flux_prior`, which needs ``sky_scale`` and
+        ``psf_noise_equivalent_area``.
     pixel_scale : float or None
         Pixel scale in arcseconds per pixel. Without it a length keeps its
         reference prior in pixels, and the proposal says so.
@@ -521,6 +625,13 @@ def propose_model_priors(
         The physical ranges of the rules; see the module description.
     photometric_system : str, optional
         Photometric system of the zeropoint, recorded in the provenance.
+    zeropoint_declared : bool, default=False
+        Whether the zeropoint is declared in ``data.calibration`` rather than
+        read from the header; it sets the source of the flux priors.
+    sky_scale : float, optional
+        Prepared sky scale, in image units, a fixed input.
+    psf_noise_equivalent_area : float, optional
+        Noise-equivalent area of the PSF, in square pixels, a fixed input.
 
     Returns
     -------
@@ -558,25 +669,14 @@ def propose_model_priors(
             continue
 
         if kind == "flux":
-            if zeropoint is None:
-                raise ValueError(
-                    f"The header gives no usable zeropoint, so the prior of "
-                    f"{name!r} cannot be proposed from magnitudes. Declare it "
-                    "in image units, or use the calibration of detectability "
-                    "and saturation."
-                )
-
-            bright, faint = _ordered_range(magnitudes, "magnitudes")
-            system = f" {photometric_system}" if photometric_system else ""
-            proposals[name] = PriorProposal(
-                parameter=name,
-                kind=kind,
-                prior=magnitude_flux_prior(zeropoint, magnitudes=magnitudes),
-                source="header",
-                detail=(
-                    f"magnitudes {bright:g} to {faint:g}{system} through the "
-                    f"zeropoint {float(zeropoint):.6g}, log-uniform in flux"
-                ),
+            proposals[name] = _flux_proposal(
+                name,
+                zeropoint=zeropoint,
+                magnitudes=magnitudes,
+                photometric_system=photometric_system,
+                zeropoint_declared=zeropoint_declared,
+                sky_scale=sky_scale,
+                psf_noise_equivalent_area=psf_noise_equivalent_area,
             )
             continue
 
@@ -688,6 +788,67 @@ def propose_model_priors(
     return proposals
 
 
+def _flux_proposal(
+    name: str,
+    *,
+    zeropoint: float | None,
+    magnitudes: Sequence[float],
+    photometric_system: str | None,
+    zeropoint_declared: bool,
+    sky_scale: float | None,
+    psf_noise_equivalent_area: float | None,
+) -> PriorProposal:
+    """Propose the prior of one flux, with the rule and its numbers."""
+    bright, faint = _ordered_range(magnitudes, "magnitudes")
+
+    if zeropoint is not None:
+        point = float(zeropoint)
+        prior = magnitude_flux_prior(point, magnitudes=magnitudes)
+        system = f" {photometric_system}" if photometric_system else ""
+        origin = "declared zeropoint" if zeropoint_declared else "zeropoint"
+
+        return PriorProposal(
+            parameter=name,
+            kind="flux",
+            prior=prior,
+            source="declaration" if zeropoint_declared else "header",
+            detail=(
+                f"magnitudes {bright:g} to {faint:g}{system} through the "
+                f"{origin} {point:.6g}: {prior['lower']:.4g} to "
+                f"{prior['upper']:.4g} in image units, log-uniform"
+            ),
+        )
+
+    if sky_scale is None or psf_noise_equivalent_area is None:
+        raise ValueError(
+            f"No usable zeropoint is read or declared, and the prior of "
+            f"{name!r} from a point source at signal-to-noise "
+            f"{POINT_SOURCE_SNR:g} needs the prepared sky scale and the "
+            "noise-equivalent area of the PSF. Declare the zeropoint in "
+            "data.calibration, or the prior in image units."
+        )
+
+    span = faint - bright
+    prior = point_source_flux_prior(
+        sky_scale, psf_noise_equivalent_area, magnitude_span=span
+    )
+
+    return PriorProposal(
+        parameter=name,
+        kind="flux",
+        prior=prior,
+        source="fixed_inputs",
+        detail=(
+            f"no usable zeropoint: from {prior['lower']:.4g}, the flux of a "
+            f"point source at signal-to-noise {POINT_SOURCE_SNR:g} (sky scale "
+            f"{float(sky_scale):.4g} times the square root of the PSF "
+            f"noise-equivalent area {float(psf_noise_equivalent_area):.4g} "
+            f"px^2), to {span:g} magnitudes brighter, {prior['upper']:.4g}, "
+            "in image units, log-uniform"
+        ),
+    )
+
+
 def _reference_prior(
     model_name: str,
     name: str,
@@ -729,11 +890,22 @@ def _normalized_unit(value: Any) -> str | None:
     return str(value).strip().lower().replace(" ", "")
 
 
+def _origin(quantity: Any) -> str:
+    """Return where a quantity of a header reading comes from."""
+    if quantity.status == "declared":
+        return "declared in data.calibration"
+
+    return f"{quantity.keyword}, {quantity.convention}"
+
+
 def _gain_keyword_in_image_units(
     reading: HeaderReading,
 ) -> tuple[float | None, str]:
     """Return the gain keyword in the units of the image, or a reason."""
     quantity = reading["gain"]
+    label = (
+        "data.calibration.gain" if quantity.status == "declared" else quantity.keyword
+    )
 
     if not quantity.usable:
         return None, f"the gain keyword is {quantity.status}"
@@ -751,7 +923,7 @@ def _gain_keyword_in_image_units(
     unit = _normalized_unit(reading.value("image_unit"))
 
     if unit in _ADU_UNITS:
-        return gain, f"{quantity.keyword} = {gain:.6g} e-/ADU, image in ADU"
+        return gain, f"{label} = {gain:.6g} e-/ADU, image in ADU"
 
     if unit in _ADU_RATE_UNITS:
         exposure = reading["exposure_time"]
@@ -768,7 +940,7 @@ def _gain_keyword_in_image_units(
             return None, "the exposure time is not a positive number"
 
         return gain * seconds, (
-            f"{quantity.keyword} = {gain:.6g} e-/ADU times the exposure time "
+            f"{label} = {gain:.6g} e-/ADU times the exposure time "
             f"{seconds:.6g} s, image in ADU/s"
         )
 
@@ -1025,6 +1197,5 @@ def propose_psf_max_peak(
     share = _positive_finite(fraction, "fraction")
 
     return share * level, (
-        f"{share:g} times the saturation level {level:.6g} "
-        f"({quantity.keyword}, {quantity.convention})"
+        f"{share:g} times the saturation level {level:.6g} ({_origin(quantity)})"
     )

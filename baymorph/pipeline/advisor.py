@@ -16,7 +16,12 @@ from baymorph.analysis.prior_predictive import (
     FluxPriorCalibration,
     calibrate_single_sersic_flux_prior,
 )
-from baymorph.core.header_metadata import HeaderReading
+from baymorph.core.header_metadata import (
+    DECLARABLE_QUANTITIES,
+    IMAGE_UNIT,
+    HeaderReading,
+    validate_declarations,
+)
 from baymorph.core.image import read_image_header
 from baymorph.core.observation import Observation
 from baymorph.models.labels import PARAMETER_KINDS
@@ -40,9 +45,11 @@ from baymorph.pipeline.prior_proposals import (
     GAIN_RATIO_TOLERANCE,
     MAGNITUDE_RANGE,
     PHYSICAL_LENGTH_MODELS,
+    POINT_SOURCE_SNR,
     PSF_PEAK_SATURATION_FRACTION,
     PriorProposal,
     background_priors,
+    noise_equivalent_area,
     propose_effective_gain,
     propose_model_priors,
     propose_psf_max_peak,
@@ -56,6 +63,7 @@ from baymorph.observation.background import background_parameter_names
 from baymorph.pipeline.real_fit import _load_psf_from_config
 from baymorph.pipeline.preparation_steps import estimate_target_geometry_from_image
 from baymorph.pipeline.segmentation import select_segment_near_position
+from baymorph.simulation.psf import GaussianPSF
 
 InputFunction = Callable[[str], str]
 TargetPosition = str | Mapping[str, float] | Sequence[float] | None
@@ -117,7 +125,8 @@ class FixedInputs:
     The prepared sky scale, the cutout and the PSF enter the observation
     model as fixed inputs (AD-046, AD-047). The advisor measures them by
     preparing the image and building its PSF, and derives from them the
-    priors of the centre and of the residual background (AD-049).
+    priors of the centre and of the residual background, and of the fluxes
+    when no zeropoint is usable (AD-049).
 
     Parameters
     ----------
@@ -131,6 +140,9 @@ class FixedInputs:
         FWHM of the PSF, in pixels.
     psf_fwhm_source : str
         How the FWHM was obtained.
+    psf_noise_equivalent_area : float
+        Noise-equivalent area ``1 / sum(p**2)`` of the PSF kernel that the
+        fit convolves with, normalized to unit sum, in square pixels.
     stage_identity : str
         Fingerprint of the configuration sections that the preparation and
         the PSF depend on; a proposal accepts only fixed inputs measured for
@@ -144,6 +156,7 @@ class FixedInputs:
     cutout_shape: tuple[int, int]
     psf_fwhm_pixels: float
     psf_fwhm_source: str
+    psf_noise_equivalent_area: float
     stage_identity: str
     run_directory: str
 
@@ -155,6 +168,7 @@ class FixedInputs:
             "cutout_shape": [int(value) for value in self.cutout_shape],
             "psf_fwhm_pixels": float(self.psf_fwhm_pixels),
             "psf_fwhm_source": self.psf_fwhm_source,
+            "psf_noise_equivalent_area": float(self.psf_noise_equivalent_area),
             "stage_identity": self.stage_identity,
             "run_directory": self.run_directory,
         }
@@ -274,7 +288,10 @@ def _guidance_rule(name: str, kind: str, *, one_component: bool) -> tuple[str, s
         return "log_uniform", (
             "A flux is a positive scale. The advisor proposes magnitudes "
             f"{MAGNITUDE_RANGE[0]:g} to {MAGNITUDE_RANGE[1]:g} through the "
-            "zeropoint of the header, log-uniform in flux."
+            "zeropoint, read or declared, log-uniform in flux; without a "
+            "usable zeropoint, from the flux of a point source at "
+            f"signal-to-noise {POINT_SOURCE_SNR:g} on the prepared sky to "
+            f"{MAGNITUDE_RANGE[1] - MAGNITUDE_RANGE[0]:g} magnitudes above it."
         )
 
     if kind == "length":
@@ -333,8 +350,8 @@ def _settle_psf_max_peak(
     The ceiling selects the stars of an empirical PSF, so the measurement of
     the fixed inputs and the proposal settle it in the same way before the
     stages run: the value the user declares, else half the saturation level
-    when the header gives it in the units of the image, else the BayMorph
-    default.
+    when the header gives it in the units of the image or it is declared in
+    ``data.calibration``, else the BayMorph default.
 
     Returns
     -------
@@ -358,8 +375,11 @@ def _settle_psf_max_peak(
 
     if peak is not None:
         config_options["psf_max_peak"] = peak
+        source = (
+            "declaration" if reading["saturation"].status == "declared" else "header"
+        )
 
-        return {"value": peak, "source": "header", "detail": peak_detail}, None
+        return {"value": peak, "source": source, "detail": peak_detail}, None
 
     return {"value": None, "source": "default", "detail": peak_detail}, (
         "No empirical-PSF candidate peak ceiling was declared, and the "
@@ -676,6 +696,21 @@ class ObservationAdvisor:
 
     Configuration generation always delegates to
     :func:`make_config_from_fits`.
+
+    Parameters
+    ----------
+    fits_path : str or pathlib.Path
+        Two-dimensional FITS image.
+    target_position : mapping, sequence, {"center"}, or None
+        Optional initial target-identification seed.
+    hdu : int or str, optional
+        Index or ``EXTNAME`` of the HDU that holds the image, written to
+        ``data.hdu`` of the proposed configuration.
+    calibration : mapping, optional
+        Calibration quantities declared where the header does not give them,
+        or gives them wrongly (AD-053). Every reading of the advisor uses
+        them, and the proposed configuration carries them in
+        ``data.calibration``.
     """
 
     def __init__(
@@ -684,6 +719,7 @@ class ObservationAdvisor:
         *,
         target_position: TargetPosition = None,
         hdu: int | str | None = None,
+        calibration: Mapping[str, Any] | None = None,
     ) -> None:
         self.fits_path = Path(fits_path)
 
@@ -692,6 +728,7 @@ class ObservationAdvisor:
 
         self.target_position = target_position
         self.hdu = hdu
+        self.calibration = validate_declarations(calibration)
         self._inspection: ObservationInspection | None = None
 
     @classmethod
@@ -702,6 +739,7 @@ class ObservationAdvisor:
         start: str | Path | None = None,
         target_position: TargetPosition = None,
         hdu: int | str | None = None,
+        calibration: Mapping[str, Any] | None = None,
     ) -> ObservationAdvisor:
         """Create an Advisor using paths relative to a BayMorph project.
 
@@ -728,6 +766,9 @@ class ObservationAdvisor:
             Index or ``EXTNAME`` of the HDU that holds the image, written to
             ``data.hdu`` of the proposed configuration. By default BayMorph
             selects it as :meth:`ImageData.from_fits` describes.
+        calibration : mapping, optional
+            Calibration quantities declared in ``data.calibration``; see
+            :class:`ObservationAdvisor`.
 
         Returns
         -------
@@ -775,7 +816,12 @@ class ObservationAdvisor:
                     "or any parent directory."
                 )
 
-        advisor = cls(resolved_fits_path, target_position=target_position, hdu=hdu)
+        advisor = cls(
+            resolved_fits_path,
+            target_position=target_position,
+            hdu=hdu,
+            calibration=calibration,
+        )
         advisor.project_root = project_root
 
         return advisor
@@ -794,7 +840,7 @@ class ObservationAdvisor:
         tuple of float
             Validated ``(x, y)`` target position.
         """
-        observation = open_observation(self.fits_path, hdu=self.hdu)
+        observation = self._open()
         data = np.asarray(observation.image.data, dtype=float)
 
         if data.ndim != 2:
@@ -865,7 +911,7 @@ class ObservationAdvisor:
         """
         from baymorph.plotting.target_selector import TargetSelector
 
-        observation = open_observation(self.fits_path, hdu=self.hdu)
+        observation = self._open()
         data = np.asarray(observation.image.data, dtype=float)
 
         if data.ndim != 2:
@@ -904,8 +950,10 @@ class ObservationAdvisor:
         keyword and convention it was read from (AD-049). A quantity whose
         status is ``ambiguous`` or ``conflicting`` shows its raw value and
         is never used without a declaration of the user; a quantity that
-        the header does not hold is left out. Only the header is read, never
-        the pixels, so the report of a mosaic of several gigabytes costs the
+        the header does not hold is left out. A quantity declared through
+        ``calibration`` shows the status ``declared`` and the source
+        ``data.calibration`` (AD-053). Only the header is read, never the
+        pixels, so the report of a mosaic of several gigabytes costs the
         same as the report of a small stamp.
 
         Returns
@@ -920,14 +968,14 @@ class ObservationAdvisor:
             f"FITS: {self.fits_path}",
             f"HDU: {hdu_text}",
             "",
-            read_image_header(self.fits_path, hdu=self.hdu).report(),
+            self._header_reading().report(),
         ]
 
         return "\n".join(lines)
 
     def inspect(self) -> ObservationInspection:
         """Inspect metadata, image scales, and optional target morphology."""
-        observation = open_observation(self.fits_path, hdu=self.hdu)
+        observation = self._open()
 
         data = np.asarray(observation.image.data, dtype=float)
 
@@ -1182,13 +1230,25 @@ class ObservationAdvisor:
     def make_config(
         self, *, model_priors: Mapping[str, Any] | None = None, **config_options: Any
     ) -> dict[str, Any]:
-        """Create a config using the canonical BayMorph config maker."""
+        """Create a config using the canonical BayMorph config maker.
+
+        The configuration carries the calibration declared to the advisor in
+        ``data.calibration``.
+        """
         target_position = config_options.pop("target_position", self.target_position)
 
         if target_position is None:
             raise ValueError("target_position is required to create a configuration.")
 
+        if "calibration" in config_options:
+            raise TypeError(
+                "Declare the calibration when creating the advisor, "
+                "ObservationAdvisor(..., calibration=...), so that every "
+                "reading of the advisor uses it."
+            )
+
         config_options.setdefault("hdu", self.hdu)
+        config_options["calibration"] = self.calibration
 
         return make_config_from_fits(
             self.fits_path,
@@ -1324,7 +1384,8 @@ class ObservationAdvisor:
             raise ValueError(
                 "Flux upper-bound calibration requires the saturation level in "
                 "the units of the image, which the header does not establish; "
-                "declare it in data.calibration.saturation."
+                "declare it in data.calibration.saturation, through "
+                "ObservationAdvisor(..., calibration={'saturation': ...})."
             )
 
         try:
@@ -1452,8 +1513,8 @@ class ObservationAdvisor:
         Returns
         -------
         FixedInputs
-            The sky scale, the measured sky level, the cutout shape and the
-            FWHM of the PSF.
+            The sky scale, the measured sky level, the cutout shape, and the
+            FWHM and noise-equivalent area of the PSF.
         """
         if self.target_position is None:
             raise ValueError(
@@ -1478,12 +1539,15 @@ class ObservationAdvisor:
         if str(psf_config["type"]).strip().lower() == "gaussian":
             psf_fwhm = float(psf_config["gaussian"]["fwhm"])
             psf_fwhm_source = "FWHM of the declared Gaussian PSF"
+            # The kernel of the default size, the one the fit convolves with.
+            psf_area = noise_equivalent_area(GaussianPSF(fwhm=psf_fwhm).kernel())
         else:
             if psf is None:
                 raise ValueError("The PSF stage returned no empirical PSF.")
 
             psf_fwhm = float(estimate_psf_core_fwhm(np.asarray(psf, dtype=float)))
             psf_fwhm_source = "core FWHM of the empirical PSF"
+            psf_area = noise_equivalent_area(psf)
 
         if not (np.isfinite(sky_scale) and sky_scale > 0.0):
             raise ValueError("The prepared sky scale must be positive and finite.")
@@ -1499,6 +1563,7 @@ class ObservationAdvisor:
             cutout_shape=(int(rows), int(columns)),
             psf_fwhm_pixels=psf_fwhm,
             psf_fwhm_source=psf_fwhm_source,
+            psf_noise_equivalent_area=psf_area,
             stage_identity=_stage_identity(resolved),
             run_directory=str(
                 Path(resolved["outputs"]["root"]) / str(resolved["object"]["name"])
@@ -1525,10 +1590,16 @@ class ObservationAdvisor:
         from physics and from the fixed inputs of the observation model,
         never from the intensities of the image being fitted.
 
-        - Every flux takes the magnitudes 8 to 30 through the zeropoint of
-          the header, as a log-uniform prior in image units, unless a flux
-          prior is supplied: ``flux_calibration``, ``flux_prior`` or an entry
-          of ``model_priors``.
+        - Every flux takes the magnitudes 8 to 30 through the zeropoint,
+          read from the header or declared through ``calibration``, as a
+          log-uniform prior in image units, unless a flux prior is supplied:
+          ``flux_calibration``, ``flux_prior`` or an entry of
+          ``model_priors``. Without a usable zeropoint, every flux is
+          log-uniform in image units from the flux of a point source at
+          signal-to-noise 1 on the prepared sky, the sky scale times the
+          square root of the noise-equivalent area of the PSF, to 22
+          magnitudes above it. Each flux prior records its rule and its
+          numbers.
         - Every length of a model with one extended component takes 0.1 to
           120 arcsec through the pixel scale, as a log-uniform prior in
           pixels within the validated rendering domain; the lengths of the
@@ -1620,8 +1691,8 @@ class ObservationAdvisor:
         if supplied_sources > 1:
             raise ValueError(
                 "Supply exactly one flux-prior source: flux_calibration, "
-                "flux_prior, or model_priors['flux'], or none to propose the "
-                "flux prior from the zeropoint of the header."
+                "flux_prior, or model_priors['flux'], or none to let the "
+                "advisor propose the flux prior."
             )
 
         if (
@@ -1691,25 +1762,9 @@ class ObservationAdvisor:
 
         reading = self._header_reading()
         zeropoint = _finite_or_none(reading.value("zeropoint"))
+        zeropoint_declared = reading["zeropoint"].status == "declared"
         pixel_scale = _finite_or_none(reading.value("pixel_scale"))
         photometric_system = reading.value("photometric_system")
-        undecided_fluxes = _undecided_parameters(decided, "flux")
-
-        if undecided_fluxes and zeropoint is None:
-            raise ValueError(
-                "The header gives no usable zeropoint, so the priors of "
-                f"{undecided_fluxes} cannot be proposed from magnitudes. "
-                + (
-                    "Declare each flux in image units through model_priors, "
-                    "keyed by model."
-                    if several
-                    else "Supply exactly one flux-prior source: "
-                    "flux_prior=... in image units or flux_calibration=... "
-                    "for a model with one total flux, or model_priors=... "
-                    "for each flux."
-                )
-            )
-
         undecided_lengths = _undecided_parameters(decided, "length")
 
         if pixel_scale is None and undecided_lengths:
@@ -1751,6 +1806,9 @@ class ObservationAdvisor:
                 photometric_system=(
                     None if photometric_system is None else str(photometric_system)
                 ),
+                zeropoint_declared=zeropoint_declared,
+                sky_scale=fixed_inputs.sky_scale,
+                psf_noise_equivalent_area=fixed_inputs.psf_noise_equivalent_area,
             )
             for name in chosen
         }
@@ -1945,15 +2003,24 @@ class ObservationAdvisor:
 
         provenance = {
             "schema": "baymorph.advisor_proposal",
-            "schema_version": 1,
+            "schema_version": 2,
             "decision": "AD-049",
             "baymorph_version": _baymorph_version(),
             "image_path": config["data"]["image_path"],
             "hdu": self.hdu,
+            "calibration": {
+                name: {
+                    "value": value,
+                    "unit": DECLARABLE_QUANTITIES[name],
+                    "source": "user",
+                }
+                for name, value in self.calibration.items()
+            },
             "target_position": deepcopy(config["data"]["target_position"]),
             "models": list(chosen),
             "rules": {
                 "magnitudes": list(MAGNITUDE_RANGE),
+                "point_source_snr": POINT_SOURCE_SNR,
                 "angular_range_arcsec": list(ANGULAR_RANGE_ARCSEC),
                 "physical_length_models": sorted(PHYSICAL_LENGTH_MODELS),
                 "centre_fwhm_multiple": CENTRE_FWHM_MULTIPLE,
@@ -2000,9 +2067,20 @@ class ObservationAdvisor:
             models=tuple(chosen),
         )
 
+    def _open(self) -> Observation:
+        """Open the image, with the metadata of the declared calibration."""
+        return open_observation(
+            self.fits_path, hdu=self.hdu, declarations=self.calibration
+        )
+
     def _header_reading(self) -> HeaderReading:
-        """Return the reading of the header of the image HDU."""
-        return open_observation(self.fits_path, hdu=self.hdu).metadata.header_reading
+        """Return the reading of the header of the image HDU.
+
+        Only the header is read, with the declared calibration.
+        """
+        return read_image_header(
+            self.fits_path, hdu=self.hdu, declarations=self.calibration
+        )
 
     def _resolve_target(
         self, observation: Observation
@@ -2148,6 +2226,20 @@ def _format_prior(prior: Mapping[str, Any]) -> str:
     return text
 
 
+def _format_declaration(name: str, entry: Mapping[str, Any]) -> str:
+    """Format one declared calibration quantity for a human reader."""
+    value = entry["value"]
+    text = f"{value:.6g}" if isinstance(value, float) else str(value)
+    unit = entry.get("unit")
+
+    if unit == IMAGE_UNIT:
+        text += " in the units of the image"
+    elif unit:
+        text += f" {unit}"
+
+    return f"{name} {text} [{entry['source']}]"
+
+
 def _provenance_summary(provenance: Mapping[str, Any]) -> list[str]:
     """Return the summary lines of the provenance of a proposal."""
     lines = ["", "PRIORS AND THEIR SOURCES"]
@@ -2179,6 +2271,16 @@ def _provenance_summary(provenance: Mapping[str, Any]) -> list[str]:
         )
 
     lines.extend(["", "OBSERVATION"])
+
+    calibration = provenance.get("calibration") or {}
+
+    if calibration:
+        lines.append(
+            "Declared calibration (data.calibration): "
+            + ", ".join(
+                _format_declaration(name, entry) for name, entry in calibration.items()
+            )
+        )
 
     gain = provenance.get("effective_gain") or {}
     declaration = gain.get("declaration")
@@ -2233,6 +2335,10 @@ def _provenance_summary(provenance: Mapping[str, Any]) -> list[str]:
                 (
                     f"PSF FWHM: {fixed['psf_fwhm_pixels']:.4g} pixels "
                     f"({fixed['psf_fwhm_source']})"
+                ),
+                (
+                    "PSF noise-equivalent area: "
+                    f"{fixed['psf_noise_equivalent_area']:.4g} px^2"
                 ),
                 f"Products: {fixed['run_directory']}",
             ]
