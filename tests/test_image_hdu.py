@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from astropy.io import fits
 
-from baymorph.core.image import ImageData, select_image_hdu
+from baymorph.core.image import ImageData, read_image_header, select_image_hdu
 from baymorph.core.observation import Observation
 from baymorph.pipeline.config import resolve_config
 from baymorph.pipeline.config_maker import make_config_from_fits
@@ -42,6 +42,46 @@ def _write_extensions(path, extensions) -> None:
     primary.header["TELESCOP"] = "Example telescope"
     primary.header["EXPTIME"] = 600.0
     fits.HDUList([primary, *extensions]).writeto(path)
+
+
+@pytest.mark.filterwarnings("ignore:File may have been truncated")
+def test_the_header_is_read_without_the_pixels(tmp_path) -> None:
+    """The reading of the header needs no pixel, even in a file without them."""
+    path = tmp_path / "header_only.fits"
+    header = _wcs_header()
+    header["BUNIT"] = "ADU/s"
+    fits.PrimaryHDU(data=_image(shape=(64, 64)), header=header).writeto(path)
+    header_size = len(fits.getheader(path).tostring())
+    path.write_bytes(path.read_bytes()[:header_size])
+
+    reading = read_image_header(path)
+
+    assert path.stat().st_size < 64 * 64 * 4
+    assert reading.value("image_unit") == "ADU/s"
+    assert reading.value("pixel_scale") == pytest.approx(0.25)
+
+
+def test_the_header_reading_equals_the_reading_of_the_opened_image(
+    tmp_path,
+) -> None:
+    """Same HDU, same headers and the same inherited primary keywords."""
+    path = tmp_path / "extensions.fits"
+    _write_extensions(
+        path,
+        [
+            fits.ImageHDU(_image(), header=_wcs_header(), name="SCI"),
+            fits.ImageHDU(_image(1.0), name="WHT"),
+        ],
+    )
+    opened = Observation.from_fits(path).metadata.header_reading
+
+    reading = read_image_header(path)
+
+    assert reading.as_dict() == opened.as_dict()
+    assert reading["exposure_time"].source == "primary"
+    assert read_image_header(path, hdu="WHT").as_dict() == (
+        Observation.from_fits(path, hdu="WHT").metadata.header_reading.as_dict()
+    )
 
 
 def test_a_primary_image_loads_as_before(tmp_path) -> None:

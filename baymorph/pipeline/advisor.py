@@ -17,6 +17,7 @@ from baymorph.analysis.prior_predictive import (
     calibrate_single_sersic_flux_prior,
 )
 from baymorph.core.header_metadata import HeaderReading
+from baymorph.core.image import read_image_header
 from baymorph.core.observation import Observation
 from baymorph.models.labels import PARAMETER_KINDS
 from baymorph.pipeline.config import (
@@ -903,7 +904,9 @@ class ObservationAdvisor:
         keyword and convention it was read from (AD-049). A quantity whose
         status is ``ambiguous`` or ``conflicting`` shows its raw value and
         is never used without a declaration of the user; a quantity that
-        the header does not hold is left out.
+        the header does not hold is left out. Only the header is read, never
+        the pixels, so the report of a mosaic of several gigabytes costs the
+        same as the report of a small stamp.
 
         Returns
         -------
@@ -917,7 +920,7 @@ class ObservationAdvisor:
             f"FITS: {self.fits_path}",
             f"HDU: {hdu_text}",
             "",
-            self._header_reading().report(),
+            read_image_header(self.fits_path, hdu=self.hdu).report(),
         ]
 
         return "\n".join(lines)

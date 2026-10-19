@@ -19,6 +19,9 @@ and the project follows Semantic Versioning in spirit.
 * A FITS file of 16 MiB or more is read and hashed once per session and
   shared by every stage, instead of five times and eight times for one
   saved preparation. The shared image is read-only.
+* `ObservationAdvisor.header_report()` reads only the header of the image,
+  never its pixels, so the report of a mosaic of several gigabytes costs the
+  same as the report of a small stamp.
 * A configuration that still holds the retired `data.external_mask_path`
   is refused as soon as it is read, by every command, rather than only
   when the image is prepared. Declare the curated mask under

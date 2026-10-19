@@ -21,11 +21,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 
-from baymorph.core.header_metadata import (
-    HeaderReading,
-    read_header,
-    read_pixel_scales,
-)
+from baymorph.core.header_metadata import HeaderReading, read_header, read_pixel_scales
 from baymorph.core.image import ImageData
 
 

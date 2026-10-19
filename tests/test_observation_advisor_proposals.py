@@ -628,3 +628,17 @@ def test_header_report_tables_what_the_header_holds(tmp_path: Path) -> None:
     assert "PHOTZP" in report
     assert "BKGMED" in report
     assert "HDU: 0" in ObservationAdvisor(fits_path, hdu=0).header_report()
+
+
+def test_header_report_reads_no_pixels(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The report reads the header only, so a large mosaic is never loaded."""
+    fits_path = _write_coadd(tmp_path)
+
+    def refuse_pixels(*args, **kwargs):
+        raise AssertionError("the header report opened the pixels")
+
+    monkeypatch.setattr("baymorph.pipeline.advisor.open_observation", refuse_pixels)
+
+    assert "PHOTZP" in ObservationAdvisor(fits_path).header_report()

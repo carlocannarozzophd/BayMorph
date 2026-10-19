@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 from astropy.io import fits
@@ -84,30 +85,17 @@ class ImageData:
         filename = Path(filename)
 
         with fits.open(filename) as hdul:
-            index = select_image_hdu(hdul, hdu)
-            selected = hdul[index]
-            header = selected.header.copy()
-            name = None
-            primary_header = None
-
-            if index > 0:
-                name = str(selected.name).strip() or None
-                primary_header = hdul[0].header.copy()
-
-            reading = read_header(header, primary_header=primary_header)
-            ensure_linear_pixels(
-                reading, image=f"the image in HDU {index} of {filename}"
-            )
-            data = selected.data.astype(float)
+            selected = _read_image_header(hdul, hdu, filename=filename)
+            data = hdul[selected.index].data.astype(float)
 
         return cls(
             data=data,
-            header=header,
+            header=selected.header,
             path=str(filename),
-            hdu_index=index,
-            hdu_name=name,
-            primary_header=primary_header,
-            header_reading=reading,
+            hdu_index=selected.index,
+            hdu_name=selected.name,
+            primary_header=selected.primary_header,
+            header_reading=selected.reading,
         )
 
     def to_fits(self, filename: str | Path, overwrite: bool = True) -> None:
@@ -130,6 +118,77 @@ class ImageData:
     def shape(self) -> tuple[int, int]:
         """tuple of int : Shape of the image array as ``(ny, nx)``."""
         return self.data.shape
+
+
+def read_image_header(
+    filename: str | Path, hdu: int | str | None = None
+) -> HeaderReading:
+    """Read the header of the image of a FITS file without reading its pixels.
+
+    The HDU is chosen and its header read as :meth:`ImageData.from_fits` does,
+    so the reading equals the one of the opened image, but no pixel is read: a
+    mosaic of several gigabytes costs the same as a small stamp.
+
+    Parameters
+    ----------
+    filename : str or pathlib.Path
+        Path to the FITS file.
+    hdu : int or str, optional
+        Index or ``EXTNAME`` of the HDU that holds the image. See
+        :meth:`ImageData.from_fits` for the default.
+
+    Returns
+    -------
+    HeaderReading
+        Reading of the header of the image, with the primary header inherited
+        when the image is stored in an extension.
+
+    Raises
+    ------
+    ValueError
+        As :meth:`ImageData.from_fits`, when the HDU cannot be chosen or the
+        pixel values are not linear in flux.
+    """
+    filename = Path(filename)
+
+    with fits.open(filename) as hdul:
+        return _read_image_header(hdul, hdu, filename=filename).reading
+
+
+class _ImageHeader(NamedTuple):
+    """The HDU that holds the image, its headers and their reading."""
+
+    index: int
+    name: str | None
+    header: fits.Header
+    primary_header: fits.Header | None
+    reading: HeaderReading
+
+
+def _read_image_header(
+    hdul: fits.HDUList, hdu: int | str | None, *, filename: Path
+) -> _ImageHeader:
+    """Choose the image HDU and read its headers, refusing non-linear pixels."""
+    index = select_image_hdu(hdul, hdu)
+    selected = hdul[index]
+    header = selected.header.copy()
+    name = None
+    primary_header = None
+
+    if index > 0:
+        name = str(selected.name).strip() or None
+        primary_header = hdul[0].header.copy()
+
+    reading = read_header(header, primary_header=primary_header)
+    ensure_linear_pixels(reading, image=f"the image in HDU {index} of {filename}")
+
+    return _ImageHeader(
+        index=index,
+        name=name,
+        header=header,
+        primary_header=primary_header,
+        reading=reading,
+    )
 
 
 def select_image_hdu(hdul: fits.HDUList, hdu: int | str | None = None) -> int:
