@@ -1,16 +1,30 @@
 # Images of the Hubble Space Telescope calibrated by the STScI pipelines. The
 # SCI extensions carry the inverse sensitivity PHOTFLAM and the pivot
-# wavelength PHOTPLAM, and the primary header the file name and the telescope.
+# wavelength PHOTPLAM, and the primary header the file name, the telescope,
+# the detector and the start and end of the observation.
 name: hst
 title: Hubble Space Telescope images
 priority: 50
 references:
   - "STScI, ACS zeropoints: https://www.stsci.edu/hst/instrumentation/acs/data-analysis/zeropoints"
-  - "STScI, ACS Data Handbook, section 2.4, Headers and Keywords: FILTER1, 'Element selected from filter wheel 1', and FILTER2, 'Element selected from filter wheel 2': https://hst-docs.stsci.edu/acsdhb/chapter-2-acs-data-structure/2-4-headers-and-keywords"
+  - "STScI, ACS Data Handbook, section 2.4, Headers and Keywords: FILTER1, 'Element selected from filter wheel 1', and FILTER2, 'Element selected from filter wheel 2'; DETECTOR, EXPSTART and EXPEND: https://hst-docs.stsci.edu/acsdhb/chapter-2-acs-data-structure/2-4-headers-and-keywords"
 match:
   - keyword: TELESCOP
     equals: HST
 quantities:
+  detector:
+    keywords: [DETECTOR]
+    note: "DETECTOR names the detector in use; for ACS, WFC, HRC or SBC."
+  observation_start:
+    keywords: [EXPSTART]
+    unit: MJD
+    note: "EXPSTART is the start time of the exposure as a Modified Julian
+      Date."
+  observation_end:
+    keywords: [EXPEND]
+    unit: MJD
+    note: "EXPEND is the end time of the exposure as a Modified Julian
+      Date."
   filter:
     keywords: [FILTER, FILTER1, FILTER2]
     ignore_prefixes: [CLEAR]

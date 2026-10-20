@@ -25,19 +25,21 @@ path or a configuration dictionary. See [The Runner](../guide/RUNNER.md).
 
 **`make_config_from_fits(fits_path, *, target_position, ...)`** returns a
 configuration for one FITS image, and writes it when `output_path` is
-given. Its keyword arguments are `hdu`, `output_path`, `object_name`,
-`model_name`, `model_priors`, `likelihood`, `background`, `sampler`,
-`outputs_root`, `overwrite`, `cutout_mode`, `fixed_size`, `psf_type`,
-`gaussian_fwhm_pixels`, `psf_max_peak` and `preparation`. See
+given. Its keyword arguments are `hdu`, `calibration`, `output_path`,
+`object_name`, `model_name`, `model_priors`, `likelihood`, `background`,
+`sampler`, `outputs_root`, `overwrite`, `cutout_mode`, `fixed_size`,
+`psf_type`, `gaussian_fwhm_pixels`, `psf_max_peak` and `preparation`. See
 [Writing a Configuration](../guide/CONFIGURING.md).
 
-**`ObservationAdvisor`** inspects one image and proposes a configuration
-for review.
+**`ObservationAdvisor(fits_path, *, target_position=None, hdu=None, calibration=None, online=True)`**
+inspects one image and proposes a configuration for review. `calibration`
+declares calibration quantities, and `online=False` keeps it from asking a
+calibration service for a quantity that the header lacks.
 
 | Member | Description |
 | --- | --- |
-| `ObservationAdvisor.from_project(fits_path)` | Create an advisor, with paths relative to the project. |
-| `header_report()` | The quantities read from the header, with their values, units, statuses and sources, as a table to print. |
+| `ObservationAdvisor.from_project(fits_path)` | Create an advisor, with paths relative to the project; it takes the same keyword arguments. |
+| `header_report()` | The quantities read from the header, with their values, units, statuses and sources, as a table to print, and what each calibration service that serves the image was asked and answered. |
 | `select_target()`, `set_target_position(x, y)` | Choose the target, by clicking or explicitly. |
 | `inspect()`, `summary()` | Measure and print header metadata and image diagnostics. |
 | `prior_guidance(model_name)` | The prior family of every parameter of any of the ten models and the rule that proposes it, as `PriorGuidance` objects. |
@@ -48,7 +50,11 @@ for review.
 every prior and its warnings, `config` holds it, `models` names its
 models, `provenance` records where each value comes from, and
 `write(accept=True)` writes the YAML with the report `report_path` beside
-it; an existing different file is replaced only with `overwrite=True`.
+it. Writing again keeps a report that differs only in when a calibration
+service was asked, in the verbatim text of the error a failed request met,
+or in whether the advisor was online; an existing different file is
+replaced only with `overwrite=True`, and the refusal names the keys that
+differ.
 
 **`make_multi_parameters(model, observations, *, target_centers, prior_bounds, shared, ...)`**
 and **`make_multi_observation_config(observations, *, target_positions, parameters, output_dir, ...)`**

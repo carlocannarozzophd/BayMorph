@@ -39,7 +39,9 @@ The first matched convention that finds a quantity decides it. When its
 reading is usable, it is compared with the usable readings of the other
 matched conventions, and a disagreement makes the quantity conflicting,
 unless the deciding convention declares that it overrides the other one; the
-value it overrides is then recorded in the note of the reading.
+value it overrides is then recorded in the note of the reading. Two zeropoints
+agree when they differ by at most ``ZEROPOINT_AGREEMENT_MAG``, and the note
+names the other one.
 """
 
 from __future__ import annotations
@@ -124,6 +126,9 @@ QUANTITIES: dict[str, QuantityDefinition] = {
     for definition in (
         QuantityDefinition("telescope", "string", "Telescope."),
         QuantityDefinition("instrument", "string", "Instrument."),
+        QuantityDefinition(
+            "detector", "string", "Detector or channel of the instrument."
+        ),
         QuantityDefinition("filter", "string", "Filter."),
         QuantityDefinition("pipeline", "string", "Software that produced the image."),
         QuantityDefinition("image_unit", "string", "Unit of the pixel values."),
@@ -134,6 +139,12 @@ QUANTITIES: dict[str, QuantityDefinition] = {
             "Sum of the exposure times of the combined exposures.",
         ),
         QuantityDefinition("n_combined", "integer", "Number of combined exposures."),
+        QuantityDefinition(
+            "observation_start", "number", "Start of the first exposure of the image."
+        ),
+        QuantityDefinition(
+            "observation_end", "number", "End of the last exposure of the image."
+        ),
         QuantityDefinition("gain", "number", "Gain of the detector or coadd."),
         QuantityDefinition("read_noise", "number", "Read noise."),
         QuantityDefinition("saturation", "number", "Level at which pixels saturate."),
@@ -238,6 +249,11 @@ _RULE_KEYS = frozenset(
     }
 )
 _RELATIVE_AGREEMENT = 1e-9
+
+ZEROPOINT_AGREEMENT_MAG = 0.001
+"""Largest difference, in magnitudes, between two readings of the zeropoint
+by different conventions that agree (AD-054); 0.001 mag changes a flux by
+0.09 percent."""
 
 
 @dataclass(frozen=True)
@@ -1151,6 +1167,7 @@ def _read_quantity(
     """
     decision: HeaderQuantity | None = None
     overrides: tuple[str, ...] = ()
+    close: list[HeaderQuantity] = []
 
     for convention in conventions:
         reading = _convention_reading(definition, convention, lookup, resolved)
@@ -1166,7 +1183,13 @@ def _read_quantity(
             overrides = convention.quantities[definition.name].overrides
             continue
 
-        if not reading.usable or _readings_agree(definition, decision, reading):
+        if not reading.usable:
+            continue
+
+        if _readings_agree(definition, decision, reading):
+            if not _readings_agree(definition, decision, reading, exact=True):
+                close.append(reading)
+
             continue
 
         if convention.name not in overrides:
@@ -1182,6 +1205,22 @@ def _read_quantity(
 
     if decision is None:
         return HeaderQuantity(name=definition.name, status="missing")
+
+    if close:
+        decision = replace(
+            decision,
+            note=_join_notes(
+                decision.note,
+                (
+                    "Another reading agrees"
+                    if len(close) == 1
+                    else "Other readings agree"
+                )
+                + f" within {ZEROPOINT_AGREEMENT_MAG:g} mag: "
+                + "; ".join(_describe_reading(item) for item in close)
+                + ".",
+            ),
+        )
 
     return decision
 
@@ -1311,9 +1350,16 @@ def _is_ignored(value: Any, prefixes: Sequence[str]) -> bool:
 
 
 def _readings_agree(
-    definition: QuantityDefinition, first: HeaderQuantity, second: HeaderQuantity
+    definition: QuantityDefinition,
+    first: HeaderQuantity,
+    second: HeaderQuantity,
+    *,
+    exact: bool = False,
 ) -> bool:
-    """Return whether two usable readings give the same value and unit."""
+    """Return whether two usable readings give the same value and unit.
+
+    Two zeropoints agree within ``ZEROPOINT_AGREEMENT_MAG`` unless ``exact``.
+    """
     if definition.kind == "string":
         compare = (
             canonical_unit
@@ -1321,6 +1367,13 @@ def _readings_agree(
             else (lambda value: str(value).strip().lower())
         )
         same_value = compare(first.value) == compare(second.value)
+    elif definition.name == "zeropoint" and not exact:
+        # Two zeropoints written 0.001 mag apart differ by slightly more or
+        # less in binary; the relative slack keeps them agreeing.
+        difference = abs(float(first.value) - float(second.value))
+        same_value = difference <= ZEROPOINT_AGREEMENT_MAG or math.isclose(
+            difference, ZEROPOINT_AGREEMENT_MAG, rel_tol=_RELATIVE_AGREEMENT
+        )
     else:
         same_value = _agree(float(first.value), float(second.value))
 

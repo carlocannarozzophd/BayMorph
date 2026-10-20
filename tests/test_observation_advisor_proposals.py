@@ -742,3 +742,515 @@ def test_header_report_reads_no_pixels(
     monkeypatch.setattr("baymorph.pipeline.advisor.open_observation", refuse_pixels)
 
     assert "PHOTZP" in ObservationAdvisor(fits_path).header_report()
+
+
+ACS_OPTIONS = {"psf_type": "gaussian", "gaussian_fwhm_pixels": 2.0}
+SERVED = {"zeropoint": 25.931, "photometric_system": "AB"}
+
+
+def _write_acs_drizzle(directory: Path) -> Path:
+    """Write a small ACS/WFC F814W image drizzled to cps whose PHOTFLAM is 0.
+
+    The dates and the exposure time are those of an image of the Coma
+    Treasury Survey, so the calculator is asked for 2007-01-22.
+    """
+    y, x = np.indices((81, 81), dtype=float)
+    image = 2.0 * np.exp(-0.5 * (((x - 40.0) / 4.0) ** 2 + ((y - 40.0) / 3.0) ** 2))
+    image += np.random.default_rng(0).normal(0.0, 0.01, image.shape)
+
+    header = fits.Header()
+    header["CTYPE1"] = "RA---TAN"
+    header["CTYPE2"] = "DEC--TAN"
+    header["CRPIX1"] = 41.0
+    header["CRPIX2"] = 41.0
+    header["CRVAL1"] = 195.0
+    header["CRVAL2"] = 27.9
+    header["CDELT1"] = -0.05 / 3600.0
+    header["CDELT2"] = 0.05 / 3600.0
+    header["TELESCOP"] = "HST"
+    header["INSTRUME"] = "ACS"
+    header["DETECTOR"] = "WFC"
+    header["FILTER1"] = "CLEAR1L"
+    header["FILTER2"] = "F814W"
+    header["FILENAME"] = "j9ty22010_drz.fits"
+    header["BUNIT"] = "ELECTRONS"
+    header["D001OUUN"] = "cps"
+    header["PHOTFLAM"] = 0.0
+    header["PHOTPLAM"] = 8045.0
+    header["EXPSTART"] = 54122.6577005
+    header["EXPEND"] = 54122.74369596
+    header["EXPTIME"] = 1400.0
+
+    path = directory / "acs.fits"
+    fits.writeto(path, image, header)
+
+    return path
+
+
+def test_the_calculator_gives_the_zeropoint_the_header_lacks(
+    tmp_path: Path,
+    stages: list[dict],
+    acs_calculator,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """One request settles the zeropoint for every reading of the advisor."""
+    fits_path = _write_acs_drizzle(tmp_path)
+    advisor = ObservationAdvisor(fits_path, target_position=(40.0, 40.0))
+    options = {"outputs_root": tmp_path / "runs", **ACS_OPTIONS}
+
+    report = advisor.header_report()
+    advisor.inspect()
+    fixed_inputs = advisor.measure_fixed_inputs(**options)
+    proposal = advisor.propose_config(
+        output_path=tmp_path / "acs.yaml", fixed_inputs=fixed_inputs, **options
+    )
+
+    assert len(acs_calculator.calls) == 1
+    assert "Asking the ACS Zeropoint Calculator of STScI" in capsys.readouterr().out
+    assert advisor.calibration == {}
+    assert stages[0]["data"]["calibration"] == SERVED
+    assert proposal.config["data"]["calibration"] == SERVED
+
+    flux = proposal.provenance["priors"]["single_sersic"]["flux"]
+
+    assert flux["source"] == "declaration"
+    assert flux["prior"]["lower"] == pytest.approx(10.0 ** (0.4 * (25.931 - 30.0)))
+    assert "through the zeropoint 25.931 given by the ACS Zeropoint" in flux["detail"]
+
+    provenance = proposal.provenance
+
+    assert provenance["schema_version"] == 3
+    assert provenance["online"] is True
+    assert provenance["calibration"] == {
+        "zeropoint": {"value": 25.931, "unit": "mag", "source": "stsci_acs_zeropoint"},
+        "photometric_system": {
+            "value": "AB",
+            "unit": None,
+            "source": "stsci_acs_zeropoint",
+        },
+    }
+
+    (record,) = provenance["bridges"]
+
+    assert record["status"] == "applied"
+    assert record["values"] == SERVED
+    assert record["run"] == {"asked_at": acs_calculator.asked_at, "error": None}
+    assert provenance["header"]["quantities"]["zeropoint"]["status"] == "declared"
+    assert provenance["header"]["quantities"]["zeropoint"]["note"].startswith(
+        "From the ACS Zeropoint Calculator of STScI (stsci_acs_zeropoint). "
+        "Declared in data.calibration;"
+    )
+
+    summary = proposal.summary()
+
+    assert "zeropoint 25.931 mag [stsci_acs_zeropoint]" in summary
+    assert "CALIBRATION SERVICES" in summary
+    assert "- ACS Zeropoint Calculator of STScI [stsci_acs_zeropoint]: applied." in (
+        summary
+    )
+    assert f"Asked at {acs_calculator.asked_at} at https://" in summary
+    assert "Calibration services" in report
+    assert "- zeropoint: From the ACS Zeropoint Calculator of STScI" in report
+
+
+def test_offline_the_advisor_asks_nothing_and_uses_the_rule_without_a_zeropoint(
+    tmp_path: Path,
+    stages: list[dict],
+    acs_calculator,
+) -> None:
+    """Offline, the request is recorded and the fluxes need no zeropoint."""
+    fits_path = _write_acs_drizzle(tmp_path)
+    advisor = ObservationAdvisor(
+        fits_path, target_position=(40.0, 40.0), online=False
+    )
+
+    proposal = advisor.propose_config(
+        output_path=tmp_path / "acs.yaml",
+        outputs_root=tmp_path / "runs",
+        **ACS_OPTIONS,
+    )
+
+    assert acs_calculator.calls == []
+    assert "calibration" not in proposal.config["data"]
+    assert proposal.provenance["online"] is False
+    assert proposal.provenance["bridges"][0]["status"] == "offline"
+    assert proposal.provenance["priors"]["single_sersic"]["flux"]["source"] == (
+        "fixed_inputs"
+    )
+    assert not any("Calculator" in warning for warning in proposal.warnings)
+
+    with pytest.raises(TypeError, match="online must be True or False"):
+        ObservationAdvisor(fits_path, online="no")
+
+
+def test_a_failed_request_falls_back_with_a_stable_warning(
+    tmp_path: Path,
+    stages: list[dict],
+    acs_calculator,
+) -> None:
+    """A failure is stated in words that do not change, the error apart."""
+    from baymorph.pipeline.calibration_bridges import BridgeTransportError
+
+    acs_calculator.error = BridgeTransportError(
+        "did not answer within 30 s", "The read operation timed out"
+    )
+    advisor = ObservationAdvisor(
+        _write_acs_drizzle(tmp_path), target_position=(40.0, 40.0)
+    )
+
+    proposal = advisor.propose_config(
+        output_path=tmp_path / "acs.yaml",
+        outputs_root=tmp_path / "runs",
+        **ACS_OPTIONS,
+    )
+
+    (record,) = proposal.provenance["bridges"]
+    (warning,) = [item for item in proposal.warnings if "Calculator" in item]
+
+    assert record["status"] == "failed"
+    assert record["run"]["error"] == "The read operation timed out"
+    assert "did not answer within 30 s" in record["detail"]
+    assert "did not answer within 30 s" in warning
+    assert "timed out" not in record["detail"] and "timed out" not in warning
+    assert proposal.provenance["priors"]["single_sersic"]["flux"]["source"] == (
+        "fixed_inputs"
+    )
+    assert "(The read operation timed out)" in proposal.summary()
+
+
+def test_writing_again_ignores_when_the_service_answered(
+    tmp_path: Path,
+    stages: list[dict],
+    acs_calculator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The same answer at another time is the same proposal; another is not."""
+    from baymorph.pipeline import calibration_bridges
+
+    fits_path = _write_acs_drizzle(tmp_path)
+    output_path = tmp_path / "configs" / "acs.yaml"
+    options = {
+        "output_path": output_path,
+        "outputs_root": tmp_path / "runs",
+        **ACS_OPTIONS,
+    }
+
+    def propose():
+        advisor = ObservationAdvisor(fits_path, target_position=(40.0, 40.0))
+
+        return advisor.propose_config(**options)
+
+    first = propose()
+    first.write(accept=True)
+    written = first.report_path.read_text(encoding="utf-8")
+
+    monkeypatch.setattr(calibration_bridges, "_utc_now", lambda: "2026-10-21T09:00:00Z")
+    again = propose()
+
+    assert again.provenance["bridges"][0]["run"]["asked_at"] == "2026-10-21T09:00:00Z"
+    assert again.write(accept=True) == output_path.resolve()
+    assert first.report_path.read_text(encoding="utf-8") == written
+
+    # Another answer with the same zeropoint leaves the YAML unchanged, but it
+    # is another report, refused with the keys that differ.
+    headers = acs_calculator.answers["2007-01-22"]["headers"]
+    acs_calculator.answer = {
+        "headers": headers,
+        "rows": [
+            ["WFC", "F814W", "8045.2", "7.1340e-20", "26.767", "25.500", "25.931"]
+        ],
+    }
+    other_answer = propose()
+    configuration = output_path.read_text(encoding="utf-8")
+
+    with pytest.raises(
+        FileExistsError,
+        match=r"Provenance report already exists and differs at "
+        r"bridges\.0\.detail, bridges\.0\.response\.rows\.0\.3, ",
+    ):
+        other_answer.write(accept=True)
+
+    assert output_path.read_text(encoding="utf-8") == configuration
+    assert first.report_path.read_text(encoding="utf-8") == written
+
+    # A recalibration of STScI changes the zeropoint, and so the YAML.
+    acs_calculator.answer = {
+        "headers": headers,
+        "rows": [
+            ["WFC", "F814W", "8045.2", "7.0683e-20", "26.777", "25.510", "25.941"]
+        ],
+    }
+    changed = propose()
+
+    with pytest.raises(
+        FileExistsError,
+        match=r"Configuration already exists and differs at "
+        r"data\.calibration\.zeropoint, ",
+    ):
+        changed.write(accept=True)
+
+
+def test_writing_again_keeps_a_failure_with_the_same_reason(
+    tmp_path: Path,
+    stages: list[dict],
+    acs_calculator,
+) -> None:
+    """The verbatim error of a failure may change; its reason may not."""
+    from baymorph.pipeline.calibration_bridges import BridgeTransportError
+
+    fits_path = _write_acs_drizzle(tmp_path)
+    options = {
+        "output_path": tmp_path / "acs.yaml",
+        "outputs_root": tmp_path / "runs",
+        **ACS_OPTIONS,
+    }
+
+    def propose(error):
+        acs_calculator.error = error
+        advisor = ObservationAdvisor(fits_path, target_position=(40.0, 40.0))
+
+        return advisor.propose_config(**options)
+
+    first = propose(BridgeTransportError("did not answer within 30 s", "timed out"))
+    first.write(accept=True)
+    written = first.report_path.read_text(encoding="utf-8")
+
+    again = propose(
+        BridgeTransportError("did not answer within 30 s", "The read timed out")
+    )
+
+    assert again.write(accept=True) == (tmp_path / "acs.yaml").resolve()
+    assert first.report_path.read_text(encoding="utf-8") == written
+
+    other = propose(BridgeTransportError("could not be reached", "no route"))
+
+    with pytest.raises(
+        FileExistsError, match=r"Provenance report already exists and differs at "
+    ):
+        other.write(accept=True)
+
+
+def test_writing_offline_again_keeps_a_proposal_no_service_serves(
+    tmp_path: Path,
+    stages: list[dict],
+) -> None:
+    """Whether the advisor was online changes nothing a service did not do."""
+    fits_path = _write_coadd(tmp_path)
+    options = {
+        "output_path": tmp_path / "coadd.yaml",
+        "outputs_root": tmp_path / "runs",
+        "psf_type": "gaussian",
+        "gaussian_fwhm_pixels": 2.74,
+    }
+
+    online = ObservationAdvisor(fits_path, target_position=(40.0, 40.0))
+    first = online.propose_config(**options)
+    first.write(accept=True)
+    written = first.report_path.read_text(encoding="utf-8")
+
+    offline = ObservationAdvisor(fits_path, target_position=(40.0, 40.0), online=False)
+    again = offline.propose_config(**options)
+
+    assert again.provenance["online"] is False
+    assert again.provenance["bridges"] == []
+    assert again.write(accept=True) == (tmp_path / "coadd.yaml").resolve()
+    assert first.report_path.read_text(encoding="utf-8") == written
+
+
+def test_a_proposal_rests_on_one_settlement_of_the_calibration(
+    tmp_path: Path,
+    acs_calculator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A file that changes state while the stages run stops the proposal."""
+    fits_path = _write_acs_drizzle(tmp_path)
+
+    def stages_that_touch_the_file(self, resolved):
+        fits_path.chmod(0o600 if fits_path.stat().st_mode & 0o777 != 0o600 else 0o644)
+        products = SimpleNamespace(
+            noise=np.full(CUTOUT_SHAPE, SKY_SCALE),
+            prepared_data=np.zeros(CUTOUT_SHAPE),
+            background=-0.4,
+        )
+
+        return products, None
+
+    monkeypatch.setattr(
+        ObservationAdvisor, "_run_fixed_input_stages", stages_that_touch_the_file
+    )
+    advisor = ObservationAdvisor(fits_path, target_position=(40.0, 40.0))
+
+    with pytest.raises(RuntimeError, match="the calibration was settled again"):
+        advisor.propose_config(
+            output_path=tmp_path / "acs.yaml",
+            outputs_root=tmp_path / "runs",
+            **ACS_OPTIONS,
+        )
+
+    assert len(acs_calculator.calls) == 2
+
+
+def test_a_declared_zeropoint_is_never_asked_for(
+    tmp_path: Path,
+    stages: list[dict],
+    acs_calculator,
+) -> None:
+    """A declaration of the user comes before any service."""
+    advisor = ObservationAdvisor(
+        _write_acs_drizzle(tmp_path),
+        target_position=(40.0, 40.0),
+        calibration={"zeropoint": 25.94, "photometric_system": "AB"},
+    )
+
+    proposal = advisor.propose_config(
+        output_path=tmp_path / "acs.yaml",
+        outputs_root=tmp_path / "runs",
+        **ACS_OPTIONS,
+    )
+
+    assert acs_calculator.calls == []
+    assert proposal.provenance["bridges"][0]["status"] == "not_needed"
+    assert proposal.provenance["calibration"]["zeropoint"]["source"] == "user"
+    assert proposal.config["data"]["calibration"] == {
+        "zeropoint": 25.94,
+        "photometric_system": "AB",
+    }
+
+
+def test_target_selection_asks_no_service(tmp_path: Path) -> None:
+    """Choosing the target, by click or by number, sends no request."""
+    fits_path = _write_acs_drizzle(tmp_path)
+    advisor = ObservationAdvisor(fits_path, target_position="center")
+
+    assert advisor.select_target().value is None
+    assert advisor.set_target_position(40.0, 41.0) == (40.0, 41.0)
+
+
+def test_a_new_calibration_or_online_state_reaches_every_reading(
+    tmp_path: Path,
+    acs_calculator,
+) -> None:
+    """A changed declaration or online flag settles the calibration again."""
+    coadd = ObservationAdvisor(_write_coadd(tmp_path), target_position=(40.0, 40.0))
+
+    assert "Saturation: not established" in coadd.summary()
+
+    coadd.calibration = {"saturation": 5000.0}
+
+    assert "Saturation: 5000 in the units of the image" in coadd.summary()
+
+    advisor = ObservationAdvisor(
+        _write_acs_drizzle(tmp_path), target_position=(40.0, 40.0), online=False
+    )
+
+    assert "[stsci_acs_zeropoint]: offline." in advisor.header_report()
+    assert acs_calculator.calls == []
+
+    advisor.online = True
+
+    assert "[stsci_acs_zeropoint]: applied." in advisor.header_report()
+    assert len(acs_calculator.calls) == 1
+
+
+def test_a_new_declaration_settles_the_calibration_again(
+    tmp_path: Path,
+    acs_calculator,
+) -> None:
+    """Declarations made after a request replace what the service gave."""
+    advisor = ObservationAdvisor(
+        _write_acs_drizzle(tmp_path), target_position=(40.0, 40.0)
+    )
+
+    assert "stsci_acs_zeropoint" in advisor.header_report()
+    assert "stsci_acs_zeropoint" in advisor.header_report()
+    assert len(acs_calculator.calls) == 1
+
+    advisor.calibration = {"zeropoint": 26.0, "photometric_system": "Vega"}
+    report = advisor.header_report()
+
+    assert "not_needed. The zeropoint 26 is declared in data.calibration" in report
+    assert "From the ACS Zeropoint Calculator" not in report
+    assert len(acs_calculator.calls) == 1
+
+    config = advisor.make_config(
+        model_priors={"flux": {"type": "log_uniform", "lower": 1.0, "upper": 1e6}},
+        **ACS_OPTIONS,
+    )
+
+    assert config["data"]["calibration"] == {
+        "zeropoint": 26.0,
+        "photometric_system": "Vega",
+    }
+
+
+def test_every_reading_follows_a_new_file_or_hdu(tmp_path: Path) -> None:
+    """A rewritten file or another HDU is inspected again by every reading."""
+    fits_path = _write_coadd(tmp_path)
+    advisor = ObservationAdvisor(fits_path, target_position=(40.0, 40.0))
+    before = advisor.prior_guidance()["flux"].observed_scale
+
+    with fits.open(fits_path) as hdus:
+        data, header = hdus[0].data * 4.0, hdus[0].header
+
+    fits.writeto(fits_path, data, header, overwrite=True)
+
+    assert advisor.prior_guidance()["flux"].observed_scale == pytest.approx(
+        4.0 * before, rel=0.05
+    )
+
+    second = np.random.default_rng(1).normal(0.0, SKY_SCALE, (61, 71))
+    fits.HDUList(
+        [fits.PrimaryHDU(data, header), fits.ImageHDU(second, header)]
+    ).writeto(fits_path, overwrite=True)
+    advisor.hdu = 0
+
+    assert "Shape: 81 x 81 pixels" in advisor.summary()
+
+    advisor.hdu = 1
+
+    assert "Shape: 71 x 61 pixels" in advisor.summary()
+
+
+def test_calibrate_flux_prior_reads_the_current_calibration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A saturation declared after an inspection reaches the calibration."""
+    from baymorph.pipeline import advisor as advisor_module
+
+    advisor = ObservationAdvisor(
+        _write_coadd(tmp_path),
+        target_position=(40.0, 40.0),
+        calibration={"saturation": 5000.0},
+    )
+    config = advisor.make_config(
+        model_priors={"flux": {"type": "log_uniform", "lower": 1.0, "upper": 1e6}},
+        psf_type="gaussian",
+        gaussian_fwhm_pixels=2.0,
+        outputs_root=tmp_path / "runs",
+    )
+
+    assert advisor.inspect().saturation == pytest.approx(5000.0)
+
+    advisor.calibration = {"saturation": 8000.0}
+    seen: dict = {}
+    monkeypatch.setattr(
+        advisor_module,
+        "load_image_preparation_products",
+        lambda resolved: SimpleNamespace(
+            target_x=40.0,
+            target_y=40.0,
+            prepared_data=np.zeros(CUTOUT_SHAPE),
+            noise=np.full(CUTOUT_SHAPE, SKY_SCALE),
+            background=0.0,
+            fitting_mask=np.zeros(CUTOUT_SHAPE, dtype=bool),
+        ),
+    )
+    monkeypatch.setattr(advisor_module, "_load_psf_from_config", lambda resolved: None)
+    monkeypatch.setattr(
+        advisor_module,
+        "calibrate_single_sersic_flux_prior",
+        lambda **options: seen.update(options) or "calibrated",
+    )
+
+    assert advisor.calibrate_flux_prior(config) == "calibrated"
+    assert seen["saturation_level"] == pytest.approx(8000.0)

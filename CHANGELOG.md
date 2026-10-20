@@ -48,10 +48,36 @@ and the project follows Semantic Versioning in spirit.
   Treasury Survey (25.937 AB in F814W, 26.068 in F475W). The XDF headers
   carry no `PHOTFLAM`; the Coma headers record `PHOTCORR = OMIT`, some with a
   `PHOTFLAM` of 0, and where `PHOTFLAM` is valid it agrees with the survey
-  zeropoint within 0.001 mag, which overrides it. A convention may now
-  tabulate a quantity by a text quantity read before, such as a zeropoint by
-  filter (`by` and `table`), and a reading that overrides another records the
-  overridden value in its note.
+  zeropoint within 0.001 mag, and the survey value is kept. A convention may
+  now tabulate a quantity by a text quantity read before, such as a zeropoint
+  by filter (`by` and `table`), and a reading that overrides another records
+  the overridden value in its note.
+* The observation advisor asks an online calibration service for a
+  calibration quantity that the header lacks and that is not declared, and
+  writes the answer to `data.calibration`, so the fit still reads it from the
+  YAML alone, offline. The first service is the ACS Zeropoint Calculator of
+  STScI: for an ACS image of the WFC or HRC detector drizzled to electrons
+  per second whose header gives no usable zeropoint, and not two readings of
+  it that disagree, the advisor asks once, over HTTPS and following no
+  redirection, for the AB zeropoint of its detector and filter on the date of
+  the middle of the observation, between `EXPSTART` and `EXPEND`, accepts the
+  answer only when its AB and ST zeropoints agree with its `PHOTFLAM` and
+  pivot wavelength, and declares it with `photometric_system: AB`. For an
+  observation over several dates it also asks for its first and last dates,
+  and declares nothing when their zeropoints differ from that of the middle
+  date by more than 0.002 mag, as across the step of July 2006 of WFC. It does
+  not ask for an image without observation dates, such as a mosaic of
+  several epochs, nor for dates that span more than a year or do not cover
+  the exposure time. A zeropoint read from the header or declared is never
+  replaced. The header report, the summary and the report of the proposal
+  state what was asked, the answer and when it was asked, or why the
+  service was not asked; without a usable answer the flux priors follow the
+  rule without a zeropoint, so the evidences of proposals made with and
+  without it are not comparable. `ObservationAdvisor(..., online=False)` and
+  `baymorph config --advise --offline` ask no service.
+* The header reading has three new quantities, `detector`,
+  `observation_start` and `observation_end`, which HST images give in
+  `DETECTOR`, `EXPSTART` and `EXPEND`, the last two as Modified Julian Dates.
 
 ### Changed
 
@@ -61,13 +87,37 @@ and the project follows Semantic Versioning in spirit.
   deciding convention declares that it `overrides` the other. Before, the
   first convention decided without looking at the others. A user convention
   that reads a quantity differently from the FITS standard, such as a gain
-  from another keyword than `GAIN`, now needs `overrides: [generic]`.
+  from another keyword than `GAIN`, now needs `overrides: [generic]`. Two
+  zeropoints agree when they differ by at most 0.001 mag, and the note of
+  the reading names the other one.
 * Every flux prior that the advisor proposes states its rule and its numbers
   in the summary and in the report: the zeropoint and the bounds in image
   units, or, without a zeropoint, the sky scale, the noise-equivalent area of
   the PSF and the bounds. A prior from a declared zeropoint, and a PSF
-  ceiling from a declared saturation level, have the source `declaration`.
-  The report of a proposal has `schema_version` 2.
+  ceiling from a declared saturation level, have the source `declaration`;
+  a prior from a zeropoint that a calibration service gave names the
+  service in its detail.
+* The report of a proposal has `schema_version` 3. It records the declared
+  calibration with the source of each value, the user or a calibration
+  service, whether the advisor was online, and, under `bridges`, every
+  calibration service that serves the image with what it was asked and
+  answered. A report written by an earlier version differs, so replacing it
+  needs `overwrite=True` once in Python, or removing it before
+  `baymorph config --advise --accept`.
+* Writing a proposal again keeps an existing report that differs only in
+  when a calibration service was asked, in the verbatim text of the error a
+  failed request met, or in whether the advisor was online; another answer,
+  or a failure for another reason, is another proposal. A refusal to replace
+  a configuration or a report names the keys that differ.
+* `baymorph config --advise --accept` writes neither the configuration nor
+  its report when a request to a calibration service that the proposal
+  needed failed, with no answer or an answer that fails its checks; run it
+  again, or add `--offline` to write the proposal without it. A refusal, when
+  the image allows no request or the answers hold no single value, is
+  written with the priors that do without it.
+* A proposal stops with an error when the image, its HDU or the declared
+  calibration changes while it is built, instead of mixing two answers of a
+  calibration service.
 * The metadata of an observation (`ObservationMetadata`) hold only values
   that the header reading establishes or that are declared. A value whose
   unit or meaning the header leaves open, such as a saturation level in ADU

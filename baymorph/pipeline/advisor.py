@@ -6,7 +6,7 @@ import hashlib
 import json
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +25,11 @@ from baymorph.core.header_metadata import (
 from baymorph.core.image import read_image_header
 from baymorph.core.observation import Observation
 from baymorph.models.labels import PARAMETER_KINDS
+from baymorph.pipeline.calibration_bridges import (
+    BridgeOutcome,
+    bridged_declarations,
+    consult_bridges,
+)
 from baymorph.pipeline.config import (
     DEFAULT_CONFIG,
     load_resolved_config,
@@ -37,7 +42,7 @@ from baymorph.pipeline.image_preparation import (
     prepare_real_fits_image,
     prepare_real_image_from_config,
 )
-from baymorph.pipeline.opening import open_observation
+from baymorph.pipeline.opening import file_state, open_observation
 from baymorph.pipeline.prior_proposals import (
     ANGULAR_RANGE_ARCSEC,
     BACKGROUND_SKY_SCALE_MULTIPLE,
@@ -174,6 +179,29 @@ class FixedInputs:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class _SettledCalibration:
+    """The calibration that every reading of the advisor uses.
+
+    ``declarations`` are those of the user completed by the calibration
+    services, ``sources`` gives for each ``"user"`` or the name of the
+    service, and ``key`` the state they were settled for.
+    """
+
+    key: tuple[Any, ...]
+    declarations: dict[str, Any]
+    sources: dict[str, str]
+    outcomes: tuple[BridgeOutcome, ...]
+
+    def origin(self, name: str) -> str | None:
+        """Return the title of the service that gave a quantity, or None."""
+        source = self.sources.get(name)
+
+        return next(
+            (outcome.title for outcome in self.outcomes if outcome.name == source), None
+        )
+
+
 _STAGE_SECTIONS = ("object", "data", "preparation", "psf", "outputs")
 """Configuration sections that the preparation and the PSF depend on."""
 
@@ -288,7 +316,8 @@ def _guidance_rule(name: str, kind: str, *, one_component: bool) -> tuple[str, s
         return "log_uniform", (
             "A flux is a positive scale. The advisor proposes magnitudes "
             f"{MAGNITUDE_RANGE[0]:g} to {MAGNITUDE_RANGE[1]:g} through the "
-            "zeropoint, read or declared, log-uniform in flux; without a "
+            "zeropoint, read, declared or given by a calibration service, "
+            "log-uniform in flux; without a "
             "usable zeropoint, from the flux of a point source at "
             f"signal-to-noise {POINT_SOURCE_SNR:g} on the prepared sky to "
             f"{MAGNITUDE_RANGE[1] - MAGNITUDE_RANGE[0]:g} magnitudes above it."
@@ -633,10 +662,16 @@ class ObservationConfigProposal:
         Notes
         -----
         Writing the same proposal again is accepted and changes nothing, so a
-        notebook can be re-executed. A destination whose content differs is
-        never replaced without ``overwrite=True``. When the proposal carries
-        its provenance, the JSON report :attr:`report_path` is written with
-        the YAML, and both destinations are checked before either is written.
+        notebook can be re-executed. A report that differs only in when a
+        calibration service was asked, in the verbatim text of the error a
+        failed request met, or in whether the advisor was online, belongs to
+        the same proposal and is kept as it is; another reason of failure,
+        or another answer, makes another proposal. A destination whose
+        content differs otherwise is never replaced without
+        ``overwrite=True``, and the refusal names the keys that differ. When
+        the proposal carries its provenance, the JSON report
+        :attr:`report_path` is written with the YAML, and both destinations
+        are checked before either is written.
         """
         if accept is not True:
             raise ValueError("Writing a configuration proposal requires accept=True.")
@@ -653,7 +688,12 @@ class ObservationConfigProposal:
         destination = self.output_path.expanduser()
 
         documents = [
-            (destination, yaml.safe_dump(self.config, sort_keys=False), "Configuration")
+            (
+                destination,
+                yaml.safe_dump(self.config, sort_keys=False),
+                "Configuration",
+                _parsed_yaml,
+            )
         ]
 
         if self.provenance is not None:
@@ -662,26 +702,41 @@ class ObservationConfigProposal:
                     self.report_path.expanduser(),
                     json.dumps(self.provenance, indent=2) + "\n",
                     "Provenance report",
+                    _comparable_report,
                 )
             )
 
-        for path, text, label in documents:
-            if (
-                path.exists()
-                and overwrite is not True
-                and path.read_text(encoding="utf-8") != text
-            ):
+        pending: list[tuple[Path, str]] = []
+
+        for path, text, label, comparable in documents:
+            if not path.exists():
+                pending.append((path, text))
+                continue
+
+            existing = path.read_text(encoding="utf-8")
+
+            if existing == text:
+                continue
+
+            old, new = comparable(existing), comparable(text)
+
+            if comparable is _comparable_report and old is not None and old == new:
+                continue
+
+            if overwrite is not True:
+                keys = [] if old is None else _differences(old, new)
+                where = f" at {', '.join(keys)}" if keys else ""
+
                 raise FileExistsError(
-                    f"{label} already exists and differs: {path}. "
+                    f"{label} already exists and differs{where}: {path}. "
                     "Choose a new output path, or pass overwrite=True only if "
                     "replacing it is intended; products already created from "
                     "it are not updated."
                 )
 
-        for path, text, _ in documents:
-            if path.exists() and path.read_text(encoding="utf-8") == text:
-                continue
+            pending.append((path, text))
 
+        for path, text in pending:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text, encoding="utf-8")
 
@@ -711,6 +766,14 @@ class ObservationAdvisor:
         or gives them wrongly (AD-053). Every reading of the advisor uses
         them, and the proposed configuration carries them in
         ``data.calibration``.
+    online : bool, default=True
+        Whether the advisor may ask a calibration service for a quantity
+        that neither ``calibration`` nor the header gives usably, such as
+        the ACS Zeropoint Calculator of STScI for the zeropoint of a
+        drizzled ACS image (AD-054). The answer joins the declarations, with
+        the service as its source; the advisor asks at most once per image
+        and calibration, and never while it selects the target. Offline, it
+        asks nothing and records the request it would have sent.
     """
 
     def __init__(
@@ -720,16 +783,22 @@ class ObservationAdvisor:
         target_position: TargetPosition = None,
         hdu: int | str | None = None,
         calibration: Mapping[str, Any] | None = None,
+        online: bool = True,
     ) -> None:
         self.fits_path = Path(fits_path)
 
         if not self.fits_path.exists():
             raise FileNotFoundError(f"FITS file not found: {self.fits_path}")
 
+        if not isinstance(online, bool):
+            raise TypeError("online must be True or False.")
+
         self.target_position = target_position
         self.hdu = hdu
         self.calibration = validate_declarations(calibration)
+        self.online = online
         self._inspection: ObservationInspection | None = None
+        self._settled: _SettledCalibration | None = None
 
     @classmethod
     def from_project(
@@ -740,6 +809,7 @@ class ObservationAdvisor:
         target_position: TargetPosition = None,
         hdu: int | str | None = None,
         calibration: Mapping[str, Any] | None = None,
+        online: bool = True,
     ) -> ObservationAdvisor:
         """Create an Advisor using paths relative to a BayMorph project.
 
@@ -768,6 +838,9 @@ class ObservationAdvisor:
             selects it as :meth:`ImageData.from_fits` describes.
         calibration : mapping, optional
             Calibration quantities declared in ``data.calibration``; see
+            :class:`ObservationAdvisor`.
+        online : bool, default=True
+            Whether the advisor may ask a calibration service; see
             :class:`ObservationAdvisor`.
 
         Returns
@@ -821,6 +894,7 @@ class ObservationAdvisor:
             target_position=target_position,
             hdu=hdu,
             calibration=calibration,
+            online=online,
         )
         advisor.project_root = project_root
 
@@ -840,7 +914,7 @@ class ObservationAdvisor:
         tuple of float
             Validated ``(x, y)`` target position.
         """
-        observation = self._open()
+        observation = self._open_pixels()
         data = np.asarray(observation.image.data, dtype=float)
 
         if data.ndim != 2:
@@ -911,7 +985,7 @@ class ObservationAdvisor:
         """
         from baymorph.plotting.target_selector import TargetSelector
 
-        observation = self._open()
+        observation = self._open_pixels()
         data = np.asarray(observation.image.data, dtype=float)
 
         if data.ndim != 2:
@@ -952,9 +1026,12 @@ class ObservationAdvisor:
         is never used without a declaration of the user; a quantity that
         the header does not hold is left out. A quantity declared through
         ``calibration`` shows the status ``declared`` and the source
-        ``data.calibration`` (AD-053). Only the header is read, never the
-        pixels, so the report of a mosaic of several gigabytes costs the
-        same as the report of a small stamp.
+        ``data.calibration`` (AD-053), and so does a quantity that a
+        calibration service gave, whose note names the service; a last
+        section states what each service that serves the image was asked
+        and answered, or why it was not asked (AD-054). Only the header is
+        read, never the pixels, so the report of a mosaic of several
+        gigabytes costs the same as the report of a small stamp.
 
         Returns
         -------
@@ -970,6 +1047,13 @@ class ObservationAdvisor:
             "",
             self._header_reading().report(),
         ]
+        outcomes = self._settle_calibration().outcomes
+
+        if outcomes:
+            lines.extend(["", "Calibration services"])
+            lines.extend(
+                f"- {_format_bridge(outcome.as_dict())}" for outcome in outcomes
+            )
 
         return "\n".join(lines)
 
@@ -1092,7 +1176,7 @@ class ObservationAdvisor:
         if model_name not in PARAMETER_KINDS:
             raise ValueError(f"Unknown model: {model_name}")
 
-        inspection = self._inspection or self.inspect()
+        inspection = self._current_inspection()
 
         observed_scales = {
             "flux": inspection.target_flux_scale,
@@ -1135,7 +1219,7 @@ class ObservationAdvisor:
 
     def summary(self) -> str:
         """Return a concise human-readable inspection summary."""
-        inspection = self._inspection or self.inspect()
+        inspection = self._current_inspection()
 
         lines = [
             "BayMorph Observation Advisor",
@@ -1232,8 +1316,9 @@ class ObservationAdvisor:
     ) -> dict[str, Any]:
         """Create a config using the canonical BayMorph config maker.
 
-        The configuration carries the calibration declared to the advisor in
-        ``data.calibration``.
+        The configuration carries in ``data.calibration`` the calibration
+        declared to the advisor, completed by the values that a calibration
+        service gave.
         """
         target_position = config_options.pop("target_position", self.target_position)
 
@@ -1248,7 +1333,7 @@ class ObservationAdvisor:
             )
 
         config_options.setdefault("hdu", self.hdu)
-        config_options["calibration"] = self.calibration
+        config_options["calibration"] = self._settle_calibration().declarations
 
         return make_config_from_fits(
             self.fits_path,
@@ -1378,7 +1463,7 @@ class ObservationAdvisor:
 
         psf = _load_psf_from_config(resolved)
 
-        inspection = self._inspection or self.inspect()
+        inspection = self._current_inspection()
 
         if inspection.saturation is None:
             raise ValueError(
@@ -1591,8 +1676,9 @@ class ObservationAdvisor:
         never from the intensities of the image being fitted.
 
         - Every flux takes the magnitudes 8 to 30 through the zeropoint,
-          read from the header or declared through ``calibration``, as a
-          log-uniform prior in image units, unless a flux prior is supplied:
+          read from the header, declared through ``calibration`` or given by
+          a calibration service, as a log-uniform prior in image units,
+          unless a flux prior is supplied:
           ``flux_calibration``, ``flux_prior`` or an entry of
           ``model_priors``. Without a usable zeropoint, every flux is
           log-uniform in image units from the flux of a point source at
@@ -1760,6 +1846,7 @@ class ObservationAdvisor:
                 detail="explicit user-declared scientific prior",
             )
 
+        settled = self._settle_calibration()
         reading = self._header_reading()
         zeropoint = _finite_or_none(reading.value("zeropoint"))
         zeropoint_declared = reading["zeropoint"].status == "declared"
@@ -1792,9 +1879,16 @@ class ObservationAdvisor:
         if fixed_inputs.stage_identity != stage_identity:
             raise ValueError(
                 "The fixed inputs were measured for another preparation or "
-                "PSF configuration. Measure them again with the options of "
-                "this proposal, or let the proposal measure them."
+                "PSF configuration, or another data.calibration. Measure them "
+                "again with the options of this proposal, or let the proposal "
+                "measure them."
             )
+
+        warnings.extend(
+            _format_bridge(outcome.as_dict(), volatile=False)
+            for outcome in settled.outcomes
+            if outcome.status == "failed"
+        )
 
         proposals = {
             name: propose_model_priors(
@@ -1807,6 +1901,7 @@ class ObservationAdvisor:
                     None if photometric_system is None else str(photometric_system)
                 ),
                 zeropoint_declared=zeropoint_declared,
+                zeropoint_origin=settled.origin("zeropoint"),
                 sky_scale=fixed_inputs.sky_scale,
                 psf_noise_equivalent_area=fixed_inputs.psf_noise_equivalent_area,
             )
@@ -1910,7 +2005,7 @@ class ObservationAdvisor:
                 "dynesty, or declare the priors through model_priors."
             )
 
-        inspection = self._inspection or self.inspect()
+        inspection = self._current_inspection()
         flux_review_models = [
             name
             for name in chosen
@@ -1950,6 +2045,18 @@ class ObservationAdvisor:
             },
             **config_options,
         )
+
+        # Every part of the proposal must rest on one settlement of the
+        # calibration: a change of the file or of the declarations while the
+        # stages ran settles it again, and would mix two answers.
+        if self._settled is not settled:
+            raise RuntimeError(
+                "The FITS file, its HDU or the declared calibration changed "
+                "while the proposal was built, so the calibration was settled "
+                "again and the proposal would mix two settlements. Create the "
+                "advisor again and propose again."
+            )
+
         config["fit"]["models"] = list(chosen)
         config["fit"]["priors"] = {
             name: {
@@ -2003,19 +2110,21 @@ class ObservationAdvisor:
 
         provenance = {
             "schema": "baymorph.advisor_proposal",
-            "schema_version": 2,
+            "schema_version": 3,
             "decision": "AD-049",
             "baymorph_version": _baymorph_version(),
             "image_path": config["data"]["image_path"],
             "hdu": self.hdu,
+            "online": self.online,
             "calibration": {
                 name: {
                     "value": value,
                     "unit": DECLARABLE_QUANTITIES[name],
-                    "source": "user",
+                    "source": settled.sources[name],
                 }
-                for name, value in self.calibration.items()
+                for name, value in settled.declarations.items()
             },
+            "bridges": [outcome.as_dict() for outcome in settled.outcomes],
             "target_position": deepcopy(config["data"]["target_position"]),
             "models": list(chosen),
             "rules": {
@@ -2068,19 +2177,85 @@ class ObservationAdvisor:
         )
 
     def _open(self) -> Observation:
-        """Open the image, with the metadata of the declared calibration."""
+        """Open the image, with the metadata of the settled calibration."""
         return open_observation(
-            self.fits_path, hdu=self.hdu, declarations=self.calibration
+            self.fits_path,
+            hdu=self.hdu,
+            declarations=self._settle_calibration().declarations,
         )
+
+    def _open_pixels(self) -> Observation:
+        """Open the image for its pixels, without asking any service."""
+        return open_observation(self.fits_path, hdu=self.hdu)
+
+    def _current_inspection(self) -> ObservationInspection:
+        """Return the inspection of the current image and calibration.
+
+        Settling the calibration first drops an inspection made for another
+        image, HDU or calibration, which is then made again.
+        """
+        self._settle_calibration()
+
+        return self._inspection or self.inspect()
 
     def _header_reading(self) -> HeaderReading:
         """Return the reading of the header of the image HDU.
 
-        Only the header is read, with the declared calibration.
+        Only the header is read, with the settled calibration. The note of a
+        quantity that a calibration service gave names the service.
         """
-        return read_image_header(
+        settled = self._settle_calibration()
+        reading = read_image_header(
+            self.fits_path, hdu=self.hdu, declarations=settled.declarations
+        )
+        quantities = dict(reading.quantities)
+
+        for name in settled.declarations:
+            title = settled.origin(name)
+
+            if title is not None:
+                quantity = quantities[name]
+                quantities[name] = replace(
+                    quantity,
+                    note=f"From the {title} ({settled.sources[name]}). "
+                    f"{quantity.note}",
+                )
+
+        return replace(reading, quantities=quantities)
+
+    def _settle_calibration(self) -> _SettledCalibration:
+        """Return the calibration that every reading of the advisor uses.
+
+        The declarations of the user come first. When ``online``, a
+        calibration service is asked only for a quantity that they and the
+        header leave unusable (AD-054). The result is kept while the image,
+        the HDU, the declarations and ``online`` are unchanged, so the
+        advisor asks at most once; a new result clears the inspection.
+        """
+        key = (
+            str(self.fits_path.resolve()),
+            file_state(self.fits_path),
+            repr(self.hdu),
+            json.dumps(self.calibration, sort_keys=True, default=str),
+            self.online,
+        )
+
+        if self._settled is not None and self._settled.key == key:
+            return self._settled
+
+        if self._settled is not None:
+            self._inspection = None
+
+        reading = read_image_header(
             self.fits_path, hdu=self.hdu, declarations=self.calibration
         )
+        outcomes = consult_bridges(reading, online=self.online, notify=print)
+        declarations, sources = bridged_declarations(self.calibration, outcomes)
+        self._settled = _SettledCalibration(
+            key=key, declarations=declarations, sources=sources, outcomes=outcomes
+        )
+
+        return self._settled
 
     def _resolve_target(
         self, observation: Observation
@@ -2240,6 +2415,96 @@ def _format_declaration(name: str, entry: Mapping[str, Any]) -> str:
     return f"{name} {text} [{entry['source']}]"
 
 
+def _format_bridge(record: Mapping[str, Any], *, volatile: bool = True) -> str:
+    """Format the outcome of a calibration service for a human reader.
+
+    With ``volatile``, an answer also gives when and where the service was
+    asked, and a failure its verbatim error.
+    """
+    text = f"{record['title']} [{record['name']}]: {record['status']}. "
+    text += record["detail"]
+    run = record.get("run") or {}
+
+    if volatile and record["status"] == "applied":
+        text += f" Asked at {run['asked_at']} at {record['request']['url']}."
+    elif volatile and run.get("error"):
+        text += f" ({run['error']})"
+
+    return text
+
+
+def _parsed_yaml(text: str) -> Any:
+    """Return a YAML document as data, or None if it cannot be parsed."""
+    import yaml
+
+    try:
+        return yaml.safe_load(text)
+    except yaml.YAMLError:
+        return None
+
+
+def _comparable_report(text: str) -> Any:
+    """Return a report without what may differ within one proposal.
+
+    That is the record of when each service was asked and of the verbatim
+    error a failed request met, and whether the advisor was online, which
+    the statuses of the services already show where it matters. None if the
+    text is not a JSON report.
+    """
+    try:
+        report = json.loads(text)
+    except ValueError:
+        return None
+
+    if isinstance(report, dict):
+        report.pop("online", None)
+
+    if isinstance(report, dict) and isinstance(report.get("bridges"), list):
+        report["bridges"] = [
+            (
+                {key: value for key, value in record.items() if key != "run"}
+                if isinstance(record, dict)
+                else record
+            )
+            for record in report["bridges"]
+        ]
+
+    return report
+
+
+_ABSENT = object()
+
+
+def _differences(old: Any, new: Any, *, limit: int = 5) -> list[str]:
+    """Return up to ``limit`` dotted keys at which two documents differ."""
+    found: list[str] = []
+
+    def walk(first: Any, second: Any, path: str) -> None:
+        if len(found) >= limit:
+            return
+
+        if isinstance(first, Mapping) and isinstance(second, Mapping):
+            for key in [*first, *(key for key in second if key not in first)]:
+                walk(
+                    first.get(key, _ABSENT),
+                    second.get(key, _ABSENT),
+                    f"{path}.{key}" if path else str(key),
+                )
+        elif (
+            isinstance(first, list)
+            and isinstance(second, list)
+            and len(first) == len(second)
+        ):
+            for index, (one, other) in enumerate(zip(first, second)):
+                walk(one, other, f"{path}.{index}" if path else str(index))
+        elif first != second:
+            found.append(path or "the whole document")
+
+    walk(old, new, "")
+
+    return found
+
+
 def _provenance_summary(provenance: Mapping[str, Any]) -> list[str]:
     """Return the summary lines of the provenance of a proposal."""
     lines = ["", "PRIORS AND THEIR SOURCES"]
@@ -2321,6 +2586,12 @@ def _provenance_summary(provenance: Mapping[str, Any]) -> list[str]:
             + ("BayMorph default" if value is None else f"{value:.6g}")
             + f" [{peak['source']}] {peak['detail']}"
         )
+
+    bridges = provenance.get("bridges") or []
+
+    if bridges:
+        lines.extend(["", "CALIBRATION SERVICES"])
+        lines.extend(f"- {_format_bridge(record)}" for record in bridges)
 
     fixed = provenance.get("fixed_inputs")
 

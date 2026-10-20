@@ -318,6 +318,7 @@ def _command_config(args: argparse.Namespace) -> int:
 
     for option, value in (
         ("--accept", args.accept),
+        ("--offline", args.offline),
         ("--background-model", args.background_model),
         ("--resampling-variance-factor", args.resampling_variance_factor),
     ):
@@ -376,16 +377,20 @@ def _advise_config(
 ) -> int:
     """Propose a configuration with the observation advisor.
 
-    The advisor reads the header with the declared calibration, prepares the
-    image and builds its PSF in the run directory, where the fit reuses
-    them, and proposes every prior. The configuration and its report are
-    written only with ``--accept``.
+    The advisor reads the header with the declared calibration, asks a
+    calibration service for a quantity the header lacks unless
+    ``--offline``, prepares the image and builds its PSF in the run
+    directory, where the fit reuses them, and proposes every prior. The
+    configuration and its report are written only with ``--accept``, and
+    not when a request to a calibration service that the proposal needed
+    failed: no answer, or an answer that fails its checks.
     """
     advisor = ObservationAdvisor(
         fits_path.resolve(),
         target_position=target_position,
         hdu=args.hdu,
         calibration=calibration,
+        online=not args.offline,
     )
 
     print(advisor.header_report())
@@ -423,6 +428,22 @@ def _advise_config(
         )
 
         return 0
+
+    failed = [
+        record["title"]
+        for record in (proposal.provenance or {}).get("bridges", [])
+        if record["status"] == "failed"
+    ]
+
+    if failed:
+        raise RuntimeError(
+            "The configuration and its report were not written: the "
+            + " and the ".join(failed)
+            + " did not answer, or gave an answer that fails its checks, so the "
+            "proposal holds the priors that do "
+            "without it. Run the command again when the service answers, or add "
+            "--offline to write this proposal."
+        )
 
     written_path = proposal.write(accept=True)
 
@@ -562,6 +583,18 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "With --advise, write the reviewed proposal and its report " "beside it."
+        ),
+    )
+
+    config_parser.add_argument(
+        "--offline",
+        action="store_true",
+        help=(
+            "With --advise, ask no calibration service online. Without it, "
+            "the advisor asks the ACS Zeropoint Calculator of STScI for the "
+            "zeropoint of a drizzled ACS image whose header gives no usable "
+            "one, unless two readings of it disagree, and for which none is "
+            "declared."
         ),
     )
 

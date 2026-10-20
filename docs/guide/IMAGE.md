@@ -37,7 +37,15 @@ BayMorph derives it only for the products its documentation covers, here the
 drizzled images in electrons per second. An HST image drizzled to counts per
 second (`D001OUUN = 'cps'`) from exposures in electrons is read in electrons
 per second even when its `BUNIT` still says `ELECTRONS`, and the filter of
-ACS is read from its two filter wheels, `FILTER1` and `FILTER2`. Two High
+ACS is read from its two filter wheels, `FILTER1` and `FILTER2`. HST headers
+also give the detector, `DETECTOR`, and the start and end of the
+observation, `EXPSTART` and `EXPEND`, as Modified Julian Dates; for a
+drizzled ACS image whose header gives no usable zeropoint, and not two
+readings of it that disagree, the observation advisor asks the ACS Zeropoint
+Calculator of STScI for the zeropoint of that detector, filter and date (see
+[Writing a Configuration](CONFIGURING.md#interactively-in-a-notebook)). A
+zeropoint that the header gives is kept, even when it comes from an earlier
+calibration; declare one to replace it. Two High
 Level Science Products of MAST that document their own zeropoints are read
 with them: the eXtreme Deep Field (XDF), whose headers carry no `PHOTFLAM`,
 and the ACS Coma Cluster Treasury Survey, whose headers record
@@ -46,11 +54,13 @@ and the ACS Coma Cluster Treasury Survey, whose headers record
 When several conventions read the same quantity, the most specific one
 decides, and BayMorph compares its value with the others: two values that
 disagree make the quantity `conflicting`, with both sources in the notes of
-the header report, and it is not used until you declare it. A convention
+the header report, and it is not used until you declare it. Two zeropoints
+agree when they differ by at most 0.001 mag, which changes a flux by less
+than 0.1 percent, and the note names the other one. A convention
 whose documentation corrects another one, such as the drizzle rule that
 corrects `BUNIT`, or the Coma survey whose zeropoint replaces the one of
-`PHOTFLAM`, overrides it instead, and the note records the value it
-overrode.
+`PHOTFLAM` when the two differ by more than 0.001 mag, overrides it instead,
+and the note records the value it overrode.
 
 When the header lacks a calibration quantity, or states it wrongly, declare
 it in `data.calibration`. A drizzled image whose header says `ELECTRONS`

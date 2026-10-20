@@ -143,6 +143,41 @@ command line the options `--image-unit`, `--zeropoint`,
 `--photometric-system`, `--exposure-time`, `--gain` and `--saturation` do the
 same (see [Command Line](../reference/CLI.md)).
 
+Some calibration quantities are given only by an online service of the
+observatory. When the header leaves such a quantity ambiguous or missing and
+you declare none, the Advisor asks the service once, before it prepares the
+image, and writes the answer to `data.calibration`, so that the fit reads it
+from the YAML and never goes online. A value you declare, or one the header
+gives, is never replaced, and two readings of the header that disagree are
+never settled by a service.
+
+| Service | Images | What the Advisor sends | What it writes |
+| --- | --- | --- | --- |
+| [ACS Zeropoint Calculator](https://acszeropoints.stsci.edu) of STScI | ACS images of the WFC or HRC detector drizzled to electrons per second (`D001OUUN = 'cps'`), observed within one year (`EXPSTART`, `EXPEND`) | the detector, the filter, and the date of the middle of the observation; for an observation over several dates, also its first and last dates | `zeropoint`, the AB zeropoint of the middle date, and `photometric_system: AB` |
+
+The sensitivity of ACS does not only drift: for WFC F814W the calculator
+gives 25.948 on 2006-06-20 and 25.932 on 2006-07-20. When the zeropoints of
+the first and last dates of an observation differ from that of its middle
+date by more than 0.002 mag, no single zeropoint holds for its exposures,
+and the Advisor writes none.
+
+The header report and the summary say what was asked and answered, when
+an answer was applied, or why the service was not asked, for example for a mosaic without
+observation dates; the report beside the YAML records the request and the
+answer. The answer is accepted only when it is consistent with itself: its
+AB and ST zeropoints must agree with its `PHOTFLAM` and pivot wavelength.
+Without a usable answer, the fluxes take the priors that need no zeropoint.
+Proposals of one image made with and without the answer therefore have
+different flux priors, and their evidences are not comparable.
+`ObservationAdvisor(..., online=False)` asks nothing, as for a batch of
+images on a computer without network. Writing the same proposal again keeps
+the report that is already there when it differs only in when the service
+was asked, or in the verbatim text of the error a failed request met;
+another answer, after a recalibration of the observatory, even one that
+fails for the same reason, or a failure for another reason, is a different
+proposal, and `write` refuses to replace the files and names the keys that
+differ.
+
 The Advisor first prepares the image and builds its PSF, the inputs of the
 observation model that come before any prior; the fit then reuses them. To
 look at them before the priors, call `advisor.measure_fixed_inputs(...)` and
@@ -153,7 +188,7 @@ fit:
 
 | Parameter | Proposed prior |
 | --- | --- |
-| Fluxes | Magnitudes 8 to 30, converted through the zeropoint, read from the header or declared: log-uniform in image units. Without a zeropoint, from the flux of a point source at signal-to-noise 1 on the prepared sky, the sky scale times the square root of the noise-equivalent area of the PSF, to 22 magnitudes above it: log-uniform in image units. |
+| Fluxes | Magnitudes 8 to 30, converted through the zeropoint, read from the header, declared, or given by a calibration service: log-uniform in image units. Without a zeropoint, from the flux of a point source at signal-to-noise 1 on the prepared sky, the sky scale times the square root of the noise-equivalent area of the PSF, to 22 magnitudes above it: log-uniform in image units. |
 | Lengths of a model with one component | 0.1 to 120 arcsec, converted through the pixel scale: log-uniform in pixels, within the range where the rendering of the model is validated. |
 | Lengths of a model with several components | The default ranges, which tell the components apart, limited to 0.1 to 120 arcsec. |
 | Centre | Within three times the FWHM of the PSF of the target position. |

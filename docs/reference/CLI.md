@@ -68,6 +68,7 @@ together.
 | `--overwrite` | Write `outputs.overwrite: true`, which allows products of existing runs to be replaced. | off |
 | `--advise` | Let the observation advisor propose the configuration, as described below. | off |
 | `--accept` | With `--advise`, write the reviewed proposal. | off |
+| `--offline` | With `--advise`, ask no calibration service online. Without it, the advisor asks the ACS Zeropoint Calculator of STScI for the zeropoint of a drizzled ACS image whose header gives no usable one, unless two readings of it disagree, and for which none is declared. | online |
 | `--background-model` | With `--advise`, the residual background model whose priors are proposed: `constant` or `plane`. | `constant` |
 | `--resampling-variance-factor` | With `--advise`, the factor by which a resampling of the image multiplied the variance of its noise, which lets the gain keyword of a resampled image be proposed as the effective gain. | |
 
@@ -87,12 +88,24 @@ calibration you declared in place of the header readings, prepares the
 image and builds its PSF in the run directory, where the fit reuses them,
 and prints a proposal of every prior of every `--model`, with its source:
 the header, a declared calibration, the prepared sky scale and PSF, the
-BayMorph defaults, or a `--uniform-prior` you declared. Without a zeropoint,
-read or declared, the flux priors come from the sky and the PSF, and the
-proposal states the rule and its numbers. It writes nothing; run the same command
+BayMorph defaults, or a `--uniform-prior` you declared. When the header of a
+drizzled ACS image gives no usable zeropoint, and not two readings of it that
+disagree, and you declare none, the advisor first asks the ACS Zeropoint
+Calculator of STScI for it, when the image allows a request, sending only the detector, the filter and the
+dates of the observation, and prints the answer in a section of its own;
+`--offline` asks nothing. Without a zeropoint, read, declared or given by the
+calculator, the flux priors come from the sky and the PSF, and the proposal
+states the rule and its numbers. It writes nothing; run the same command
 again with `--accept` to write the YAML and, beside it, a report
-`<stem>.advisor.json` of where every proposed value comes from. The rules
-of the proposal are those of
+`<stem>.advisor.json` of where every proposed value comes from. With
+`--accept` the command writes neither the YAML nor its report, and exits with
+status 1, when a request to the calculator failed: no answer, or an answer
+that cannot be read or is not consistent with itself. It has then prepared
+the image as usual; run it again, or add `--offline` to write the proposal
+without the zeropoint. When the image allows no request, or the answers hold
+no single zeropoint for an observation over several dates, the proposal is
+written with the flux priors that need no zeropoint, and the summary says
+why. The rules of the proposal are those of
 [Writing a Configuration](../guide/CONFIGURING.md#interactively-in-a-notebook).
 
 The image path and the output root of the written file are absolute, so
@@ -120,5 +133,5 @@ diagnostics. See [The Runner](../guide/RUNNER.md).
 | Status | Meaning |
 | --- | --- |
 | `0` | The command succeeded. |
-| `1` | The command failed while it ran, for example because a file is missing or is not a FITS file, or a configuration is invalid. The error is printed on one line, `baymorph: error: …`. |
+| `1` | The command failed while it ran, for example because a file is missing or is not a FITS file, a configuration is invalid, or a request to a calibration service that a proposal to write needed failed. The error is printed on one line, `baymorph: error: …`. |
 | `2` | The options are invalid or do not go together, for example `--target-center` with `--target-x`. The error is printed after the usage of the command. |

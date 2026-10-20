@@ -1055,6 +1055,99 @@ def test_conventions_that_disagree_make_a_quantity_conflicting(tmp_path) -> None
 
     assert agreed["zeropoint"].status == "convention"
     assert agreed["zeropoint"].convention == "first"
+    assert agreed["zeropoint"].note is None
+
+
+def test_two_zeropoints_within_a_thousandth_of_a_magnitude_agree(tmp_path) -> None:
+    """Zeropoints 0.0005 mag apart agree; 0.0015 mag apart they conflict."""
+    first = _write_convention(
+        tmp_path / "first.yaml",
+        "first",
+        50,
+        ["  zeropoint:", "    keywords: [MAGZP]", "    unit: mag"],
+    )
+    second = _write_convention(
+        tmp_path / "second.yaml",
+        "second",
+        40,
+        ["  zeropoint:", "    keywords: [ZPAB]", "    unit: mag"],
+    )
+    conventions = load_header_conventions([first, second])
+    header = _generic_header()
+    header["MAGZP"] = 25.937
+    header["ZPAB"] = 25.9365
+
+    zeropoint = read_header(header, conventions=conventions)["zeropoint"]
+
+    assert zeropoint.status == "convention"
+    assert zeropoint.value == pytest.approx(25.937)
+    assert zeropoint.note == (
+        "Another reading agrees within 0.001 mag: second gives 25.9365 mag (ZPAB)."
+    )
+
+    # Written 0.001 mag apart, two zeropoints agree whichever way the binary
+    # difference rounds.
+    for other in (25.936, 25.938):
+        header["ZPAB"] = other
+
+        assert read_header(header, conventions=conventions)["zeropoint"].status == (
+            "convention"
+        )
+
+    header["ZPAB"] = 25.9355
+
+    assert read_header(header, conventions=conventions)["zeropoint"].status == (
+        "conflicting"
+    )
+
+    # Any other number must still agree exactly.
+    exposure = [
+        "  exposure_time:",
+        "    keywords: [EXPTIME]",
+        "    unit: s",
+    ]
+    _write_convention(tmp_path / "first.yaml", "first", 50, exposure)
+    _write_convention(
+        tmp_path / "second.yaml",
+        "second",
+        40,
+        ["  exposure_time:", "    keywords: [EXPOSURE]", "    unit: s"],
+    )
+    header["EXPOSURE"] = 300.0005
+
+    assert read_header(
+        header, conventions=load_header_conventions([first, second])
+    )["exposure_time"].status == "conflicting"
+
+
+def test_hst_headers_give_the_detector_and_the_dates_of_the_observation() -> None:
+    """DETECTOR, EXPSTART and EXPEND are read for the calibration services."""
+    primary, image = _hst_headers()
+    primary["DETECTOR"] = ("WFC", "detector in use: WFC, HRC, or SBC")
+    primary["EXPSTART"] = 54122.6577005
+    primary["EXPEND"] = 54122.74369596
+
+    reading = read_header(image, primary_header=primary)
+
+    assert reading["detector"].status == "explicit"
+    assert reading.value("detector") == "WFC"
+    assert reading["detector"].convention == "hst"
+
+    for name, keyword, value in (
+        ("observation_start", "EXPSTART", 54122.6577005),
+        ("observation_end", "EXPEND", 54122.74369596),
+    ):
+        quantity = reading[name]
+
+        assert quantity.status == "convention"
+        assert quantity.value == pytest.approx(value)
+        assert quantity.unit == "MJD"
+        assert quantity.keyword == keyword
+
+    generic = read_header(_generic_header())
+
+    for name in ("detector", "observation_start", "observation_end"):
+        assert generic[name].status == "missing"
 
 
 def test_a_convention_may_override_another_and_an_ambiguous_one_decides(
@@ -1474,8 +1567,20 @@ def test_a_coma_treasury_image_takes_the_zeropoint_of_the_survey() -> None:
     assert zeropoint.keyword == "FILTER2"
     assert reading.value("photometric_system") == "AB"
 
-    # A valid PHOTFLAM gives another value, which the survey value overrides.
+    # A valid PHOTFLAM gives 25.9365, within 0.001 mag of the survey value,
+    # which is kept, and the note names the other readings.
     primary, image = _coma_headers(photflam=7.0723600e-20)
+    reading = read_header(image, primary_header=primary)
+
+    assert reading.value("zeropoint") == pytest.approx(25.937)
+    assert (
+        "Other readings agree within 0.001 mag: hst_drizzle gives 25.9365 mag "
+        "(PHOTFLAM, PHOTPLAM); hst gives 25.9365 mag (PHOTFLAM, PHOTPLAM)."
+    ) in reading["zeropoint"].note
+
+    # A PHOTFLAM whose zeropoint is 0.0015 mag lower, 0.002 mag from the
+    # survey value, is overridden by it.
+    primary, image = _coma_headers(photflam=7.0723600e-20 * 10 ** (0.4 * 0.0015))
     reading = read_header(image, primary_header=primary)
 
     assert reading.value("zeropoint") == pytest.approx(25.937)

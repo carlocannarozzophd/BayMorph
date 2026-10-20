@@ -695,6 +695,7 @@ def test_config_command_advises_several_models_with_qualified_priors(
     ("extra", "message"),
     [
         (["--accept"], "--accept requires --advise"),
+        (["--offline"], "--offline requires --advise"),
         (["--background-model", "plane"], "--background-model requires --advise"),
         (
             ["--resampling-variance-factor", "0.8"],
@@ -931,3 +932,177 @@ def test_config_command_advises_with_the_declared_calibration(
     assert config["fit"]["priors"]["single_sersic"]["flux"]["lower"] == (
         pytest.approx(10.0 ** (0.4 * (28.0 - 30.0)))
     )
+
+
+def _write_acs_drizzle(path: Path, **cards) -> None:
+    """Write an ACS/WFC F814W image drizzled to cps whose PHOTFLAM is 0.
+
+    ``cards`` replace keywords of the header.
+    """
+    y, x = np.indices((81, 81), dtype=float)
+    image = 2.0 * np.exp(-0.5 * (((x - 40.0) / 4.0) ** 2 + ((y - 40.0) / 3.0) ** 2))
+    image += np.random.default_rng(0).normal(0.0, 0.01, image.shape)
+
+    header = fits.Header()
+    header["CTYPE1"] = "RA---TAN"
+    header["CTYPE2"] = "DEC--TAN"
+    header["CRPIX1"] = 41.0
+    header["CRPIX2"] = 41.0
+    header["CRVAL1"] = 195.0
+    header["CRVAL2"] = 27.9
+    header["CDELT1"] = -0.05 / 3600.0
+    header["CDELT2"] = 0.05 / 3600.0
+    header["TELESCOP"] = "HST"
+    header["INSTRUME"] = "ACS"
+    header["DETECTOR"] = "WFC"
+    header["FILTER2"] = "F814W"
+    header["BUNIT"] = "ELECTRONS"
+    header["D001OUUN"] = "cps"
+    header["PHOTFLAM"] = 0.0
+    header["PHOTPLAM"] = 8045.0
+    header["EXPSTART"] = 54122.6577005
+    header["EXPEND"] = 54122.74369596
+    header["EXPTIME"] = 1400.0
+    header.update(cards)
+
+    fits.writeto(path, image, header)
+
+
+def test_config_command_writes_the_zeropoint_of_the_calculator(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    advisor_stages: list[dict],
+    acs_calculator,
+) -> None:
+    """--advise --accept writes the zeropoint the calculator gave."""
+    fits_path = tmp_path / "acs.fits"
+    output_path = tmp_path / "acs.yaml"
+
+    _write_acs_drizzle(fits_path)
+    monkeypatch.setattr(
+        "sys.argv",
+        [*_advise_arguments(tmp_path, fits_path, output_path), "--accept"],
+    )
+
+    assert main() == 0
+
+    config = yaml.safe_load(output_path.read_text(encoding="utf-8"))
+    report = yaml.safe_load(
+        (tmp_path / "acs.advisor.json").read_text(encoding="utf-8")
+    )
+
+    assert config["data"]["calibration"] == {
+        "zeropoint": 25.931,
+        "photometric_system": "AB",
+    }
+    assert report["bridges"][0]["status"] == "applied"
+    assert "Asking the ACS Zeropoint Calculator of STScI" in capsys.readouterr().out
+    assert len(acs_calculator.calls) == 1
+
+
+def test_config_command_advises_offline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    advisor_stages: list[dict],
+    acs_calculator,
+) -> None:
+    """--offline asks nothing and says what it would have asked."""
+    fits_path = tmp_path / "acs.fits"
+
+    _write_acs_drizzle(fits_path)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            *_advise_arguments(tmp_path, fits_path, tmp_path / "acs.yaml"),
+            "--offline",
+        ],
+    )
+
+    assert main() == 0
+
+    printed = capsys.readouterr().out
+
+    assert "[stsci_acs_zeropoint]: offline." in printed
+    assert "Asking" not in printed
+    assert acs_calculator.calls == []
+
+
+def test_accept_writes_nothing_when_the_service_failed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    advisor_stages: list[dict],
+    acs_calculator,
+) -> None:
+    """A proposal without the answer it needed is written only with --offline."""
+    from baymorph.pipeline.calibration_bridges import BridgeTransportError
+
+    fits_path = tmp_path / "acs.fits"
+    output_path = tmp_path / "acs.yaml"
+    arguments = [*_advise_arguments(tmp_path, fits_path, output_path), "--accept"]
+
+    _write_acs_drizzle(fits_path)
+    acs_calculator.error = BridgeTransportError("could not be reached", "no route")
+    monkeypatch.setattr("sys.argv", arguments)
+
+    report_path = tmp_path / "acs.advisor.json"
+
+    assert main() == 1
+    assert (
+        "baymorph: error: The configuration and its report were not written: the "
+        "ACS Zeropoint Calculator of STScI did not answer, or gave an answer"
+    ) in capsys.readouterr().err
+    assert not output_path.exists()
+    assert not report_path.exists()
+
+    monkeypatch.setattr("sys.argv", [*arguments, "--offline"])
+
+    assert main() == 0
+    assert "calibration" not in yaml.safe_load(output_path.read_text(encoding="utf-8"))[
+        "data"
+    ]
+    assert yaml.safe_load(report_path.read_text(encoding="utf-8"))["bridges"][0][
+        "status"
+    ] == ("offline")
+    assert len(acs_calculator.calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("cards", "options", "calibration", "requests"),
+    [
+        ({}, ["--zeropoint", "25.94", "--photometric-system", "AB"], True, 0),
+        ({"EXPTIME": 99999.0}, [], False, 0),
+        ({"EXPSTART": 53906.5, "EXPEND": 53936.5}, [], False, 3),
+    ],
+    ids=["not_needed", "refused_before_asking", "refused_after_asking"],
+)
+def test_accept_writes_a_consultation_that_did_not_fail(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    advisor_stages: list[dict],
+    acs_calculator,
+    cards,
+    options,
+    calibration,
+    requests,
+) -> None:
+    """Only a failed request stops --accept; a refusal writes the proposal."""
+    fits_path = tmp_path / "acs.fits"
+    output_path = tmp_path / "acs.yaml"
+
+    _write_acs_drizzle(fits_path, **cards)
+    acs_calculator.by_date["2006-07-05"] = acs_calculator.answers["2006-07-20"]
+    monkeypatch.setattr(
+        "sys.argv",
+        [*_advise_arguments(tmp_path, fits_path, output_path), *options, "--accept"],
+    )
+
+    assert main() == 0
+
+    written = yaml.safe_load(output_path.read_text(encoding="utf-8"))["data"]
+
+    assert ("calibration" in written) is calibration
+    assert (tmp_path / "acs.advisor.json").is_file()
+    assert len(acs_calculator.calls) == requests

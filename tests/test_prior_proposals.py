@@ -305,6 +305,25 @@ def test_flux_priors_state_their_rule_and_numbers() -> None:
     assert "declared zeropoint 25" in declared.detail
     assert declared.prior == magnitude_flux_prior(25.0)
 
+    # A zeropoint that a calibration service gave names the service.
+    served = propose_model_priors(
+        "single_sersic",
+        zeropoint=25.931,
+        pixel_scale=0.05,
+        psf_fwhm_pixels=2.0,
+        photometric_system="AB",
+        zeropoint_declared=True,
+        zeropoint_origin="ACS Zeropoint Calculator of STScI",
+    )["flux"]
+
+    assert served.source == "declaration"
+    assert served.detail == (
+        "magnitudes 8 to 30 AB through the zeropoint 25.931 given by the ACS "
+        "Zeropoint Calculator of STScI: 0.02357 to 1.487e+07 in image units, "
+        "log-uniform"
+    )
+    assert served.prior["lower"] == pytest.approx(10 ** (0.4 * (25.931 - 30.0)))
+
     proposals = propose_model_priors(
         "bulge_disk",
         zeropoint=None,

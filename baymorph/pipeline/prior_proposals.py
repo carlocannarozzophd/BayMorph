@@ -598,6 +598,7 @@ def propose_model_priors(
     centre_multiple: float = CENTRE_FWHM_MULTIPLE,
     photometric_system: str | None = None,
     zeropoint_declared: bool = False,
+    zeropoint_origin: str | None = None,
     sky_scale: float | None = None,
     psf_noise_equivalent_area: float | None = None,
 ) -> dict[str, PriorProposal]:
@@ -628,6 +629,9 @@ def propose_model_priors(
     zeropoint_declared : bool, default=False
         Whether the zeropoint is declared in ``data.calibration`` rather than
         read from the header; it sets the source of the flux priors.
+    zeropoint_origin : str, optional
+        Title of the calibration service that gave a declared zeropoint,
+        named in the detail of the flux priors.
     sky_scale : float, optional
         Prepared sky scale, in image units, a fixed input.
     psf_noise_equivalent_area : float, optional
@@ -675,6 +679,7 @@ def propose_model_priors(
                 magnitudes=magnitudes,
                 photometric_system=photometric_system,
                 zeropoint_declared=zeropoint_declared,
+                zeropoint_origin=zeropoint_origin,
                 sky_scale=sky_scale,
                 psf_noise_equivalent_area=psf_noise_equivalent_area,
             )
@@ -797,6 +802,7 @@ def _flux_proposal(
     zeropoint_declared: bool,
     sky_scale: float | None,
     psf_noise_equivalent_area: float | None,
+    zeropoint_origin: str | None = None,
 ) -> PriorProposal:
     """Propose the prior of one flux, with the rule and its numbers."""
     bright, faint = _ordered_range(magnitudes, "magnitudes")
@@ -805,7 +811,13 @@ def _flux_proposal(
         point = float(zeropoint)
         prior = magnitude_flux_prior(point, magnitudes=magnitudes)
         system = f" {photometric_system}" if photometric_system else ""
-        origin = "declared zeropoint" if zeropoint_declared else "zeropoint"
+
+        if zeropoint_origin:
+            through = f"zeropoint {point:.6g} given by the {zeropoint_origin}"
+        elif zeropoint_declared:
+            through = f"declared zeropoint {point:.6g}"
+        else:
+            through = f"zeropoint {point:.6g}"
 
         return PriorProposal(
             parameter=name,
@@ -814,7 +826,7 @@ def _flux_proposal(
             source="declaration" if zeropoint_declared else "header",
             detail=(
                 f"magnitudes {bright:g} to {faint:g}{system} through the "
-                f"{origin} {point:.6g}: {prior['lower']:.4g} to "
+                f"{through}: {prior['lower']:.4g} to "
                 f"{prior['upper']:.4g} in image units, log-uniform"
             ),
         )
