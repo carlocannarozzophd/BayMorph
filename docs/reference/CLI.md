@@ -101,8 +101,9 @@ Calculator of STScI for it, when the image allows a request, sending only the de
 dates of the observation, and prints the answer in a section of its own;
 `--offline` asks nothing. Without a zeropoint, read, declared or given by the
 calculator, the flux priors come from the sky and the PSF, and the proposal
-states the rule and its numbers. It writes nothing; run the same command
-again with `--accept` to write the YAML and, beside it, a report
+states the rule and its numbers. The configuration is not written yet: run
+the same command again with `--accept` to write the YAML and, beside it, a
+report
 `<stem>.advisor.json` of where every proposed value comes from. With
 `--accept` the command writes neither the YAML nor its report, and exits with
 status 1, when a request to the calculator failed: no answer, or an answer
@@ -116,6 +117,10 @@ why. The rules of the proposal are those of
 
 The image path and the output root of the written file are absolute, so
 the fit finds the products of the advisor wherever it is run from.
+
+To read what the header holds without preparing the image, print the header
+report of the advisor from Python, as
+[Opening an Image](../guide/OPENING.md#what-the-header-says) shows.
 
 ## `baymorph run`
 

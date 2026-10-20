@@ -16,6 +16,15 @@ runs/galaxy/
 └── model_comparison/           the Bayes factor, when enabled
 ```
 
+## Beside the configuration
+
+A configuration that the observation advisor proposed, and that you
+accepted with `baymorph config --advise --accept` or
+`proposal.write(accept=True)`, comes with a report beside it,
+`<stem>.advisor.json`. It records where every proposed value comes from, the
+declared calibration with the source of each value, and what every
+calibration service that serves the image was asked and answered.
+
 ## `image_preparation/`
 
 | File | Content |

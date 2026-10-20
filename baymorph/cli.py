@@ -675,16 +675,14 @@ def _build_parser() -> argparse.ArgumentParser:
             "Print what the header holds, prepare the image and build its "
             "PSF in the run directory, where the fit reuses them, and "
             "propose every prior from the header, physics and these fixed "
-            "inputs. Nothing is written without --accept."
+            "inputs. The configuration is written only with --accept."
         ),
     )
 
     config_parser.add_argument(
         "--accept",
         action="store_true",
-        help=(
-            "With --advise, write the reviewed proposal and its report " "beside it."
-        ),
+        help="With --advise, write the reviewed proposal and its report beside it.",
     )
 
     config_parser.add_argument(

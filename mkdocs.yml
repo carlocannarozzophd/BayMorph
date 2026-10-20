@@ -71,9 +71,10 @@ nav:
 - User Guide:
 
   - guide/index.md
+  - Opening an Image: guide/OPENING.md
   - The Runner: guide/RUNNER.md
   - Writing a Configuration: guide/CONFIGURING.md
-  - Image and Cutout: guide/IMAGE.md
+  - Target and Cutout: guide/IMAGE.md
   - Masks: guide/MASKS.md
   - Sky and Noise: guide/SKY_AND_NOISE.md
   - Point-Spread Function: guide/PSF.md
@@ -112,6 +113,7 @@ nav:
 
   - Command Line: reference/CLI.md
   - Configuration: reference/CONFIGURATION.md
+  - Supported Images: reference/SUPPORTED_IMAGES.md
   - Output Files: reference/OUTPUT_FILES.md
   - Python API: reference/API.md
 

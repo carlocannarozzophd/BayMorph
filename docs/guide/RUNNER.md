@@ -40,7 +40,7 @@ runner.diagnostics()                  # corner plot, residuals, profile
 | Method | Returns | Guide page |
 | --- | --- | --- |
 | `simulate()` | the synthetic observation; only for a configuration with a `simulation` section, and before `prepare_image()` | [Simulated Images](SIMULATIONS.md) |
-| `prepare_image()` | the prepared observation: cutout, masks, sky, noise | [Image and Cutout](IMAGE.md) |
+| `prepare_image()` | the prepared observation: cutout, masks, sky, noise | [Target and Cutout](IMAGE.md) |
 | `select_psf_candidates()` | the list of selected stars | [Point-Spread Function](PSF.md) |
 | `build_psf()` | the PSF kernel, a 2D array | [Point-Spread Function](PSF.md) |
 | `fit()` | the fit products; a dictionary by model name for several models | [Fitting](FITTING.md), [Results](RESULTS.md) |

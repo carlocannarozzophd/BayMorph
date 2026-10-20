@@ -111,6 +111,11 @@ and the project follows Semantic Versioning in spirit.
   header, stops when it falls outside the image, and writes the pixels in
   the configuration, which takes the target in pixels only. The summary of
   the advisor, and its report, record the position on the sky.
+* Two pages of documentation: Opening an Image, the first page of the user
+  guide, on what BayMorph reads from a header, how to declare what it does
+  not establish, and how it reads large mosaics, compressed files and pixels
+  without data; and Supported Images, which says for each family of
+  products what BayMorph reads from its header and what you declare.
 
 ### Changed
 

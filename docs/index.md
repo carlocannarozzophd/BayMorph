@@ -35,6 +35,9 @@ chain backwards.*
 
 ## What it does
 
+- **Reads the header** through the conventions of the main telescopes and
+  pipelines, and asks you to declare only what the header does not
+  establish.
 - **Prepares the image**: cuts out the target, masks the other sources,
   subtracts the sky and measures the noise.
 - **Builds the PSF** from the stars of the same image.

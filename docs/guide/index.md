@@ -9,11 +9,12 @@ configuration file describes the whole analysis, and one object, the
 
 | Step | What happens | Runner method | Page |
 | --- | --- | --- | --- |
-| 1. Configure | Write the YAML file that declares the image, the target, the model and the priors. | | [Writing a Configuration](CONFIGURING.md) |
-| 2. Prepare | Cut out the target, mask the other sources, subtract the sky and measure the noise. | `prepare_image()` | [Image and Cutout](IMAGE.md), [Masks](MASKS.md), [Sky and Noise](SKY_AND_NOISE.md) |
-| 3. PSF | Select isolated stars and build the point-spread function from them, or use an analytic one. | `select_psf_candidates()`, `build_psf()` | [Point-Spread Function](PSF.md) |
-| 4. Fit | Sample the posterior of the model parameters with a nested sampler. | `fit()` | [Fitting](FITTING.md) |
-| 5. Inspect | Read the parameter estimates and the evidence, and draw the diagnostic figures. | `diagnostics()` | [Results](RESULTS.md), [Plotting](PLOTTING.md) |
+| 1. Open | Read what the header says about the image, and declare what it does not say. | | [Opening an Image](OPENING.md) |
+| 2. Configure | Write the YAML file that declares the image, the target, the model and the priors. | | [Writing a Configuration](CONFIGURING.md) |
+| 3. Prepare | Cut out the target, mask the other sources, subtract the sky and measure the noise. | `prepare_image()` | [Target and Cutout](IMAGE.md), [Masks](MASKS.md), [Sky and Noise](SKY_AND_NOISE.md) |
+| 4. PSF | Select isolated stars and build the point-spread function from them, or use an analytic one. | `select_psf_candidates()`, `build_psf()` | [Point-Spread Function](PSF.md) |
+| 5. Fit | Sample the posterior of the model parameters with a nested sampler. | `fit()` | [Fitting](FITTING.md) |
+| 6. Results | Read the parameter estimates and the evidence, and draw the diagnostic figures. | `diagnostics()` | [Results](RESULTS.md), [Plotting](PLOTTING.md) |
 
 The whole sequence is one call:
 

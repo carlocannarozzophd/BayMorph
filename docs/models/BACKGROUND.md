@@ -35,7 +35,7 @@ to a galaxy contains part of its light, and subtracting it makes the
 profile fall faster, which lowers the fitted flux, radius and index. The
 residual background absorbs a constant error of the subtracted level, but
 not light of the galaxy that falls off with radius, so the cutout must
-reach well into the sky: see [Image and Cutout](../guide/IMAGE.md).
+reach well into the sky: see [Target and Cutout](../guide/IMAGE.md).
 
 ## The residual background
 

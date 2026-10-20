@@ -75,31 +75,41 @@ to the noise.
 
 ## 4. Fit your own image
 
-Copy a FITS image into `data/` and write a configuration for it. Tell
-BayMorph where the galaxy is and give a prior range for its flux, in the
-units of the image:
+Copy a FITS image into `data/` and tell BayMorph where the galaxy is, in
+pixels or on the sky. The observation advisor reads the header, prepares the
+image, builds the PSF from its stars and proposes a configuration, with the
+source of every prior:
 
 ```bash
 baymorph config data/galaxy.fits \
-  --target-x 500 \
-  --target-y 500 \
+  --target-ra 150.1 --target-dec 2.2 \
   --model single_sersic \
-  --uniform-prior flux 100 1000000 \
+  --advise \
   --output configs/galaxy.yaml
 ```
 
-Open `configs/galaxy.yaml` and review it before running: the priors, the
-residual background and the brightest star accepted for the PSF are in the
-units of your image, and [Writing a Configuration](CONFIGURING.md) lists
-what to check. Then:
+Read what it printed. The header report says what BayMorph has read from
+the header and what it could not establish; declare what is missing with
+the options of [Opening an Image](OPENING.md#declaring-what-the-header-lacks),
+such as `--zeropoint`. The proposal lists every prior with its source;
+[Writing a Configuration](CONFIGURING.md) says which choices are yours. When
+the proposal is right, run the same command with `--accept`, which writes
+the configuration, then fit:
 
 ```bash
+baymorph config data/galaxy.fits \
+  --target-ra 150.1 --target-dec 2.2 \
+  --model single_sersic \
+  --advise --accept \
+  --output configs/galaxy.yaml
+
 baymorph run configs/galaxy.yaml
 ```
 
-BayMorph cuts out the galaxy, masks the other sources, subtracts the sky,
-builds the PSF from the stars of the image, fits the model and draws the
-diagnostics.
+The fit reuses the image, the masks and the PSF that the advisor prepared,
+fits the model and draws the diagnostics. Without `--advise`,
+`baymorph config` writes the configuration at once, and every flux prior
+must then be declared with `--uniform-prior`, in the units of the image.
 
 ## 5. The same from Python
 

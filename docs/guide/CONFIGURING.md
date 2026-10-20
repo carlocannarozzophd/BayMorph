@@ -43,7 +43,7 @@ coordinates of the full image: `x` is the column and `y` the row, as in
 `image[y, x]`. It only tells BayMorph which source to fit; the centre of the
 galaxy is a fitted parameter. `baymorph config --target-ra RA --target-dec
 DEC`, and the advisor, take the position on the sky instead and write it in
-pixels (see [Image and Cutout](IMAGE.md#the-target)).
+pixels (see [Target and Cutout](IMAGE.md#the-target)).
 
 Every key, with its default, is listed in the
 [Configuration reference](../reference/CONFIGURATION.md).
@@ -74,9 +74,10 @@ baymorph config data/galaxy.fits \
   --output configs/galaxy.yaml
 ```
 
-It prints what the header holds, prepares the image and builds its PSF,
-and prints the proposal with the source of every prior. Nothing is written
-until you run the same command again with `--accept`. Several `--model`
+It prints what the header holds, prepares the image and builds its PSF in
+the run directory, where the fit reuses them, and prints the proposal with
+the source of every prior. The configuration is written only when you run
+the same command again with `--accept`. Several `--model`
 options give one configuration with every model, each fitted separately;
 with several models, a declared prior names its model, as in
 `--uniform-prior double_sersic.q_bulge 0.4 1`.
@@ -136,8 +137,9 @@ proposal.write(accept=True)
 unit, status and source. A quantity whose unit or meaning the header does
 not establish is marked `ambiguous` and is never used: a unit is never
 guessed from a value. Declare such a quantity in `data.calibration` (see
-[The image](IMAGE.md)); its status then becomes `declared`. Give the
-declarations to the Advisor when you create it, for example
+[Opening an Image](OPENING.md#declaring-what-the-header-lacks)); its status
+then becomes `declared`. Give the declarations to the Advisor when you
+create it, for example
 `ObservationAdvisor.from_project(fits_path, calibration={"zeropoint": 25.94,
 "photometric_system": "AB"})`: every reading of the Advisor then uses them,
 and the proposed configuration carries them in `data.calibration`. On the
@@ -220,7 +222,7 @@ pixel scale, the lengths keep the default ranges in pixels, and the summary
 says so.
 
 Without the interactive widgets, `advisor.set_target_position(x, y)` sets
-the target instead of the click. Nothing is written until
+the target instead of the click. The configuration is written only by
 `proposal.write(accept=True)`. The summary lists every prior with its
 source, and the written YAML comes with a report, `galaxy.advisor.json`,
 that records where every proposed value comes from. The diagnostics the
@@ -240,7 +242,8 @@ fit:
 | The residual background prior | `fit.background.priors` | The default, −50 to 50 in image units, is not scaled to your image. |
 | The effective gain | `fit.likelihood.effective_gain` | It sets the Poisson noise of the galaxy; see [Sky and Noise](SKY_AND_NOISE.md). |
 | The brightest star for the PSF | `psf.empirical.candidate_selection.max_peak` | The default, 80000, is not scaled to your image: keep it below the saturation level, so that saturated stars are not used. |
-| The cutout | `data.cutout` | The cutout is the part of the image the fit sees; see [Image and Cutout](IMAGE.md). |
+| The cutout | `data.cutout` | The cutout is the part of the image the fit sees; see [Target and Cutout](IMAGE.md). |
+| What the header does not say | `data.calibration` | A quantity that the header leaves `ambiguous` or `conflicting` is not used until you declare it; see [Opening an Image](OPENING.md). |
 
 The Advisor proposes each of these and records where each value comes
 from, but accepting them stays your decision.
