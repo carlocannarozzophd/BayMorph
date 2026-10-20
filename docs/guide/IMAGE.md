@@ -110,10 +110,15 @@ A cutout that leaves the region stops with the side to declare. Within a
 region, the first detection of an automatic cutout and the search of the
 PSF stars cover the region only.
 
-Every pixel that BayMorph reads must be finite. BayMorph refuses an image
-with NaN or infinite pixels instead of guessing a value for them: fill them
-before, and list them in an external mask so that the fit ignores them (see
-[Masks](MASKS.md)).
+Mosaics and drizzled images fill the parts of their grid that no exposure
+covers with NaN or with zeros. BayMorph treats as pixels without data the
+NaN or infinite pixels and, in an image stored in floating point, the areas
+of at least 100 connected pixels that are exactly zero. It leaves them out
+of the detection of the sources, of the statistics of the image and of the
+stars of the PSF, wherever they are. The cutout must hold none of them,
+unless an external mask excludes them (see [Masks](MASKS.md)): otherwise
+the preparation stops and says where they are, so that a smaller cutout or
+a mask can leave them out. BayMorph never guesses a value for them.
 
 ## The target
 

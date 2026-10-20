@@ -13,8 +13,13 @@ import numpy as np
 from astropy.io import fits
 
 from baymorph.core.image import WorkingRegion
+from baymorph.core.mask import no_data_mask
 from baymorph.pipeline.config import load_resolved_config
-from baymorph.pipeline.empirical_psf_builder import BuilderSettings, build_empirical_psf
+from baymorph.pipeline.empirical_psf_builder import (
+    BuilderSettings,
+    build_empirical_psf,
+    window_holds,
+)
 from baymorph.pipeline.image_preparation import detect_real_fits_sources
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
 from baymorph.pipeline.opening import open_configured_observation, working_region
@@ -843,12 +848,35 @@ def run_psf_construction_from_config(config: str | Path | dict[str, Any]) -> np.
     if not np.isfinite(min_peak_snr) or min_peak_snr < 0.0:
         raise ValueError("min_peak_snr must be finite and non-negative.")
 
+    # Pixels without data stay out of the stars and of their sky (AD-053).
+    no_data = no_data_mask(image.data, floating_point=image.floating_point)
+    if not np.any(no_data):
+        no_data = None
+
     used_candidates = []
     rejected_candidates = []
 
     for candidate in candidates:
         if candidate.half_size is None:
             raise ValueError("PSF candidate is missing half_size.")
+
+        if no_data is not None and window_holds(
+            no_data,
+            x=candidate.x - origin_x,
+            y=candidate.y - origin_y,
+            half_size=candidate.half_size,
+        ):
+            rejected_candidates.append(
+                {
+                    "label": candidate.label,
+                    "x": candidate.x,
+                    "y": candidate.y,
+                    "half_size": candidate.half_size,
+                    "peak_snr": None,
+                    "reason": "pixels_without_data",
+                }
+            )
+            continue
 
         cutout = extract_centered_cutout(
             image.data,
@@ -889,7 +917,7 @@ def run_psf_construction_from_config(config: str | Path | dict[str, Any]) -> np.
         )
 
     settings = empirical_psf_builder_settings(resolved)
-    detection = detect_real_fits_sources(image.data)
+    detection = detect_real_fits_sources(image.data, no_data=no_data)
     labels = (
         np.zeros(image.data.shape, dtype=int)
         if detection.segmentation is None
@@ -915,6 +943,7 @@ def run_psf_construction_from_config(config: str | Path | dict[str, Any]) -> np.
             ),
             labels,
             settings,
+            no_data,
         )
     except ValueError as exc:
         if region is None:

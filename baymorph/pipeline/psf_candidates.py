@@ -9,7 +9,9 @@ from typing import Any
 
 import numpy as np
 
+from baymorph.core.mask import no_data_mask
 from baymorph.pipeline.checkpoint_signing import canonical_json_sha256
+from baymorph.pipeline.empirical_psf_builder import window_holds
 from baymorph.pipeline.config import load_resolved_config
 from baymorph.pipeline.image_preparation import detect_real_fits_sources
 from baymorph.pipeline.opening import open_configured_observation, working_region
@@ -284,6 +286,11 @@ def run_psf_candidate_selection_from_config(
     region = image.region
     origin_x, origin_y = (0, 0) if region is None else (region.xmin, region.ymin)
 
+    # Pixels without data take no part in the search (AD-053).
+    no_data = no_data_mask(image.data, floating_point=image.floating_point)
+    if not np.any(no_data):
+        no_data = None
+
     detection_cfg = resolved["preparation"]["detection"]
 
     detection = detect_real_fits_sources(
@@ -291,6 +298,7 @@ def run_psf_candidate_selection_from_config(
         detection_sigma=detection_cfg["n_sigma"],
         detection_n_pixels=detection_cfg["n_pixels"],
         detection_n_levels=detection_cfg["n_levels"],
+        no_data=no_data,
     )
 
     segmentation = detection.segmentation
@@ -325,6 +333,7 @@ def run_psf_candidate_selection_from_config(
         min_half_size=candidate_cfg["min_half_size"],
         max_half_size=candidate_cfg["max_half_size"],
         isolation_margin=candidate_cfg["isolation_margin"],
+        no_data=no_data,
     )
 
     # The stars are found in the array of the working region; their positions
@@ -422,6 +431,7 @@ def select_psf_candidates_from_rows(
     min_half_size: int,
     max_half_size: int,
     isolation_margin: int,
+    no_data: np.ndarray | None = None,
 ) -> list[PSFCandidate]:
     """Select high-quality empirical PSF candidates from source-catalog rows.
 
@@ -453,6 +463,9 @@ def select_psf_candidates_from_rows(
         Bounds applied to the estimated half-size.
     isolation_margin : int
         Extra margin used when checking candidate isolation.
+    no_data : ndarray of bool, optional
+        Pixels without data (AD-053), the shape of ``segmentation``. A
+        candidate is rejected when its isolation window holds one.
 
     Returns
     -------
@@ -501,6 +514,11 @@ def select_psf_candidates_from_rows(
             x=float(row["x"]),
             y=float(row["y"]),
             half_size=isolation_half_size,
+        ):
+            continue
+
+        if no_data is not None and window_holds(
+            no_data, x=float(row["x"]), y=float(row["y"]), half_size=isolation_half_size
         ):
             continue
 

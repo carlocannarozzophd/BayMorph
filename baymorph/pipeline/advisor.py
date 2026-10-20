@@ -23,6 +23,7 @@ from baymorph.core.header_metadata import (
     validate_declarations,
 )
 from baymorph.core.image import read_image_header
+from baymorph.core.mask import no_data_mask
 from baymorph.core.observation import Observation, ObservationMetadata
 from baymorph.models.labels import PARAMETER_KINDS
 from baymorph.pipeline.calibration_bridges import (
@@ -106,7 +107,9 @@ class ObservationInspection:
     ``shape`` is the shape of the whole image. The pixel statistics, the
     background, the noise and the target measurements come from its working
     region when it was read within one (AD-053), whose bounds, in pixels of
-    the whole image, are ``working_region``.
+    the whole image, are ``working_region``. ``minimum``, ``maximum`` and
+    ``median`` leave out the pixels without data (AD-053), a fraction
+    ``no_data_fraction`` of the pixels read.
     """
 
     path: Path
@@ -136,6 +139,7 @@ class ObservationInspection:
     seeing_fwhm_unit: str | None = None
     working_region: dict[str, int] | None = None
     region_description: str | None = None
+    no_data_fraction: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -1094,12 +1098,16 @@ class ObservationAdvisor:
             )
 
         finite = np.isfinite(data)
-        finite_values = data[finite]
+        no_data = no_data_mask(data, floating_point=observation.image.floating_point)
+        values = data[~no_data]
 
-        if finite_values.size == 0:
-            raise ValueError("FITS image contains no finite pixels.")
+        if values.size == 0:
+            raise ValueError(
+                "FITS image contains no pixels with data: every pixel is "
+                "non-finite or in an area of exact zeros."
+            )
 
-        prepared = prepare_real_fits_image(data)
+        prepared = prepare_real_fits_image(data, no_data=no_data)
 
         noise_sigma = float(np.nanmedian(prepared.noise))
 
@@ -1155,9 +1163,9 @@ class ObservationAdvisor:
             path=self.fits_path.resolve(),
             shape=(int(metadata.height), int(metadata.width)),
             finite_fraction=float(np.mean(finite)),
-            minimum=float(np.nanmin(data)),
-            maximum=float(np.nanmax(data)),
-            median=float(np.nanmedian(data)),
+            minimum=float(np.min(values)),
+            maximum=float(np.max(values)),
+            median=float(np.median(values)),
             background=float(prepared.background),
             noise_sigma=noise_sigma,
             pixel_scale=_finite_or_none(metadata.pixel_scale),
@@ -1174,6 +1182,7 @@ class ObservationAdvisor:
             target_area_pixels=target_area_pixels,
             working_region=None if region is None else region.as_dict(),
             region_description=describe_working_region(region, metadata),
+            no_data_fraction=float(np.mean(no_data)),
         )
 
         self._inspection = inspection
@@ -1263,7 +1272,7 @@ class ObservationAdvisor:
                 if inspection.region_description is None
                 else [f"Read: {inspection.region_description}"]
             ),
-            f"Finite pixels: {inspection.finite_fraction:.3%}",
+            f"Pixels without data: {inspection.no_data_fraction:.3%}",
             (
                 "Pixel scale: "
                 + _format_optional(inspection.pixel_scale, "arcsec/pixel")

@@ -98,6 +98,9 @@ and the project follows Semantic Versioning in spirit.
   `make_config_from_fits(..., region=...)`,
   `ObservationAdvisor(..., region=...)` and
   `ObservationAdvisor.from_project(..., region=...)` take the same values.
+* `baymorph.core.no_data_mask` returns the pixels without data of an image,
+  and `detect_sources_segmentation(..., mask=...)` leaves pixels out of a
+  detection.
 
 ### Changed
 
@@ -170,6 +173,22 @@ and the project follows Semantic Versioning in spirit.
   whole image.
 * The steps of a joint fit that use only the celestial WCS of an image, and
   `ObservationAdvisor.set_target_position`, read its header, not its pixels.
+* Pixels without data are accepted outside the cutout: the NaN or infinite
+  pixels and, in an image stored in floating point, the areas of at least
+  100 connected exact zeros that mosaics and drizzled images leave where no
+  exposure falls. They take no part in the detection of the sources, in the
+  statistics of the observation advisor, in the check that decides whether
+  the sky can give the effective gain, or in the stars of the empirical PSF:
+  a star whose window touches them is not used, and they are left out of
+  the sky and of the wings of the other stars. Inside the cutout they stop
+  the preparation, which says where they are and how to leave them out,
+  unless the curated mask of `data.mask_path` excludes them; the prepared
+  image then keeps them, outside the likelihood. Before, one NaN anywhere
+  in the image, or in its working region, stopped the preparation, and
+  areas of zeros entered the detection threshold and the sky. An image
+  without such pixels gives the same products as before. The summary of the
+  observation advisor gives the fraction of pixels without data instead of
+  the fraction of finite pixels.
 
 ### Fixed
 

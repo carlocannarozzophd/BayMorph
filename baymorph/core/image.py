@@ -403,6 +403,22 @@ class ImageData:
 
         return self.region.image_shape
 
+    @property
+    def floating_point(self) -> bool:
+        """bool : Whether the image is stored in floating point.
+
+        It is ``BITPIX < 0`` in the header, or the type of the array for an
+        image built in memory without a ``BITPIX``. The pixels read from a
+        FITS file are always converted to floating point, so only the header
+        tells how they were stored.
+        """
+        bitpix = None if self.header is None else self.header.get("BITPIX")
+
+        if isinstance(bitpix, (int, np.integer)) and not isinstance(bitpix, bool):
+            return bool(bitpix < 0)
+
+        return bool(np.issubdtype(np.asarray(self.data).dtype, np.floating))
+
 
 def read_image_header(
     filename: str | Path,

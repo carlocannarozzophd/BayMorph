@@ -17,6 +17,7 @@ from astropy.stats import sigma_clipped_stats
 
 from baymorph.core.effective_gain import SKY_LEVEL_GUARD
 from baymorph.core.header_metadata import validate_declarations
+from baymorph.core.mask import no_data_mask
 from baymorph.core.observation import Observation, resolve_seeing_fwhm_pixels
 from baymorph.pipeline.opening import (
     RegionRequest,
@@ -110,21 +111,24 @@ def _normalize_target_position(
     return {"x": x, "y": y}
 
 
-def image_sky_gives_the_gain(image: np.ndarray) -> bool:
+def image_sky_gives_the_gain(image: np.ndarray, *, floating_point: bool = True) -> bool:
     """Return whether the sky of an image may give the effective gain.
 
     The sky level and scale are the median and the standard deviation of the
-    image after iterative three-sigma clipping. AD-047 lets a sky give the
-    gain only when its level is at least ``SKY_LEVEL_GUARD`` times its scale;
-    the fit repeats the test with the level and scale of the preparation.
+    image after iterative three-sigma clipping, without its pixels without
+    data (AD-053). AD-047 lets a sky give the gain only when its level is at
+    least ``SKY_LEVEL_GUARD`` times its scale; the fit repeats the test with
+    the level and scale of the preparation. ``floating_point`` tells whether
+    the image is stored in floating point, where areas of exact zeros hold
+    no data.
     """
     values = np.asarray(image, dtype=float)
-    finite = values[np.isfinite(values)]
+    with_data = values[~no_data_mask(values, floating_point=floating_point)]
 
-    if finite.size < 2:
+    if with_data.size < 2:
         return False
 
-    _, level, scale = sigma_clipped_stats(finite, sigma=3.0, maxiters=10)
+    _, level, scale = sigma_clipped_stats(with_data, sigma=3.0, maxiters=10)
 
     return bool(
         np.isfinite(level)
@@ -555,7 +559,9 @@ def make_config_from_fits(
             raise TypeError("likelihood must be a mapping or None.")
 
         fit_config["likelihood"] = deepcopy(dict(likelihood))
-    elif image_sky_gives_the_gain(observation.image.data):
+    elif image_sky_gives_the_gain(
+        observation.image.data, floating_point=observation.image.floating_point
+    ):
         # AD-047: the measured sky is written only when the image passes the
         # guard; otherwise the gain stays undeclared and the fit refuses to
         # start until it is declared.

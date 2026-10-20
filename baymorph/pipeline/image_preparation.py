@@ -27,8 +27,10 @@ from baymorph.core import (
     build_fitting_mask,
     load_external_mask,
     negative_outlier_mask,
+    no_data_mask,
     union,
 )
+from baymorph.core.mask import NO_DATA_MIN_ZERO_PIXELS
 from baymorph.core.image import WorkingRegion
 from baymorph.core.observation import Observation
 from baymorph.core.sky import (
@@ -127,8 +129,14 @@ class RealFITSPreparation:
     detection: DetectionResult
 
 
-def _as_finite_image(data, *, context: str) -> np.ndarray:
-    """Return a finite two-dimensional floating-point science image."""
+def _as_finite_image(
+    data, *, context: str, no_data: np.ndarray | None = None
+) -> np.ndarray:
+    """Return a two-dimensional floating-point science image.
+
+    Every pixel must be finite, except the pixels without data ``no_data``
+    (AD-053), when given.
+    """
     array = np.asarray(data, dtype=float)
     if array.ndim != 2:
         raise ValueError(
@@ -136,6 +144,14 @@ def _as_finite_image(data, *, context: str) -> np.ndarray:
             f"received shape {array.shape}."
         )
     invalid = ~np.isfinite(array)
+    if no_data is not None:
+        no_data = np.asarray(no_data, dtype=bool)
+        if no_data.shape != array.shape:
+            raise ValueError(
+                f"The mask of the pixels without data for {context} has shape "
+                f"{no_data.shape}, not the shape {array.shape} of the image."
+            )
+        invalid &= ~no_data
     if np.any(invalid):
         raise ValueError(
             f"Science data for {context} contain "
@@ -155,11 +171,21 @@ def _resolve_fitting_mask_mode(data_cfg: dict[str, Any]) -> str:
     return mode
 
 
-def _validate_prepared_arrays(*, prepared_data: np.ndarray, noise: np.ndarray) -> None:
-    """Fail before persistence when final inference arrays are invalid."""
-    if not np.all(np.isfinite(prepared_data)):
+def _validate_prepared_arrays(
+    *, prepared_data: np.ndarray, noise: np.ndarray, excluded: np.ndarray | None = None
+) -> None:
+    """Fail before persistence when final inference arrays are invalid.
+
+    The prepared data may be non-finite only where the curated mask
+    ``excluded`` excludes them, pixels without data (AD-053).
+    """
+    invalid = ~np.isfinite(prepared_data)
+    if excluded is not None:
+        invalid &= ~np.asarray(excluded, dtype=bool)
+    if np.any(invalid):
         raise RuntimeError(
-            "Background-subtracted fitting data contain non-finite pixels."
+            "Background-subtracted fitting data contain non-finite pixels "
+            "that the curated mask does not exclude."
         )
     if noise.shape != prepared_data.shape:
         raise RuntimeError(
@@ -219,14 +245,21 @@ def _build_geometry_target_segment(
 
 def _validate_products_for_persistence(products: PreparedObservation) -> None:
     """Validate persisted preparation products before the first write."""
+    # Pixels without data may stay in the cutout where the curated mask
+    # excludes them (AD-053).
+    curated = products.external_mask
     prepared_data = _as_finite_image(
-        products.prepared_data, context="persisted prepared image"
+        products.prepared_data, context="persisted prepared image", no_data=curated
     )
     _validate_prepared_arrays(
-        prepared_data=prepared_data, noise=np.asarray(products.noise, dtype=float)
+        prepared_data=prepared_data,
+        noise=np.asarray(products.noise, dtype=float),
+        excluded=curated,
     )
 
-    cutout = _as_finite_image(products.cutout, context="persisted science cutout")
+    cutout = _as_finite_image(
+        products.cutout, context="persisted science cutout", no_data=curated
+    )
     if cutout.shape != prepared_data.shape:
         raise ValueError("The science cutout shape must match the prepared image.")
 
@@ -254,7 +287,7 @@ def _validate_products_for_persistence(products: PreparedObservation) -> None:
         raise ValueError("The persisted background level must be finite.")
 
     expected_prepared = cutout - float(products.background)
-    if not np.array_equal(prepared_data, expected_prepared):
+    if not np.array_equal(prepared_data, expected_prepared, equal_nan=True):
         raise RuntimeError(
             "The persisted prepared image is not the science cutout minus "
             "the recorded constant background."
@@ -328,10 +361,14 @@ def _validate_products_against_current_sources(
             "the current configuration and source FITS image."
         )
 
-    source = _as_finite_image(
-        observation.image.data, context="current source FITS image"
+    # The source may hold pixels without data anywhere, and the cutout where
+    # the curated mask excludes them (AD-053).
+    source = np.asarray(observation.image.data, dtype=float)
+    cutout = _as_finite_image(
+        products.cutout,
+        context="persisted source cutout",
+        no_data=products.external_mask,
     )
-    cutout = _as_finite_image(products.cutout, context="persisted source cutout")
     bounds = _normalized_cutout_bounds(
         products.cutout_bounds,
         source_shape=observation.image.full_shape,
@@ -350,17 +387,15 @@ def _validate_products_against_current_sources(
         else region.local_slices(**bounds)
     )
     expected_cutout = source[rows, columns]
-    if not np.array_equal(cutout, expected_cutout):
+    if not np.array_equal(cutout, expected_cutout, equal_nan=True):
         raise RuntimeError(
             "Persisted science cutout does not match the current source "
             "FITS pixels at the saved bounds."
         )
 
     if products.original_image is not None:
-        original_image = _as_finite_image(
-            products.original_image, context="persisted original image"
-        )
-        if not np.array_equal(original_image, source):
+        original_image = np.asarray(products.original_image, dtype=float)
+        if not np.array_equal(original_image, source, equal_nan=True):
             raise RuntimeError(
                 "Persisted original image does not match the current source "
                 "FITS pixels."
@@ -593,6 +628,8 @@ def detect_real_fits_sources(
     detection_sigma: float = 3.0,
     detection_n_pixels: int = 5,
     detection_n_levels: int = 32,
+    *,
+    no_data: np.ndarray | None = None,
 ) -> DetectionResult:
     """Detect and deblend the sources of one real image.
 
@@ -604,13 +641,16 @@ def detect_real_fits_sources(
     Parameters
     ----------
     data : array-like
-        Input image. Non-finite pixels are rejected, not repaired.
+        Input image. Non-finite pixels outside ``no_data`` are rejected, not
+        repaired.
     detection_sigma : float, default=3.0
         Source-detection threshold in units of noise.
     detection_n_pixels : int, default=5
         Minimum connected pixels required for source detection.
     detection_n_levels : int, default=32
         Number of detection levels forwarded to the detection interface.
+    no_data : ndarray of bool, optional
+        Pixels without data (AD-053), left out of the detection.
 
     Returns
     -------
@@ -618,10 +658,11 @@ def detect_real_fits_sources(
         Segmentation, detection mask and source catalogue.
     """
     return detect_sources_segmentation(
-        _as_finite_image(data, context="source detection"),
+        _as_finite_image(data, context="source detection", no_data=no_data),
         n_sigma=detection_sigma,
         n_pixels=detection_n_pixels,
         n_levels=detection_n_levels,
+        mask=no_data,
     )
 
 
@@ -632,6 +673,8 @@ def prepare_real_fits_image(
     detection_sigma: float = 3.0,
     detection_n_pixels: int = 5,
     detection_n_levels: int = 32,
+    *,
+    no_data: np.ndarray | None = None,
 ):
     """Detect sources and estimate a whole-image background and noise map.
 
@@ -654,6 +697,10 @@ def prepare_real_fits_image(
         Minimum connected pixels required for source detection.
     detection_n_levels : int, default=32
         Number of detection levels forwarded to the detection interface.
+    no_data : ndarray of bool, optional
+        Pixels without data (AD-053). They take no part in the detection,
+        the background or the noise, and stay non-finite or zero in the
+        background-subtracted image.
 
     Returns
     -------
@@ -664,18 +711,22 @@ def prepare_real_fits_image(
     Raises
     ------
     ValueError
-        If the image contains non-finite pixels, or if the mesh background
-        cannot be estimated because the detected sources leave too few
-        unmasked pixels in every mesh box. There is no fallback to a
-        background estimate that ignores the detection mask.
+        If the image contains non-finite pixels outside ``no_data``, or if
+        the mesh background cannot be estimated because the detected sources
+        leave too few unmasked pixels in every mesh box. There is no
+        fallback to a background estimate that ignores the detection mask.
     """
-    data = _as_finite_image(data, context="source detection")
+    data = _as_finite_image(data, context="source detection", no_data=no_data)
+
+    if no_data is not None and not np.any(no_data):
+        no_data = None
 
     detection = detect_real_fits_sources(
         data,
         detection_sigma=detection_sigma,
         detection_n_pixels=detection_n_pixels,
         detection_n_levels=detection_n_levels,
+        no_data=no_data,
     )
 
     mask = detection.mask
@@ -686,6 +737,7 @@ def prepare_real_fits_image(
             box_size=background_box_size,
             filter_size=background_filter_size,
             mask=mask,
+            no_data=no_data,
         )
     except ValueError as exc:
         raise ValueError(
@@ -696,7 +748,9 @@ def prepare_real_fits_image(
 
     background_subtracted = subtract_background(data, background_result.background)
 
-    noise = estimate_noise_map(background_subtracted, mask=mask)
+    noise = estimate_noise_map(
+        background_subtracted, mask=mask if no_data is None else mask | no_data
+    )
 
     return RealFITSPreparation(
         data=background_subtracted,
@@ -805,13 +859,18 @@ def _target_light_level(
     the target segment and every other detected segment excluded; annuli
     with no unmasked pixel take the value interpolated from their
     neighbours. Far from the target it is the background of the image.
+    The pixels left out of the detection, pixels without data, are left out
+    of the annuli too.
     """
     detection = target_detection.detection
     geometry = estimate_target_geometry_from_image(
         image, target_detection.target_segment
     )
+    profile_mask = target_detection.contaminant_mask
+    if detection.excluded is not None:
+        profile_mask = profile_mask | detection.excluded
     profile = build_target_radial_profile(
-        detection.detection_image, geometry, mask=target_detection.contaminant_mask
+        detection.detection_image, geometry, mask=profile_mask
     )
     valid = np.isfinite(profile.profile)
 
@@ -919,7 +978,7 @@ def _apply_negative_outlier_mask(
         return (fitting_mask, np.zeros(fitting_mask.shape, dtype=bool))
 
     negative_outliers = negative_outlier_mask(
-        prepared_data, noise, threshold_sigma=threshold_sigma
+        prepared_data, noise, threshold_sigma=threshold_sigma, excluded=fitting_mask
     )
 
     return (union(fitting_mask, negative_outliers), negative_outliers)
@@ -932,13 +991,19 @@ def _detect_target_in_image(
     target_y: float,
     detection_cfg: dict[str, Any],
     context: str,
+    no_data: np.ndarray | None = None,
 ) -> _TargetDetection:
-    """Detect sources and select the target near a requested position."""
+    """Detect sources and select the target near a requested position.
+
+    The pixels without data ``no_data`` (AD-053) take no part in the
+    detection.
+    """
     detection = detect_real_fits_sources(
         data,
         detection_sigma=detection_cfg["n_sigma"],
         detection_n_pixels=detection_cfg["n_pixels"],
         detection_n_levels=detection_cfg["n_levels"],
+        no_data=no_data,
     )
 
     segmentation = detection.segmentation
@@ -971,6 +1036,7 @@ def _resolve_auto_cutout(
     fitting_mask_mode: str = "union",
     region: WorkingRegion | None = None,
     pixel_scale: float | None = None,
+    no_data: np.ndarray | None = None,
 ) -> AutoCutoutResult:
     """Resolve a plateau-based automatic cutout for a target source.
 
@@ -978,11 +1044,13 @@ def _resolve_auto_cutout(
     cutout, whose plateau sets the size of the cutout. On the whole image
     only the target segment is used, so the rule is not applied there.
 
-    ``image`` and ``external_mask`` hold the whole image, or its working
-    region ``region`` (AD-053), on which the first detection then runs. The
-    target position and the cutouts are in pixels of the whole image; a
-    target that reaches an edge of the region inside the image, or a cutout
-    that leaves the region, stops the preparation.
+    ``image``, ``external_mask`` and ``no_data`` hold the whole image, or its
+    working region ``region`` (AD-053), on which the first detection then
+    runs. The target position and the cutouts are in pixels of the whole
+    image; a target that reaches an edge of the region inside the image, or
+    a cutout that leaves the region, stops the preparation. The pixels
+    without data ``no_data`` take no part in the detections, nor in the sky
+    profile of the preliminary cutout.
     """
     origin_x, origin_y = (0, 0) if region is None else (region.xmin, region.ymin)
     image_shape = image.shape if region is None else region.image_shape
@@ -995,6 +1063,7 @@ def _resolve_auto_cutout(
         context=(
             "full-image detection" if region is None else "working-region detection"
         ),
+        no_data=no_data,
     )
 
     if region is not None:
@@ -1028,6 +1097,13 @@ def _resolve_auto_cutout(
     preliminary_cutout = make_target_cutout(
         image, preliminary_definition, region=region, pixel_scale=pixel_scale
     )
+    preliminary_no_data = (
+        None
+        if no_data is None
+        else make_target_cutout(no_data, preliminary_definition, region=region)
+    )
+    if preliminary_no_data is not None and not np.any(preliminary_no_data):
+        preliminary_no_data = None
 
     preliminary_detection = _apply_contaminant_rule(
         preliminary_cutout,
@@ -1037,6 +1113,7 @@ def _resolve_auto_cutout(
             target_y=target_y - preliminary_definition.ymin,
             detection_cfg=detection_cfg,
             context="preliminary-cutout detection",
+            no_data=preliminary_no_data,
         ),
         rule=contaminant_rule,
         detection_cfg=detection_cfg,
@@ -1065,7 +1142,11 @@ def _resolve_auto_cutout(
     geometry, radial_profile, plateau = estimate_target_sky(
         preliminary_cutout,
         preliminary_target_segment,
-        mask=preliminary_fitting_mask,
+        mask=(
+            preliminary_fitting_mask
+            if preliminary_no_data is None
+            else preliminary_fitting_mask | preliminary_no_data
+        ),
         min_radius=0.0,
         window_size=5,
         sigma_threshold=1.0,
@@ -1329,6 +1410,54 @@ _CUTOUT_NAMES = {
 """Names of the cutouts in the messages about the working region."""
 
 
+def _require_data_in_cutout(
+    no_data: np.ndarray | None,
+    *,
+    external_mask: np.ndarray | None,
+    cutout: CutoutDefinition,
+) -> np.ndarray | None:
+    """Stop when the cutout holds pixels without data left in it (AD-053).
+
+    Pixels without data may stay in the cutout only where the curated mask
+    ``external_mask`` excludes them.
+
+    Returns
+    -------
+    ndarray of bool or None
+        The pixels without data of the cutout, all excluded by the curated
+        mask, or None when the cutout holds none.
+
+    Raises
+    ------
+    ValueError
+        If a pixel without data of the cutout is not excluded by the
+        curated mask.
+    """
+    if no_data is None or not np.any(no_data):
+        return None
+
+    left = no_data if external_mask is None else no_data & ~external_mask
+
+    if not np.any(left):
+        return no_data
+
+    rows, columns = np.nonzero(left)
+    what = _CUTOUT_NAMES.get(cutout.mode, "cutout")
+    remedy = "data.cutout.max_size" if cutout.mode == "auto" else "data.cutout.size"
+
+    raise ValueError(
+        f"The {what}, x {cutout.xmin}-{cutout.xmax} and y {cutout.ymin}-"
+        f"{cutout.ymax} of the image, holds {columns.size} pixels without data, "
+        "non-finite or in areas of at least "
+        f"{NO_DATA_MIN_ZERO_PIXELS} exact zeros, within x "
+        f"{cutout.xmin + int(columns.min())}-{cutout.xmin + int(columns.max()) + 1} "
+        f"and y {cutout.ymin + int(rows.min())}-"
+        f"{cutout.ymin + int(rows.max()) + 1}. Choose a smaller cutout that "
+        f"leaves them out, through {remedy}, or exclude them with a curated "
+        "mask, data.mask_path."
+    )
+
+
 def _numeric_pixel_scale(value: Any) -> float | None:
     """Return a resolved pixel scale, or None when it is not a number."""
     if isinstance(value, bool) or not isinstance(value, (int, float, np.number)):
@@ -1380,14 +1509,11 @@ def prepare_real_image_from_config(
     region = image.region
     pixel_scale = _numeric_pixel_scale(resolved["data"].get("pixel_scale"))
 
-    _as_finite_image(
-        image.data,
-        context=(
-            "input FITS image"
-            if region is None
-            else "working region of the input FITS image"
-        ),
-    )
+    # Pixels without data are accepted outside the cutout; inside it, only
+    # where the curated mask excludes them (AD-053).
+    no_data = no_data_mask(image.data, floating_point=image.floating_point)
+    if not np.any(no_data):
+        no_data = None
 
     target_position = resolved["data"]["target_position"]
     if target_position is None:
@@ -1437,6 +1563,7 @@ def prepare_real_image_from_config(
             fitting_mask_mode=fitting_mask_mode,
             region=region,
             pixel_scale=pixel_scale,
+            no_data=no_data,
         )
         cutout_definition = auto_cutout_result.cutout
 
@@ -1453,6 +1580,16 @@ def prepare_real_image_from_config(
             full_external_mask, cutout_definition, region=region
         ).astype(bool)
 
+    cutout_no_data = _require_data_in_cutout(
+        (
+            None
+            if no_data is None
+            else make_target_cutout(no_data, cutout_definition, region=region)
+        ),
+        external_mask=external_mask,
+        cutout=cutout_definition,
+    )
+
     seed_target_x = float(target_position["x"]) - cutout_definition.xmin
     seed_target_y = float(target_position["y"]) - cutout_definition.ymin
 
@@ -1464,6 +1601,7 @@ def prepare_real_image_from_config(
             target_y=seed_target_y,
             detection_cfg=detection_cfg,
             context="final-cutout detection",
+            no_data=cutout_no_data,
         ),
         rule=contaminant_rule,
         detection_cfg=detection_cfg,
@@ -1540,7 +1678,9 @@ def prepare_real_image_from_config(
 
     noise = make_constant_noise_map(prepared_data.shape, background_result.sigma)
 
-    _validate_prepared_arrays(prepared_data=prepared_data, noise=noise)
+    _validate_prepared_arrays(
+        prepared_data=prepared_data, noise=noise, excluded=external_mask
+    )
 
     # Applied to the final likelihood support, after the sky region, the
     # background level and the noise scale have been estimated. Those
@@ -1765,9 +1905,15 @@ def save_image_preparation_products(
     if products.original_image is not None:
         np.save(paths["dir"] / "original_image.npy", products.original_image)
 
+    # Every finite pixel is tested; the curated mask only lets the pixels
+    # without data under it be non-finite (AD-053).
     negative_threshold = _negative_threshold_sigma(config)
     _, persisted_negative_outliers = _apply_negative_outlier_mask(
-        np.zeros(np.asarray(products.fitting_mask).shape, dtype=bool),
+        (
+            np.zeros(np.asarray(products.fitting_mask).shape, dtype=bool)
+            if products.external_mask is None
+            else np.asarray(products.external_mask, dtype=bool)
+        ),
         prepared_data=products.prepared_data,
         noise=products.noise,
         threshold_sigma=negative_threshold,
@@ -1924,7 +2070,15 @@ def load_image_preparation_products(
 
     prepared_data = np.asarray(fits.getdata(paths["prepared_image"]), dtype=float)
     noise = np.asarray(fits.getdata(paths["noise_map"]), dtype=float)
-    _validate_prepared_arrays(prepared_data=prepared_data, noise=noise)
+    external_mask_path = paths["dir"] / "external_mask.npy"
+    external_mask = (
+        np.load(external_mask_path).astype(bool)
+        if "external_mask.npy" in artifact_names
+        else None
+    )
+    _validate_prepared_arrays(
+        prepared_data=prepared_data, noise=noise, excluded=external_mask
+    )
     contaminant_mask = load_external_mask(
         paths["mask"], expected_shape=prepared_data.shape
     )
@@ -1974,13 +2128,6 @@ def load_image_preparation_products(
     original_image_path = paths["dir"] / "original_image.npy"
     original_image = (
         np.load(original_image_path) if "original_image.npy" in artifact_names else None
-    )
-
-    external_mask_path = paths["dir"] / "external_mask.npy"
-    external_mask = (
-        np.load(external_mask_path).astype(bool)
-        if "external_mask.npy" in artifact_names
-        else None
     )
 
     geometry_data = metadata.get("geometry")

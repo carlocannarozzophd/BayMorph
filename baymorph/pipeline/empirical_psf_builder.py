@@ -149,6 +149,22 @@ def window_centroid(
     raise RuntimeError("The windowed centroid of a star did not converge.")
 
 
+def window_holds(
+    mask: NDArray[np.bool_], *, x: float, y: float, half_size: int
+) -> bool:
+    """Return whether the square window about ``(x, y)`` holds a pixel of ``mask``.
+
+    The window spans ``2 * half_size + 1`` pixels about the pixel nearest
+    ``(x, y)``, clipped to the image.
+    """
+    x0 = int(round(x))
+    y0 = int(round(y))
+    rows = slice(max(0, y0 - half_size), max(0, y0 + half_size + 1))
+    columns = slice(max(0, x0 - half_size), max(0, x0 + half_size + 1))
+
+    return bool(np.any(mask[rows, columns]))
+
+
 def _disk(radius: int) -> NDArray[np.bool_]:
     """Return a boolean disk of ``radius`` pixels."""
     yy, xx = np.mgrid[-radius : radius + 1, -radius : radius + 1]
@@ -156,12 +172,18 @@ def _disk(radius: int) -> NDArray[np.bool_]:
 
 
 def other_sources(
-    labels: NDArray[np.integer], x: float, y: float, reach: float, growth: int
+    labels: NDArray[np.integer],
+    x: float,
+    y: float,
+    reach: float,
+    growth: int,
+    no_data: NDArray[np.bool_] | None = None,
 ) -> tuple[slice, slice, NDArray[np.bool_]]:
     """Return a region about ``(x, y)`` and the mask of other sources in it.
 
     The detected segment under the pixel nearest ``(x, y)`` is the star; every
-    other segment is grown by ``growth`` pixels.
+    other segment is grown by ``growth`` pixels. The pixels without data
+    ``no_data`` (AD-053) are masked too, without growth.
     """
     rows, columns = labels.shape
     top = max(0, int(np.floor(y - reach)) - growth)
@@ -175,6 +197,9 @@ def other_sources(
     if growth > 0:
         others = binary_dilation(others, structure=_disk(growth))
 
+    if no_data is not None:
+        others = others | no_data[top:bottom, left:right]
+
     return slice(top, bottom), slice(left, right), others
 
 
@@ -184,10 +209,14 @@ def far_sky(
     x: float,
     y: float,
     settings: BuilderSettings,
+    no_data: NDArray[np.bool_] | None = None,
 ) -> tuple[float, float]:
-    """Return the sigma-clipped sky and noise in the far ring of a star."""
+    """Return the sigma-clipped sky and noise in the far ring of a star.
+
+    Other sources and the pixels without data ``no_data`` are left out.
+    """
     rows, columns, masked = other_sources(
-        labels, x, y, settings.sky_outer_radius, settings.mask_growth_pixels
+        labels, x, y, settings.sky_outer_radius, settings.mask_growth_pixels, no_data
     )
     yy, xx = np.mgrid[rows, columns]
     radius = np.hypot(xx - x, yy - y)
@@ -292,6 +321,7 @@ def ring_profile(
     labels: NDArray[np.integer],
     star: dict,
     settings: BuilderSettings,
+    no_data: NDArray[np.bool_] | None = None,
 ) -> dict[str, FloatArray]:
     """Return one star's normalized azimuthal profile.
 
@@ -299,12 +329,13 @@ def ring_profile(
     sky-subtracted pixels divided by the star's flux in the common
     footprint, the mean radius of its pixels and the standard error of the
     mean; a ring with fewer than ``MIN_RING_PIXELS`` free pixels is NaN.
+    Other sources and the pixels without data ``no_data`` are left out.
     """
     edges = settings.ring_edges
     x = float(star["x"])
     y = float(star["y"])
     rows, columns, masked = other_sources(
-        labels, x, y, edges[-1], settings.mask_growth_pixels
+        labels, x, y, edges[-1], settings.mask_growth_pixels, no_data
     )
     yy, xx = np.mgrid[rows, columns]
     radius = np.hypot(xx - x, yy - y)
@@ -433,6 +464,7 @@ def build_empirical_psf(
     candidates: list[dict],
     labels: NDArray[np.integer],
     settings: BuilderSettings,
+    no_data: NDArray[np.bool_] | None = None,
 ) -> EmpiricalPSFBuild:
     """Build the effective PSF from the stars selected for it.
 
@@ -448,13 +480,29 @@ def build_empirical_psf(
         nothing is detected.
     settings : BuilderSettings
         Radii of the builder.
+    no_data : ndarray of bool, optional
+        Pixels without data of the image (AD-053), left out of the sky and
+        of the wings of every star. The cutout of a star must hold none.
 
     Raises
     ------
     ValueError
-        If fewer than six stars are usable, too few to fit the quadratic.
+        If fewer than six stars are usable, too few to fit the quadratic,
+        or the cutout of a star holds a pixel without data.
     """
     data = np.asarray(image, dtype=float)
+
+    if no_data is not None:
+        no_data = np.asarray(no_data, dtype=bool)
+
+        if no_data.shape != data.shape:
+            raise ValueError(
+                "The mask of the pixels without data does not have the shape "
+                "of the image."
+            )
+
+        if not np.any(no_data):
+            no_data = None
 
     if not candidates:
         raise ValueError("No stars are available for the empirical PSF.")
@@ -465,8 +513,24 @@ def build_empirical_psf(
     profiles = []
 
     for candidate in candidates:
+        if no_data is not None and window_holds(
+            no_data,
+            x=float(candidate["x"]),
+            y=float(candidate["y"]),
+            half_size=int(candidate["half_size"]),
+        ):
+            raise ValueError(
+                f"The cutout of the star at ({float(candidate['x']):.1f}, "
+                f"{float(candidate['y']):.1f}) holds pixels without data."
+            )
+
         sky = far_sky(
-            data, labels, float(candidate["x"]), float(candidate["y"]), settings
+            data,
+            labels,
+            float(candidate["x"]),
+            float(candidate["y"]),
+            settings,
+            no_data,
         )
         star = star_window(data, candidate, half, sky)
 
@@ -474,7 +538,7 @@ def build_empirical_psf(
             continue
 
         windows.append(star["window"] / star["flux"])
-        profiles.append(ring_profile(data, labels, star, settings))
+        profiles.append(ring_profile(data, labels, star, settings, no_data))
         stars.append(
             {
                 "label": candidate.get("label"),

@@ -719,7 +719,7 @@ def test_prepare_real_image_rejects_final_plateau_outside_auto_cutout(
     monkeypatch,
 ):
     image_path = tmp_path / "image.fits"
-    fits.writeto(image_path, np.zeros((40, 40), dtype=float))
+    fits.writeto(image_path, np.ones((40, 40), dtype=float))
 
     resolved = resolve_config(
         {
@@ -800,7 +800,7 @@ def test_prepare_real_image_rejects_final_plateau_outside_fixed_cutout(
     monkeypatch,
 ):
     image_path = tmp_path / "image.fits"
-    fits.writeto(image_path, np.zeros((40, 40), dtype=float))
+    fits.writeto(image_path, np.ones((40, 40), dtype=float))
 
     resolved = resolve_config(
         {

@@ -436,6 +436,7 @@ def estimate_background_photutils(
     filter_size: int = 3,
     mask: np.ndarray | None = None,
     exclude_percentile: float = 10.0,
+    no_data: np.ndarray | None = None,
 ) -> BackgroundResult:
     """Estimate a spatially varying background using Photutils.
 
@@ -454,6 +455,11 @@ def estimate_background_photutils(
     exclude_percentile : float, default=10.0
         Maximum fraction of masked pixels allowed within each background
         mesh.
+    no_data : ndarray of bool, optional
+        Pixels without data (AD-053), passed to Photutils as the coverage
+        mask: they take no part in the estimate, their values may be
+        non-finite, and the maps hold 0 there. The scalar level and scale
+        are the medians of the maps over the other pixels.
 
     Returns
     -------
@@ -461,6 +467,13 @@ def estimate_background_photutils(
         Background estimate containing both scalar summary values and the
         full background and RMS maps.
     """
+    covered = None
+
+    if no_data is not None and np.any(no_data):
+        covered = ~np.asarray(no_data, dtype=bool)
+    else:
+        no_data = None
+
     bkg = Background2D(
         data,
         box_size=box_size,
@@ -469,13 +482,16 @@ def estimate_background_photutils(
             filter_size,
         ),
         mask=mask,
+        coverage_mask=no_data,
         exclude_percentile=exclude_percentile,
         bkg_estimator=MedianBackground(),
     )
+    background = bkg.background if covered is None else bkg.background[covered]
+    rms = bkg.background_rms if covered is None else bkg.background_rms[covered]
 
     return BackgroundResult(
-        background_level=float(np.median(bkg.background)),
-        sigma=float(np.median(bkg.background_rms)),
+        background_level=float(np.median(background)),
+        sigma=float(np.median(rms)),
         mode="mesh",
         background_map=bkg.background.copy(),
         rms_map=bkg.background_rms.copy(),

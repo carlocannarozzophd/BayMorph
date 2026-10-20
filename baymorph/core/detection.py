@@ -37,6 +37,9 @@ class DetectionResult:
     threshold_level : float, optional
         Detection threshold: ``background_level`` plus ``n_sigma`` times the
         sigma-clipped standard deviation of ``detection_image``.
+    excluded : ndarray of bool, optional
+        Pixels left out of the detection, such as pixels without data, when
+        there were any; ``detection_image`` holds ``background_level`` there.
     """
 
     segmentation: object
@@ -45,6 +48,7 @@ class DetectionResult:
     detection_image: np.ndarray | None = None
     background_level: float | None = None
     threshold_level: float | None = None
+    excluded: np.ndarray | None = None
 
 
 def detect_sources_segmentation(
@@ -54,6 +58,7 @@ def detect_sources_segmentation(
     n_levels: int = 32,
     deblend: bool = True,
     deblend_contrast: float = 0.001,
+    mask=None,
 ) -> DetectionResult:
     """Detect and optionally deblend sources using Photutils.
 
@@ -64,6 +69,12 @@ def detect_sources_segmentation(
 
     When ``deblend`` is True, overlapping detections are subsequently
     separated using multi-threshold watershed deblending.
+
+    Pixels of ``mask`` take no part in the detection: the smoothing averages
+    the other pixels only, weighting each by the Gaussian kernel, the
+    threshold is measured without them, and no segment contains them. Their
+    values may be non-finite. Without excluded pixels the detection is the
+    one of an image without a mask.
 
     Parameters
     ----------
@@ -81,33 +92,55 @@ def detect_sources_segmentation(
     deblend_contrast : float, default=0.001
         Minimum fractional source flux required for a local peak to be
         retained as a separate deblended source.
+    mask : array-like of bool, optional
+        Pixels to leave out of the detection, ``True`` = excluded, such as
+        the pixels without data of :func:`baymorph.core.mask.no_data_mask`;
+        the shape of ``data``.
 
     Returns
     -------
     DetectionResult
         Container holding the segmentation image, detection mask, and source
         catalog when available.
+
+    Raises
+    ------
+    ValueError
+        If ``mask`` does not have the shape of ``data``, a pixel outside it
+        is not finite, or it leaves no pixel to detect on.
     """
     data = np.asarray(data, dtype=float)
+    excluded = _excluded_pixels(mask, data)
 
-    detection_image = gaussian_filter(data, sigma=2.0)
+    if excluded is None:
+        detection_image = gaussian_filter(data, sigma=2.0)
+    else:
+        detection_image = _smooth_included_pixels(data, excluded, sigma=2.0)
 
-    threshold = detect_threshold(detection_image, n_sigma=n_sigma)
-    background_level = float(detect_threshold(detection_image, n_sigma=0.0).flat[0])
+    threshold = detect_threshold(detection_image, n_sigma=n_sigma, mask=excluded)
+    background_level = float(
+        detect_threshold(detection_image, n_sigma=0.0, mask=excluded).flat[0]
+    )
     threshold_level = float(threshold.flat[0])
 
-    segmentation = detect_sources(detection_image, threshold, n_pixels=n_pixels)
+    if excluded is not None:
+        detection_image[excluded] = background_level
+
+    segmentation = detect_sources(
+        detection_image, threshold, n_pixels=n_pixels, mask=excluded
+    )
 
     if segmentation is None:
-        mask = np.zeros(data.shape, dtype=bool)
+        source_mask = np.zeros(data.shape, dtype=bool)
 
         return DetectionResult(
             segmentation=None,
-            mask=mask,
+            mask=source_mask,
             catalog=None,
             detection_image=detection_image,
             background_level=background_level,
             threshold_level=threshold_level,
+            excluded=excluded,
         )
 
     if deblend:
@@ -120,17 +153,71 @@ def detect_sources_segmentation(
             progress_bar=False,
         )
 
-    mask = segmentation.data > 0
-
-    catalog = SourceCatalog(data, segmentation)
+    catalog = SourceCatalog(data, segmentation, mask=excluded)
 
     return DetectionResult(
         segmentation=segmentation,
-        mask=mask,
+        mask=segmentation.data > 0,
         catalog=catalog,
         detection_image=detection_image,
         background_level=background_level,
         threshold_level=threshold_level,
+        excluded=excluded,
+    )
+
+
+def _excluded_pixels(mask, data: np.ndarray) -> NDArray[np.bool_] | None:
+    """Return the validated excluded pixels, or None when there are none.
+
+    Without excluded pixels every pixel must be finite, and the detection
+    runs exactly as it does without a mask.
+    """
+    excluded = None
+
+    if mask is not None:
+        excluded = np.asarray(mask)
+
+        if excluded.shape != data.shape:
+            raise ValueError(
+                f"The detection mask of shape {excluded.shape} does not have "
+                f"the shape {data.shape} of the image."
+            )
+
+        excluded = excluded.astype(bool)
+
+        if not np.any(excluded):
+            excluded = None
+
+    included = np.isfinite(data) if excluded is None else np.isfinite(data[~excluded])
+
+    if not np.all(included):
+        raise ValueError(
+            f"The image holds {int(np.count_nonzero(~included))} non-finite "
+            "pixels that the detection mask does not exclude."
+        )
+
+    if excluded is not None and np.all(excluded):
+        raise ValueError("The detection mask excludes every pixel of the image.")
+
+    return excluded
+
+
+def _smooth_included_pixels(
+    data: np.ndarray, excluded: NDArray[np.bool_], *, sigma: float
+) -> NDArray[np.floating]:
+    """Smooth an image with a Gaussian kernel over its included pixels only.
+
+    Each pixel takes the mean of the included pixels within reach of the
+    kernel, weighted by it (normalized convolution), so the excluded pixels
+    neither lower nor raise the pixels next to them. A pixel that the kernel
+    reaches no included pixel from takes 0; the caller replaces the values
+    of the excluded pixels.
+    """
+    weights = gaussian_filter((~excluded).astype(float), sigma=sigma)
+    smoothed = gaussian_filter(np.where(excluded, 0.0, data), sigma=sigma)
+
+    return np.divide(
+        smoothed, weights, out=np.zeros_like(smoothed), where=weights > 0.0
     )
 
 

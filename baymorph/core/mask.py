@@ -5,10 +5,77 @@ from pathlib import Path
 
 import numpy as np
 from astropy.io import fits
+from numpy.typing import NDArray
 from photutils.segmentation import detect_sources, detect_threshold
-from scipy.ndimage import binary_dilation
+from scipy.ndimage import binary_dilation, label
 
 from baymorph.core.image import WorkingRegion
+
+NO_DATA_MIN_ZERO_PIXELS = 100
+"""Smallest area of exact zeros, in pixels, that holds no data (AD-053)."""
+
+
+def no_data_mask(
+    data, *, floating_point: bool, min_zero_pixels: int = NO_DATA_MIN_ZERO_PIXELS
+) -> NDArray[np.bool_]:
+    """Return the pixels of an image that hold no data (AD-053).
+
+    A pixel holds no data when it is not finite or, in an image stored in
+    floating point, when it belongs to an area of at least
+    ``min_zero_pixels`` exact zeros connected along their edges. Mosaics and
+    drizzled images fill the parts of their grid that no exposure covers with
+    NaN or with zeros; a measured value in floating point is almost never an
+    exact zero, while an integer image may hold real zeros, so the zero rule
+    applies to floating-point images only.
+
+    Parameters
+    ----------
+    data : array-like
+        Two-dimensional image.
+    floating_point : bool
+        Whether the image is stored in floating point, ``BITPIX < 0`` in its
+        FITS header.
+    min_zero_pixels : int, default=NO_DATA_MIN_ZERO_PIXELS
+        Smallest area of connected exact zeros that holds no data.
+
+    Returns
+    -------
+    ndarray of bool
+        Mask of the pixels without data, ``True`` = excluded.
+
+    Raises
+    ------
+    ValueError
+        If ``data`` is not a two-dimensional numeric array or
+        ``min_zero_pixels`` is not a positive integer.
+    """
+    values = np.asarray(data)
+
+    if values.ndim != 2 or not np.issubdtype(values.dtype, np.number):
+        raise ValueError("'data' must be a two-dimensional numeric array.")
+
+    if (
+        isinstance(min_zero_pixels, bool)
+        or not isinstance(min_zero_pixels, (int, np.integer))
+        or min_zero_pixels < 1
+    ):
+        raise ValueError("'min_zero_pixels' must be a positive integer.")
+
+    mask = ~np.isfinite(values)
+
+    if not floating_point:
+        return mask
+
+    zeros = values == 0
+
+    if np.count_nonzero(zeros) < min_zero_pixels:
+        return mask
+
+    areas, _ = label(zeros)
+    large = np.bincount(areas.ravel()) >= min_zero_pixels
+    large[0] = False
+
+    return mask | large[areas]
 
 
 def load_external_mask(
@@ -182,7 +249,9 @@ def build_fitting_mask(automatic_mask, *, external_mask=None, mode: str = "union
     return union(mask, curated)
 
 
-def negative_outlier_mask(data, noise, *, threshold_sigma: float) -> np.ndarray:
+def negative_outlier_mask(
+    data, noise, *, threshold_sigma: float, excluded=None
+) -> np.ndarray:
     """Flag pixels that are impossibly negative for background-subtracted data.
 
     Source detection thresholds positive excursions, so a one-sided criterion
@@ -207,6 +276,10 @@ def negative_outlier_mask(data, noise, *, threshold_sigma: float) -> np.ndarray:
     threshold_sigma : float
         Number of noise scales below zero at which a pixel is excluded.
         Must be finite and positive.
+    excluded : array-like of bool, optional
+        Pixels already excluded, such as pixels without data under a curated
+        mask (AD-053). Only they may be non-finite, and a non-finite pixel
+        is never flagged.
 
     Returns
     -------
@@ -218,7 +291,17 @@ def negative_outlier_mask(data, noise, *, threshold_sigma: float) -> np.ndarray:
     if values.ndim != 2:
         raise ValueError("'data' must be a two-dimensional array.")
 
-    if not np.all(np.isfinite(values)):
+    non_finite = ~np.isfinite(values)
+
+    if excluded is not None:
+        excluded = np.asarray(excluded, dtype=bool)
+
+        if excluded.shape != values.shape:
+            raise ValueError("'excluded' must have the same shape as 'data'.")
+
+        non_finite &= ~excluded
+
+    if np.any(non_finite):
         raise ValueError("'data' contains non-finite pixel values.")
 
     scale = np.asarray(noise, dtype=float)
@@ -240,6 +323,7 @@ def negative_outlier_mask(data, noise, *, threshold_sigma: float) -> np.ndarray:
     if not np.isfinite(threshold) or threshold <= 0.0:
         raise ValueError("'threshold_sigma' must be finite and positive.")
 
+    # A non-finite pixel compares False, so it is never flagged.
     return values < -threshold * scale
 
 

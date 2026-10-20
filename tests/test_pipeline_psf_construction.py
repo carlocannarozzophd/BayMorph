@@ -622,6 +622,8 @@ def test_psf_construction_rejects_low_snr_candidates(
         image=SimpleNamespace(
             data=image,
             region=None,
+            # Stored in integers, so its zeros are data (AD-053).
+            floating_point=False,
         )
     )
 
@@ -673,7 +675,7 @@ def test_psf_construction_rejects_low_snr_candidates(
 
     captured = {}
 
-    def fake_build(image, used, labels, settings):
+    def fake_build(image, used, labels, settings, no_data=None):
         captured["n_used"] = len(used)
         psf = np.zeros(
             (7, 7),
@@ -702,7 +704,7 @@ def test_psf_construction_rejects_low_snr_candidates(
     monkeypatch.setattr(
         module,
         "detect_real_fits_sources",
-        lambda image: SimpleNamespace(segmentation=None),
+        lambda image, **kwargs: SimpleNamespace(segmentation=None),
     )
     monkeypatch.setattr(
         module,
@@ -774,11 +776,12 @@ def test_psf_construction_fails_when_all_candidates_fail_snr(
 
     observation = SimpleNamespace(
         image=SimpleNamespace(
-            data=np.zeros(
+            data=np.ones(
                 (21, 21),
                 dtype=float,
             ),
             region=None,
+            floating_point=True,
         )
     )
 
