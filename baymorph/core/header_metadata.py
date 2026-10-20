@@ -7,9 +7,10 @@ BayMorph live in ``baymorph/resources/header_conventions``; a user may add
 files of the same form.
 
 A convention reads a quantity from keywords, states its value as a constant
-of the convention, or derives it from keywords through a formula, and it may
-require conditions on the header, such as the unit of the image, for its
-reading to hold.
+of the convention, derives it from keywords through a formula, or tabulates
+it by a quantity read before, such as the zeropoints of a product by filter,
+and it may require conditions on the header, such as the unit of the image,
+for its reading to hold.
 
 Every quantity of a reading carries its provenance, the keyword and the
 convention, and one status:
@@ -37,7 +38,8 @@ depend on it.
 The first matched convention that finds a quantity decides it. When its
 reading is usable, it is compared with the usable readings of the other
 matched conventions, and a disagreement makes the quantity conflicting,
-unless the deciding convention declares that it overrides the other one.
+unless the deciding convention declares that it overrides the other one; the
+value it overrides is then recorded in the note of the reading.
 """
 
 from __future__ import annotations
@@ -205,6 +207,8 @@ _SPEC_KEYS = frozenset(
         "note",
         "overrides",
         "ignore_prefixes",
+        "by",
+        "table",
     }
 )
 _FORMULA_FUNCTIONS: Mapping[str, Callable[[float], float]] = MappingProxyType(
@@ -391,9 +395,10 @@ def _evaluate_formula_node(node: ast.AST, values: Mapping[str, float]) -> float:
 class QuantitySpec:
     """How one convention reads one quantity.
 
-    A quantity is read from ``keywords``, stated by ``value``, or derived by
-    ``formula``. A value given with keywords applies only when one of them
-    is present: they are the evidence the convention relies on.
+    A quantity is read from ``keywords``, stated by ``value``, derived by
+    ``formula``, or looked up in ``table`` by the value of the quantity
+    ``by``. A value given with keywords applies only when one of them is
+    present: they are the evidence the convention relies on.
 
     Parameters
     ----------
@@ -427,6 +432,12 @@ class QuantitySpec:
         Prefixes of keyword values that mean the keyword holds nothing, such
         as a ``CLEAR`` element of a filter wheel; such a value is treated as
         blank. The comparison ignores case.
+    by : str, optional
+        Text quantity read before, such as ``filter``, whose usable value
+        selects the entry of ``table``.
+    table : mapping, optional
+        Values of the quantity by value of ``by``. The lookup ignores case and
+        surrounding spaces, and compares image units in canonical form.
     """
 
     keywords: tuple[str, ...] = ()
@@ -440,6 +451,8 @@ class QuantitySpec:
     requires: tuple[MatchRule, ...] = ()
     overrides: tuple[str, ...] = ()
     ignore_prefixes: tuple[str, ...] = ()
+    by: str | None = None
+    table: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -1132,8 +1145,9 @@ def _read_quantity(
     declared before. A usable decision is compared with the usable reading
     of every later convention that finds the quantity: a value or unit that
     disagrees makes the quantity conflicting, unless the deciding convention
-    overrides the other one. An unusable decision is kept, so a convention
-    that leaves a quantity ambiguous is not bypassed by a less specific one.
+    overrides the other one, and then the overridden value is recorded in the
+    note of the decision. An unusable decision is kept, so a convention that
+    leaves a quantity ambiguous is not bypassed by a less specific one.
     """
     decision: HeaderQuantity | None = None
     overrides: tuple[str, ...] = ()
@@ -1152,12 +1166,19 @@ def _read_quantity(
             overrides = convention.quantities[definition.name].overrides
             continue
 
-        if (
-            reading.usable
-            and convention.name not in overrides
-            and not _readings_agree(definition, decision, reading)
-        ):
+        if not reading.usable or _readings_agree(definition, decision, reading):
+            continue
+
+        if convention.name not in overrides:
             return _conflicting_readings(definition, decision, reading)
+
+        decision = replace(
+            decision,
+            note=_join_notes(
+                decision.note,
+                f"It overrides another reading: {_describe_reading(reading)}.",
+            ),
+        )
 
     if decision is None:
         return HeaderQuantity(name=definition.name, status="missing")
@@ -1204,6 +1225,9 @@ def _convention_reading(
     if spec.formula is not None:
         return _resolve_formula(definition, spec, found, convention)
 
+    if spec.table is not None:
+        return _resolve_table(definition, spec, convention, resolved)
+
     if spec.value is not None:
         return _resolve_value(definition, spec, found, convention)
 
@@ -1211,6 +1235,72 @@ def _convention_reading(
         return _resolve_string(definition, spec, found, convention)
 
     return _resolve_number(definition, spec, found, convention, lookup)
+
+
+def _table_key(value: Any, by: str) -> str:
+    """Return the form in which a table compares the value of its key.
+
+    An image unit is compared in the form of :func:`canonical_unit`, as every
+    other comparison of units; any other text ignores case and surrounding
+    spaces.
+    """
+    if by == "image_unit":
+        return canonical_unit(value)
+
+    return str(value).strip().upper()
+
+
+def _resolve_table(
+    definition: QuantityDefinition,
+    spec: QuantitySpec,
+    convention: HeaderConvention,
+    resolved: Mapping[str, HeaderQuantity],
+) -> HeaderQuantity:
+    """Resolve a quantity that the convention tabulates by another quantity.
+
+    The value rests on the keyword of the quantity that selects it, such as
+    ``FILTER2`` for a zeropoint tabulated by filter.
+    """
+    subject = "the " + spec.by.replace("_", " ")
+    key = resolved.get(spec.by)
+    common = {
+        "name": definition.name,
+        "convention": convention.name,
+        "keyword": None if key is None else key.keyword,
+        "source": None if key is None else key.source,
+    }
+
+    if key is None or not key.usable:
+        state = "not known" if key is None or key.status == "missing" else key.status
+
+        return HeaderQuantity(
+            status="ambiguous",
+            note=_join_notes(
+                spec.note,
+                f"The convention tabulates it by {subject}, which is {state}.",
+            ),
+            **common,
+        )
+
+    entry = _table_key(key.value, spec.by)
+
+    if entry not in spec.table:
+        return HeaderQuantity(
+            status="ambiguous",
+            note=_join_notes(
+                spec.note,
+                f"The convention tabulates no value for {subject} {key.value!r}.",
+            ),
+            **common,
+        )
+
+    return HeaderQuantity(
+        status="convention",
+        value=spec.table[entry],
+        unit=spec.unit,
+        note=_join_notes(spec.note, f"Tabulated for {subject} {key.value!r}."),
+        **common,
+    )
 
 
 def _is_ignored(value: Any, prefixes: Sequence[str]) -> bool:
@@ -1916,6 +2006,7 @@ def _parse_spec(
     keywords = spec.get("keywords", [])
     has_value = "value" in spec
     formula_text = spec.get("formula")
+    has_table = "table" in spec or "by" in spec
 
     if formula_text is not None and (keywords or has_value):
         raise ValueError(
@@ -1923,9 +2014,15 @@ def _parse_spec(
             "a value."
         )
 
+    if has_table and (keywords or has_value or formula_text is not None):
+        raise ValueError(
+            f"Header convention {source}: a table takes neither keywords, a "
+            "value nor a formula."
+        )
+
     if (
         not isinstance(keywords, list)
-        or (not keywords and not has_value and formula_text is None)
+        or (not keywords and not has_value and formula_text is None and not has_table)
         or not all(isinstance(item, str) and item.strip() for item in keywords)
     ):
         raise ValueError(f"Header convention {source}: keywords must be listed.")
@@ -1953,10 +2050,10 @@ def _parse_spec(
             "convention or declared by the header, not both."
         )
 
-    if declares and (has_value or formula_text is not None):
+    if declares and (has_value or formula_text is not None or has_table):
         raise ValueError(
-            f"Header convention {source}: a stated or derived value takes its "
-            "unit from the convention, not from the header."
+            f"Header convention {source}: a stated, derived or tabulated value "
+            "takes its unit from the convention, not from the header."
         )
 
     unit = _optional_text(spec.get("unit"))
@@ -1983,6 +2080,9 @@ def _parse_spec(
         except ValueError as error:
             raise ValueError(f"Header convention {source}: {error}.") from None
 
+    by, table = (
+        _parse_table(spec, definition, unit, source) if has_table else (None, None)
+    )
     requires = spec.get("requires", [])
 
     if not isinstance(requires, list):
@@ -2022,7 +2122,63 @@ def _parse_spec(
         ),
         overrides=tuple(item.strip() for item in overrides),
         ignore_prefixes=tuple(item.strip() for item in ignore_prefixes),
+        by=by,
+        table=table,
     )
+
+
+def _parse_table(
+    spec: Mapping[str, Any],
+    definition: QuantityDefinition,
+    unit: str | None,
+    source: str,
+) -> tuple[str, Mapping[str, Any]]:
+    """Validate a table of values keyed by a text quantity read before."""
+    if "by" not in spec or "table" not in spec:
+        raise ValueError(
+            f"Header convention {source}: a table needs both by and table."
+        )
+
+    by = str(spec["by"]).strip()
+    allowed = tuple(
+        name
+        for name in _quantities_before(definition)
+        if QUANTITIES[name].kind == "string"
+    )
+
+    if by not in allowed:
+        raise ValueError(
+            f"Header convention {source}: a table is keyed by a text quantity "
+            f"read before, among {', '.join(allowed)}; got {by!r}."
+        )
+
+    table = spec["table"]
+
+    if not isinstance(table, Mapping) or not table:
+        raise ValueError(
+            f"Header convention {source}: table must map values of {by} to " "values."
+        )
+
+    entries: dict[str, Any] = {}
+
+    for key, value in table.items():
+        if not isinstance(key, str):
+            raise ValueError(
+                f"Header convention {source}: the keys of the table are text; "
+                f"quote the key {key!r}, which YAML did not read as text."
+            )
+
+        name = _table_key(key, by)
+
+        if not name or name in entries:
+            raise ValueError(
+                f"Header convention {source}: the keys of the table must be "
+                "distinct and non-empty."
+            )
+
+        entries[name] = _parse_value(value, definition, unit, source)
+
+    return by, MappingProxyType(entries)
 
 
 def _quantities_before(definition: QuantityDefinition) -> tuple[str, ...]:

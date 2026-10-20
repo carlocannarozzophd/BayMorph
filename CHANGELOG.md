@@ -42,6 +42,16 @@ and the project follows Semantic Versioning in spirit.
   take their AB zeropoint from `PHOTFNU`, 28.9 for pixels of 10 nJy. The
   filter of an ACS image is read from `FILTER1` and `FILTER2`, leaving out a
   `CLEAR` element.
+* Two more header conventions, for High Level Science Products of MAST that
+  document their zeropoints by filter: the Hubble eXtreme Deep Field
+  (`XDFVER`; for example 24.87 AB in F850LP) and the HST/ACS Coma Cluster
+  Treasury Survey (25.937 AB in F814W, 26.068 in F475W). The XDF headers
+  carry no `PHOTFLAM`; the Coma headers record `PHOTCORR = OMIT`, some with a
+  `PHOTFLAM` of 0, and where `PHOTFLAM` is valid it agrees with the survey
+  zeropoint within 0.001 mag, which overrides it. A convention may now
+  tabulate a quantity by a text quantity read before, such as a zeropoint by
+  filter (`by` and `table`), and a reading that overrides another records the
+  overridden value in its note.
 
 ### Changed
 

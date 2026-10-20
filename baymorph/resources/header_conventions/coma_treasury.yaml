@@ -1,0 +1,38 @@
+# The images of the HST/ACS Coma Cluster Treasury Survey (program 10861),
+# released by MAST as a High Level Science Product. The survey team drizzled
+# the exposures itself, into files named *_ivm_drz_cl*, whose headers record
+# PHOTCORR = OMIT; in some of them PHOTFLAM is 0, and where it is valid it
+# agrees with the survey zeropoint within 0.001 mag. The survey documents one
+# AB zeropoint per filter for count rates in electrons per second.
+name: coma_treasury
+title: HST/ACS Coma Cluster Treasury Survey images
+priority: 60
+references:
+  - "D. Hammer et al. 2010, ApJS 191, 143, p. 4 (arXiv): 'We use magnitude zeropoints of 26.068 and 25.937 for the F475W and F814W bands, respectively, which were calculated separately for each visit (but resulting in identical zeropoints)': https://ui.adsabs.harvard.edu/abs/2010ApJS..191..143H/abstract"
+  - "MAST, Coma Cluster Treasury Survey, release notes of DR2, SExtractor parameters: 'MAG_ZEROPOINT 25.937 (f814), 26.068 (f475) [AB]', with fluxes in e-/sec: https://archive.stsci.edu/pub/hlsp/coma/release2/coma_release_note_DR2.html"
+  - "D. Carter et al. 2008, ApJS 176, 424, the design of the survey: https://ui.adsabs.harvard.edu/abs/2008ApJS..176..424C/abstract"
+match:
+  - keyword: FILENAME
+    contains: _ivm_drz_cl
+quantities:
+  zeropoint:
+    by: filter
+    table:
+      F475W: 26.068
+      F814W: 25.937
+    unit: mag
+    requires:
+      - keyword: PROPOSID
+        equals: "10861"
+      - quantity: image_unit
+        equals: electron/s
+    overrides: [hst, hst_drizzle]
+    note: "The AB zeropoint of the survey for the filter of the image, for
+      count rates in electrons per second; the survey team computed it for
+      each visit and found the same value."
+  photometric_system:
+    value: AB
+    requires:
+      - quantity: zeropoint
+        present: true
+    note: "The zeropoints of the survey are on the AB system."

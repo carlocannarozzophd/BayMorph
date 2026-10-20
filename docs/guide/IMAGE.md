@@ -37,12 +37,20 @@ BayMorph derives it only for the products its documentation covers, here the
 drizzled images in electrons per second. An HST image drizzled to counts per
 second (`D001OUUN = 'cps'`) from exposures in electrons is read in electrons
 per second even when its `BUNIT` still says `ELECTRONS`, and the filter of
-ACS is read from its two filter wheels, `FILTER1` and `FILTER2`.
+ACS is read from its two filter wheels, `FILTER1` and `FILTER2`. Two High
+Level Science Products of MAST that document their own zeropoints are read
+with them: the eXtreme Deep Field (XDF), whose headers carry no `PHOTFLAM`,
+and the ACS Coma Cluster Treasury Survey, whose headers record
+`PHOTCORR = OMIT` and, in some images, a `PHOTFLAM` of 0.
 
 When several conventions read the same quantity, the most specific one
 decides, and BayMorph compares its value with the others: two values that
 disagree make the quantity `conflicting`, with both sources in the notes of
-the header report, and it is not used until you declare it.
+the header report, and it is not used until you declare it. A convention
+whose documentation corrects another one, such as the drizzle rule that
+corrects `BUNIT`, or the Coma survey whose zeropoint replaces the one of
+`PHOTFLAM`, overrides it instead, and the note records the value it
+overrode.
 
 When the header lacks a calibration quantity, or states it wrongly, declare
 it in `data.calibration`. A drizzled image whose header says `ELECTRONS`

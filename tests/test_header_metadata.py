@@ -90,6 +90,7 @@ def test_every_distributed_convention_loads_and_cites_its_sources() -> None:
         "decam",
         "eso_phase3",
         "eso_raw",
+        "coma_treasury",
         "generic",
         "grizli",
         "hscpipe",
@@ -101,6 +102,7 @@ def test_every_distributed_convention_loads_and_cites_its_sources() -> None:
         "sdss_frame",
         "swarp",
         "vst_tube",
+        "xdf",
     } <= set(names)
 
     for convention in conventions:
@@ -1084,6 +1086,9 @@ def test_a_convention_may_override_another_and_an_ambiguous_one_decides(
 
     assert reading["zeropoint"].status == "convention"
     assert reading.value("zeropoint") == pytest.approx(28.4)
+    assert "It overrides another reading: second gives 28.1 mag (ZPAB)." in (
+        reading["zeropoint"].note
+    )
 
     # The generic convention reads SATURATE in the units of the image, but a
     # VST-Tube coadd leaves it ambiguous, and that decision stands.
@@ -1193,8 +1198,9 @@ def test_an_hst_image_drizzled_to_count_rates_is_in_electrons_per_second() -> No
 
 def test_a_photflam_of_zero_leaves_the_drizzled_zeropoint_to_declare() -> None:
     primary, image = _drizzled_hst_headers(
-        photflam=0.0, filename="h_v22_F814W_ivm_drz_cl_ver2.fits"
+        photflam=0.0, filename="j9ty22010_drz.fits"
     )
+    primary["PHOTCORR"] = "OMIT"
 
     reading = read_header(image, primary_header=primary)
     zeropoint = reading["zeropoint"]
@@ -1282,3 +1288,207 @@ def test_an_exposure_time_written_as_text_is_read_as_a_number() -> None:
     assert reading["exposure_time"].status == "convention"
     assert reading.value("exposure_time") == pytest.approx(53.907456)
     assert reading["exposure_time"].unit == "s"
+
+
+# Values tabulated by a quantity read before, and the zeropoints of two High
+# Level Science Products that document them per filter.
+
+
+def test_a_convention_tabulates_a_quantity_by_one_read_before(tmp_path) -> None:
+    """A table keyed by the filter gives the value of the filter it finds."""
+    path = _write_convention(
+        tmp_path / "survey.yaml",
+        "survey",
+        50,
+        [
+            "  zeropoint:",
+            "    by: filter",
+            "    table:",
+            "      r: 27.1",
+            "      I: 26.4",
+            "    unit: mag",
+        ],
+    )
+    conventions = load_header_conventions([path])
+    header = _generic_header()
+
+    reading = read_header(header, conventions=conventions)
+    zeropoint = reading["zeropoint"]
+
+    assert zeropoint.status == "convention"
+    assert zeropoint.value == pytest.approx(27.1)
+    assert zeropoint.unit == "mag"
+    assert zeropoint.keyword == "FILTER"
+    assert zeropoint.convention == "survey"
+    assert "Tabulated for the filter 'r'." in zeropoint.note
+
+    header["FILTER"] = " i "
+
+    assert read_header(header, conventions=conventions).value("zeropoint") == (
+        pytest.approx(26.4)
+    )
+
+    header["FILTER"] = "z"
+    unlisted = read_header(header, conventions=conventions)["zeropoint"]
+
+    assert unlisted.status == "ambiguous"
+    assert "tabulates no value for the filter 'z'" in unlisted.note
+
+    del header["FILTER"]
+    unknown = read_header(header, conventions=conventions)["zeropoint"]
+
+    assert unknown.status == "ambiguous"
+    assert "tabulates it by the filter, which is not known" in unknown.note
+
+
+@pytest.mark.parametrize(
+    ("lines", "message"),
+    [
+        (["    by: filter", "    unit: mag"], "needs both by and table"),
+        (
+            ["    by: psf_fwhm", "    table: {r: 27.1}", "    unit: mag"],
+            "keyed by a text quantity read before",
+        ),
+        (
+            ["    by: exposure_time", "    table: {'300': 27.1}", "    unit: mag"],
+            "keyed by a text quantity read before",
+        ),
+        (
+            ["    by: filter", "    table: {on: 27.1}", "    unit: mag"],
+            "quote the key True",
+        ),
+        (["    by: filter", "    table: {}", "    unit: mag"], "must map values"),
+        (
+            ["    by: filter", "    table: {r: 27.1, R: 27.2}", "    unit: mag"],
+            "distinct and non-empty",
+        ),
+        (["    by: filter", "    table: {r: 27.1}"], "needs its unit"),
+        (
+            ["    by: filter", "    table: {r: 27.1}", "    keywords: [ZP]"],
+            "neither keywords",
+        ),
+    ],
+)
+def test_malformed_tables_are_rejected(tmp_path, lines, message) -> None:
+    path = _write_convention(
+        tmp_path / "survey.yaml", "survey", 50, ["  zeropoint:", *lines]
+    )
+
+    with pytest.raises(ValueError, match=message):
+        load_header_conventions([path])
+
+
+def test_a_table_keyed_by_the_image_unit_compares_units_in_one_form(
+    tmp_path,
+) -> None:
+    """A key spelled as BUNIT matches the unit a convention or a user gives."""
+    path = _write_convention(
+        tmp_path / "camera.yaml",
+        "camera",
+        70,
+        [
+            "  saturation:",
+            "    by: image_unit",
+            "    table:",
+            "      ELECTRONS/S: 50.0",
+            "    unit: image",
+        ],
+    )
+    conventions = [*load_header_conventions(), *load_header_conventions([path])]
+    primary, image = _drizzled_hst_headers()
+
+    reading = read_header(image, primary_header=primary, conventions=conventions)
+
+    assert reading.value("image_unit") == "electron/s"
+    assert reading.value("saturation") == pytest.approx(50.0)
+
+    # Without a BUNIT, the declared unit contradicts no unit of the header.
+    header = _generic_header()
+    del header["BUNIT"]
+    declared = read_header(
+        header, conventions=conventions, declarations={"image_unit": "e-/s"}
+    )
+
+    assert declared.value("saturation") == pytest.approx(50.0)
+
+
+def _xdf_header(filter_name: str = "F850LP") -> fits.Header:
+    """Return the header of an XDF mosaic, which records XDFVER."""
+    header = fits.Header()
+    header["TELESCOP"] = "HST"
+    header["INSTRUME"] = "ACS"
+    header["DETECTOR"] = "WFC"
+    header["FILTER"] = filter_name
+    header["BUNIT"] = "ELECTRONS/S"
+    header["EXPTIME"] = 1.0
+    header["XDFVER"] = "Hubble eXtreme Deep Field (ACS/WFC) V1.0. 22 March 2013"
+    _wcs_cards(header, 0.03)
+
+    return header
+
+
+def test_an_xdf_mosaic_takes_the_zeropoint_of_its_release() -> None:
+    """The XDF documents one AB zeropoint per filter; its header has none."""
+    reading = read_header(_xdf_header())
+    zeropoint = reading["zeropoint"]
+
+    assert reading.conventions[:2] == ("xdf", "hst")
+    assert zeropoint.status == "convention"
+    assert zeropoint.value == pytest.approx(24.87)
+    assert zeropoint.convention == "xdf"
+    assert zeropoint.keyword == "FILTER"
+    assert reading.value("photometric_system") == "AB"
+    assert read_header(_xdf_header("F160W")).value("zeropoint") == pytest.approx(
+        25.94
+    )
+
+    header = _xdf_header()
+    header["BUNIT"] = "ELECTRONS"
+
+    assert read_header(header)["zeropoint"].status == "ambiguous"
+
+
+def _coma_headers(photflam: float = 0.0) -> tuple[fits.Header, fits.Header]:
+    """Return the headers of an image of the Coma Treasury Survey (DR2)."""
+    primary, image = _drizzled_hst_headers(
+        photflam=photflam, filename="h_v22_F814W_ivm_drz_cl_ver2.fits"
+    )
+    primary["PROPOSID"] = 10861
+    primary["PHOTCORR"] = "OMIT"
+
+    return primary, image
+
+
+def test_a_coma_treasury_image_takes_the_zeropoint_of_the_survey() -> None:
+    """PHOTFLAM = 0 in the header; the survey documents 25.937 for F814W."""
+    primary, image = _coma_headers()
+
+    reading = read_header(image, primary_header=primary)
+    zeropoint = reading["zeropoint"]
+
+    assert reading.conventions[:2] == ("coma_treasury", "hst_drizzle")
+    assert reading.value("image_unit") == "electron/s"
+    assert zeropoint.status == "convention"
+    assert zeropoint.value == pytest.approx(25.937)
+    assert zeropoint.convention == "coma_treasury"
+    assert zeropoint.keyword == "FILTER2"
+    assert reading.value("photometric_system") == "AB"
+
+    # A valid PHOTFLAM gives another value, which the survey value overrides.
+    primary, image = _coma_headers(photflam=7.0723600e-20)
+    reading = read_header(image, primary_header=primary)
+
+    assert reading.value("zeropoint") == pytest.approx(25.937)
+    assert "It overrides another reading: hst_drizzle gives" in (
+        reading["zeropoint"].note
+    )
+
+    # The file name alone is not enough: the program must be the survey's.
+    primary, image = _coma_headers()
+    primary["PROPOSID"] = 12345
+
+    other = read_header(image, primary_header=primary)["zeropoint"]
+
+    assert other.status == "ambiguous"
+    assert other.convention == "coma_treasury"
+    assert "PROPOSID" in other.note
