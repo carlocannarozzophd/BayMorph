@@ -55,7 +55,7 @@ from baymorph.pipeline.multi_observation_config import (
     multi_observation_parameter_frame,
     resolve_multi_observation_config,
 )
-from baymorph.pipeline.opening import open_observation
+from baymorph.pipeline.opening import read_observation_metadata
 from baymorph.pipeline.real_fit import _compute_fit_statistics, _load_psf_from_config
 from baymorph.results import (
     InferenceResult,
@@ -622,9 +622,7 @@ def _build_sky_parameter_transforms(
                 f"observation '{observation_name}'."
             )
 
-        observation = open_observation(image_path)
-
-        wcs = observation.metadata.wcs
+        wcs = read_observation_metadata(image_path).wcs
 
         if wcs is None:
             raise ValueError(

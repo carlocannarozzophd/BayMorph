@@ -14,7 +14,7 @@ from astropy.coordinates import SkyCoord
 from astropy.wcs.utils import proj_plane_pixel_scales
 
 from baymorph.observation.geometry import slice_wcs_to_cutout
-from baymorph.pipeline.opening import open_observation
+from baymorph.pipeline.opening import read_observation_metadata
 
 
 @dataclass(frozen=True)
@@ -350,9 +350,7 @@ def _cutout_wcs(image_path: Path | None, products: Any):
     if set(bounds) != {"xmin", "xmax", "ymin", "ymax"}:
         return None
 
-    observation = open_observation(image_path)
-
-    wcs = observation.metadata.wcs
+    wcs = read_observation_metadata(image_path).wcs
 
     if wcs is None:
         return None

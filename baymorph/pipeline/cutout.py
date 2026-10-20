@@ -164,6 +164,7 @@ def resolve_preliminary_auto_cutout(
     initial_factor: float = 4.0,
     min_size: int = 100,
     max_size: int | None = None,
+    segment_origin: tuple[int, int] | None = None,
 ) -> CutoutDefinition:
     """Resolve a preliminary adaptive cutout anchored to a target position.
 
@@ -190,6 +191,12 @@ def resolve_preliminary_auto_cutout(
         Minimum preliminary cutout size.
     max_size : int, optional
         Maximum preliminary cutout size.
+    segment_origin : tuple of int, optional
+        Pixel ``(x, y)`` of the parent image at which ``target_segment``
+        starts, when the segment covers only part of the parent image, such
+        as a working region. By default the segment covers the whole parent
+        image. Only the size of the target bounding box is taken from the
+        segment.
 
     Returns
     -------
@@ -212,10 +219,25 @@ def resolve_preliminary_auto_cutout(
 
     segment = np.asarray(target_segment, dtype=bool)
 
-    if segment.shape != tuple(image_shape):
-        raise ValueError(
-            "'target_segment' must have the same shape as the parent image."
-        )
+    if segment_origin is None:
+        if segment.shape != tuple(image_shape):
+            raise ValueError(
+                "'target_segment' must have the same shape as the parent image."
+            )
+    else:
+        origin_x, origin_y = (int(value) for value in segment_origin)
+
+        if (
+            segment.ndim != 2
+            or origin_x < 0
+            or origin_y < 0
+            or origin_y + segment.shape[0] > image_shape[0]
+            or origin_x + segment.shape[1] > image_shape[1]
+        ):
+            raise ValueError(
+                "'target_segment' placed at 'segment_origin' must lie inside "
+                "the parent image."
+            )
 
     y, x = np.nonzero(segment)
 

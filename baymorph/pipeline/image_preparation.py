@@ -29,6 +29,7 @@ from baymorph.core import (
     negative_outlier_mask,
     union,
 )
+from baymorph.core.image import WorkingRegion
 from baymorph.core.observation import Observation
 from baymorph.core.sky import (
     PlateauResult,
@@ -52,7 +53,10 @@ from baymorph.pipeline.cutout import (
     validate_plateau_cutout_containment,
 )
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
-from baymorph.pipeline.opening import open_observation
+from baymorph.pipeline.opening import (
+    open_configured_observation,
+    region_request_message,
+)
 from baymorph.pipeline.outputs import (
     make_output_tree,
     pipeline_paths,
@@ -313,8 +317,15 @@ def _validate_products_against_current_sources(
 ) -> None:
     """Verify cutout and mask semantics against immutable current sources."""
     if observation is None:
-        observation = open_observation(
-            config["data"]["image_path"], hdu=config["data"].get("hdu")
+        observation = open_configured_observation(config["data"], declarations=False)
+
+    region = observation.image.region
+    current_region = None if region is None else region.as_dict()
+
+    if products.working_region != current_region:
+        raise RuntimeError(
+            "Persisted working region does not match the working region of "
+            "the current configuration and source FITS image."
         )
 
     source = _as_finite_image(
@@ -322,11 +333,23 @@ def _validate_products_against_current_sources(
     )
     cutout = _as_finite_image(products.cutout, context="persisted source cutout")
     bounds = _normalized_cutout_bounds(
-        products.cutout_bounds, source_shape=source.shape, cutout_shape=cutout.shape
+        products.cutout_bounds,
+        source_shape=observation.image.full_shape,
+        cutout_shape=cutout.shape,
     )
-    expected_cutout = source[
-        bounds["ymin"] : bounds["ymax"], bounds["xmin"] : bounds["xmax"]
-    ]
+
+    if region is not None and not region.contains(**bounds):
+        raise RuntimeError(
+            "Saved cutout bounds lie outside the working region of the current "
+            "source FITS image."
+        )
+
+    rows, columns = (
+        (slice(bounds["ymin"], bounds["ymax"]), slice(bounds["xmin"], bounds["xmax"]))
+        if region is None
+        else region.local_slices(**bounds)
+    )
+    expected_cutout = source[rows, columns]
     if not np.array_equal(cutout, expected_cutout):
         raise RuntimeError(
             "Persisted science cutout does not match the current source "
@@ -355,11 +378,11 @@ def _validate_products_against_current_sources(
     current_mask_crop = None
     if configured_mask_path is not None:
         full_mask = load_external_mask(
-            configured_mask_path, expected_shape=source.shape
+            configured_mask_path,
+            expected_shape=observation.image.full_shape,
+            region=region,
         )
-        current_mask_crop = full_mask[
-            bounds["ymin"] : bounds["ymax"], bounds["xmin"] : bounds["xmax"]
-        ].astype(bool, copy=True)
+        current_mask_crop = full_mask[rows, columns].astype(bool, copy=True)
 
     if current_mask_crop is None:
         if products.external_mask is not None:
@@ -946,20 +969,38 @@ def _resolve_auto_cutout(
     contaminant_rule: str,
     external_mask: np.ndarray | None = None,
     fitting_mask_mode: str = "union",
+    region: WorkingRegion | None = None,
+    pixel_scale: float | None = None,
 ) -> AutoCutoutResult:
     """Resolve a plateau-based automatic cutout for a target source.
 
     The contaminant rule selects the masked segments of the preliminary
     cutout, whose plateau sets the size of the cutout. On the whole image
     only the target segment is used, so the rule is not applied there.
+
+    ``image`` and ``external_mask`` hold the whole image, or its working
+    region ``region`` (AD-053), on which the first detection then runs. The
+    target position and the cutouts are in pixels of the whole image; a
+    target that reaches an edge of the region inside the image, or a cutout
+    that leaves the region, stops the preparation.
     """
+    origin_x, origin_y = (0, 0) if region is None else (region.xmin, region.ymin)
+    image_shape = image.shape if region is None else region.image_shape
+
     full_detection = _detect_target_in_image(
         image,
-        target_x=target_x,
-        target_y=target_y,
+        target_x=target_x - origin_x,
+        target_y=target_y - origin_y,
         detection_cfg=detection_cfg,
-        context="full-image detection",
+        context=(
+            "full-image detection" if region is None else "working-region detection"
+        ),
     )
+
+    if region is not None:
+        _require_target_inside_region(
+            full_detection.target_segment, region, pixel_scale=pixel_scale
+        )
 
     full_fitting_mask = build_fitting_mask(
         full_detection.contaminant_mask,
@@ -974,16 +1015,19 @@ def _resolve_auto_cutout(
     )
 
     preliminary_definition = resolve_preliminary_auto_cutout(
-        image_shape=image.shape,
+        image_shape=image_shape,
         target_segment=full_target_segment,
         center_x=target_x,
         center_y=target_y,
         initial_factor=float(cutout_cfg.get("initial_factor", 4.0)),
         min_size=int(cutout_cfg.get("min_size", 100)),
         max_size=cutout_cfg.get("max_size"),
+        segment_origin=None if region is None else (origin_x, origin_y),
     )
 
-    preliminary_cutout = make_target_cutout(image, preliminary_definition)
+    preliminary_cutout = make_target_cutout(
+        image, preliminary_definition, region=region, pixel_scale=pixel_scale
+    )
 
     preliminary_detection = _apply_contaminant_rule(
         preliminary_cutout,
@@ -999,7 +1043,9 @@ def _resolve_auto_cutout(
     )
 
     preliminary_external_mask = (
-        make_target_cutout(external_mask, preliminary_definition).astype(bool)
+        make_target_cutout(external_mask, preliminary_definition, region=region).astype(
+            bool
+        )
         if external_mask is not None
         else None
     )
@@ -1031,7 +1077,7 @@ def _resolve_auto_cutout(
     global_center_y = preliminary_definition.ymin + geometry.y0
 
     final_cutout = resolve_plateau_cutout(
-        image_shape=image.shape,
+        image_shape=image_shape,
         center_x=global_center_x,
         center_y=global_center_y,
         plateau_radius=plateau.radius,
@@ -1057,6 +1103,43 @@ def _resolve_auto_cutout(
         geometry=geometry,
         radial_profile=radial_profile,
         plateau=plateau,
+    )
+
+
+def _require_target_inside_region(
+    target_segment: np.ndarray, region: WorkingRegion, *, pixel_scale: float | None
+) -> None:
+    """Stop when the detected target reaches an inner edge of the region.
+
+    An edge of the working region that is also an edge of the image cuts
+    nothing, so only the inner edges are checked.
+    """
+    segment = np.asarray(target_segment, dtype=bool)
+    edges = (
+        (region.xmin > 0, segment[:, 0]),
+        (region.xmax < region.image_width, segment[:, -1]),
+        (region.ymin > 0, segment[0, :]),
+        (region.ymax < region.image_height, segment[-1, :]),
+    )
+
+    if not any(inner and np.any(edge) for inner, edge in edges):
+        return
+
+    rows, columns = np.nonzero(segment)
+
+    # One pixel beyond the segment on every side, within the image, so that
+    # the side the message names exceeds the extent seen so far.
+    raise ValueError(
+        region_request_message(
+            region,
+            what="The target, as detected, reaches the edge of the region: its "
+            "segment",
+            xmin=max(int(columns.min()) + region.xmin - 1, 0),
+            xmax=min(int(columns.max()) + region.xmin + 2, region.image_width),
+            ymin=max(int(rows.min()) + region.ymin - 1, 0),
+            ymax=min(int(rows.max()) + region.ymin + 2, region.image_height),
+            pixel_scale=pixel_scale,
+        )
     )
 
 
@@ -1101,7 +1184,8 @@ class PreparedObservation:
     cutout_mode : {"fixed", "auto"}, default="fixed"
         Cutout strategy used during image preparation.
     original_image : ndarray, optional
-        Full original input image before cutout extraction.
+        Original input image before cutout extraction: the whole image, or
+        its working region when it was read within one.
     cutout_bounds : dict of str, int, optional
         Pixel bounds of the final cutout in the original image, with keys
         ``xmin``, ``xmax``, ``ymin``, and ``ymax``.
@@ -1109,6 +1193,10 @@ class PreparedObservation:
         User-provided exclusion mask extracted onto the final cutout.
     fitting_mask_mode : {"union", "exact", "replace"}, default="union"
         Composition rule used to construct ``fitting_mask``.
+    working_region : dict of str, int, optional
+        Bounds, in pixels of the whole image and with the keys of
+        ``cutout_bounds``, of the working region that ``original_image``
+        holds (AD-053). None when the whole image was read.
     geometry : TargetGeometry, optional
         Target geometry measured on the final cutout.
     radial_profile : RadialProfile, optional
@@ -1159,6 +1247,7 @@ class PreparedObservation:
     cutout_bounds: dict[str, int] | None = None
     external_mask: np.ndarray | None = None
     fitting_mask_mode: str = "union"
+    working_region: dict[str, int] | None = None
 
     geometry: TargetGeometry | None = None
     radial_profile: RadialProfile | None = None
@@ -1175,22 +1264,79 @@ class PreparedObservation:
     contaminant_growth_pixels: int = 0
 
 
-def make_target_cutout(data: np.ndarray, cutout: CutoutDefinition) -> np.ndarray:
+def make_target_cutout(
+    data: np.ndarray,
+    cutout: CutoutDefinition,
+    *,
+    region: WorkingRegion | None = None,
+    pixel_scale: float | None = None,
+) -> np.ndarray:
     """Extract a target cutout from an image.
 
     Parameters
     ----------
     data : ndarray
-        Parent image.
+        Parent image, or its working region.
     cutout : CutoutDefinition
-        Resolved cutout bounds.
+        Resolved cutout bounds, in pixels of the whole image.
+    region : WorkingRegion, optional
+        Working region that ``data`` holds (AD-053). By default ``data`` is
+        the whole image.
+    pixel_scale : float, optional
+        Pixel scale in arcsec per pixel, used only to state the size of a
+        region that would hold the cutout.
 
     Returns
     -------
     ndarray
         Extracted image cutout.
+
+    Raises
+    ------
+    ValueError
+        If the cutout leaves the working region.
     """
-    return data[cutout.ymin : cutout.ymax, cutout.xmin : cutout.xmax]
+    if region is None:
+        return data[cutout.ymin : cutout.ymax, cutout.xmin : cutout.xmax]
+
+    bounds = {
+        "xmin": cutout.xmin,
+        "xmax": cutout.xmax,
+        "ymin": cutout.ymin,
+        "ymax": cutout.ymax,
+    }
+
+    if not region.contains(**bounds):
+        raise ValueError(
+            region_request_message(
+                region,
+                what=f"The {_CUTOUT_NAMES.get(cutout.mode, 'cutout')}",
+                pixel_scale=pixel_scale,
+                **bounds,
+            )
+        )
+
+    rows, columns = region.local_slices(**bounds)
+
+    return data[rows, columns]
+
+
+_CUTOUT_NAMES = {
+    "fixed": "cutout",
+    "auto": "automatic cutout",
+    "auto_preliminary": "preliminary automatic cutout",
+}
+"""Names of the cutouts in the messages about the working region."""
+
+
+def _numeric_pixel_scale(value: Any) -> float | None:
+    """Return a resolved pixel scale, or None when it is not a number."""
+    if isinstance(value, bool) or not isinstance(value, (int, float, np.number)):
+        return None
+
+    value = float(value)
+
+    return value if np.isfinite(value) and value > 0.0 else None
 
 
 def prepare_real_image_from_config(
@@ -1224,19 +1370,24 @@ def prepare_real_image_from_config(
 
     make_output_tree(resolved)
 
-    observation = open_observation(
-        resolved["data"]["image_path"],
-        hdu=resolved["data"].get("hdu"),
-        declarations=resolved["data"].get("calibration"),
-    )
+    observation = open_configured_observation(resolved["data"])
 
     resolved = resolve_runtime_config(resolved, observation)
 
     input_identity = build_prepared_input_identity(resolved, observation=observation)
 
     image = observation.image
+    region = image.region
+    pixel_scale = _numeric_pixel_scale(resolved["data"].get("pixel_scale"))
 
-    _as_finite_image(image.data, context="input FITS image")
+    _as_finite_image(
+        image.data,
+        context=(
+            "input FITS image"
+            if region is None
+            else "working region of the input FITS image"
+        ),
+    )
 
     target_position = resolved["data"]["target_position"]
     if target_position is None:
@@ -1254,7 +1405,7 @@ def prepare_real_image_from_config(
     external_mask_path = resolved["data"].get("mask_path")
     if external_mask_path is not None:
         external_mask = load_external_mask(
-            external_mask_path, expected_shape=image.data.shape
+            external_mask_path, expected_shape=image.full_shape, region=region
         )
     elif fitting_mask_mode in {"exact", "replace"}:
         raise ValueError(
@@ -1268,7 +1419,7 @@ def prepare_real_image_from_config(
 
     if cutout_mode == "fixed":
         cutout_definition = resolve_cutout(
-            image_shape=image.data.shape,
+            image_shape=image.full_shape,
             center_x=target_position["x"],
             center_y=target_position["y"],
             config=cutout_cfg,
@@ -1284,18 +1435,22 @@ def prepare_real_image_from_config(
             contaminant_rule=contaminant_rule,
             external_mask=external_mask,
             fitting_mask_mode=fitting_mask_mode,
+            region=region,
+            pixel_scale=pixel_scale,
         )
         cutout_definition = auto_cutout_result.cutout
 
     else:
         raise ValueError(f"Unsupported cutout mode: {cutout_mode!r}.")
 
-    cutout = make_target_cutout(image.data, cutout_definition)
+    cutout = make_target_cutout(
+        image.data, cutout_definition, region=region, pixel_scale=pixel_scale
+    )
 
     full_external_mask = external_mask
     if full_external_mask is not None:
         external_mask = make_target_cutout(
-            full_external_mask, cutout_definition
+            full_external_mask, cutout_definition, region=region
         ).astype(bool)
 
     seed_target_x = float(target_position["x"]) - cutout_definition.xmin
@@ -1437,6 +1592,7 @@ def prepare_real_image_from_config(
         original_image=image.data,
         external_mask=external_mask,
         fitting_mask_mode=fitting_mask_mode,
+        working_region=None if region is None else region.as_dict(),
         contaminant_rule=contaminant_rule,
         released_labels=final_detection.released_labels,
         contaminant_growth_pixels=contaminant_growth_pixels,
@@ -1632,6 +1788,11 @@ def save_image_preparation_products(
         "target_label": products.target_label,
         "cutout_mode": products.cutout_mode,
         "cutout_bounds": products.cutout_bounds,
+        **(
+            {}
+            if products.working_region is None
+            else {"working_region": dict(products.working_region)}
+        ),
         "fitting_mask_mode": products.fitting_mask_mode,
         "geometry": (
             {
@@ -1899,6 +2060,7 @@ def load_image_preparation_products(
         external_mask=external_mask,
         fitting_mask_mode=metadata.get("fitting_mask_mode", "union"),
         cutout_bounds=metadata.get("cutout_bounds"),
+        working_region=metadata.get("working_region"),
         geometry=geometry,
         radial_profile=radial_profile,
         plateau=plateau,

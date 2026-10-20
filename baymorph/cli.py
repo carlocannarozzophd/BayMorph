@@ -16,6 +16,12 @@ from baymorph.core.header_metadata import PHOTOMETRIC_SYSTEMS
 from baymorph.observation.background import BACKGROUND_PARAMETER_NAMES
 from baymorph.pipeline.advisor import ObservationAdvisor
 from baymorph.pipeline.config_maker import make_config_from_fits
+from baymorph.pipeline.opening import (
+    WHOLE_IMAGE_MAX_SIDE,
+    describe_working_region,
+    read_observation_metadata,
+    working_region,
+)
 from baymorph.runner import BayMorphRunner
 
 _RESOURCE_PACKAGE = "baymorph.resources"
@@ -289,6 +295,24 @@ def _preparation_from_args(args: argparse.Namespace) -> dict[str, Any] | None:
     return {"noise": {"sky_correlation": args.sky_correlation}}
 
 
+def _region_from_args(args: argparse.Namespace) -> str | dict[str, float] | None:
+    """Return the data.region that the options declare, if any."""
+    if args.whole_image:
+        return "whole"
+
+    if args.region_size is not None:
+        return {"size": args.region_size}
+
+    return None
+
+
+def _region_line(data: dict[str, Any]) -> str:
+    """Say how much of the image BayMorph will read."""
+    metadata = read_observation_metadata(data["image_path"], hdu=data.get("hdu"))
+
+    return describe_working_region(working_region(data), metadata)
+
+
 def _command_config(args: argparse.Namespace) -> int:
     """Generate a BayMorph YAML configuration from one FITS image."""
     fits_path = Path(args.fits_path).expanduser()
@@ -303,6 +327,7 @@ def _command_config(args: argparse.Namespace) -> int:
     model_priors = _model_priors_from_args(args, models)
     preparation = _preparation_from_args(args)
     calibration = _calibration_from_args(args)
+    region = _region_from_args(args)
 
     if args.advise:
         return _advise_config(
@@ -314,6 +339,7 @@ def _command_config(args: argparse.Namespace) -> int:
             model_priors=model_priors,
             preparation=preparation,
             calibration=calibration,
+            region=region,
         )
 
     for option, value in (
@@ -336,6 +362,7 @@ def _command_config(args: argparse.Namespace) -> int:
         target_position=target_position,
         hdu=args.hdu,
         calibration=calibration,
+        region=region,
         output_path=output_path,
         object_name=args.object_name,
         model_name=models[0],
@@ -352,6 +379,7 @@ def _command_config(args: argparse.Namespace) -> int:
     )
 
     print("BayMorph configuration written to:\n" f"{output_path.resolve()}")
+    print(_region_line(config["data"]))
 
     if "effective_gain" not in config["fit"].get("likelihood", {}):
         print(
@@ -374,6 +402,7 @@ def _advise_config(
     model_priors: dict[str, dict[str, dict[str, float | str]]] | None,
     preparation: dict[str, Any] | None,
     calibration: dict[str, Any] | None,
+    region: str | dict[str, float] | None,
 ) -> int:
     """Propose a configuration with the observation advisor.
 
@@ -391,10 +420,21 @@ def _advise_config(
         hdu=args.hdu,
         calibration=calibration,
         online=not args.offline,
+        region=region,
     )
 
     print(advisor.header_report())
     print()
+    print(
+        _region_line(
+            {
+                "image_path": fits_path.resolve(),
+                "hdu": args.hdu,
+                "region": region,
+                "target_position": target_position,
+            }
+        )
+    )
     print("Preparing the image and building its PSF, which the fit will reuse.")
 
     # Absolute paths, as the configuration maker writes them, keep the
@@ -534,6 +574,27 @@ def _build_parser() -> argparse.ArgumentParser:
             "Index or EXTNAME of the HDU that holds the image. "
             "Default: selected by BayMorph."
         ),
+    )
+
+    region_options = config_parser.add_mutually_exclusive_group()
+
+    region_options.add_argument(
+        "--region-size",
+        dest="region_size",
+        type=_positive_number,
+        help=(
+            "Side, in arcsec, of the square about the target within which "
+            "the image is read, written to data.region. Default: the whole "
+            f"image up to {WHOLE_IMAGE_MAX_SIDE} pixels on a side, otherwise "
+            f"a square of {WHOLE_IMAGE_MAX_SIDE} pixels about the target."
+        ),
+    )
+
+    region_options.add_argument(
+        "--whole-image",
+        dest="whole_image",
+        action="store_true",
+        help="Read the whole image, whatever its size (data.region: whole).",
     )
 
     config_parser.add_argument(

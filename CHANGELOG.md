@@ -78,6 +78,26 @@ and the project follows Semantic Versioning in spirit.
 * The header reading has three new quantities, `detector`,
   `observation_start` and `observation_end`, which HST images give in
   `DETECTOR`, `EXPSTART` and `EXPEND`, the last two as Modified Julian Dates.
+* `data.region` reads a large image within a working region about the
+  target. By default an image with a side larger than 4096 pixels is read
+  within a square of 4096 pixels about `data.target_position`, about 134 MB
+  in double precision whatever the size of the mosaic; `whole` reads the
+  whole image, and `{size: S}` a square of S arcsec. Only the pixels of the
+  region are read: the bytes that hold them in an uncompressed file and the
+  tiles that cross it in a tile-compressed one, while a file compressed as a
+  whole, gzip or bzip2, is still read through up to the region. Every
+  position stays in pixels of the whole image: the target, the cutout
+  bounds, the PSF stars, and the axes of the first panel of the fit report.
+  A cutout, or a target of an automatic cutout, that leaves the region stops
+  with the side to declare. A fixed cutout inside the region gives the same
+  prepared products as the whole image. The region enters the identity of
+  the prepared products and of the PSF only when it is not the whole image,
+  so products of images read whole keep their identity.
+* `baymorph config` declares the region with `--region-size` or
+  `--whole-image` and says how much of the image will be read;
+  `make_config_from_fits(..., region=...)`,
+  `ObservationAdvisor(..., region=...)` and
+  `ObservationAdvisor.from_project(..., region=...)` take the same values.
 
 ### Changed
 
@@ -140,6 +160,16 @@ and the project follows Semantic Versioning in spirit.
   is refused as soon as it is read, by every command, rather than only
   when the image is prepared. Declare the curated mask under
   `data.mask_path`.
+* Unknown entries in the `data` section are refused, as those of `fit`
+  already were, so a misspelt key no longer passes unnoticed.
+* On an image read within a working region, what covered the whole image
+  covers the region: the first detection of an automatic cutout, the search
+  of the PSF stars, the inspection of the observation advisor and of the
+  model screening, and the check that decides whether the sky can give the
+  effective gain. The interactive selection of the target still shows the
+  whole image.
+* The steps of a joint fit that use only the celestial WCS of an image, and
+  `ObservationAdvisor.set_target_position`, read its header, not its pixels.
 
 ### Fixed
 

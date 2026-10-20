@@ -8,7 +8,7 @@ observations is described in
 [Several Observations](../guide/MULTI_OBSERVATION.md).
 
 Three keys are required: `object.name`, `data.image_path` and `outputs.root`.
-Unknown entries in the `fit` section are rejected. An unknown top-level
+Unknown entries in the `data` and `fit` sections are rejected. An unknown top-level
 section is not read: a `sampler` block written at the top level, for
 instance, is ignored, and the default backend is used.
 
@@ -33,6 +33,7 @@ instance, is ignored, and the default backend is used.
 | --- | --- | --- | --- |
 | `data.image_path` | path | required | FITS image to analyse. |
 | `data.hdu` | integer, string or `null` | `null` | HDU that holds the image, by index or `EXTNAME`. `null` selects the primary HDU when it holds an image, otherwise the single `SCI` or `IMAGE` extension or the single image extension. Not accepted in a joint configuration. |
+| `data.region` | `null`, `whole` or `{size}` | `null` | Part of the image that BayMorph reads. `null` reads the whole image when no side exceeds 4096 pixels, otherwise a square of 4096 pixels about `data.target_position`; `whole` always reads the whole image; `{size: S}` reads a square of S arcsec about the target. The square is shifted inside the image and never padded, and every position, of the target, of the cutout or of the PSF stars, stays in pixels of the whole image. A cutout, or an `auto` target, that leaves the region stops with the side to declare. What would cover the whole image covers the region: the first detection of an `auto` cutout and the search of the PSF stars. The region enters the identity of the prepared products and of the PSF only when it is not the whole image. |
 | `data.target_position` | `{x, y}` or `center` | `null` | Target-identification seed in zero-based full-image pixel coordinates, or the detector centre. Required to prepare and fit; it is also the reference of priors declared with `relative_to`. |
 | `data.cutout` | mapping | | Cutout of the target. |
 | `data.cutout.mode` | `fixed` or `auto` | `fixed` | `fixed` cuts `data.cutout.size` pixels about the target seed; `auto` cuts a preliminary region, measures where the radial profile of the target reaches the sky plateau, and cuts the plateau plus a margin. |
@@ -43,7 +44,7 @@ instance, is ignored, and the default backend is used.
 | `data.cutout.sky_margin` | number | 20.0 | `auto`: pixels added beyond the plateau radius. |
 | `data.mask_path` | path | `null` | External FITS mask, `True` (non-zero) for excluded pixels, on the grid of the image. |
 | `data.mask_mode` | `union`, `exact`, `replace` | `union` | `union` excludes the detected contaminants and the external mask; `exact` and `replace`, which are equivalent, use the external mask instead of the detected contaminants and require `data.mask_path`. |
-| `data.pixel_scale` | number, `auto` or `null` | `null` | Pixel scale in arcsec. `null` or `auto` reads it from the FITS metadata. It is used for reporting, not by the fit. |
+| `data.pixel_scale` | number, `auto` or `null` | `null` | Pixel scale in arcsec. `null` or `auto` reads it from the FITS metadata. It is used for reporting and to convert `data.region.size` into pixels, not by the fit. |
 | `data.calibration` | mapping | none | Calibration quantities declared where the header does not give them, or gives them wrongly. A declared value takes the place of the header reading, which stays recorded beside it; declarations change no prepared product. The observation advisor may write `zeropoint` and `photometric_system` from a calibration service, and its report records the source of each value. Not accepted in a joint configuration. |
 | `data.calibration.image_unit` | string | | Unit of the pixel values, such as `ADU/s` or `electron/s`. A unit that differs from the header leaves the header values given in the units of the image unestablished. |
 | `data.calibration.zeropoint` | number | | Zeropoint in magnitudes, with m = zeropoint − 2.5 log10(flux in image units). The system and the zeropoint error of the header are then set aside. |

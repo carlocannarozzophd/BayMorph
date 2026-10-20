@@ -12,11 +12,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy.io import fits
 
+from baymorph.core.image import WorkingRegion
 from baymorph.pipeline.config import load_resolved_config
 from baymorph.pipeline.empirical_psf_builder import BuilderSettings, build_empirical_psf
 from baymorph.pipeline.image_preparation import detect_real_fits_sources
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
-from baymorph.pipeline.opening import open_observation
+from baymorph.pipeline.opening import open_configured_observation, working_region
 from baymorph.pipeline.outputs import make_output_tree, pipeline_paths
 from baymorph.pipeline.prepared_identity import (
     file_content_identity,
@@ -186,9 +187,14 @@ def build_empirical_psf_provenance(config: Mapping[str, Any]) -> dict[str, Any]:
 
     # A declared HDU binds the PSF to the image it was built from; it enters
     # only when declared, so the PSF of an image read by default keeps its
-    # provenance.
+    # provenance. The working region enters likewise only when there is one.
     if config["data"].get("hdu") is not None:
         input_fits["hdu"] = config["data"]["hdu"]
+
+    region = working_region(config["data"])
+
+    if region is not None:
+        input_fits["region"] = region.as_dict()
 
     return {
         "schema_version": EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION,
@@ -818,17 +824,15 @@ def run_psf_construction_from_config(config: str | Path | dict[str, Any]) -> np.
     else:
         resolved = config
 
-    observation = open_observation(
-        resolved["data"]["image_path"],
-        hdu=resolved["data"].get("hdu"),
-        declarations=resolved["data"].get("calibration"),
-    )
+    observation = open_configured_observation(resolved["data"])
     image = observation.image
+    region = image.region
+    origin_x, origin_y = (0, 0) if region is None else (region.xmin, region.ymin)
 
     candidates = load_psf_candidates(resolved)
 
     if len(candidates) == 0:
-        raise ValueError("No PSF candidates available.")
+        raise ValueError(f"No PSF candidates available.{_region_hint(region)}")
 
     candidate_cfg = (
         resolved.get("psf", {}).get("empirical", {}).get("candidate_selection", {})
@@ -847,7 +851,10 @@ def run_psf_construction_from_config(config: str | Path | dict[str, Any]) -> np.
             raise ValueError("PSF candidate is missing half_size.")
 
         cutout = extract_centered_cutout(
-            image.data, x=candidate.x, y=candidate.y, half_size=candidate.half_size
+            image.data,
+            x=candidate.x - origin_x,
+            y=candidate.y - origin_y,
+            half_size=candidate.half_size,
         )
 
         peak_snr = estimate_cutout_peak_snr(cutout)
@@ -876,7 +883,10 @@ def run_psf_construction_from_config(config: str | Path | dict[str, Any]) -> np.
         used_candidates.append(candidate_metadata)
 
     if len(used_candidates) == 0:
-        raise ValueError("No PSF candidates satisfy " f"min_peak_snr={min_peak_snr:g}.")
+        raise ValueError(
+            f"No PSF candidates satisfy min_peak_snr={min_peak_snr:g}."
+            f"{_region_hint(region)}"
+        )
 
     settings = empirical_psf_builder_settings(resolved)
     detection = detect_real_fits_sources(image.data)
@@ -885,7 +895,47 @@ def run_psf_construction_from_config(config: str | Path | dict[str, Any]) -> np.
         if detection.segmentation is None
         else np.asarray(detection.segmentation.data)
     )
-    build = build_empirical_psf(image.data, used_candidates, labels, settings)
+    # The builder works in the pixels of the array, those of the working
+    # region when there is one; the positions it records are moved back to
+    # the pixels of the whole image.
+    try:
+        build = build_empirical_psf(
+            image.data,
+            (
+                used_candidates
+                if region is None
+                else [
+                    {
+                        **candidate,
+                        "x": candidate["x"] - origin_x,
+                        "y": candidate["y"] - origin_y,
+                    }
+                    for candidate in used_candidates
+                ]
+            ),
+            labels,
+            settings,
+        )
+    except ValueError as exc:
+        if region is None:
+            raise
+
+        raise ValueError(f"{exc}{_region_hint(region)}") from exc
+
+    stars = build.stars
+
+    if region is not None:
+        stars = [
+            {
+                **star,
+                "x": star["x"] + origin_x,
+                "y": star["y"] + origin_y,
+                "centroid_x": star["centroid_x"] + origin_x,
+                "centroid_y": star["centroid_y"] + origin_y,
+            }
+            for star in stars
+        ]
+
     psf = build.native
 
     validation = validate_empirical_psf(
@@ -922,7 +972,7 @@ def run_psf_construction_from_config(config: str | Path | dict[str, Any]) -> np.
                 key: [float(value) for value in values]
                 for key, values in build.wing_profile.items()
             },
-            "stars": build.stars,
+            "stars": stars,
             "observation": observation_metadata_dict(observation),
             "n_candidates_input": len(candidates),
             "n_candidates_used": len(build.stars),
@@ -948,6 +998,18 @@ def run_psf_construction_from_config(config: str | Path | dict[str, Any]) -> np.
     )
 
     return psf
+
+
+def _region_hint(region: WorkingRegion | None) -> str:
+    """Say where the stars were searched, when the image has a working region."""
+    if region is None:
+        return ""
+
+    return (
+        " The stars are searched within the working region x "
+        f"{region.xmin}-{region.xmax}, y {region.ymin}-{region.ymax} of the "
+        "image: a larger data.region, or data.region: whole, offers more."
+    )
 
 
 def normalize_psf(psf: np.ndarray) -> np.ndarray:

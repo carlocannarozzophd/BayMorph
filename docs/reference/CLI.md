@@ -47,6 +47,8 @@ together.
 | `--target-x`, `--target-y` | Target-identification seed in zero-based full-image pixel coordinates. | |
 | `--target-center` | Use the detector centre as the target seed; cannot be combined with `--target-x` or `--target-y`. | |
 | `--hdu` | Index or `EXTNAME` of the HDU that holds the image, written to `data.hdu`. | selected by BayMorph |
+| `--region-size` | Side, in arcsec, of the square about the target within which the image is read, written to `data.region`. | the whole image up to 4096 pixels on a side, otherwise a square of 4096 pixels about the target |
+| `--whole-image` | Read the whole image, whatever its size: `data.region: whole`. Cannot be combined with `--region-size`. | |
 | `--output` | Path of the YAML file to write. | `<FITS stem>.yaml` in the current directory |
 | `--object-name` | Name of the analysis object, which names its output directory. | FITS file name without extension |
 | `--model` | Registered morphology model, one of the ten of the [Models](../models/index.md) section, such as `single_sersic`, `bulge_disk` or `core_sersic`. Repeat it with `--advise` for a configuration of several models. | `single_sersic` |
@@ -75,7 +77,10 @@ together.
 The generated file is a starting point to review, not a finished analysis:
 [Writing a Configuration](../guide/CONFIGURING.md) lists the choices that are
 yours, such as the defaults that are not scaled to the units of the image.
-When the sky of the image, measured after three-sigma clipping, is at least
+The command says how much of the image BayMorph will read: the whole image,
+or a working region about the target, with its bounds in pixels of the whole
+image. When the sky of the image, measured after three-sigma clipping in the
+part that is read, is at least
 ten times its noise, the file declares `effective_gain` with
 `source: measured_sky`; otherwise it leaves the gain undeclared, the command
 says so, and the fit refuses to start until `fit.likelihood.effective_gain`

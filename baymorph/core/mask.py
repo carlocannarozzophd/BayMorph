@@ -8,14 +8,20 @@ from astropy.io import fits
 from photutils.segmentation import detect_sources, detect_threshold
 from scipy.ndimage import binary_dilation
 
+from baymorph.core.image import WorkingRegion
+
 
 def load_external_mask(
-    filename: str | Path, *, expected_shape: tuple[int, int] | None = None
+    filename: str | Path,
+    *,
+    expected_shape: tuple[int, int] | None = None,
+    region: WorkingRegion | None = None,
 ) -> np.ndarray:
     """Load and validate an external exclusion mask from a FITS file.
 
     Non-zero input pixels are interpreted as masked pixels. The returned
-    array always has boolean dtype.
+    array always has boolean dtype. The mask is read from the primary HDU,
+    or from the first extension when the primary HDU holds no data.
 
     Parameters
     ----------
@@ -24,11 +30,16 @@ def load_external_mask(
     expected_shape : tuple of int, optional
         Required mask shape as ``(ny, nx)``. If provided, a shape mismatch
         raises ``ValueError``.
+    region : WorkingRegion, optional
+        Working region of the science image (AD-053). Only that part of the
+        mask is read and returned, after the shape of the whole mask is
+        checked against ``expected_shape``.
 
     Returns
     -------
     ndarray of bool
-        Two-dimensional boolean exclusion mask.
+        Two-dimensional boolean exclusion mask, of the working region when
+        one is given.
 
     Raises
     ------
@@ -43,21 +54,43 @@ def load_external_mask(
     if not path.exists():
         raise FileNotFoundError(f"External mask file not found: {path}")
 
-    data = np.asarray(fits.getdata(path))
+    if region is None:
+        data = np.asarray(fits.getdata(path))
+        shape = data.shape
+    else:
+        with fits.open(path) as hdul:
+            hdu = hdul[0] if hdul[0].header.get("NAXIS", 0) else hdul[1]
+            header = hdu.header
+            shape = tuple(
+                int(header.get(f"NAXIS{axis}", 0))
+                for axis in range(int(header.get("NAXIS", 0)), 0, -1)
+            )
+            data = None
 
-    if data.ndim != 2:
+            if len(shape) == 2 and shape == region.image_shape:
+                data = np.asarray(
+                    hdu.section[region.ymin : region.ymax, region.xmin : region.xmax]
+                )
+
+    if len(shape) != 2:
         raise ValueError(
             "External mask must be a two-dimensional FITS image; "
-            f"received shape {data.shape}."
+            f"received shape {shape}."
         )
 
-    if not np.all(np.isfinite(data)):
+    if data is not None and not np.all(np.isfinite(data)):
         raise ValueError("External mask contains non-finite pixel values.")
 
-    if expected_shape is not None and data.shape != expected_shape:
+    if expected_shape is not None and shape != tuple(expected_shape):
         raise ValueError(
             "External mask shape does not match the science image: "
-            f"mask shape {data.shape}, image shape {expected_shape}."
+            f"mask shape {shape}, image shape {tuple(expected_shape)}."
+        )
+
+    if data is None:
+        raise ValueError(
+            f"External mask of shape {shape} does not cover the working "
+            f"region of an image of shape {region.image_shape}."
         )
 
     return data != 0

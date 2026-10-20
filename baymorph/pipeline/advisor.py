@@ -23,7 +23,7 @@ from baymorph.core.header_metadata import (
     validate_declarations,
 )
 from baymorph.core.image import read_image_header
-from baymorph.core.observation import Observation
+from baymorph.core.observation import Observation, ObservationMetadata
 from baymorph.models.labels import PARAMETER_KINDS
 from baymorph.pipeline.calibration_bridges import (
     BridgeOutcome,
@@ -42,7 +42,14 @@ from baymorph.pipeline.image_preparation import (
     prepare_real_fits_image,
     prepare_real_image_from_config,
 )
-from baymorph.pipeline.opening import file_state, open_observation
+from baymorph.pipeline.opening import (
+    RegionRequest,
+    describe_working_region,
+    file_state,
+    open_observation,
+    read_observation_metadata,
+    validate_region,
+)
 from baymorph.pipeline.prior_proposals import (
     ANGULAR_RANGE_ARCSEC,
     BACKGROUND_SKY_SCALE_MULTIPLE,
@@ -94,7 +101,13 @@ class PriorGuidance:
 
 @dataclass(frozen=True, slots=True)
 class ObservationInspection:
-    """Non-destructive summary of one astronomical FITS observation."""
+    """Non-destructive summary of one astronomical FITS observation.
+
+    ``shape`` is the shape of the whole image. The pixel statistics, the
+    background, the noise and the target measurements come from its working
+    region when it was read within one (AD-053), whose bounds, in pixels of
+    the whole image, are ``working_region``.
+    """
 
     path: Path
     shape: tuple[int, int]
@@ -121,6 +134,8 @@ class ObservationInspection:
     target_position_angle: float | None
     target_area_pixels: int | None
     seeing_fwhm_unit: str | None = None
+    working_region: dict[str, int] | None = None
+    region_description: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -774,6 +789,14 @@ class ObservationAdvisor:
         the service as its source; the advisor asks at most once per image
         and calibration, and never while it selects the target. Offline, it
         asks nothing and records the request it would have sent.
+    region : None, "whole" or mapping, optional
+        Working region of the image (AD-053), written to ``data.region`` of
+        the proposed configuration: by default the whole image when no side
+        exceeds 4096 pixels, otherwise a square of 4096 pixels about the
+        target, or about the centre of the image while no target is set;
+        ``"whole"`` for the whole image; ``{"size": side}`` for a square of
+        ``side`` arcsec. The inspection reads only the region; the
+        interactive selection of the target always shows the whole image.
     """
 
     def __init__(
@@ -784,6 +807,7 @@ class ObservationAdvisor:
         hdu: int | str | None = None,
         calibration: Mapping[str, Any] | None = None,
         online: bool = True,
+        region: str | Mapping[str, Any] | None = None,
     ) -> None:
         self.fits_path = Path(fits_path)
 
@@ -797,6 +821,7 @@ class ObservationAdvisor:
         self.hdu = hdu
         self.calibration = validate_declarations(calibration)
         self.online = online
+        self.region = validate_region(region)
         self._inspection: ObservationInspection | None = None
         self._settled: _SettledCalibration | None = None
 
@@ -810,6 +835,7 @@ class ObservationAdvisor:
         hdu: int | str | None = None,
         calibration: Mapping[str, Any] | None = None,
         online: bool = True,
+        region: str | Mapping[str, Any] | None = None,
     ) -> ObservationAdvisor:
         """Create an Advisor using paths relative to a BayMorph project.
 
@@ -842,6 +868,8 @@ class ObservationAdvisor:
         online : bool, default=True
             Whether the advisor may ask a calibration service; see
             :class:`ObservationAdvisor`.
+        region : None, "whole" or mapping, optional
+            Working region of the image; see :class:`ObservationAdvisor`.
 
         Returns
         -------
@@ -895,6 +923,7 @@ class ObservationAdvisor:
             hdu=hdu,
             calibration=calibration,
             online=online,
+            region=region,
         )
         advisor.project_root = project_root
 
@@ -914,11 +943,7 @@ class ObservationAdvisor:
         tuple of float
             Validated ``(x, y)`` target position.
         """
-        observation = self._open_pixels()
-        data = np.asarray(observation.image.data, dtype=float)
-
-        if data.ndim != 2:
-            raise ValueError("Target selection requires a two-dimensional FITS image.")
+        metadata = read_observation_metadata(self.fits_path, hdu=self.hdu)
 
         x = float(x)
         y = float(y)
@@ -926,7 +951,7 @@ class ObservationAdvisor:
         if not np.all(np.isfinite([x, y])):
             raise ValueError("Target coordinates must be finite.")
 
-        height, width = data.shape
+        height, width = metadata.height, metadata.width
 
         if not (0.0 <= x <= width - 1 and 0.0 <= y <= height - 1):
             raise ValueError(
@@ -994,7 +1019,7 @@ class ObservationAdvisor:
             )
 
         if initial_position is None and self.target_position is not None:
-            target_x, target_y = self._resolve_target(observation)
+            target_x, target_y = self._resolve_target(observation.metadata)
 
             if target_x is not None and target_y is not None:
                 initial_position = (float(target_x), float(target_y))
@@ -1078,7 +1103,9 @@ class ObservationAdvisor:
 
         noise_sigma = float(np.nanmedian(prepared.noise))
 
-        target_x, target_y = self._resolve_target(observation)
+        target_x, target_y = self._resolve_target(observation.metadata)
+        region = observation.image.region
+        origin_x, origin_y = (0, 0) if region is None else (region.xmin, region.ymin)
 
         target_flux_scale = None
         target_half_light_radius = None
@@ -1089,7 +1116,9 @@ class ObservationAdvisor:
         segmentation = prepared.detection.segmentation
 
         if target_x is not None and segmentation is not None:
-            label = select_segment_near_position(segmentation, x=target_x, y=target_y)
+            label = select_segment_near_position(
+                segmentation, x=target_x - origin_x, y=target_y - origin_y
+            )
 
             target_segment = segmentation.data == label
 
@@ -1124,7 +1153,7 @@ class ObservationAdvisor:
 
         inspection = ObservationInspection(
             path=self.fits_path.resolve(),
-            shape=(int(data.shape[0]), int(data.shape[1])),
+            shape=(int(metadata.height), int(metadata.width)),
             finite_fraction=float(np.mean(finite)),
             minimum=float(np.nanmin(data)),
             maximum=float(np.nanmax(data)),
@@ -1143,6 +1172,8 @@ class ObservationAdvisor:
             target_axis_ratio=target_axis_ratio,
             target_position_angle=target_position_angle,
             target_area_pixels=target_area_pixels,
+            working_region=None if region is None else region.as_dict(),
+            region_description=describe_working_region(region, metadata),
         )
 
         self._inspection = inspection
@@ -1227,6 +1258,11 @@ class ObservationAdvisor:
             "OBSERVATION",
             f"FITS: {inspection.path}",
             (f"Shape: {inspection.shape[1]} x {inspection.shape[0]} pixels"),
+            *(
+                []
+                if inspection.region_description is None
+                else [f"Read: {inspection.region_description}"]
+            ),
             f"Finite pixels: {inspection.finite_fraction:.3%}",
             (
                 "Pixel scale: "
@@ -1247,8 +1283,14 @@ class ObservationAdvisor:
                     else f"{inspection.saturation:.6g} in the units of the image"
                 )
             ),
-            ("Background (whole-image diagnostic): " f"{inspection.background:.6g}"),
-            ("Noise sigma (whole-image diagnostic): " f"{inspection.noise_sigma:.6g}"),
+            (
+                f"Background ({_diagnostic_scope(inspection)}): "
+                f"{inspection.background:.6g}"
+            ),
+            (
+                f"Noise sigma ({_diagnostic_scope(inspection)}): "
+                f"{inspection.noise_sigma:.6g}"
+            ),
         ]
 
         if inspection.target_x is not None:
@@ -1333,6 +1375,7 @@ class ObservationAdvisor:
             )
 
         config_options.setdefault("hdu", self.hdu)
+        config_options.setdefault("region", self.region)
         config_options["calibration"] = self._settle_calibration().declarations
 
         return make_config_from_fits(
@@ -2177,15 +2220,22 @@ class ObservationAdvisor:
         )
 
     def _open(self) -> Observation:
-        """Open the image, with the metadata of the settled calibration."""
+        """Open the image within its working region, with the settled calibration.
+
+        The region is taken about the target, or about the centre of the
+        image while no target is set.
+        """
+        target = "center" if self.target_position is None else self.target_position
+
         return open_observation(
             self.fits_path,
             hdu=self.hdu,
             declarations=self._settle_calibration().declarations,
+            region=RegionRequest.of(self.region, target=target),
         )
 
     def _open_pixels(self) -> Observation:
-        """Open the image for its pixels, without asking any service."""
+        """Open the whole image for its pixels, without asking any service."""
         return open_observation(self.fits_path, hdu=self.hdu)
 
     def _current_inspection(self) -> ObservationInspection:
@@ -2258,9 +2308,9 @@ class ObservationAdvisor:
         return self._settled
 
     def _resolve_target(
-        self, observation: Observation
+        self, metadata: ObservationMetadata
     ) -> tuple[float | None, float | None]:
-        """Resolve the optional target seed for inspection."""
+        """Resolve the optional target seed, in pixels of the whole image."""
         target = self.target_position
 
         if target is None:
@@ -2270,10 +2320,7 @@ class ObservationAdvisor:
             if target.strip().lower() != "center":
                 raise ValueError("String target_position must be exactly 'center'.")
 
-            return (
-                float(observation.metadata.center_x),
-                float(observation.metadata.center_y),
-            )
+            return (float(metadata.center_x), float(metadata.center_y))
 
         if isinstance(target, Mapping):
             if set(target) != {"x", "y"}:
@@ -2287,6 +2334,14 @@ class ObservationAdvisor:
             raise ValueError("target_position must contain exactly two coordinates.")
 
         return (float(target[0]), float(target[1]))
+
+
+def _diagnostic_scope(inspection: ObservationInspection) -> str:
+    """Name the part of the image that an inspection statistic describes."""
+    if inspection.working_region is None:
+        return "whole-image diagnostic"
+
+    return "diagnostic of the working region"
 
 
 def _half_light_radius(

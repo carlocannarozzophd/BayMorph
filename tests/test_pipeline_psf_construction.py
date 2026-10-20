@@ -620,14 +620,15 @@ def test_psf_construction_rejects_low_snr_candidates(
 
     observation = SimpleNamespace(
         image=SimpleNamespace(
-            data=image
+            data=image,
+            region=None,
         )
     )
 
     monkeypatch.setattr(
         module,
-        "open_observation",
-        lambda _, hdu=None, declarations=None: observation,
+        "open_configured_observation",
+        lambda data, declarations=True: observation,
     )
     monkeypatch.setattr(
         module,
@@ -776,7 +777,8 @@ def test_psf_construction_fails_when_all_candidates_fail_snr(
             data=np.zeros(
                 (21, 21),
                 dtype=float,
-            )
+            ),
+            region=None,
         )
     )
 
@@ -789,8 +791,8 @@ def test_psf_construction_fails_when_all_candidates_fail_snr(
 
     monkeypatch.setattr(
         module,
-        "open_observation",
-        lambda _, hdu=None, declarations=None: observation,
+        "open_configured_observation",
+        lambda data, declarations=True: observation,
     )
     monkeypatch.setattr(
         module,

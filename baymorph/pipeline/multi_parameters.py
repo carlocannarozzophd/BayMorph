@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from baymorph.core.observation import Observation
+from baymorph.core.observation import ObservationMetadata
 from baymorph.fitting.priors import UniformPrior
 from baymorph.models import get_model
 from baymorph.models.geometry import (
@@ -21,7 +21,7 @@ from baymorph.observation.background import (
     background_parameter_names,
 )
 from baymorph.pipeline.config import DEFAULT_CONFIG
-from baymorph.pipeline.opening import open_observation
+from baymorph.pipeline.opening import read_observation_metadata
 from baymorph.pipeline.prior_config import parse_prior_config
 
 Bounds = Sequence[float]
@@ -256,13 +256,13 @@ def _explicit_bounds_specification(
 
 def _sky_center_bounds(
     *,
-    observation: Observation,
+    metadata: ObservationMetadata,
     target_center: tuple[float, float],
     x_offsets: tuple[float, float],
     y_offsets: tuple[float, float],
 ) -> tuple[tuple[float, float], tuple[float, float]]:
     """Convert a local detector-space centre box into RA/Dec bounds."""
-    wcs = observation.metadata.wcs
+    wcs = metadata.wcs
 
     if wcs is None:
         raise ValueError("Sky-frame parameter construction requires a celestial WCS.")
@@ -317,7 +317,7 @@ def _sky_center_bounds(
 
 def _center_parameter_specifications(
     *,
-    observations: Mapping[str, Observation],
+    observations: Mapping[str, ObservationMetadata],
     target_centers: Mapping[str, tuple[float, float]],
     observation_ids: tuple[str, ...],
     x_offsets: tuple[float, float],
@@ -327,7 +327,7 @@ def _center_parameter_specifications(
     """Build sky-coordinate centre specifications."""
     bounds = {
         observation_id: _sky_center_bounds(
-            observation=observations[observation_id],
+            metadata=observations[observation_id],
             target_center=target_centers[observation_id],
             x_offsets=x_offsets,
             y_offsets=y_offsets,
@@ -508,16 +508,18 @@ def make_multi_parameters(
         for detector_name, frame_name in detector_to_frame.items()
     }
 
-    loaded_observations: dict[str, Observation] = {}
+    loaded_observations: dict[str, ObservationMetadata] = {}
 
     if parameter_frame == "sky":
         loaded_observations = {
-            observation_id: open_observation(Path(observations[observation_id]))
+            observation_id: read_observation_metadata(
+                Path(observations[observation_id])
+            )
             for observation_id in observation_ids
         }
 
-        for observation_id, observation in loaded_observations.items():
-            if observation.metadata.wcs is None:
+        for observation_id, metadata in loaded_observations.items():
+            if metadata.wcs is None:
                 raise ValueError(
                     "Sky-frame parameter construction requires a celestial "
                     f"WCS for observation {observation_id!r}."
@@ -661,9 +663,7 @@ def make_multi_parameters(
                 radius_priors = {}
 
                 for observation_id in observation_ids:
-                    pixel_scale = loaded_observations[
-                        observation_id
-                    ].metadata.pixel_scale
+                    pixel_scale = loaded_observations[observation_id].pixel_scale
 
                     if (
                         pixel_scale is None

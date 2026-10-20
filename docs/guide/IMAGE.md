@@ -93,9 +93,27 @@ values are compressed through `asinh` (`BSOFTEN` and `BOFFSET`); the FITS
 cutouts of the PS1 image cutout service, and the cutouts that astrocut
 linearizes, are linear and load as usual.
 
-Every pixel must be finite. BayMorph refuses an image with NaN or infinite
-pixels instead of guessing a value for them: fill them before, and list them
-in an external mask so that the fit ignores them (see [Masks](MASKS.md)).
+A mosaic can hold far more pixels than a fit needs: 21 504 x 16 384 pixels
+take 2.8 GB in double precision. BayMorph reads an image with a side larger
+than 4096 pixels only within a working region, a square of 4096 pixels about
+the target, and `baymorph config` says how much of the image it will read.
+Every position, of the target, of the cutout or of the PSF stars, stays in
+pixels of the whole image. Set the region with `data.region`:
+
+```yaml
+data:
+  region: {size: 300}   # a square of 300 arcsec about the target
+  # region: whole       # the whole image, whatever its size
+```
+
+A cutout that leaves the region stops with the side to declare. Within a
+region, the first detection of an automatic cutout and the search of the
+PSF stars cover the region only.
+
+Every pixel that BayMorph reads must be finite. BayMorph refuses an image
+with NaN or infinite pixels instead of guessing a value for them: fill them
+before, and list them in an external mask so that the fit ignores them (see
+[Masks](MASKS.md)).
 
 ## The target
 

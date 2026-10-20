@@ -426,8 +426,8 @@ def test_build_sky_parameter_transforms_uses_each_cutout_wcs(
 
     monkeypatch.setattr(
         multi_observation_fit,
-        "open_observation",
-        lambda path, hdu=None: observations[path],
+        "read_observation_metadata",
+        lambda path, hdu=None: observations[path].metadata,
     )
 
     transforms = (
@@ -500,12 +500,8 @@ def test_build_sky_parameter_transforms_requires_wcs(
 
     monkeypatch.setattr(
         multi_observation_fit,
-        "open_observation",
-        lambda path, hdu=None: SimpleNamespace(
-            metadata=SimpleNamespace(
-                wcs=None
-            )
-        ),
+        "read_observation_metadata",
+        lambda path, hdu=None: SimpleNamespace(wcs=None),
     )
 
     with pytest.raises(
@@ -563,12 +559,8 @@ def test_build_sky_parameter_transforms_requires_cutout_bounds(
 
     monkeypatch.setattr(
         multi_observation_fit,
-        "open_observation",
-        lambda path, hdu=None: SimpleNamespace(
-            metadata=SimpleNamespace(
-                wcs=wcs
-            )
-        ),
+        "read_observation_metadata",
+        lambda path, hdu=None: SimpleNamespace(wcs=wcs),
     )
 
     with pytest.raises(

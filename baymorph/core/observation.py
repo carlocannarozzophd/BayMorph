@@ -14,6 +14,7 @@ PSF construction, fitting, diagnostics, or configuration resolution.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,7 +23,7 @@ from astropy.io import fits
 from astropy.wcs import WCS
 
 from baymorph.core.header_metadata import HeaderReading, read_header, read_pixel_scales
-from baymorph.core.image import ImageData
+from baymorph.core.image import ImageData, ImageHeader, WorkingRegion
 
 
 @dataclass(frozen=True)
@@ -211,7 +212,7 @@ class ObservationMetadata:
         """
         return cls.from_header(
             image.header,
-            image_shape=image.shape,
+            image_shape=image.full_shape,
             primary_header=image.primary_header,
             reading=image.header_reading,
         )
@@ -292,14 +293,14 @@ class Observation:
 
     def __post_init__(self) -> None:
         """Validate consistency between image and metadata dimensions."""
-        ny, nx = self.image.shape
+        ny, nx = self.image.full_shape
 
         if self.metadata.width != nx or self.metadata.height != ny:
             raise ValueError(
                 "Observation metadata dimensions do not match the image: "
                 f"metadata=(height={self.metadata.height}, "
                 f"width={self.metadata.width}), "
-                f"image_shape={self.image.shape}."
+                f"image_shape={self.image.full_shape}."
             )
 
     @classmethod
@@ -321,7 +322,13 @@ class Observation:
 
     @classmethod
     def from_fits(
-        cls, filename: str | Path, hdu: int | str | None = None
+        cls,
+        filename: str | Path,
+        hdu: int | str | None = None,
+        *,
+        region: (
+            WorkingRegion | Callable[[ImageHeader], WorkingRegion | None] | None
+        ) = None,
     ) -> Observation:
         """Load an astronomical observation from a FITS file.
 
@@ -342,13 +349,18 @@ class Observation:
             Index or ``EXTNAME`` of the HDU that holds the image, the
             ``data.hdu`` of a configuration. See :meth:`ImageData.from_fits`
             for the default.
+        region : WorkingRegion or callable, optional
+            Part of the image to read (AD-053), or a function of the headers
+            of the image that returns it; see :meth:`ImageData.from_fits`. The
+            metadata describe the whole image. By default the whole image is
+            read.
 
         Returns
         -------
         Observation
             Observation containing the image and normalized metadata.
         """
-        image = ImageData.from_fits(filename, hdu=hdu)
+        image = ImageData.from_fits(filename, hdu=hdu, region=region)
 
         return cls.from_image(image)
 

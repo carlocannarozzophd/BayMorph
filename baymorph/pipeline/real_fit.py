@@ -52,7 +52,7 @@ from baymorph.pipeline.likelihood_state import (
     require_complete_likelihood_normalization,
 )
 from baymorph.pipeline.observation_metadata import observation_metadata_dict
-from baymorph.pipeline.opening import open_observation
+from baymorph.pipeline.opening import open_configured_observation
 from baymorph.pipeline.outputs import (
     make_output_tree,
     pipeline_paths,
@@ -90,11 +90,7 @@ def run_real_fit_from_config(config: str | Path | dict[str, Any]):
         raise FileNotFoundError("PSF products are required before fitting.") from exc
 
     try:
-        observation = open_observation(
-            resolved["data"]["image_path"],
-            hdu=resolved["data"].get("hdu"),
-            declarations=resolved["data"].get("calibration"),
-        )
+        observation = open_configured_observation(resolved["data"])
     except FileNotFoundError:
         observation = None
 

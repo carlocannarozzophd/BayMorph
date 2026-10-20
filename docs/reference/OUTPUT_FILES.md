@@ -26,7 +26,8 @@ runs/galaxy/
 | `mask.fits` | the automatic mask of the detected sources |
 | `segmentation.npy`, `target_segment.npy` | the detected sources and the target |
 | `radial_profile.npz`, `sky_region.npz` | the radial profile of the target and the sky region |
-| `image_preparation_metadata.json` | the cutout, the target, the subtracted sky level, the plateau, the sky gradient, the contaminant rule with the segments it left unmasked, and the growth of the masks |
+| `image_preparation_metadata.json` | the cutout, the target, the subtracted sky level, the plateau, the sky gradient, the contaminant rule with the segments it left unmasked, the growth of the masks, and the working region when the image was read within one |
+| `original_image.npy` | the image as read: the whole image, or its working region |
 | `correlated_gaussian_noise.npz` | the correlation of the sky, measured before the first fit, and the estimator that measured it |
 | `correlated_gaussian_vecchia/m24/` | the nearest-neighbour factorization of that correlation used by the likelihood |
 | `IMAGE_PREPARATION_COMPLETE.json` | written last, when every product is valid |

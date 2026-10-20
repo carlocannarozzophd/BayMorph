@@ -93,6 +93,7 @@ def _image_products(
             "ymin": 0,
             "ymax": shape[0],
         },
+        working_region=None,
     )
 
 

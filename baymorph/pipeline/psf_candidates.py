@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +12,7 @@ import numpy as np
 from baymorph.pipeline.checkpoint_signing import canonical_json_sha256
 from baymorph.pipeline.config import load_resolved_config
 from baymorph.pipeline.image_preparation import detect_real_fits_sources
-from baymorph.pipeline.opening import open_observation
+from baymorph.pipeline.opening import open_configured_observation, working_region
 from baymorph.pipeline.outputs import make_output_tree, pipeline_paths
 from baymorph.pipeline.prepared_identity import file_content_identity
 
@@ -107,8 +107,9 @@ def build_psf_candidates_provenance(config: dict[str, Any]) -> dict[str, Any]:
     Returns
     -------
     dict
-        The FITS file, with its HDU when one is declared, and the digests of
-        the detection and candidate-selection settings.
+        The FITS file, with its HDU when one is declared and its working
+        region when there is one, and the digests of the detection and
+        candidate-selection settings.
     """
     image_path = Path(config["data"]["image_path"]).expanduser().resolve()
     input_fits = {
@@ -118,6 +119,13 @@ def build_psf_candidates_provenance(config: dict[str, Any]) -> dict[str, Any]:
 
     if config["data"].get("hdu") is not None:
         input_fits["hdu"] = config["data"]["hdu"]
+
+    # The stars are searched within the working region, so a region enters
+    # the provenance; an image read whole keeps the provenance it had.
+    region = working_region(config["data"])
+
+    if region is not None:
+        input_fits["region"] = region.as_dict()
 
     return {
         "schema_version": PSF_CANDIDATES_PROVENANCE_SCHEMA_VERSION,
@@ -191,7 +199,8 @@ def validate_psf_candidates_provenance(config: dict[str, Any]) -> None:
     if recorded != build_psf_candidates_provenance(config):
         raise ValueError(
             "The saved PSF candidates were selected from another image, HDU, "
-            "detection or candidate-selection setting than the current "
+            "working region, detection or candidate-selection setting than the "
+            "current "
             f"configuration ({path}). Use a new output namespace, or set "
             "outputs.overwrite: true to select them again."
         )
@@ -271,9 +280,9 @@ def run_psf_candidate_selection_from_config(
 
     make_output_tree(resolved)
 
-    image = open_observation(
-        resolved["data"]["image_path"], hdu=resolved["data"].get("hdu")
-    ).image
+    image = open_configured_observation(resolved["data"], declarations=False).image
+    region = image.region
+    origin_x, origin_y = (0, 0) if region is None else (region.xmin, region.ymin)
 
     detection_cfg = resolved["preparation"]["detection"]
 
@@ -308,7 +317,9 @@ def run_psf_candidate_selection_from_config(
         max_eccentricity=candidate_cfg["max_eccentricity"],
         max_elongation=candidate_cfg["max_elongation"],
         edge_margin=candidate_cfg["edge_margin"],
-        galaxy_exclusion_box=candidate_cfg["galaxy_exclusion_box"],
+        galaxy_exclusion_box=_box_in_region(
+            candidate_cfg["galaxy_exclusion_box"], origin_x=origin_x, origin_y=origin_y
+        ),
         sigma_factor=candidate_cfg["sigma_factor"],
         size_margin=candidate_cfg["size_margin"],
         min_half_size=candidate_cfg["min_half_size"],
@@ -316,10 +327,34 @@ def run_psf_candidate_selection_from_config(
         isolation_margin=candidate_cfg["isolation_margin"],
     )
 
+    # The stars are found in the array of the working region; their positions
+    # are saved in pixels of the whole image.
+    if region is not None:
+        candidates = [
+            replace(candidate, x=candidate.x + origin_x, y=candidate.y + origin_y)
+            for candidate in candidates
+        ]
+
     save_psf_candidates(resolved, candidates)
     save_psf_candidates_provenance(resolved)
 
     return candidates
+
+
+def _box_in_region(
+    box: dict[str, float] | None, *, origin_x: int, origin_y: int
+) -> dict[str, float] | None:
+    """Move an exclusion box of the whole image into a working region."""
+    if box is None:
+        return None
+
+    return {
+        **box,
+        "xmin": box["xmin"] - origin_x,
+        "xmax": box["xmax"] - origin_x,
+        "ymin": box["ymin"] - origin_y,
+        "ymax": box["ymax"] - origin_y,
+    }
 
 
 def is_isolated_candidate(

@@ -297,6 +297,7 @@ def _run_single_observation_residual_maps(
             cutout_bounds=plot_products[
                 "cutout_bounds"
             ],
+            working_region=image_products.working_region,
             title=_diagnostic_title(
                 config,
                 model_name,
@@ -423,6 +424,7 @@ def _run_multi_observation_residual_maps(
                 target_mask=image_products.target_segment,
                 original_image=image_products.original_image,
                 cutout_bounds=image_products.cutout_bounds,
+                working_region=image_products.working_region,
                 title=_multi_observation_title(
                     observation_config,
                     model_name,

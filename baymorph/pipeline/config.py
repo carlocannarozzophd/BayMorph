@@ -18,6 +18,7 @@ from baymorph.core.header_metadata import validate_declarations
 from baymorph.core.observation import Observation, resolve_seeing_fwhm_pixels
 from baymorph.fitting.execution import resolve_sampler_execution
 from baymorph.likelihood.factory import normalize_likelihood_type
+from baymorph.pipeline.opening import validate_region
 
 REQUIRED_TOP_LEVEL_KEYS = ("object", "data", "outputs")
 
@@ -70,6 +71,20 @@ SAMPLER_DEFAULTS = {
         "run": {},
     },
 }
+
+
+DATA_KEYS = (
+    "image_path",
+    "hdu",
+    "calibration",
+    "region",
+    "pixel_scale",
+    "target_position",
+    "cutout",
+    "mask_path",
+    "mask_mode",
+)
+"""Entries of the ``data`` section; any other entry is refused."""
 
 
 DEFAULT_CONFIG = {
@@ -516,8 +531,18 @@ def validate_config(config: dict[str, Any]) -> None:
             "Declare the curated mask under data.mask_path."
         )
 
+    unknown_data_keys = sorted(set(config["data"]) - set(DATA_KEYS))
+
+    if unknown_data_keys:
+        raise ValueError(
+            "Unsupported configuration entries in section 'data': "
+            f"{unknown_data_keys}. Available entries: {sorted(DATA_KEYS)}."
+        )
+
     if "calibration" in config["data"]:
         validate_declarations(config["data"]["calibration"])
+
+    validate_region(config["data"].get("region"))
 
     hdu = config["data"].get("hdu")
 

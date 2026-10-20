@@ -14,7 +14,11 @@ import numpy as np
 
 from baymorph.core.observation import Observation
 from baymorph.pipeline.config import resolve_config, resolve_runtime_config
-from baymorph.pipeline.opening import REUSE_MIN_BYTES, file_state, open_observation
+from baymorph.pipeline.opening import (
+    REUSE_MIN_BYTES,
+    file_state,
+    open_configured_observation,
+)
 
 PREPARED_INPUT_IDENTITY_VERSION = 2
 
@@ -272,7 +276,7 @@ def build_prepared_input_identity(
     )
 
     file_identity_before = _file_identity(image_path)
-    disk_observation = open_observation(image_path, hdu=resolved["data"].get("hdu"))
+    disk_observation = open_configured_observation(resolved["data"], declarations=False)
     file_identity_after = _file_identity(image_path)
 
     if file_identity_before != file_identity_after:
@@ -295,6 +299,12 @@ def build_prepared_input_identity(
             raise ValueError(
                 "The supplied Observation does not identify the configured "
                 f"FITS input: {observation_path} != {image_path}."
+            )
+
+        if observation.image.region != disk_observation.image.region:
+            raise ValueError(
+                "The supplied Observation was read within another working "
+                "region than the one the configuration gives."
             )
 
         loaded_data_sha256 = _array_sha256(
@@ -344,6 +354,12 @@ def build_prepared_input_identity(
             "index": observation.image.hdu_index,
             "name": observation.image.hdu_name,
         }
+
+    # The working region enters the identity only when there is one, so that
+    # products of an image read whole keep their identity (AD-053); the
+    # digest of the loaded data is then the digest of the region.
+    if observation.image.region is not None:
+        fits_identity["region"] = observation.image.region.as_dict()
 
     return {
         "schema_version": PREPARED_INPUT_IDENTITY_VERSION,

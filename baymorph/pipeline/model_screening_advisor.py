@@ -18,7 +18,7 @@ from baymorph.pipeline.advisor import ObservationAdvisor
 from baymorph.analysis.model_screening_classifier import (
     LinearDiscriminantScreeningClassifier,
 )
-from baymorph.pipeline.opening import open_observation
+from baymorph.pipeline.opening import RegionRequest, open_observation
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,19 +98,42 @@ class SingleObservationModelAdvisor(ObservationAdvisor):
         therefore never converts it silently. The caller must either supply
         ``psf_fwhm_pixels`` directly or declare whether the header value is
         expressed in ``"arcsec"`` or ``"pixels"``.
+
+        The image is read within its working region about the target
+        (AD-053), whose border then gives the background and the noise when
+        they are not supplied. ``target_mask``, when given, covers the whole
+        image.
         """
-        observation = open_observation(self.fits_path, hdu=self.hdu)
+        if self.target_position is None:
+            raise ValueError(
+                "Model screening requires target_position. Supply pixel "
+                "coordinates or use target_position='center'."
+            )
+
+        observation = open_observation(
+            self.fits_path,
+            hdu=self.hdu,
+            region=RegionRequest.of(self.region, target=self.target_position),
+        )
         data = np.asarray(observation.image.data, dtype=float)
 
         if data.ndim != 2:
             raise ValueError("Model screening requires a two-dimensional FITS image.")
 
-        target_x, target_y = self._resolve_target(observation)
-        if target_x is None or target_y is None:
-            raise ValueError(
-                "Model screening requires target_position. Supply pixel "
-                "coordinates or use target_position='center'."
-            )
+        target_x, target_y = self._resolve_target(observation.metadata)
+        region = observation.image.region
+        origin_x, origin_y = (0, 0) if region is None else (region.xmin, region.ymin)
+
+        if target_mask is not None and region is not None:
+            mask = np.asarray(target_mask, dtype=bool)
+
+            if mask.shape != region.image_shape:
+                raise ValueError(
+                    "target_mask must have the shape of the whole image, "
+                    f"{region.image_shape}; got {mask.shape}."
+                )
+
+            target_mask = mask[region.ymin : region.ymax, region.xmin : region.xmax]
 
         resolved_psf_fwhm, psf_source = _resolve_psf_fwhm_pixels(
             observation.metadata,
@@ -120,8 +143,8 @@ class SingleObservationModelAdvisor(ObservationAdvisor):
 
         features = extract_model_screening_features(
             data,
-            target_x=target_x,
-            target_y=target_y,
+            target_x=target_x - origin_x,
+            target_y=target_y - origin_y,
             psf_fwhm=resolved_psf_fwhm,
             background=background,
             noise_sigma=noise_sigma,
@@ -131,7 +154,7 @@ class SingleObservationModelAdvisor(ObservationAdvisor):
 
         return SingleObservationScreeningResult(
             path=self.fits_path.resolve(),
-            shape=(int(data.shape[0]), int(data.shape[1])),
+            shape=(int(observation.metadata.height), int(observation.metadata.width)),
             target_x=float(target_x),
             target_y=float(target_y),
             metadata=observation.metadata,

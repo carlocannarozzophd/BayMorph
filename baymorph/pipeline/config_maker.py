@@ -18,7 +18,12 @@ from astropy.stats import sigma_clipped_stats
 from baymorph.core.effective_gain import SKY_LEVEL_GUARD
 from baymorph.core.header_metadata import validate_declarations
 from baymorph.core.observation import Observation, resolve_seeing_fwhm_pixels
-from baymorph.pipeline.opening import open_observation
+from baymorph.pipeline.opening import (
+    RegionRequest,
+    open_observation,
+    read_observation_metadata,
+    validate_region,
+)
 from baymorph.pipeline.prior_config import parse_prior_config
 from baymorph.pipeline.config import resolve_config, validate_fit_priors
 from baymorph.pipeline.multi_observation_config import (
@@ -376,6 +381,7 @@ def make_config_from_fits(
     target_position: TargetPosition | None = None,
     hdu: int | str | None = None,
     calibration: Mapping[str, Any] | None = None,
+    region: str | Mapping[str, Any] | None = None,
     output_path: str | Path | None = None,
     object_name: str | None = None,
     model_name: str = "single_sersic",
@@ -415,6 +421,15 @@ def make_config_from_fits(
         with them, so the metadata the configuration reads, such as the
         FWHM of a Gaussian PSF, follow the declarations. The configuration
         records the block only when it declares something.
+    region : None, "whole" or mapping, optional
+        Working region of the image (AD-053), written to ``data.region``
+        when given: ``"whole"`` for the whole image, or ``{"size": side}``
+        for a square of ``side`` arcsec about the target. By default the
+        configuration records nothing, and BayMorph reads the whole image
+        when no side exceeds 4096 pixels, otherwise a square of 4096 pixels
+        about the target. The image is opened within that region, so the
+        sky that decides whether the gain can be measured is the sky of the
+        region.
     output_path : str or pathlib.Path, optional
         YAML path to write. If omitted, no file is written.
     object_name : str, optional
@@ -477,7 +492,14 @@ def make_config_from_fits(
         raise FileNotFoundError(f"FITS file not found: {fits_path}")
 
     declarations = validate_declarations(calibration)
-    observation = open_observation(fits_path, hdu=hdu, declarations=declarations)
+    region = validate_region(region)
+    normalized_target = _normalize_target_position(target_position)
+    observation = open_observation(
+        fits_path,
+        hdu=hdu,
+        declarations=declarations,
+        region=RegionRequest.of(region, target=normalized_target),
+    )
 
     resolved_name = fits_path.stem if object_name is None else str(object_name).strip()
 
@@ -485,8 +507,6 @@ def make_config_from_fits(
         raise ValueError("object_name must be non-empty.")
 
     pixel_scale = _finite_positive(observation.metadata.pixel_scale)
-
-    normalized_target = _normalize_target_position(target_position)
 
     cutout = _cutout_config(cutout_mode, fixed_size=fixed_size)
 
@@ -558,6 +578,7 @@ def make_config_from_fits(
             "image_path": str(fits_path),
             **({} if hdu is None else {"hdu": hdu}),
             **({"calibration": declarations} if declarations else {}),
+            **({} if region is None else {"region": region}),
             "pixel_scale": pixel_scale,
             "target_position": normalized_target,
             "cutout": cutout,
@@ -712,9 +733,7 @@ def _observation_config_paths(
 def _validate_sky_frame_wcs(observations: Mapping[str, Path]) -> None:
     """Require a WCS for every sky-frame observation."""
     for name, fits_path in observations.items():
-        observation = open_observation(fits_path)
-
-        if observation.metadata.wcs is None:
+        if read_observation_metadata(fits_path).wcs is None:
             raise ValueError(
                 "Sky-frame multi-observation configuration requires a "
                 f"valid WCS for observation '{name}'."

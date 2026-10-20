@@ -484,8 +484,8 @@ def _contaminant_mask_rgba(
     return overlay
 
 
-def _imshow_log(ax, image, *, title, cmap, vmin=None, vmax=None):
-    """Display log-scaled image."""
+def _imshow_log(ax, image, *, title, cmap, vmin=None, vmax=None, extent=None):
+    """Display log-scaled image, over ``extent`` in data coordinates if given."""
     image = np.asarray(image, dtype=float)
 
     if vmin is None or vmax is None:
@@ -498,6 +498,7 @@ def _imshow_log(ax, image, *, title, cmap, vmin=None, vmax=None):
         origin="lower",
         cmap=cmap,
         norm=LogNorm(vmin=vmin, vmax=vmax),
+        extent=extent,
     )
 
     ax.set_title(
@@ -563,6 +564,7 @@ def plot_pipeline_fit_maps(
     *,
     original_image=None,
     cutout_bounds=None,
+    working_region=None,
     title: str = "",
     cmap: str = BAYMORPH_IMAGE_CMAP,
     show: bool = False,
@@ -572,6 +574,10 @@ def plot_pipeline_fit_maps(
     ``norm_residual`` is drawn as given: the ``norm_residual`` of the fit
     products, which the likelihood standardizes by the scale of its noise
     model (AD-047), with NaN outside the likelihood support.
+
+    ``original_image`` is the whole image, or its working region when
+    ``working_region`` gives the bounds of one (AD-053); its axes are in
+    pixels of the whole image either way, those of ``cutout_bounds``.
     """
     del segmentation
 
@@ -681,6 +687,16 @@ def plot_pipeline_fit_maps(
         cmap=cmap,
         vmin=row_vmin,
         vmax=row_vmax,
+        extent=(
+            None
+            if working_region is None
+            else (
+                working_region["xmin"] - 0.5,
+                working_region["xmax"] - 0.5,
+                working_region["ymin"] - 0.5,
+                working_region["ymax"] - 0.5,
+            )
+        ),
     )
 
     if cutout_bounds is not None:
