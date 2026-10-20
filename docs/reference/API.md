@@ -32,7 +32,11 @@ given. Its keyword arguments are `hdu`, `calibration`, `region`, `output_path`,
 [Writing a Configuration](../guide/CONFIGURING.md).
 
 **`ObservationAdvisor(fits_path, *, target_position=None, hdu=None, calibration=None, online=True, region=None)`**
-inspects one image and proposes a configuration for review. `calibration`
+inspects one image and proposes a configuration for review. `target_position`
+is `(x, y)` or `{"x": ..., "y": ...}` in pixels of the whole image, `"center"`,
+or `{"ra": ..., "dec": ...}` on the sky (ICRS), which the advisor converts to
+pixels through the celestial WCS of the header; `make_config_from_fits`
+takes the same forms and writes pixels. `calibration`
 declares calibration quantities, `online=False` keeps it from asking a
 calibration service for a quantity that the header lacks, and `region` sets
 the working region of a large image, as `data.region`: the inspection reads

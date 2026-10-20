@@ -101,6 +101,16 @@ and the project follows Semantic Versioning in spirit.
 * `baymorph.core.no_data_mask` returns the pixels without data of an image,
   and `detect_sources_segmentation(..., mask=...)` leaves pixels out of a
   detection.
+* The target can be given on the sky, as the position of a catalogue:
+  `ObservationAdvisor(..., target_position={"ra": ..., "dec": ...})`,
+  `make_config_from_fits` with the same mapping, and `baymorph config
+  --target-ra RA --target-dec DEC`. Right ascension and declination are in
+  the ICRS, in degrees or as texts with their units, such as
+  `"00h14m05.69s"`; a text without a unit is refused. BayMorph converts the
+  position to pixels of the whole image through the celestial WCS of the
+  header, stops when it falls outside the image, and writes the pixels in
+  the configuration, which takes the target in pixels only. The summary of
+  the advisor, and its report, record the position on the sky.
 
 ### Changed
 
@@ -189,6 +199,11 @@ and the project follows Semantic Versioning in spirit.
   without such pixels gives the same products as before. The summary of the
   observation advisor gives the fraction of pixels without data instead of
   the fraction of finite pixels.
+* A header that holds SIP distortion terms while its `CTYPE` lacks the
+  `-SIP` suffix, as some drizzled HST images do, no longer makes Astropy
+  print a long message at every opening of the image: the header report
+  says it once, in the note of the pixel scale. The terms are still
+  applied, as Astropy applies them.
 
 ### Fixed
 

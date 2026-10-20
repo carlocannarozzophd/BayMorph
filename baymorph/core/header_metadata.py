@@ -47,6 +47,7 @@ names the other one.
 from __future__ import annotations
 
 import ast
+import logging
 import math
 import operator
 import warnings
@@ -60,6 +61,7 @@ from typing import Any
 
 import numpy as np
 import yaml
+from astropy import log as astropy_log
 from astropy.io import fits
 from astropy.wcs import WCS, FITSFixedWarning
 from astropy.wcs.utils import proj_plane_pixel_scales
@@ -914,7 +916,7 @@ def read_header(
     _set_aside_image_unit_values(quantities)
 
     celestial_wcs = read_celestial_wcs(header)
-    quantities["pixel_scale"] = _read_pixel_scale_quantity(celestial_wcs)
+    quantities["pixel_scale"] = _read_pixel_scale_quantity(celestial_wcs, header)
 
     return HeaderReading(
         conventions=tuple(convention.name for convention in matched),
@@ -1754,12 +1756,30 @@ def normalize_declared_unit(text: Any, *, allowed: Sequence[str]) -> str | None:
     return recognized.pop()
 
 
-def _read_pixel_scale_quantity(celestial_wcs: WCS | None) -> HeaderQuantity:
-    """Derive the mean pixel scale from the celestial WCS."""
+def _read_pixel_scale_quantity(
+    celestial_wcs: WCS | None, header: fits.Header | None = None
+) -> HeaderQuantity:
+    """Derive the mean pixel scale from the celestial WCS.
+
+    The note also says when the header holds SIP terms that its ``CTYPE``
+    does not declare, which Astropy applies anyway.
+    """
     scale_x, scale_y, scale_mean = read_pixel_scales(celestial_wcs)
 
     if scale_mean is None:
         return HeaderQuantity(name="pixel_scale", status="missing")
+
+    sip_note = ""
+
+    if header is not None and _sip_without_suffix(header):
+        sip_note = (
+            f" The header holds SIP distortion terms (A_ORDER = "
+            f"{header['A_ORDER']}) while its CTYPE lacks the -SIP suffix: "
+            "Astropy applies them, and so does BayMorph when it places a "
+            "target given in RA and Dec. An image already corrected for "
+            "distortion, such as a drizzled one, should not carry them; the "
+            "pixel scale does not depend on them."
+        )
 
     return HeaderQuantity(
         name="pixel_scale",
@@ -1771,9 +1791,37 @@ def _read_pixel_scale_quantity(celestial_wcs: WCS | None) -> HeaderQuantity:
         raw_value=scale_mean,
         note=(
             f"Mean of the projected scales {scale_x:.6g} and {scale_y:.6g} "
-            "arcsec per pixel along the two image axes."
+            "arcsec per pixel along the two image axes." + sip_note
         ),
     )
+
+
+def _sip_without_suffix(header: fits.Header) -> bool:
+    """Return whether the header holds SIP terms its CTYPE does not declare.
+
+    The test is the one after which Astropy reports the inconsistency: an
+    ``A_ORDER`` above 1 and a ``CTYPE`` without the ``-SIP`` suffix.
+    """
+    order = header.get("A_ORDER")
+
+    if isinstance(order, bool) or not isinstance(order, (int, float)) or order <= 1:
+        return False
+
+    return any(
+        not str(header.get(f"CTYPE{axis}", "")).endswith("-SIP") for axis in (1, 2)
+    )
+
+
+class _SipWithoutSuffixFilter(logging.Filter):
+    """Drop the information Astropy logs about SIP terms without -SIP.
+
+    BayMorph states the same in the note of the pixel scale, once per
+    reading, instead of a long message at every construction of the WCS.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Keep every record but the one about the SIP terms."""
+        return "Inconsistent SIP distortion information" not in record.getMessage()
 
 
 def read_celestial_wcs(header: fits.Header | None) -> WCS | None:
@@ -1792,12 +1840,17 @@ def read_celestial_wcs(header: fits.Header | None) -> WCS | None:
     if header is None:
         return None
 
+    sip_filter = _SipWithoutSuffixFilter()
+    astropy_log.addFilter(sip_filter)
+
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=FITSFixedWarning)
             wcs = WCS(header)
     except Exception:
         return None
+    finally:
+        astropy_log.removeFilter(sip_filter)
 
     if not wcs.has_celestial:
         return None

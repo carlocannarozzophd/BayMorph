@@ -45,6 +45,7 @@ from baymorph.pipeline.image_preparation import (
 )
 from baymorph.pipeline.opening import (
     RegionRequest,
+    SkyPosition,
     describe_working_region,
     file_state,
     open_observation,
@@ -79,7 +80,7 @@ from baymorph.pipeline.segmentation import select_segment_near_position
 from baymorph.simulation.psf import GaussianPSF
 
 InputFunction = Callable[[str], str]
-TargetPosition = str | Mapping[str, float] | Sequence[float] | None
+TargetPosition = str | Mapping[str, Any] | Sequence[float] | SkyPosition | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -776,7 +777,11 @@ class ObservationAdvisor:
     fits_path : str or pathlib.Path
         Two-dimensional FITS image.
     target_position : mapping, sequence, {"center"}, or None
-        Optional initial target-identification seed.
+        Optional initial target-identification seed: ``(x, y)`` or
+        ``{"x": ..., "y": ...}`` in pixels of the whole image, ``"center"``,
+        or ``{"ra": ..., "dec": ...}`` on the sky (ICRS), in degrees or as
+        texts with their units, which the advisor converts to pixels through
+        the celestial WCS of the header (:class:`SkyPosition`).
     hdu : int or str, optional
         Index or ``EXTNAME`` of the HDU that holds the image, written to
         ``data.hdu`` of the proposed configuration.
@@ -821,7 +826,7 @@ class ObservationAdvisor:
         if not isinstance(online, bool):
             raise TypeError("online must be True or False.")
 
-        self.target_position = target_position
+        self.target_position = _sky_or_given(target_position)
         self.hdu = hdu
         self.calibration = validate_declarations(calibration)
         self.online = online
@@ -861,7 +866,8 @@ class ObservationAdvisor:
             Directory from which to begin project discovery. The current
             working directory is used by default.
         target_position : mapping, sequence, {"center"}, or None
-            Optional initial target-identification seed.
+            Optional initial target-identification seed, in pixels or on the
+            sky; see :class:`ObservationAdvisor`.
         hdu : int or str, optional
             Index or ``EXTNAME`` of the HDU that holds the image, written to
             ``data.hdu`` of the proposed configuration. By default BayMorph
@@ -1329,7 +1335,7 @@ class ObservationAdvisor:
                     (
                         "Target seed: "
                         f"({inspection.target_x:.3f}, "
-                        f"{inspection.target_y:.3f})"
+                        f"{inspection.target_y:.3f})" + _sky_text(self.target_position)
                     ),
                     (
                         "Segmented positive-flux scale: "
@@ -2178,6 +2184,11 @@ class ObservationAdvisor:
             },
             "bridges": [outcome.as_dict() for outcome in settled.outcomes],
             "target_position": deepcopy(config["data"]["target_position"]),
+            **(
+                {"target_sky": self.target_position.as_dict()}
+                if isinstance(self.target_position, SkyPosition)
+                else {}
+            ),
             "models": list(chosen),
             "rules": {
                 "magnitudes": list(MAGNITUDE_RANGE),
@@ -2325,6 +2336,9 @@ class ObservationAdvisor:
         if target is None:
             return None, None
 
+        if isinstance(target, SkyPosition):
+            return target.pixel(metadata)
+
         if isinstance(target, str):
             if target.strip().lower() != "center":
                 raise ValueError("String target_position must be exactly 'center'.")
@@ -2343,6 +2357,22 @@ class ObservationAdvisor:
             raise ValueError("target_position must contain exactly two coordinates.")
 
         return (float(target[0]), float(target[1]))
+
+
+def _sky_or_given(target: TargetPosition) -> TargetPosition:
+    """Read a target given on the sky; leave any other form as given."""
+    if isinstance(target, Mapping) and ("ra" in target or "dec" in target):
+        return SkyPosition.of(target)
+
+    return target
+
+
+def _sky_text(target: TargetPosition) -> str:
+    """Return the position on the sky of a target given there, for a summary."""
+    if not isinstance(target, SkyPosition):
+        return ""
+
+    return f", from RA {target.ra:.10g} and Dec {target.dec:.10g} (ICRS)"
 
 
 def _diagnostic_scope(inspection: ObservationInspection) -> str:

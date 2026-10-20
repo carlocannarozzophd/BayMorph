@@ -18,6 +18,7 @@ from baymorph.pipeline.advisor import ObservationAdvisor
 from baymorph.pipeline.config_maker import make_config_from_fits
 from baymorph.pipeline.opening import (
     WHOLE_IMAGE_MAX_SIDE,
+    SkyPosition,
     describe_working_region,
     read_observation_metadata,
     working_region,
@@ -109,23 +110,53 @@ def _command_init(args: argparse.Namespace) -> int:
 
 def _target_position_from_args(args: argparse.Namespace):
     """Return the explicit target seed requested on the command line."""
+    in_pixels = args.target_x is not None or args.target_y is not None
+    on_sky = args.target_ra is not None or args.target_dec is not None
+
     if args.target_center:
-        if args.target_x is not None or args.target_y is not None:
+        if in_pixels or on_sky:
             raise UsageError(
-                "--target-center cannot be combined with " "--target-x or --target-y."
+                "--target-center cannot be combined with --target-x, "
+                "--target-y, --target-ra or --target-dec."
             )
 
         return "center"
 
+    if in_pixels and on_sky:
+        raise UsageError(
+            "Give the target either in pixels, with --target-x and --target-y, "
+            "or on the sky, with --target-ra and --target-dec."
+        )
+
+    if on_sky:
+        if args.target_ra is None or args.target_dec is None:
+            raise UsageError("--target-ra and --target-dec must be supplied together.")
+
+        try:
+            return SkyPosition.of(
+                {"ra": _sky_value(args.target_ra), "dec": _sky_value(args.target_dec)}
+            )
+        except ValueError as error:
+            raise UsageError(str(error)) from error
+
     if args.target_x is None and args.target_y is None:
         raise UsageError(
-            "Specify either --target-center or both " "--target-x and --target-y."
+            "Specify either --target-center, both --target-x and --target-y, "
+            "or both --target-ra and --target-dec."
         )
 
     if args.target_x is None or args.target_y is None:
         raise UsageError("--target-x and --target-y must be supplied together.")
 
     return (float(args.target_x), float(args.target_y))
+
+
+def _sky_value(text: str) -> float | str:
+    """Return a coordinate of the command line: degrees, or a text with units."""
+    try:
+        return float(text)
+    except ValueError:
+        return text
 
 
 def _models_from_args(args: argparse.Namespace) -> list[str]:
@@ -379,6 +410,15 @@ def _command_config(args: argparse.Namespace) -> int:
     )
 
     print("BayMorph configuration written to:\n" f"{output_path.resolve()}")
+
+    if isinstance(target_position, SkyPosition):
+        target = config["data"]["target_position"]
+        print(
+            f"Target: RA {target_position.ra:.10g}, Dec {target_position.dec:.10g} "
+            f"(ICRS), at pixel ({target['x']:.2f}, {target['y']:.2f}) of the "
+            "whole image."
+        )
+
     print(_region_line(config["data"]))
 
     if "effective_gain" not in config["fit"].get("likelihood", {}):
@@ -696,6 +736,23 @@ def _build_parser() -> argparse.ArgumentParser:
         "--target-y",
         type=float,
         help="Target-identification seed y coordinate in zero-based pixels.",
+    )
+
+    config_parser.add_argument(
+        "--target-ra",
+        help=(
+            "Right ascension of the target (ICRS), in degrees or as a text "
+            "with its unit such as 00h14m05.69s; converted to pixels through "
+            "the celestial WCS of the header."
+        ),
+    )
+
+    config_parser.add_argument(
+        "--target-dec",
+        help=(
+            "Declination of the target (ICRS), in degrees or as a text with "
+            "its unit such as -30d22m20.7s."
+        ),
     )
 
     config_parser.add_argument(

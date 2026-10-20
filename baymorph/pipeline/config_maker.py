@@ -21,6 +21,7 @@ from baymorph.core.mask import no_data_mask
 from baymorph.core.observation import Observation, resolve_seeing_fwhm_pixels
 from baymorph.pipeline.opening import (
     RegionRequest,
+    SkyPosition,
     open_observation,
     read_observation_metadata,
     validate_region,
@@ -33,7 +34,7 @@ from baymorph.pipeline.multi_observation_config import (
 )
 from baymorph.observation.background import background_parameter_names
 
-TargetPosition = str | Mapping[str, float] | Sequence[float]
+TargetPosition = str | Mapping[str, Any] | Sequence[float] | SkyPosition
 
 
 _OBSERVATION_OPTION_KEYS = {
@@ -65,13 +66,26 @@ def _finite_positive(value: Any) -> float | None:
 
 def _normalize_target_position(
     target_position: TargetPosition | None,
-) -> str | dict[str, float]:
-    """Normalize an explicit target-identification seed."""
+) -> str | dict[str, float] | SkyPosition:
+    """Normalize an explicit target-identification seed.
+
+    A target on the sky is returned as a :class:`SkyPosition`, which the
+    caller converts to pixels once the header of the image is read.
+    """
     if target_position is None:
         raise ValueError(
             "target_position is required. Supply (x, y), a mapping with "
-            "'x' and 'y', or the explicit value 'center'."
+            "'x' and 'y', a mapping with 'ra' and 'dec', or the explicit value "
+            "'center'."
         )
+
+    if isinstance(target_position, SkyPosition):
+        return target_position
+
+    if isinstance(target_position, Mapping) and (
+        "ra" in target_position or "dec" in target_position
+    ):
+        return SkyPosition.of(target_position)
 
     if isinstance(target_position, str):
         value = target_position.strip().lower()
@@ -412,6 +426,11 @@ def make_config_from_fits(
     target_position : mapping, sequence, or {"center"}
         Explicit target-identification seed. The value ``"center"`` requests
         the detector centre and does not imply automatic target discovery.
+        A mapping with ``ra`` and ``dec`` gives the target on the sky
+        (ICRS), in degrees or as texts with their units; it is converted
+        through the celestial WCS of the header and written to
+        ``data.target_position`` in pixels of the whole image, rounded to
+        0.01 pixel.
     hdu : int or str, optional
         Index or ``EXTNAME`` of the HDU that holds the image, written to
         ``data.hdu``. By default BayMorph selects it as
@@ -504,6 +523,10 @@ def make_config_from_fits(
         declarations=declarations,
         region=RegionRequest.of(region, target=normalized_target),
     )
+
+    if isinstance(normalized_target, SkyPosition):
+        x, y = normalized_target.pixel(observation.metadata)
+        normalized_target = {"x": round(x, 2), "y": round(y, 2)}
 
     resolved_name = fits_path.stem if object_name is None else str(object_name).strip()
 

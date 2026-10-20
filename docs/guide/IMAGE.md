@@ -129,6 +129,16 @@ the centre of the image. Any point on the galaxy will do: BayMorph detects
 the sources in the image, takes the one that contains this position as the
 target, and fits its centre as a free parameter.
 
+The position from a catalogue can be given on the sky instead, to
+`baymorph config` with `--target-ra` and `--target-dec`, or to the advisor
+as `target_position={"ra": 3.5237, "dec": -30.37241}`: degrees in the ICRS,
+or texts with their units such as `"00h14m05.69s"`. BayMorph converts it to
+pixels through the celestial WCS of the header and writes the pixels in the
+configuration. When the header carries SIP distortion terms without the
+`-SIP` suffix in its `CTYPE`, as some drizzled images do, the conversion
+applies them, as Astropy does, and the header report says so in the note of
+the pixel scale; at the target the difference is a fraction of an arcsecond.
+
 ## The cutout
 
 The fit does not see the whole image, only a square cutout around the

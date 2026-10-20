@@ -25,6 +25,9 @@ from numbers import Real
 from pathlib import Path
 from typing import Any
 
+import astropy.units as u
+from astropy.coordinates import Angle, SkyCoord
+
 from baymorph.core.header_metadata import read_header
 from baymorph.core.image import ImageHeader, WorkingRegion, read_image_headers
 from baymorph.core.observation import Observation, ObservationMetadata
@@ -119,6 +122,132 @@ def validate_region(value: Any) -> str | dict[str, float] | None:
 
 
 @dataclass(frozen=True)
+class SkyPosition:
+    """A target given by its right ascension and declination (ICRS).
+
+    The preparation inputs, :class:`baymorph.ObservationAdvisor`,
+    :func:`baymorph.make_config_from_fits` and ``baymorph config``, accept a
+    target as ``{"ra": ..., "dec": ...}`` and convert it to pixels of the
+    whole image through the celestial WCS of the header, as Astropy reads
+    it, SIP terms included when the header carries them. A configuration
+    holds the target in pixels.
+
+    Parameters
+    ----------
+    ra, dec : float
+        Right ascension in ``[0, 360)`` and declination in ``[-90, 90]``,
+        in degrees.
+    """
+
+    ra: float
+    dec: float
+
+    def __post_init__(self) -> None:
+        """Require a finite position on the sphere."""
+        if not (math.isfinite(self.ra) and 0.0 <= self.ra < 360.0):
+            raise ValueError(
+                f"The right ascension of the target, {self.ra!r} degrees, must lie "
+                "in [0, 360)."
+            )
+
+        if not (math.isfinite(self.dec) and -90.0 <= self.dec <= 90.0):
+            raise ValueError(
+                f"The declination of the target, {self.dec!r} degrees, must lie in "
+                "[-90, 90]."
+            )
+
+    @classmethod
+    def of(cls, target: Mapping[str, Any]) -> SkyPosition:
+        """Read ``{"ra": ..., "dec": ...}``.
+
+        Each value is a number of degrees, or a text that carries its unit,
+        such as ``"00h14m05.69s"`` or ``"-30d22m20.7s"``; a text without a
+        unit is refused, since hours and degrees would be confused.
+        """
+        if set(target) != {"ra", "dec"}:
+            raise ValueError(
+                "A target on the sky is a mapping with exactly 'ra' and 'dec'; "
+                f"got {dict(target)!r}."
+            )
+
+        return cls(
+            ra=_sky_angle(target["ra"], name="ra"),
+            dec=_sky_angle(target["dec"], name="dec"),
+        )
+
+    def pixel(self, metadata: ObservationMetadata) -> tuple[float, float]:
+        """Return the target in pixels of the whole image.
+
+        Parameters
+        ----------
+        metadata : ObservationMetadata
+            Metadata of the image, with the celestial WCS of its header.
+
+        Returns
+        -------
+        tuple of float
+            ``(x, y)``, zero-based, ``x`` along the columns.
+
+        Raises
+        ------
+        ValueError
+            If the header has no celestial WCS, or the target falls outside
+            the image.
+        """
+        if metadata.wcs is None:
+            raise ValueError(
+                "The header of the image has no celestial WCS, so a target "
+                "given in RA and Dec cannot be placed on it: give the target "
+                "in pixels."
+            )
+
+        x, y = metadata.wcs.world_to_pixel(
+            SkyCoord(self.ra * u.deg, self.dec * u.deg, frame="icrs")
+        )
+        x, y = float(x), float(y)
+        width, height = int(metadata.width), int(metadata.height)
+
+        if not (
+            math.isfinite(x)
+            and math.isfinite(y)
+            and 0.0 <= x <= width - 1
+            and 0.0 <= y <= height - 1
+        ):
+            raise ValueError(
+                f"The target at RA {self.ra:.10g}, Dec {self.dec:.10g} (ICRS) falls "
+                f"at pixel ({x:.1f}, {y:.1f}), outside the image of {width} x "
+                f"{height} pixels."
+            )
+
+        return x, y
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return the position, with its frame, for a report."""
+        return {"ra": self.ra, "dec": self.dec, "frame": "icrs"}
+
+
+def _sky_angle(value: Any, *, name: str) -> float:
+    """Return one sky coordinate of a target in degrees."""
+    if isinstance(value, Real) and not isinstance(value, bool):
+        return float(value)
+
+    if isinstance(value, str):
+        try:
+            return float(Angle(value).degree)
+        except (u.UnitsError, ValueError) as error:
+            raise ValueError(
+                f"The {name} of the target, {value!r}, is a text without a unit "
+                "BayMorph can read: give degrees as a number, or a text with "
+                "its unit, such as '00h14m05.69s' or '-30d22m20.7s'."
+            ) from error
+
+    raise ValueError(
+        f"The {name} of the target must be a number of degrees or a text with "
+        f"its unit; got {value!r}."
+    )
+
+
+@dataclass(frozen=True)
 class RegionRequest:
     """The settings that decide the working region of an image (AD-053).
 
@@ -130,17 +259,17 @@ class RegionRequest:
     setting : None, str or tuple
         The canonical ``data.region``, as :func:`validate_region` returns it,
         with a side in arcsec given as ``("size", side)``.
-    center : str or tuple of float, optional
+    center : str, tuple of float or SkyPosition, optional
         Position about which the region is taken, in pixels of the whole
-        image, or ``"center"`` for the centre of the image. None when no
-        position is known.
+        image, ``"center"`` for the centre of the image, or a position on
+        the sky. None when no position is known.
     pixel_scale : float, optional
         Declared pixel scale, in arcsec per pixel. The scale of the celestial
         WCS of the header is used when it is None.
     """
 
     setting: str | tuple[str, float] | None = None
-    center: str | tuple[float, float] | None = None
+    center: str | tuple[float, float] | SkyPosition | None = None
     pixel_scale: float | None = None
 
     @classmethod
@@ -153,9 +282,10 @@ class RegionRequest:
         ----------
         region : None, str or mapping, optional
             ``data.region``.
-        target : str, mapping or sequence, optional
+        target : str, mapping, sequence or SkyPosition, optional
             ``data.target_position``: ``"center"``, ``{"x": ..., "y": ...}``
-            or ``(x, y)``.
+            or ``(x, y)``; the inputs of the preparation may also pass a
+            :class:`SkyPosition`.
         pixel_scale : float or str, optional
             ``data.pixel_scale``; ``None`` or ``"auto"`` take the scale of
             the header.
@@ -260,6 +390,9 @@ class RegionRequest:
         """Return the position about which the region is taken."""
         if self.center == "center":
             return (float(metadata.center_x), float(metadata.center_y))
+
+        if isinstance(self.center, SkyPosition):
+            return self.center.pixel(metadata)
 
         return self.center
 
@@ -616,10 +749,10 @@ def _keep_metadata(key: tuple, metadata: ObservationMetadata) -> None:
         _READ_METADATA.popitem(last=False)
 
 
-def _region_center(target: Any) -> str | tuple[float, float] | None:
+def _region_center(target: Any) -> str | tuple[float, float] | SkyPosition | None:
     """Return the position of a target setting, in the form of a request."""
-    if target is None:
-        return None
+    if target is None or isinstance(target, SkyPosition):
+        return target
 
     if isinstance(target, str):
         if target.strip().lower() != "center":
@@ -631,6 +764,13 @@ def _region_center(target: Any) -> str | tuple[float, float] | None:
         return "center"
 
     if isinstance(target, Mapping):
+        if "ra" in target or "dec" in target:
+            raise ValueError(
+                "data.target_position gives the target in pixels, {x: ..., y: "
+                "...}; baymorph config --target-ra and --target-dec, or the "
+                "observation advisor, convert a position on the sky."
+            )
+
         coordinates = (target.get("x"), target.get("y"))
     elif isinstance(target, Sequence) and len(target) == 2:
         coordinates = tuple(target)

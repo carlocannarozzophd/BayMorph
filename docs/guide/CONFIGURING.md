@@ -41,7 +41,9 @@ outputs:
 `target_position` is the position of the target in zero-based pixel
 coordinates of the full image: `x` is the column and `y` the row, as in
 `image[y, x]`. It only tells BayMorph which source to fit; the centre of the
-galaxy is a fitted parameter.
+galaxy is a fitted parameter. `baymorph config --target-ra RA --target-dec
+DEC`, and the advisor, take the position on the sky instead and write it in
+pixels (see [Image and Cutout](IMAGE.md#the-target)).
 
 Every key, with its default, is listed in the
 [Configuration reference](../reference/CONFIGURATION.md).
