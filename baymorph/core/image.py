@@ -311,8 +311,9 @@ class ImageData:
             the whole image, so that the region can depend on the size of the
             image without reading the header twice. Only the pixels of the
             region are read: the bytes that hold them in an uncompressed
-            file, the tiles that cross it in a tile-compressed one. By
-            default the whole image is read.
+            file, the tiles that cross it in a tile-compressed one, and the
+            whole rows that cross it, in one pass, in a file compressed as a
+            whole such as a ``.gz``. By default the whole image is read.
 
         Returns
         -------
@@ -343,9 +344,7 @@ class ImageData:
                 _require_region_of_image(
                     region, selected.header, image=f"HDU {selected.index} of {filename}"
                 )
-                data = pixels.section[
-                    region.ymin : region.ymax, region.xmin : region.xmax
-                ].astype(float)
+                data = _read_region(hdul, selected.index, region).astype(float)
 
         return cls(
             data=data,
@@ -552,6 +551,25 @@ def _require_region_of_image(
             f"{region.image_width} x {region.image_height} pixels, but "
             f"{image} holds {size[0]} x {size[1]} pixels."
         )
+
+
+def _read_region(hdul: fits.HDUList, index: int, region: WorkingRegion) -> np.ndarray:
+    """Read the pixels of a working region of the image in HDU ``index``.
+
+    A file compressed as a whole, such as a ``.gz``, can only be decompressed
+    from its start, and Astropy goes back to its earlier place in the file
+    after reading each row of a section, so a section of such a file would be
+    decompressed again for every row. Its whole rows that cross the region
+    are read at once instead, then cut to the columns of the region.
+    """
+    rows = slice(region.ymin, region.ymax)
+    columns = slice(region.xmin, region.xmax)
+    section = hdul[index].section
+
+    if hdul.fileinfo(index)["file"].compression is None:
+        return section[rows, columns]
+
+    return section[rows, :][:, columns]
 
 
 def select_image_hdu(hdul: fits.HDUList, hdu: int | str | None = None) -> int:

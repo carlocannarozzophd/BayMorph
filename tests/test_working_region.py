@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bz2
 import gzip
 import json
 import shutil
@@ -12,6 +13,7 @@ import numpy as np
 import pytest
 import yaml
 from astropy.io import fits
+from astropy.io.fits.file import _File
 
 import baymorph.pipeline.image_preparation as image_preparation
 import baymorph.pipeline.opening as opening
@@ -223,7 +225,7 @@ def test_an_unknown_entry_of_the_data_section_is_refused(tmp_path):
 
 
 def _write_kinds(directory: Path) -> None:
-    """Write one image as plain, gzip, tile-compressed and scaled FITS files."""
+    """Write one image as plain, gzip, bzip2, tile-compressed and scaled files."""
     rng = np.random.default_rng(20261020)
     data = rng.normal(size=(120, 160)).astype(np.float32)
     scaled = np.round(rng.normal(0.0, 300.0, size=(120, 160))).astype(np.int16)
@@ -231,9 +233,13 @@ def _write_kinds(directory: Path) -> None:
 
     fits.writeto(directory / "plain.fits", data, header=header)
 
-    with open(directory / "plain.fits", "rb") as source:
-        with gzip.open(directory / "plain.fits.gz", "wb") as target:
-            shutil.copyfileobj(source, target)
+    for name, compressed in (
+        ("plain.fits.gz", gzip.open),
+        ("plain.fits.bz2", bz2.open),
+    ):
+        with open(directory / "plain.fits", "rb") as source:
+            with compressed(directory / name, "wb") as target:
+                shutil.copyfileobj(source, target)
 
     fits.HDUList(
         [
@@ -249,7 +255,8 @@ def _write_kinds(directory: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "kind", ["plain.fits", "plain.fits.gz", "tiled.fits.fz", "scaled.fits"]
+    "kind",
+    ["plain.fits", "plain.fits.gz", "plain.fits.bz2", "tiled.fits.fz", "scaled.fits"],
 )
 def test_a_region_holds_the_pixels_of_the_whole_image(tmp_path, kind):
     """The region equals the same pixels of the whole image, read-only."""
@@ -275,6 +282,30 @@ def test_a_region_holds_the_pixels_of_the_whole_image(tmp_path, kind):
 
     with pytest.raises(ValueError, match="working region"):
         image.to_fits(tmp_path / "copy.fits")
+
+
+@pytest.mark.parametrize("kind", ["plain.fits.gz", "plain.fits.bz2"])
+def test_a_file_compressed_whole_is_read_once_for_a_region(tmp_path, kind, monkeypatch):
+    """A region of a .gz or .bz2 file is one read, not one read per row.
+
+    Each read of a file compressed as a whole decompresses it again from its
+    start, so a region read row by row costs one decompression per row.
+    """
+    _write_kinds(tmp_path)
+    whole = fits.getdata(tmp_path / "plain.fits")
+    reads = []
+    readarray = _File.readarray
+
+    def counted(self, *args, **kwargs):
+        reads.append(self.compression)
+        return readarray(self, *args, **kwargs)
+
+    monkeypatch.setattr(_File, "readarray", counted)
+    region = WorkingRegion(100, 160, 0, 60, image_width=160, image_height=120)
+    image = ImageData.from_fits(tmp_path / kind, region=region)
+
+    assert len(reads) == 1
+    assert np.array_equal(image.data, whole[0:60, 100:160])
 
 
 def test_an_array_must_be_the_region_it_holds():

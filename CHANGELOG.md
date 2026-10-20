@@ -85,8 +85,8 @@ and the project follows Semantic Versioning in spirit.
   whole image, and `{size: S}` a square of S arcsec. Only the pixels of the
   region are read: the bytes that hold them in an uncompressed file and the
   tiles that cross it in a tile-compressed one, while a file compressed as a
-  whole, gzip or bzip2, is still read through up to the region. Every
-  position stays in pixels of the whole image: the target, the cutout
+  whole, gzip or bzip2, is still read through up to the region, in one pass.
+  Every position stays in pixels of the whole image: the target, the cutout
   bounds, the PSF stars, and the axes of the first panel of the fit report.
   A cutout, or a target of an automatic cutout, that leaves the region stops
   with the side to declare. A fixed cutout inside the region gives the same
