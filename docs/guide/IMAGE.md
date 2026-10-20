@@ -30,10 +30,19 @@ keyword it comes from and how certain it is, and BayMorph never infers a
 unit from a value. The conventions cover ESO products and the VST-Tube
 pipeline, SWarp coadds, SDSS frames, the coadds of the Legacy Surveys, HST
 and JWST images, DECam images of the NOIRLab Community Pipeline, hscPipe
-images that record `FLUXMAG0`, and Pan-STARRS stacks. Where a quantity
-follows from others, such as the AB zeropoint of HST from `PHOTFLAM` and
-`PHOTPLAM`, BayMorph derives it only for the products its documentation
-covers, here the drizzled images in electrons per second.
+images that record `FLUXMAG0`, Pan-STARRS stacks, and the mosaics of grizli,
+such as those of the DAWN JWST Archive. Where a quantity follows from
+others, such as the AB zeropoint of HST from `PHOTFLAM` and `PHOTPLAM`,
+BayMorph derives it only for the products its documentation covers, here the
+drizzled images in electrons per second. An HST image drizzled to counts per
+second (`D001OUUN = 'cps'`) from exposures in electrons is read in electrons
+per second even when its `BUNIT` still says `ELECTRONS`, and the filter of
+ACS is read from its two filter wheels, `FILTER1` and `FILTER2`.
+
+When several conventions read the same quantity, the most specific one
+decides, and BayMorph compares its value with the others: two values that
+disagree make the quantity `conflicting`, with both sources in the notes of
+the header report, and it is not used until you declare it.
 
 When the header lacks a calibration quantity, or states it wrongly, declare
 it in `data.calibration`. A drizzled image whose header says `ELECTRONS`

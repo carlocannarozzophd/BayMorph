@@ -23,7 +23,8 @@ convention, and one status:
 - ``derived``: computed from other header content, such as the WCS or the
   keywords of a formula;
 - ``ambiguous``: present, but its unit or meaning is not established;
-- ``conflicting``: present under several keywords with different values;
+- ``conflicting``: present under several keywords, or read by several
+  conventions, with different values;
 - ``missing``: absent.
 
 No unit is ever inferred from a value. Only the first four statuses give a
@@ -32,6 +33,11 @@ usable value; the others keep the raw header value for inspection only.
 A convention may require the value of a quantity read before, such as the
 unit of the image, so that a declared unit reaches the quantities that
 depend on it.
+
+The first matched convention that finds a quantity decides it. When its
+reading is usable, it is compared with the usable readings of the other
+matched conventions, and a disagreement makes the quantity conflicting,
+unless the deciding convention declares that it overrides the other one.
 """
 
 from __future__ import annotations
@@ -197,6 +203,8 @@ _SPEC_KEYS = frozenset(
         "unit_from_comment",
         "units",
         "note",
+        "overrides",
+        "ignore_prefixes",
     }
 )
 _FORMULA_FUNCTIONS: Mapping[str, Callable[[float], float]] = MappingProxyType(
@@ -410,6 +418,15 @@ class QuantitySpec:
     requires : tuple of MatchRule
         Rules that the header must satisfy for the reading to hold, such as
         the unit of the image. When one fails, the quantity is ambiguous.
+    overrides : tuple of str
+        Conventions whose disagreeing reading this one supersedes, because
+        its documentation corrects them, such as the image unit of an HST
+        image drizzled to count rates, whose ``BUNIT`` may keep the unit of
+        its inputs.
+    ignore_prefixes : tuple of str
+        Prefixes of keyword values that mean the keyword holds nothing, such
+        as a ``CLEAR`` element of a filter wheel; such a value is treated as
+        blank. The comparison ignores case.
     """
 
     keywords: tuple[str, ...] = ()
@@ -421,6 +438,8 @@ class QuantitySpec:
     value: Any = None
     formula: Formula | None = None
     requires: tuple[MatchRule, ...] = ()
+    overrides: tuple[str, ...] = ()
+    ignore_prefixes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1103,55 +1122,160 @@ def _read_quantity(
     lookup: _HeaderLookup,
     resolved: Mapping[str, HeaderQuantity],
 ) -> HeaderQuantity:
-    """Read one quantity through the first convention that finds it.
+    """Read one quantity through the conventions that find it.
 
     A convention finds a quantity when the header holds one of its keywords,
     or every keyword of its formula; a value it states without keywords is
-    found as soon as the convention matches. The convention that finds the
-    quantity decides it, and its requirements decide whether the reading
+    found as soon as the convention matches. The first convention that finds
+    the quantity decides it, and its requirements decide whether the reading
     holds; a requirement may test a quantity in ``resolved``, read or
-    declared before.
+    declared before. A usable decision is compared with the usable reading
+    of every later convention that finds the quantity: a value or unit that
+    disagrees makes the quantity conflicting, unless the deciding convention
+    overrides the other one. An unusable decision is kept, so a convention
+    that leaves a quantity ambiguous is not bypassed by a less specific one.
     """
+    decision: HeaderQuantity | None = None
+    overrides: tuple[str, ...] = ()
+
     for convention in conventions:
-        spec = convention.quantities.get(definition.name)
+        reading = _convention_reading(definition, convention, lookup, resolved)
 
-        if spec is None:
+        if reading is None:
             continue
 
-        names = spec.keywords if spec.formula is None else spec.formula.keywords
-        found = [
-            card
-            for card in (lookup.find(keyword) for keyword in names)
-            if card is not None and not _is_blank(card.value)
-        ]
+        if decision is None:
+            if not reading.usable:
+                return reading
 
-        if names and not found:
+            decision = reading
+            overrides = convention.quantities[definition.name].overrides
             continue
 
-        if spec.formula is not None and len(found) < len(names):
-            continue
+        if (
+            reading.usable
+            and convention.name not in overrides
+            and not _readings_agree(definition, decision, reading)
+        ):
+            return _conflicting_readings(definition, decision, reading)
 
-        unmet = next(
-            (rule for rule in spec.requires if not rule.matches(lookup, resolved)), None
+    if decision is None:
+        return HeaderQuantity(name=definition.name, status="missing")
+
+    return decision
+
+
+def _convention_reading(
+    definition: QuantityDefinition,
+    convention: HeaderConvention,
+    lookup: _HeaderLookup,
+    resolved: Mapping[str, HeaderQuantity],
+) -> HeaderQuantity | None:
+    """Read one quantity through one convention, or None if it finds none."""
+    spec = convention.quantities.get(definition.name)
+
+    if spec is None:
+        return None
+
+    names = spec.keywords if spec.formula is None else spec.formula.keywords
+    found = [
+        card
+        for card in (lookup.find(keyword) for keyword in names)
+        if card is not None
+        and not _is_blank(card.value)
+        and not _is_ignored(card.value, spec.ignore_prefixes)
+    ]
+
+    if names and not found:
+        return None
+
+    if spec.formula is not None and len(found) < len(names):
+        return None
+
+    unmet = next(
+        (rule for rule in spec.requires if not rule.matches(lookup, resolved)), None
+    )
+
+    if unmet is not None:
+        return _resolve_unmet(
+            definition, spec, found, convention, unmet, lookup, resolved
         )
 
-        if unmet is not None:
-            return _resolve_unmet(
-                definition, spec, found, convention, unmet, lookup, resolved
-            )
+    if spec.formula is not None:
+        return _resolve_formula(definition, spec, found, convention)
 
-        if spec.formula is not None:
-            return _resolve_formula(definition, spec, found, convention)
+    if spec.value is not None:
+        return _resolve_value(definition, spec, found, convention)
 
-        if spec.value is not None:
-            return _resolve_value(definition, spec, found, convention)
+    if definition.kind == "string":
+        return _resolve_string(definition, spec, found, convention)
 
-        if definition.kind == "string":
-            return _resolve_string(definition, spec, found, convention)
+    return _resolve_number(definition, spec, found, convention, lookup)
 
-        return _resolve_number(definition, spec, found, convention, lookup)
 
-    return HeaderQuantity(name=definition.name, status="missing")
+def _is_ignored(value: Any, prefixes: Sequence[str]) -> bool:
+    """Return whether a keyword value starts with a prefix meaning nothing."""
+    text = str(value).strip().lower()
+
+    return any(text.startswith(prefix.lower()) for prefix in prefixes)
+
+
+def _readings_agree(
+    definition: QuantityDefinition, first: HeaderQuantity, second: HeaderQuantity
+) -> bool:
+    """Return whether two usable readings give the same value and unit."""
+    if definition.kind == "string":
+        compare = (
+            canonical_unit
+            if definition.name == "image_unit"
+            else (lambda value: str(value).strip().lower())
+        )
+        same_value = compare(first.value) == compare(second.value)
+    else:
+        same_value = _agree(float(first.value), float(second.value))
+
+    units = [
+        None if item.unit is None else canonical_unit(item.unit)
+        for item in (first, second)
+    ]
+
+    return same_value and units[0] == units[1]
+
+
+def _conflicting_readings(
+    definition: QuantityDefinition, first: HeaderQuantity, second: HeaderQuantity
+) -> HeaderQuantity:
+    """Return a quantity on which two conventions disagree."""
+    return HeaderQuantity(
+        name=definition.name,
+        status="conflicting",
+        keyword=first.keyword,
+        source=first.source,
+        convention=first.convention,
+        raw_value=first.value,
+        note=_join_notes(
+            first.note,
+            "Conventions disagree: "
+            + "; ".join(_describe_reading(item) for item in (first, second))
+            + ".",
+        ),
+        candidates=first.candidates + second.candidates,
+    )
+
+
+def _describe_reading(quantity: HeaderQuantity) -> str:
+    """Describe the value a convention gives, for the notes of a reading."""
+    text = f"{quantity.convention} gives {_format_value(quantity.value)}"
+
+    if quantity.unit == IMAGE_UNIT:
+        text += " in the units of the image"
+    elif quantity.unit:
+        text += f" {quantity.unit}"
+
+    if quantity.keyword:
+        text += f" ({quantity.keyword})"
+
+    return text
 
 
 def _resolve_unmet(
@@ -1866,6 +1990,23 @@ def _parse_spec(
             f"Header convention {source}: requires must be a list of rules."
         )
 
+    overrides = spec.get("overrides", [])
+    ignore_prefixes = spec.get("ignore_prefixes", [])
+
+    for key, items in (("overrides", overrides), ("ignore_prefixes", ignore_prefixes)):
+        if not isinstance(items, list) or not all(
+            isinstance(item, str) and item.strip() for item in items
+        ):
+            raise ValueError(
+                f"Header convention {source}: {key} must be a list of names."
+            )
+
+    if ignore_prefixes and not keywords:
+        raise ValueError(
+            f"Header convention {source}: ignore_prefixes applies only to "
+            "values read from keywords."
+        )
+
     return QuantitySpec(
         keywords=tuple(item.strip() for item in keywords),
         unit=unit,
@@ -1879,6 +2020,8 @@ def _parse_spec(
             _parse_rule(rule, source=source, before=_quantities_before(definition))
             for rule in requires
         ),
+        overrides=tuple(item.strip() for item in overrides),
+        ignore_prefixes=tuple(item.strip() for item in ignore_prefixes),
     )
 
 

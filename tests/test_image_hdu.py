@@ -138,6 +138,27 @@ def test_an_image_extension_is_selected_when_named_image(tmp_path) -> None:
         assert select_image_hdu(hdul) == 1
 
 
+def test_the_science_extension_is_preferred_to_a_background_subtracted_one(
+    tmp_path,
+) -> None:
+    """A CEERS mosaic holds SCI_BKSUB before SCI; SCI is the default."""
+    path = tmp_path / "ceers_i2d.fits"
+    _write_extensions(
+        path,
+        [
+            fits.ImageHDU(data=_image(1.0), name="SCI_BKSUB"),
+            fits.ImageHDU(data=_image(2.0), header=_wcs_header(), name="SCI"),
+            fits.ImageHDU(data=_image(3.0), name="ERR"),
+        ],
+    )
+
+    image = ImageData.from_fits(path)
+
+    assert image.hdu_index == 2
+    assert image.hdu_name == "SCI"
+    assert ImageData.from_fits(path, hdu="SCI_BKSUB").hdu_index == 1
+
+
 def test_a_single_image_extension_is_selected(tmp_path) -> None:
     path = tmp_path / "compressed.fits"
     _write_extensions(path, [fits.CompImageHDU(data=_image(4.0))])

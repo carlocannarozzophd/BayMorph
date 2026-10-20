@@ -14,5 +14,6 @@ match:
 quantities:
   pixel_encoding:
     value: linear
+    overrides: [pan_starrs]
     note: "astrocut converted the asinh-compressed values of the stack to
       linear flux; BSOFTEN and BOFFSET describe the compression it undid."

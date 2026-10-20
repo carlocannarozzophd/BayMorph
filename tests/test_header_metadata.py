@@ -91,8 +91,10 @@ def test_every_distributed_convention_loads_and_cites_its_sources() -> None:
         "eso_phase3",
         "eso_raw",
         "generic",
+        "grizli",
         "hscpipe",
         "hst",
+        "hst_drizzle",
         "jwst",
         "legacy_survey",
         "pan_starrs",
@@ -369,6 +371,18 @@ def test_a_user_convention_is_read_and_preferred(tmp_path) -> None:
     assert reading.conventions[0] == "example_camera"
     assert reading["zeropoint"].value == pytest.approx(28.4)
     assert reading["zeropoint"].status == "convention"
+
+    # The GAIN keyword of the generic convention says 1.5: the two readings
+    # disagree until the convention declares that it overrides the generic one.
+    assert reading["gain"].status == "conflicting"
+    assert "generic gives 1.5 electron/adu (GAIN)" in reading["gain"].note
+
+    path.write_text(
+        path.read_text(encoding="utf-8") + "\n    overrides: [generic]\n",
+        encoding="utf-8",
+    )
+    reading = read_header(header, conventions=load_header_conventions([path]))
+
     assert reading["gain"].keyword == "EGAIN"
     assert reading["gain"].value == pytest.approx(3.1)
 
@@ -977,3 +991,294 @@ def test_a_requirement_tests_only_a_quantity_read_before(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="only a requirement"):
         load_header_conventions([path])
+
+
+# Opening an observation (AD-053, milestone 4): the readings of every matched
+# convention are compared, and the drizzled HST images and the grizli mosaics
+# have their own conventions.
+
+
+def _write_convention(path, name: str, priority: int, quantities: list[str]):
+    """Write a user convention that matches every header."""
+    path.write_text(
+        "\n".join(
+            [
+                f"name: {name}",
+                f"title: {name}",
+                f"priority: {priority}",
+                "references:",
+                "  - Example manual.",
+                "match: always",
+                "quantities:",
+                *quantities,
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    return path
+
+
+def test_conventions_that_disagree_make_a_quantity_conflicting(tmp_path) -> None:
+    """Two usable readings that disagree must name both conventions."""
+    first = _write_convention(
+        tmp_path / "first.yaml",
+        "first",
+        50,
+        ["  zeropoint:", "    keywords: [MAGZP]", "    unit: mag"],
+    )
+    second = _write_convention(
+        tmp_path / "second.yaml",
+        "second",
+        40,
+        ["  zeropoint:", "    keywords: [ZPAB]", "    unit: mag"],
+    )
+    header = _generic_header()
+    header["MAGZP"] = 28.4
+    header["ZPAB"] = 28.1
+
+    reading = read_header(header, conventions=load_header_conventions([first, second]))
+    zeropoint = reading["zeropoint"]
+
+    assert zeropoint.status == "conflicting"
+    assert zeropoint.value is None
+    assert zeropoint.raw_value == pytest.approx(28.4)
+    assert zeropoint.convention == "first"
+    assert "Conventions disagree: first gives 28.4 mag (MAGZP)" in zeropoint.note
+    assert "second gives 28.1 mag (ZPAB)" in zeropoint.note
+    assert ("ZPAB", 28.1) in zeropoint.candidates
+
+    header["ZPAB"] = 28.4
+    agreed = read_header(header, conventions=load_header_conventions([first, second]))
+
+    assert agreed["zeropoint"].status == "convention"
+    assert agreed["zeropoint"].convention == "first"
+
+
+def test_a_convention_may_override_another_and_an_ambiguous_one_decides(
+    tmp_path,
+) -> None:
+    """An override silences a conflict; an ambiguous decision is not bypassed."""
+    first = _write_convention(
+        tmp_path / "first.yaml",
+        "first",
+        50,
+        [
+            "  zeropoint:",
+            "    keywords: [MAGZP]",
+            "    unit: mag",
+            "    overrides: [second]",
+        ],
+    )
+    second = _write_convention(
+        tmp_path / "second.yaml",
+        "second",
+        40,
+        ["  zeropoint:", "    keywords: [ZPAB]", "    unit: mag"],
+    )
+    header = _generic_header()
+    header["MAGZP"] = 28.4
+    header["ZPAB"] = 28.1
+
+    reading = read_header(header, conventions=load_header_conventions([first, second]))
+
+    assert reading["zeropoint"].status == "convention"
+    assert reading.value("zeropoint") == pytest.approx(28.4)
+
+    # The generic convention reads SATURATE in the units of the image, but a
+    # VST-Tube coadd leaves it ambiguous, and that decision stands.
+    coadd = read_header(_coadd_header())
+
+    assert coadd["saturation"].status == "ambiguous"
+    assert coadd["saturation"].convention == "vst_tube"
+
+
+def test_a_value_with_an_ignored_prefix_reads_as_blank(tmp_path) -> None:
+    """A CLEAR element of a filter wheel holds no filter."""
+    primary, image = _hst_headers()
+    primary["FILTER1"] = "CLEAR1L"
+    primary["FILTER2"] = "F814W"
+
+    reading = read_header(image, primary_header=primary)
+
+    assert reading["filter"].status == "explicit"
+    assert reading.value("filter") == "F814W"
+    assert reading["filter"].keyword == "FILTER2"
+    assert reading["filter"].convention == "hst"
+
+    primary["FILTER1"] = "F606W"
+    primary["FILTER2"] = "POL0V"
+
+    assert read_header(image, primary_header=primary)["filter"].status == (
+        "conflicting"
+    )
+
+    primary["FILTER1"] = "CLEAR1L"
+    primary["FILTER2"] = "CLEAR2L"
+
+    assert read_header(image, primary_header=primary)["filter"].status == "missing"
+
+    malformed = _write_convention(
+        tmp_path / "malformed.yaml",
+        "malformed",
+        50,
+        ["  filter:", "    value: r", "    ignore_prefixes: [CLEAR]"],
+    )
+
+    with pytest.raises(ValueError, match="ignore_prefixes applies only"):
+        load_header_conventions([malformed])
+
+    malformed = _write_convention(
+        tmp_path / "malformed.yaml",
+        "malformed",
+        50,
+        ["  filter:", "    keywords: [F]", "    overrides: generic"],
+    )
+
+    with pytest.raises(ValueError, match="overrides must be a list"):
+        load_header_conventions([malformed])
+
+
+def _drizzled_hst_headers(
+    *,
+    bunit: str = "ELECTRONS",
+    output_units: str = "cps",
+    photflam: float = 7.07236e-20,
+    filename: str = "j8pu32ucq_flt.fits",
+) -> tuple[fits.Header, fits.Header]:
+    """Return the headers of an ACS image drizzled by the STScI software."""
+    primary, image = _hst_headers(bunit=bunit, filename=filename)
+    primary["FILTER1"] = "CLEAR1L"
+    primary["FILTER2"] = "F814W"
+    primary["D001DATA"] = "j8pu32ucq_flt.fits[sci,1]"
+    primary["D001OUUN"] = (
+        output_units,
+        "Drizzle, units of output image - counts or cps",
+    )
+    image["PHOTFLAM"] = photflam
+    image["PHOTPLAM"] = 8059.7598
+
+    return primary, image
+
+
+def test_an_hst_image_drizzled_to_count_rates_is_in_electrons_per_second() -> None:
+    """D001OUUN = cps over inputs in electrons gives electrons per second."""
+    primary, image = _drizzled_hst_headers()
+
+    reading = read_header(image, primary_header=primary)
+
+    assert reading.conventions[:2] == ("hst_drizzle", "hst")
+    assert reading["image_unit"].status == "convention"
+    assert reading.value("image_unit") == "electron/s"
+    assert reading["image_unit"].convention == "hst_drizzle"
+    assert reading["zeropoint"].status == "derived"
+    assert reading["zeropoint"].convention == "hst_drizzle"
+    assert reading.value("zeropoint") == pytest.approx(
+        -2.5 * math.log10(7.07236e-20) - 5.0 * math.log10(8059.7598) - 2.408,
+        rel=1e-12,
+    )
+    assert reading.value("zeropoint") == pytest.approx(25.9365, abs=1e-4)
+    assert reading.value("photometric_system") == "AB"
+    assert reading.value("filter") == "F814W"
+
+    # A product whose BUNIT already says ELECTRONS/S agrees with the rule.
+    primary, image = _drizzled_hst_headers(
+        bunit="ELECTRONS/S", filename="j8pu32010_drz.fits"
+    )
+    reading = read_header(image, primary_header=primary)
+
+    assert reading["image_unit"].status == "convention"
+    assert reading["zeropoint"].status == "derived"
+
+
+def test_a_photflam_of_zero_leaves_the_drizzled_zeropoint_to_declare() -> None:
+    primary, image = _drizzled_hst_headers(
+        photflam=0.0, filename="h_v22_F814W_ivm_drz_cl_ver2.fits"
+    )
+
+    reading = read_header(image, primary_header=primary)
+    zeropoint = reading["zeropoint"]
+
+    assert reading.value("image_unit") == "electron/s"
+    assert zeropoint.status == "ambiguous"
+    assert zeropoint.convention == "hst_drizzle"
+    assert "PHOTCORR = OMIT" in zeropoint.note
+    assert "not defined for these values" in zeropoint.note
+    assert reading["photometric_system"].status == "ambiguous"
+
+    declared = read_header(
+        image,
+        primary_header=primary,
+        declarations={"zeropoint": 25.94, "photometric_system": "AB"},
+    )
+
+    assert declared["zeropoint"].status == "declared"
+    assert declared["zeropoint"].header.convention == "hst_drizzle"
+
+
+@pytest.mark.parametrize(
+    ("bunit", "output_units", "status", "value"),
+    [
+        # Counts that are not electrons may be DN: the unit stays open.
+        ("COUNTS", "cps", "ambiguous", None),
+        # An image drizzled to counts keeps the unit of its header.
+        ("ELECTRONS", "counts", "explicit", "ELECTRONS"),
+    ],
+)
+def test_the_drizzle_rule_holds_only_for_electrons_drizzled_to_rates(
+    bunit, output_units, status, value
+) -> None:
+    primary, image = _drizzled_hst_headers(bunit=bunit, output_units=output_units)
+
+    reading = read_header(image, primary_header=primary)
+
+    assert reading["image_unit"].status == status
+    assert reading.value("image_unit") == value
+    assert reading["zeropoint"].status == "ambiguous"
+
+
+def _grizli_header() -> fits.Header:
+    """Return the header of a DJA mosaic made by grizli, in 10 nJy."""
+    header = fits.Header()
+    header["TELESCOP"] = "JWST"
+    header["INSTRUME"] = "NIRCAM"
+    header["FILTER"] = "F277W"
+    header["GRIZLIV"] = ("1.9.13.dev26+g7a14934", "Grizli code version")
+    header["PHOTFNU"] = 1e-08
+    header["OPHOTFNU"] = (9.31e-08, "Original PHOTFNU before scaling")
+    header["ZP"] = 26.47788770106852
+    header["PIXAR_SR"] = 9.31e-14
+    header["BUNIT"] = "10.0*nanoJansky"
+    _wcs_cards(header, 0.04)
+
+    return header
+
+
+def test_a_grizli_mosaic_takes_its_zeropoint_from_photfnu() -> None:
+    """10 nJy per unit of the pixels is the AB zeropoint 28.9 of the DJA."""
+    reading = read_header(_grizli_header())
+    zeropoint = reading["zeropoint"]
+
+    assert reading.conventions[:2] == ("grizli", "jwst")
+    assert zeropoint.status == "derived"
+    assert zeropoint.convention == "grizli"
+    assert zeropoint.keyword == "PHOTFNU"
+    assert zeropoint.value == pytest.approx(-2.5 * math.log10(1e-8 / 3631.0))
+    assert zeropoint.value == pytest.approx(28.9, abs=1e-3)
+    assert "not the pixels of the mosaic" in zeropoint.note
+    assert reading.value("photometric_system") == "AB"
+    assert reading.value("pipeline") == "grizli"
+    assert reading.value("image_unit") == "10.0*nanoJansky"
+
+
+def test_an_exposure_time_written_as_text_is_read_as_a_number() -> None:
+    """SDSS frames write EXPTIME as a string; its number is still read."""
+    header = fits.Header()
+    header["NMGY"] = 0.0048
+    header["EXPTIME"] = ("53.907456", "Exposure time (seconds)")
+
+    reading = read_header(header)
+
+    assert reading["exposure_time"].status == "convention"
+    assert reading.value("exposure_time") == pytest.approx(53.907456)
+    assert reading["exposure_time"].unit == "s"

@@ -34,9 +34,24 @@ and the project follows Semantic Versioning in spirit.
   of the noise-equivalent area of the PSF, to 22 magnitudes above it. The
   noise-equivalent area of the PSF is a new fixed input
   (`FixedInputs.psf_noise_equivalent_area`).
+* Two header conventions. HST images drizzled to counts per second
+  (`D001OUUN = 'cps'`) from exposures in electrons are read in electrons
+  per second even when their `BUNIT` says `ELECTRONS`, and their AB
+  zeropoint is derived from `PHOTFLAM` and `PHOTPLAM` whatever their
+  `FILENAME`. The mosaics of grizli, such as those of the DAWN JWST Archive,
+  take their AB zeropoint from `PHOTFNU`, 28.9 for pixels of 10 nJy. The
+  filter of an ACS image is read from `FILTER1` and `FILTER2`, leaving out a
+  `CLEAR` element.
 
 ### Changed
 
+* When several header conventions read the same quantity, the value of the
+  one that decides is compared with the others, and two values that disagree
+  make the quantity `conflicting`, with both sources in its note, unless the
+  deciding convention declares that it `overrides` the other. Before, the
+  first convention decided without looking at the others. A user convention
+  that reads a quantity differently from the FITS standard, such as a gain
+  from another keyword than `GAIN`, now needs `overrides: [generic]`.
 * Every flux prior that the advisor proposes states its rule and its numbers
   in the summary and in the report: the zeropoint and the bounds in image
   units, or, without a zeropoint, the sky scale, the noise-equivalent area of
