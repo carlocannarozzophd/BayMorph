@@ -16,6 +16,9 @@ from baymorph.plotting.images import (
 from baymorph.plotting.radial import (
     plot_radial_profile_diagnostics,
 )
+from baymorph.plotting.style import (
+    computer_modern_text,
+)
 
 
 def test_fit_maps_overlay_excluded_pixels_on_residual_panels():
@@ -371,12 +374,16 @@ def test_radial_legend_describes_pixel_range_and_posterior_interval():
     ]
 
     assert (
-        "Observed 16--84% pixel range"
+        computer_modern_text(
+            "Observed 16--84% pixel range"
+        )
         in labels
     )
 
     assert (
-        "68% posterior interval"
+        computer_modern_text(
+            "68% posterior interval"
+        )
         in labels
     )
 

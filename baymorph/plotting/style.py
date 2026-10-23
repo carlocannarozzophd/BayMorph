@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import re
+import shutil
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import AutoMinorLocator
@@ -14,15 +18,79 @@ MAJOR_TICK_LENGTH = 10
 MINOR_TICK_LENGTH = 5
 TICK_WIDTH = 3
 
+USETEX_ENVIRONMENT_VARIABLE = "BAYMORPH_USETEX"
+LATEX_EXECUTABLES = (
+    "latex",
+    "dvipng",
+)
+
+
+def latex_enabled(
+    usetex: bool | None = None,
+) -> bool:
+    """Return whether BayMorph figures are typeset with LaTeX.
+
+    LaTeX is the canonical typesetting. It is turned off only explicitly,
+    with ``usetex=False`` or with the environment variable
+    ``BAYMORPH_USETEX=0``.
+    """
+    if usetex is not None:
+        return bool(
+            usetex
+        )
+
+    return (
+        os.environ.get(
+            USETEX_ENVIRONMENT_VARIABLE,
+            "1",
+        )
+        != "0"
+    )
+
+
+def require_latex() -> None:
+    """Raise if Matplotlib cannot typeset text with LaTeX.
+
+    Raises
+    ------
+    RuntimeError
+        If ``latex`` or ``dvipng`` is not on the ``PATH``.
+    """
+    missing = [
+        name
+        for name in LATEX_EXECUTABLES
+        if shutil.which(
+            name
+        )
+        is None
+    ]
+
+    if missing:
+        raise RuntimeError(
+            "BayMorph figures are typeset with LaTeX, but "
+            + " and ".join(
+                missing
+            )
+            + " is not on the PATH. Install a TeX distribution, or set "
+            "the environment variable BAYMORPH_USETEX=0 to draw the "
+            "figures with Matplotlib's Computer Modern mathtext instead."
+        )
+
 
 def computer_modern_text(
     value: str,
 ) -> str:
-    """Return text compatible with bundled Computer Modern fonts.
+    """Return text that the active typesetting renders as written.
 
     Matplotlib's bundled ``cmr10`` font does not contain precomposed
-    accented Unicode glyphs. Relevant accents are therefore rendered
-    through Computer Modern MathText without requiring external LaTeX.
+    accented Unicode glyphs. Relevant accents are therefore rendered as
+    Computer Modern math accents, which LaTeX and Matplotlib's mathtext
+    both typeset. When the active style typesets with LaTeX
+    (``text.usetex``), the text outside ``$...$`` is adapted to it:
+    ``%``, ``&`` and ``#`` are escaped (otherwise LaTeX drops the text
+    after ``%`` and fails on the other two), and ``|``, ``<`` and ``>``
+    are set in math mode (in text mode the default LaTeX fonts print
+    other glyphs for them).
     """
     text = str(
         value
@@ -37,6 +105,26 @@ def computer_modern_text(
         text = text.replace(
             character,
             replacement,
+        )
+
+    if plt.rcParams["text.usetex"]:
+        segments = re.split(
+            r"(?<!\\)(\$[^$]*\$)",
+            text,
+        )
+        text = "".join(
+            segment
+            if segment.startswith("$")
+            else re.sub(
+                r"(?<!\\)([|<>])",
+                r"$\1$",
+                re.sub(
+                    r"(?<!\\)([%&#])",
+                    r"\\\1",
+                    segment,
+                ),
+            )
+            for segment in segments
         )
 
     return text
@@ -84,19 +172,42 @@ def set_plot_style(
 ) -> None:
     """Apply the canonical BayMorph Matplotlib style.
 
-    ``fontsize`` and ``usetex`` are retained temporarily for compatibility
-    with existing call sites. The canonical style uses Matplotlib mathtext
-    rather than an external LaTeX installation so that plotting behaviour
-    remains portable and reproducible across supported environments.
+    Text is typeset with LaTeX in Computer Modern; pass free text through
+    :func:`computer_modern_text` so that it prints as written.
+    ``usetex=False`` or the environment variable
+    ``BAYMORPH_USETEX=0`` select Matplotlib's bundled Computer Modern
+    mathtext instead, for environments without LaTeX.
+    ``fontsize`` is retained temporarily for compatibility with existing
+    call sites; the canonical size is always 35.
+
+    Parameters
+    ----------
+    fontsize : int, optional
+        Ignored.
+    usetex : bool, optional
+        Typeset with LaTeX. By default, True unless ``BAYMORPH_USETEX=0``.
+
+    Raises
+    ------
+    RuntimeError
+        If LaTeX is selected and ``latex`` or ``dvipng`` is not on the
+        ``PATH``.
     """
-    del fontsize, usetex
+    del fontsize
+
+    tex = latex_enabled(
+        usetex
+    )
+
+    if tex:
+        require_latex()
 
     plt.rcParams.update(
         {
-            "text.usetex": False,
+            "text.usetex": tex,
             "font.family": "serif",
             "font.serif": [
-                "cmr10",
+                "Computer Modern Roman" if tex else "cmr10",
             ],
             "font.size": FONT_SIZE,
             "mathtext.fontset": "cm",
@@ -214,7 +325,8 @@ def make_plot(
     fontsize : int, optional
         Retained temporarily for compatibility. Ignored.
     usetex : bool, optional
-        Retained temporarily for compatibility. Ignored.
+        Typeset with LaTeX. By default, True unless ``BAYMORPH_USETEX=0``;
+        see :func:`set_plot_style`.
     flatten : bool, default=True
         If True, flatten arrays of axes before returning them.
     **kwargs
@@ -228,9 +340,11 @@ def make_plot(
     ax : matplotlib.axes.Axes or numpy.ndarray
         Created axis or axes.
     """
-    del fontsize, usetex
+    del fontsize
 
-    set_plot_style()
+    set_plot_style(
+        usetex=usetex,
+    )
 
     if figsize is None:
         figsize = canonical_figsize(

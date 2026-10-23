@@ -92,10 +92,14 @@ fig, axes = fit.radial_profile()
 
 ## The BayMorph style
 
-Every BayMorph figure uses the same style: Computer Modern serif text,
-thick axes, ticks pointing outwards with minor ticks, and panels of 15 x 15
-inches with 35-point text, which keeps the proportions of a figure in a
-paper. Use it for your own figures with `make_plot`, which works like
+Every BayMorph figure uses the same style: text typeset with LaTeX in
+Computer Modern, thick axes, ticks pointing outwards with minor ticks, and
+panels of 15 x 15 inches with 35-point text, which keeps the proportions of a
+figure in a paper. BayMorph therefore needs a TeX distribution (`latex` and
+`dvipng` on the `PATH`) to draw figures. Where LaTeX is not available, set the
+environment variable `BAYMORPH_USETEX=0` (or pass `usetex=False` to
+`make_plot`): the figures then use Matplotlib's own Computer Modern fonts.
+Use the style for your own figures with `make_plot`, which works like
 `matplotlib.pyplot.subplots`:
 
 ```python

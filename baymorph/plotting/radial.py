@@ -503,7 +503,9 @@ def plot_radial_profile_diagnostics(
                 elinewidth=2,
                 capsize=4,
                 alpha=0.65,
-                label="Observed 16--84% pixel range",
+                label=computer_modern_text(
+                    "Observed 16--84% pixel range"
+                ),
             )
 
     if log_data_mean is not None:
@@ -593,7 +595,9 @@ def plot_radial_profile_diagnostics(
             color=band_color,
             alpha=band_alpha,
             linewidth=0,
-            label="68% posterior interval",
+            label=computer_modern_text(
+                "68% posterior interval"
+            ),
         )
 
         ax1.plot(

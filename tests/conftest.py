@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import urllib.request
 from copy import deepcopy
 
@@ -11,6 +12,11 @@ import pytest
 from baymorph.pipeline import calibration_bridges
 from baymorph.rendering.effective_psf import SUBPIXEL_FACTOR
 from baymorph.simulation.psf import EmpiricalPSF
+
+# The continuous-integration machines have no LaTeX, so the tests draw figures
+# with Matplotlib's Computer Modern mathtext unless BAYMORPH_USETEX is already
+# set: BAYMORPH_USETEX=1 runs them with LaTeX.
+os.environ.setdefault("BAYMORPH_USETEX", "0")
 
 ACS_ANSWER_HEADERS = [
     "Detector",
