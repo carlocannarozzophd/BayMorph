@@ -222,11 +222,15 @@ and the project follows Semantic Versioning in spirit.
   without such pixels gives the same products as before. The summary of the
   observation advisor gives the fraction of pixels without data instead of
   the fraction of finite pixels.
-* A header that holds SIP distortion terms while its `CTYPE` lacks the
-  `-SIP` suffix, as some drizzled HST images do, no longer makes Astropy
-  print a long message at every opening of the image: the header report
-  says it once, in the note of the pixel scale. The terms are still
-  applied, as Astropy applies them.
+* SIP distortion terms that the `CTYPE` of a header does not declare with
+  the `-SIP` suffix, as in some drizzled HST images, are left out of the
+  celestial WCS, as the SIP convention requires: drizzling has already
+  corrected the distortion. Before, they were applied, as Astropy applies
+  them, and on a drizzled ACS image of the Coma cluster they moved a
+  position given in RA and Dec, and the sky centre that a joint fit shares
+  among its observations, by up to 3 arcsec. Astropy no longer prints
+  a long message at every opening of such an image: the header report says
+  it once, in the note of the pixel scale.
 * Figures are typeset with LaTeX by default, which needs `latex` and
   `dvipng` on the `PATH`. Without them, drawing a figure stops and names the
   environment variable `BAYMORPH_USETEX=0`, which, like `usetex=False` in

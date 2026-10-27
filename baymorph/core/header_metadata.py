@@ -47,9 +47,9 @@ names the other one.
 from __future__ import annotations
 
 import ast
-import logging
 import math
 import operator
+import re
 import warnings
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -61,7 +61,6 @@ from typing import Any
 
 import numpy as np
 import yaml
-from astropy import log as astropy_log
 from astropy.io import fits
 from astropy.wcs import WCS, FITSFixedWarning
 from astropy.wcs.utils import proj_plane_pixel_scales
@@ -1762,7 +1761,7 @@ def _read_pixel_scale_quantity(
     """Derive the mean pixel scale from the celestial WCS.
 
     The note also says when the header holds SIP terms that its ``CTYPE``
-    does not declare, which Astropy applies anyway.
+    does not declare, which BayMorph leaves out.
     """
     scale_x, scale_y, scale_mean = read_pixel_scales(celestial_wcs)
 
@@ -1774,11 +1773,11 @@ def _read_pixel_scale_quantity(
     if header is not None and _sip_without_suffix(header):
         sip_note = (
             f" The header holds SIP distortion terms (A_ORDER = "
-            f"{header['A_ORDER']}) while its CTYPE lacks the -SIP suffix: "
-            "Astropy applies them, and so does BayMorph when it places a "
-            "target given in RA and Dec. An image already corrected for "
-            "distortion, such as a drizzled one, should not carry them; the "
-            "pixel scale does not depend on them."
+            f"{header['A_ORDER']}) that its CTYPE does not declare with the "
+            "-SIP suffix: BayMorph leaves them out, as the SIP convention "
+            "requires, also when it places a target given in RA and Dec. An "
+            "image already corrected for distortion, such as a drizzled one, "
+            "should not carry them; the pixel scale does not depend on them."
         )
 
     return HeaderQuantity(
@@ -1812,20 +1811,27 @@ def _sip_without_suffix(header: fits.Header) -> bool:
     )
 
 
-class _SipWithoutSuffixFilter(logging.Filter):
-    """Drop the information Astropy logs about SIP terms without -SIP.
+_SIP_KEYWORD = re.compile(r"(A|B|AP|BP)_(ORDER|DMAX|\d+_\d+)")
 
-    BayMorph states the same in the note of the pixel scale, once per
-    reading, instead of a long message at every construction of the WCS.
-    """
 
-    def filter(self, record: logging.LogRecord) -> bool:
-        """Keep every record but the one about the SIP terms."""
-        return "Inconsistent SIP distortion information" not in record.getMessage()
+def _without_sip_terms(header: fits.Header) -> fits.Header:
+    """Return a copy of the header without its SIP distortion terms."""
+    header = header.copy()
+
+    for keyword in [key for key in header if _SIP_KEYWORD.fullmatch(key)]:
+        del header[keyword]
+
+    return header
 
 
 def read_celestial_wcs(header: fits.Header | None) -> WCS | None:
     """Construct a valid two-dimensional celestial WCS when possible.
+
+    SIP distortion terms apply only when the ``CTYPE`` of both axes declares
+    them with the ``-SIP`` suffix, as the SIP convention requires. Terms that
+    the ``CTYPE`` does not declare, which some drizzled images carry although
+    drizzling has already corrected the distortion, are left out; Astropy
+    would apply them.
 
     Parameters
     ----------
@@ -1840,8 +1846,8 @@ def read_celestial_wcs(header: fits.Header | None) -> WCS | None:
     if header is None:
         return None
 
-    sip_filter = _SipWithoutSuffixFilter()
-    astropy_log.addFilter(sip_filter)
+    if _sip_without_suffix(header):
+        header = _without_sip_terms(header)
 
     try:
         with warnings.catch_warnings():
@@ -1849,8 +1855,6 @@ def read_celestial_wcs(header: fits.Header | None) -> WCS | None:
             wcs = WCS(header)
     except Exception:
         return None
-    finally:
-        astropy_log.removeFilter(sip_filter)
 
     if not wcs.has_celestial:
         return None

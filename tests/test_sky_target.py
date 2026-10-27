@@ -318,7 +318,31 @@ def test_sip_terms_without_their_suffix_get_a_note_instead_of_astropy_info():
 
     assert not any("SIP" in str(message.msg) for message in messages)
     assert "SIP distortion terms (A_ORDER = 2)" in reading["pixel_scale"].note
+    assert "BayMorph leaves them out" in reading["pixel_scale"].note
     assert "Notes" in reading.report()
+
+
+def test_a_sky_target_ignores_sip_terms_that_the_ctype_does_not_declare(tmp_path):
+    # At 300 pixels from the reference pixel, A_2_0 = 1e-4 moves x by 9 pixels.
+    tangent = tmp_path / "tangent.fits"
+    _mosaic(tangent)
+    target = SkyPosition.of(_sky_of(tangent, 349.0, 250.0))
+
+    found = {}
+
+    for suffix in ("", "-SIP"):
+        header = _sip_header(suffix)
+        header["A_2_0"] = 1.0e-4
+        path = tmp_path / f"sip{suffix or '_undeclared'}.fits"
+        _mosaic(path, header)
+
+        with astropy_log.log_to_list() as messages:
+            found[suffix] = target.pixel(read_observation_metadata(path))
+
+        assert not any("SIP" in str(message.msg) for message in messages)
+
+    assert found[""] == pytest.approx((349.0, 250.0), abs=1e-6)
+    assert abs(found["-SIP"][0] - 349.0) > 5.0
 
 
 def test_sip_terms_with_their_suffix_or_no_sip_get_no_note():

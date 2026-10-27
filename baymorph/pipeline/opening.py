@@ -128,9 +128,9 @@ class SkyPosition:
     The preparation inputs, :class:`baymorph.ObservationAdvisor`,
     :func:`baymorph.make_config_from_fits` and ``baymorph config``, accept a
     target as ``{"ra": ..., "dec": ...}`` and convert it to pixels of the
-    whole image through the celestial WCS of the header, as Astropy reads
-    it, SIP terms included when the header carries them. A configuration
-    holds the target in pixels.
+    whole image through the celestial WCS of the header, with its SIP
+    distortion terms only when its ``CTYPE`` declares them with the ``-SIP``
+    suffix. A configuration holds the target in pixels.
 
     Parameters
     ----------

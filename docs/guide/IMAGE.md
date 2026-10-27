@@ -33,8 +33,10 @@ or texts with their units such as `"00h14m05.69s"`. BayMorph converts it to
 pixels through the celestial WCS of the header and writes the pixels in the
 configuration. When the header carries SIP distortion terms without the
 `-SIP` suffix in its `CTYPE`, as some drizzled images do, the conversion
-applies them, as Astropy does, and the header report says so in the note of
-the pixel scale; at the target the difference is a fraction of an arcsecond.
+leaves them out, as the SIP convention requires: drizzling has already
+corrected the distortion, and applying the terms would move the target by up
+to a few arcseconds. The header report says so in the note of the pixel
+scale.
 
 ## The cutout
 
