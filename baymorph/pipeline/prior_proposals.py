@@ -42,7 +42,7 @@ from typing import Any
 import numpy as np
 
 from baymorph.core.effective_gain import SKY_LEVEL_GUARD
-from baymorph.core.header_metadata import IMAGE_UNIT, HeaderReading
+from baymorph.core.header_metadata import IMAGE_UNIT, HeaderReading, canonical_unit
 from baymorph.models.labels import PARAMETER_KINDS, parameter_names
 from baymorph.models.validated_domains import validated_domain
 from baymorph.observation.background import background_parameter_names
@@ -157,11 +157,12 @@ class GainProposal:
         Gain, in the units of the image, that the declaration gives.
     candidates : dict
         Gain given by each source found, in the order of preference:
-        ``sky_level``, ``measured_sky`` and ``gain_keyword``; the gain keyword
-        is reported converted to the units of the image but not corrected for
+        ``sky_level``, ``measured_sky``, then ``gain_keyword`` for an image
+        in ADU or ``image_unit`` for an image in electrons; the gain of the
+        detector is reported in the units of the image but not corrected for
         any resampling.
     ratio : float or None
-        Ratio of the gain of the sky to that of the gain keyword, or of the
+        Ratio of the gain of the sky to that of the detector, or of the
         two sky sources, when two sources exist.
     expected_ratio : float or None
         The ratio that the declared resampling predicts, when known.
@@ -878,18 +879,10 @@ def _gain_keyword_in_image_units(reading: HeaderReading) -> tuple[float | None, 
         return gain, f"{label} = {gain:.6g} e-/ADU, image in ADU"
 
     if unit in _ADU_RATE_UNITS:
-        exposure = reading["exposure_time"]
+        seconds, reason = _exposure_seconds(reading)
 
-        if not exposure.usable or _normalized_unit(exposure.unit) != "s":
-            return None, (
-                "the image is a rate and its exposure time in seconds is "
-                "not established"
-            )
-
-        seconds = float(exposure.value)
-
-        if not math.isfinite(seconds) or seconds <= 0.0:
-            return None, "the exposure time is not a positive number"
+        if seconds is None:
+            return None, reason
 
         return gain * seconds, (
             f"{label} = {gain:.6g} e-/ADU times the exposure time "
@@ -900,6 +893,62 @@ def _gain_keyword_in_image_units(reading: HeaderReading) -> tuple[float | None, 
         f"the image unit {reading.value('image_unit')!r} has no rule that "
         "converts a gain in electrons per ADU"
     )
+
+
+def _gain_of_image_unit(reading: HeaderReading) -> tuple[float | None, str | None]:
+    """Return the gain that an image in electrons implies, or a reason.
+
+    A pixel in electrons counts the electrons themselves, so its gain is 1; a
+    pixel in electrons per second is that count divided by the exposure time,
+    so its gain is the exposure time in seconds. The gain of the detector in
+    electrons per ADU plays no part. The reason is None for an image in other
+    units, to which the rule does not apply.
+
+    An image in electrons per second is almost always a combination of
+    exposures, often resampled, whose header need not record it, and whose
+    exposure time may be a total or a placeholder; its gain is therefore
+    proposed only with a declared resampling variance factor, 1 for a single
+    exposure that was not resampled.
+    """
+    unit = reading.value("image_unit")
+
+    if unit is None:
+        return None, None
+
+    unit = canonical_unit(unit)
+
+    if unit == "electron":
+        return 1.0, "image in electrons, gain 1"
+
+    if unit != "electron/s":
+        return None, None
+
+    seconds, reason = _exposure_seconds(reading)
+
+    if seconds is None:
+        return None, f"image in electrons per second, but {reason}"
+
+    return seconds, (
+        f"image in electrons per second, gain equal to the exposure time "
+        f"{seconds:.6g} s"
+    )
+
+
+def _exposure_seconds(reading: HeaderReading) -> tuple[float | None, str]:
+    """Return the exposure time in seconds of a rate image, or a reason."""
+    exposure = reading["exposure_time"]
+
+    if not exposure.usable or _normalized_unit(exposure.unit) != "s":
+        return None, (
+            "the image is a rate and its exposure time in seconds is not established"
+        )
+
+    seconds = float(exposure.value)
+
+    if not math.isfinite(seconds) or seconds <= 0.0:
+        return None, "the exposure time is not a positive number"
+
+    return seconds, ""
 
 
 def _resampled(reading: HeaderReading) -> bool:
@@ -924,10 +973,13 @@ def propose_effective_gain(
 
     The sources are proposed in this order: the subtracted sky level that
     the header records, when it passes the guard of AD-047; the sky that the
-    preparation measured, when it is still in the image; the gain keyword,
-    converted to the units of the image, only for an image that was not
-    resampled or whose resampling variance factor is declared, the gain then
-    divided by that factor. When two sources exist, their ratio is reported,
+    preparation measured, when it is still in the image; the gain of the
+    detector, only for an image that was not resampled or whose resampling
+    variance factor is declared, the gain then divided by that factor. The
+    gain of the detector is the gain keyword converted to the units of an
+    image in ADU, or, for an image in electrons, 1, and for an image in
+    electrons per second, the exposure time. When two sources exist, their
+    ratio is reported,
     with a warning when it departs from the ratio the declared resampling
     predicts by more than ``tolerance``.
 
@@ -1009,41 +1061,62 @@ def propose_effective_gain(
             )
 
     keyword_gain, keyword_note = _gain_keyword_in_image_units(reading)
+    unit_gain, unit_note = _gain_of_image_unit(reading)
     resampled = _resampled(reading)
 
-    if keyword_gain is not None:
-        candidates["gain_keyword"] = keyword_gain
+    if unit_note is None:
+        if keyword_gain is None:
+            notes.append(f"gain keyword not used: {keyword_note}")
+    elif unit_gain is None:
+        notes.append(f"gain of the image unit not used: {unit_note}")
 
-        if not resampled:
-            declarations["gain_keyword"] = {"source": "declared", "gain": keyword_gain}
-            notes.append(keyword_note + "; the header records no resampling")
+    # The gain keyword converts an image in ADU, the image unit gives the gain
+    # of an image in electrons: at most one of them applies.
+    rate = canonical_unit(reading.value("image_unit") or "") == "electron/s"
+    detector_resampled = resampled or (unit_gain is not None and rate)
+
+    for source, gain, note, name in (
+        ("gain_keyword", keyword_gain, keyword_note, "the keyword"),
+        ("image_unit", unit_gain, unit_note, "this gain"),
+    ):
+        if gain is None:
+            continue
+
+        candidates[source] = gain
+
+        if not detector_resampled:
+            declarations[source] = {"source": "declared", "gain": gain}
+            notes.append(f"{note}; the header records no resampling")
         elif factor is not None:
-            declarations["gain_keyword"] = {
-                "source": "declared",
-                "gain": keyword_gain / factor,
-            }
+            declarations[source] = {"source": "declared", "gain": gain / factor}
             notes.append(
-                keyword_note + f", divided by the declared resampling variance factor "
+                f"{note}, divided by the declared resampling variance factor "
                 f"{factor:.6g}"
+            )
+        elif resampled:
+            notes.append(
+                f"{note}; the image was resampled and no resampling variance "
+                f"factor is declared, so {name} is not proposed"
             )
         else:
             notes.append(
-                keyword_note + "; the image was resampled and no resampling variance "
-                "factor is declared, so the keyword is not proposed"
+                f"{note}; an image in electrons per second combines exposures "
+                "that its header need not record, so this gain is proposed "
+                "only with a declared resampling variance factor, 1 for a "
+                "single exposure that was not resampled"
             )
-    else:
-        notes.append(f"gain keyword not used: {keyword_note}")
 
     ratio = None
     expected = None
     warnings: list[str] = []
 
     sky_gain = candidates.get("sky_level", candidates.get("measured_sky"))
+    detector_gain = candidates.get("gain_keyword", candidates.get("image_unit"))
 
-    if sky_gain is not None and "gain_keyword" in candidates:
-        ratio = sky_gain / candidates["gain_keyword"]
+    if sky_gain is not None and detector_gain is not None:
+        ratio = sky_gain / detector_gain
 
-        if not resampled:
+        if not detector_resampled:
             expected = 1.0
         elif factor is not None:
             expected = 1.0 / factor
@@ -1059,16 +1132,17 @@ def propose_effective_gain(
                 f"The ratio of the gains of two sources is {ratio:.3g}, "
                 f"{departure:.0%} from the {expected:.3g} that the declared "
                 "resampling predicts. Check the sky level, the gain keyword "
-                "and the resampling before accepting the proposed gain."
+                "or the exposure time, and the resampling before accepting the "
+                "proposed gain."
             )
     elif ratio is not None:
         notes.append(
-            f"ratio of the sky gain to the gain keyword {ratio:.3g}, reported "
+            f"ratio of the sky gain to the gain of the detector {ratio:.3g}, reported "
             "without a prediction because no resampling variance factor is "
             "declared"
         )
 
-    for source in ("sky_level", "measured_sky", "gain_keyword"):
+    for source in ("sky_level", "measured_sky", "gain_keyword", "image_unit"):
         if source in declarations:
             declaration = declarations[source]
             value = (

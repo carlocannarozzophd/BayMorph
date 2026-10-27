@@ -129,6 +129,12 @@ and the project follows Semantic Versioning in spirit.
   an edge of its prior. The summary of the observation advisor gives the
   measured centre and its distance from the target position, and says when
   the position lies on no detected source.
+* The observation advisor proposes the effective gain of an image in
+  electrons, 1, as it proposes the gain keyword of an image in ADU, and of an
+  image in electrons per second, its exposure time divided by the declared
+  resampling variance factor, which you declare as 1 for a single exposure
+  that was not resampled. Before, it proposed no gain for these images when
+  their sky had been subtracted, such as a drizzled HST image.
 * When several header conventions read the same quantity, the value of the
   one that decides is compared with the others, and two values that disagree
   make the quantity `conflicting`, with both sources in its note, unless the

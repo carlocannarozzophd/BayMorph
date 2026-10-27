@@ -73,7 +73,7 @@ the galaxy is required: either `--target-center`, or `--target-x` and
 | `--accept` | With `--advise`, write the reviewed proposal. | off |
 | `--offline` | With `--advise`, ask no calibration service online. Without it, the advisor asks the ACS Zeropoint Calculator of STScI for the zeropoint of a drizzled ACS image whose header gives no usable one, unless two readings of it disagree, and for which none is declared. | online |
 | `--background-model` | With `--advise`, the residual background model whose priors are proposed: `constant` or `plane`. | `constant` |
-| `--resampling-variance-factor` | With `--advise`, the factor by which a resampling of the image multiplied the variance of its noise, which lets the gain keyword of a resampled image be proposed as the effective gain. | |
+| `--resampling-variance-factor` | With `--advise`, the factor by which a resampling of the image multiplied the variance of its noise, which lets the gain of the detector of a resampled image, its gain keyword or its exposure time, be proposed as the effective gain. | |
 
 The generated file is a starting point to review, not a finished analysis:
 [Writing a Configuration](../guide/CONFIGURING.md) lists the choices that are

@@ -201,10 +201,15 @@ fit:
 | Residual background | Within five times the sky scale; a plane changes by at most as much over half the cutout. |
 
 It also proposes where the effective gain comes from: the sky level the
-header records, the sky measured in the image, or the gain keyword, in that
-order, and it compares them when it finds more than one. When the header
-gives the saturation level in the units of the image, half of it becomes
-the brightest star allowed for the PSF.
+header records, the sky measured in the image, or the gain of the detector,
+in that order, and it compares them when it finds more than one. The gain of
+the detector is the gain keyword for an image in ADU, 1 for an image in
+electrons, and the exposure time for an image in electrons per second. For a
+resampled image, such as a drizzled one, and for any image in electrons per
+second, it is proposed only when you declare the resampling variance factor,
+1 for a single exposure that was not resampled, and is divided by it. When
+the header gives the saturation level in the units of the image, half of
+it becomes the brightest star allowed for the PSF.
 
 `models` holds one or more models, written to `fit.models`. Each receives
 its priors by the same rules, and the fit runs one fit per model on the same

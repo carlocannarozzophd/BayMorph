@@ -711,8 +711,9 @@ def _build_parser() -> argparse.ArgumentParser:
         type=float,
         help=(
             "With --advise, the factor by which a resampling of the image "
-            "multiplied the variance of its noise, which lets the gain "
-            "keyword of a resampled image be proposed."
+            "multiplied the variance of its noise, which lets the gain of "
+            "the detector of a resampled image, its gain keyword or its "
+            "exposure time, be proposed."
         ),
     )
 

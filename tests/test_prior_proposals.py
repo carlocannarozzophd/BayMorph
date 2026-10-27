@@ -526,6 +526,65 @@ def test_gain_keyword_of_a_single_exposure_is_proposed() -> None:
     assert proposal.declaration == {"source": "declared", "gain": 2.5}
 
 
+def _rate_header(*, exposure: float | None = 1400.0) -> fits.Header:
+    """Return a header of an image in electrons per second, its sky removed."""
+    header = _wcs_header(0.05)
+    header["BUNIT"] = "ELECTRONS/S"
+
+    if exposure is not None:
+        header["EXPTIME"] = exposure
+
+    return header
+
+
+def test_image_in_electrons_per_second_needs_a_declared_factor() -> None:
+    """The exposure time is the gain, divided by the declared factor."""
+    reading = read_header(_rate_header())
+
+    undeclared = propose_effective_gain(reading, sky_scale=0.0084)
+
+    assert undeclared.declaration is None
+    assert undeclared.candidates == {"image_unit": pytest.approx(1400.0)}
+    assert any("only with a declared resampling" in note for note in undeclared.notes)
+    assert "No source of the effective gain qualifies" in undeclared.warnings[0]
+
+    declared = propose_effective_gain(
+        reading, sky_scale=0.0084, resampling_variance_factor=0.5
+    )
+
+    assert declared.declaration == {
+        "source": "declared",
+        "gain": pytest.approx(2800.0),
+    }
+    assert declared.value == pytest.approx(2800.0)
+
+    single = propose_effective_gain(
+        reading, sky_scale=0.0084, resampling_variance_factor=1.0
+    )
+
+    assert single.value == pytest.approx(1400.0)
+
+
+def test_image_in_electrons_takes_a_gain_of_one() -> None:
+    """Counts of electrons need no conversion; a rate needs its exposure."""
+    header = _wcs_header(0.05)
+    header["BUNIT"] = "ELECTRONS"
+
+    proposal = propose_effective_gain(read_header(header), sky_scale=5.0)
+
+    assert proposal.declaration == {"source": "declared", "gain": 1.0}
+    assert proposal.candidates == {"image_unit": 1.0}
+
+    no_exposure = propose_effective_gain(
+        read_header(_rate_header(exposure=None)),
+        sky_scale=0.0084,
+        resampling_variance_factor=0.5,
+    )
+
+    assert no_exposure.declaration is None
+    assert any("gain of the image unit not used" in note for note in no_exposure.notes)
+
+
 def test_measured_sky_gives_the_gain_when_the_sky_is_in_the_image() -> None:
     """A measured sky that passes the guard is proposed after the header."""
     reading = read_header(_wcs_header())

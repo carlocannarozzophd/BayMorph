@@ -1807,7 +1807,10 @@ class ObservationAdvisor:
         - The residual background lies within five times the prepared sky
           scale.
         - The effective gain of AD-047 comes from the sky level the header
-          records, the measured sky, or the gain keyword, in that order; the
+          records, the measured sky, or the gain of the detector, in that
+          order: the gain keyword of an image in ADU, 1 for an image in
+          electrons, the exposure time for an image in electrons per second,
+          divided by the resampling variance factor of a resampled image; the
           ceiling on the peak of the PSF stars is half the saturation level
           when its unit is established.
 
@@ -1852,8 +1855,8 @@ class ObservationAdvisor:
             ``background``.
         resampling_variance_factor : float, optional
             Factor by which a resampling of the image multiplied the variance
-            of its noise, which lets the gain keyword of a resampled image be
-            proposed.
+            of its noise, which lets the gain of the detector of a resampled
+            image, its gain keyword or its exposure time, be proposed.
         **config_options
             Options forwarded to the canonical configuration maker.
 
