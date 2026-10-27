@@ -76,12 +76,7 @@ GAIN_RATIO_TOLERANCE = 0.15
 its prediction above which the advisor warns."""
 
 PHYSICAL_LENGTH_MODELS = frozenset(
-    {
-        "single_sersic",
-        "boxy_sersic",
-        "core_sersic",
-        "sersic_point_source",
-    }
+    {"single_sersic", "boxy_sersic", "core_sersic", "sersic_point_source"}
 )
 """Models with one extended component, whose lengths take the angular range.
 The lengths of the other models keep the reference ranges that tell their
@@ -109,15 +104,7 @@ the calibration of detectability and saturation, or the user."""
 
 _ADU_UNITS = frozenset({"adu", "count", "counts", "dn"})
 _ADU_RATE_UNITS = frozenset(
-    {
-        "adu/s",
-        "adu/sec",
-        "adu/second",
-        "count/s",
-        "counts/s",
-        "counts/sec",
-        "dn/s",
-    }
+    {"adu/s", "adu/sec", "adu/second", "count/s", "counts/s", "counts/sec", "dn/s"}
 )
 
 
@@ -237,9 +224,7 @@ def _ordered_range(values: Sequence[float], name: str) -> tuple[float, float]:
 
 
 def magnitude_flux_prior(
-    zeropoint: float,
-    *,
-    magnitudes: Sequence[float] = MAGNITUDE_RANGE,
+    zeropoint: float, *, magnitudes: Sequence[float] = MAGNITUDE_RANGE
 ) -> dict[str, Any]:
     """Return the log-uniform flux prior of a range of magnitudes.
 
@@ -359,10 +344,7 @@ def point_source_flux_prior(
     }
 
 
-def length_domain(
-    model_name: str,
-    parameter: str,
-) -> tuple[float | None, float | None]:
+def length_domain(model_name: str, parameter: str) -> tuple[float | None, float | None]:
     """Return the validated rendering domain of a length, in pixels.
 
     The domain joins the table of AD-048 for the morphology families and the
@@ -387,11 +369,7 @@ def length_domain(
 
 
 def _clip_to_domain(
-    lower: float,
-    upper: float,
-    domain: tuple[float | None, float | None],
-    *,
-    name: str,
+    lower: float, upper: float, domain: tuple[float | None, float | None], *, name: str
 ) -> tuple[float, float]:
     """Intersect ``[lower, upper]`` with a domain, or raise if empty."""
     domain_lower, domain_upper = domain
@@ -442,18 +420,9 @@ def angular_length_prior(
     if smallest <= 0.0:
         raise ValueError("angular_range must be positive.")
 
-    lower, upper = _clip_to_domain(
-        smallest / scale,
-        largest / scale,
-        domain,
-        name=name,
-    )
+    lower, upper = _clip_to_domain(smallest / scale, largest / scale, domain, name=name)
 
-    return {
-        "type": "log_uniform",
-        "lower": lower,
-        "upper": upper,
-    }
+    return {"type": "log_uniform", "lower": lower, "upper": upper}
 
 
 def clipped_reference_length_prior(
@@ -493,9 +462,7 @@ def clipped_reference_length_prior(
 
 
 def centre_priors(
-    fwhm_pixels: float,
-    *,
-    multiple: float = CENTRE_FWHM_MULTIPLE,
+    fwhm_pixels: float, *, multiple: float = CENTRE_FWHM_MULTIPLE
 ) -> dict[str, dict[str, Any]]:
     """Return the centre priors relative to the target position.
 
@@ -513,8 +480,7 @@ def centre_priors(
         ``target_y``.
     """
     half_width = _positive_finite(multiple, "multiple") * _positive_finite(
-        fwhm_pixels,
-        "fwhm_pixels",
+        fwhm_pixels, "fwhm_pixels"
     )
 
     return {
@@ -554,8 +520,7 @@ def background_priors(
         Half-width in units of the sky scale.
     """
     bound = _positive_finite(multiple, "multiple") * _positive_finite(
-        sky_scale,
-        "sky_scale",
+        sky_scale, "sky_scale"
     )
     rows, columns = (int(value) for value in cutout_shape)
 
@@ -572,11 +537,7 @@ def background_priors(
     for name in background_parameter_names(model):
         half = half_widths[name]
         limit = bound if half is None else bound / half
-        priors[name] = {
-            "type": "uniform",
-            "lower": -limit,
-            "upper": limit,
-        }
+        priors[name] = {"type": "uniform", "lower": -limit, "upper": limit}
 
     return priors
 
@@ -656,9 +617,7 @@ def propose_model_priors(
     unknown = sorted(set(decided) - set(parameter_names(model_name)))
 
     if unknown:
-        raise ValueError(
-            f"Model {model_name!r} has no parameters {unknown}."
-        )
+        raise ValueError(f"Model {model_name!r} has no parameters {unknown}.")
 
     kinds = PARAMETER_KINDS[model_name]
     references = reference_priors(model_name)
@@ -749,11 +708,7 @@ def propose_model_priors(
                 )
 
             proposals[name] = PriorProposal(
-                parameter=name,
-                kind=kind,
-                prior=prior,
-                source=source,
-                detail=detail,
+                parameter=name, kind=kind, prior=prior, source=source, detail=detail
             )
             continue
 
@@ -777,17 +732,9 @@ def propose_model_priors(
             )
             continue
 
-        prior, detail = _reference_prior(
-            model_name,
-            name,
-            references,
-        )
+        prior, detail = _reference_prior(model_name, name, references)
         proposals[name] = PriorProposal(
-            parameter=name,
-            kind=kind,
-            prior=prior,
-            source="reference",
-            detail=detail,
+            parameter=name, kind=kind, prior=prior, source="reference", detail=detail
         )
 
     return proposals
@@ -862,9 +809,7 @@ def _flux_proposal(
 
 
 def _reference_prior(
-    model_name: str,
-    name: str,
-    references: Mapping[str, Any],
+    model_name: str, name: str, references: Mapping[str, Any]
 ) -> tuple[dict[str, Any], str]:
     """Return the reference prior of a parameter and how it was found.
 
@@ -874,10 +819,7 @@ def _reference_prior(
     defaults ``q`` and ``theta``.
     """
     try:
-        prior = prior_config_for_parameter(
-            name,
-            references,
-        )
+        prior = prior_config_for_parameter(name, references)
     except ValueError:
         raise ValueError(
             f"BayMorph has no reference prior for {name!r} of "
@@ -910,9 +852,7 @@ def _origin(quantity: Any) -> str:
     return f"{quantity.keyword}, {quantity.convention}"
 
 
-def _gain_keyword_in_image_units(
-    reading: HeaderReading,
-) -> tuple[float | None, str]:
+def _gain_keyword_in_image_units(reading: HeaderReading) -> tuple[float | None, str]:
     """Return the gain keyword in the units of the image, or a reason."""
     quantity = reading["gain"]
     label = (
@@ -1014,10 +954,7 @@ def propose_effective_gain(
     factor = (
         None
         if resampling_variance_factor is None
-        else _positive_finite(
-            resampling_variance_factor,
-            "resampling_variance_factor",
-        )
+        else _positive_finite(resampling_variance_factor, "resampling_variance_factor")
     )
 
     if factor is not None and factor > 1.0:
@@ -1036,8 +973,7 @@ def propose_effective_gain(
         notes.append(f"the header sky level is {sky.status}")
     elif sky.unit != IMAGE_UNIT:
         notes.append(
-            f"the header sky level is in {sky.unit!r}, not in the units of "
-            "the image"
+            f"the header sky level is in {sky.unit!r}, not in the units of " "the image"
         )
     else:
         level = float(sky.value)
@@ -1079,10 +1015,7 @@ def propose_effective_gain(
         candidates["gain_keyword"] = keyword_gain
 
         if not resampled:
-            declarations["gain_keyword"] = {
-                "source": "declared",
-                "gain": keyword_gain,
-            }
+            declarations["gain_keyword"] = {"source": "declared", "gain": keyword_gain}
             notes.append(keyword_note + "; the header records no resampling")
         elif factor is not None:
             declarations["gain_keyword"] = {
@@ -1090,14 +1023,12 @@ def propose_effective_gain(
                 "gain": keyword_gain / factor,
             }
             notes.append(
-                keyword_note
-                + f", divided by the declared resampling variance factor "
+                keyword_note + f", divided by the declared resampling variance factor "
                 f"{factor:.6g}"
             )
         else:
             notes.append(
-                keyword_note
-                + "; the image was resampled and no resampling variance "
+                keyword_note + "; the image was resampled and no resampling variance "
                 "factor is declared, so the keyword is not proposed"
             )
     else:
@@ -1173,9 +1104,7 @@ def propose_effective_gain(
 
 
 def propose_psf_max_peak(
-    reading: HeaderReading,
-    *,
-    fraction: float = PSF_PEAK_SATURATION_FRACTION,
+    reading: HeaderReading, *, fraction: float = PSF_PEAK_SATURATION_FRACTION
 ) -> tuple[float | None, str]:
     """Propose the ceiling on the peak of the stars of the empirical PSF.
 

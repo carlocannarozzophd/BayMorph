@@ -80,11 +80,7 @@ class SkyRegion:
 
 
 def build_elliptical_radius_map(
-    shape: tuple[int, int],
-    x0: float,
-    y0: float,
-    q: float,
-    theta: float,
+    shape: tuple[int, int], x0: float, y0: float, q: float, theta: float
 ) -> np.ndarray:
     """Compute the elliptical radius map of an image.
 
@@ -130,10 +126,7 @@ def build_elliptical_radius_map(
     x_rot = dx * cos_theta + dy * sin_theta
     y_rot = -dx * sin_theta + dy * cos_theta
 
-    return np.sqrt(
-        x_rot**2 +
-        (y_rot / q) ** 2,
-    )
+    return np.sqrt(x_rot**2 + (y_rot / q) ** 2)
 
 
 def compute_elliptical_radial_profile(
@@ -175,11 +168,7 @@ def compute_elliptical_radial_profile(
     image = np.asarray(image, dtype=float)
 
     radius_map = build_elliptical_radius_map(
-        image.shape,
-        x0=x0,
-        y0=y0,
-        q=q,
-        theta=theta,
+        image.shape, x0=x0, y0=y0, q=q, theta=theta
     )
 
     radius_index = np.floor(radius_map).astype(int)
@@ -225,9 +214,7 @@ def compute_elliptical_radial_profile(
             value = np.sum(values)
 
         else:
-            raise ValueError(
-                f"Unknown statistic: {statistic!r}"
-            )
+            raise ValueError(f"Unknown statistic: {statistic!r}")
 
         profile.append(float(value))
 
@@ -309,10 +296,7 @@ def detect_profile_plateau(
     else:
         area = np.asarray(radial_profile.area, dtype=float)
         coverage = np.divide(
-            n_pixels,
-            area,
-            out=np.zeros_like(n_pixels, dtype=float),
-            where=area > 0,
+            n_pixels, area, out=np.zeros_like(n_pixels, dtype=float), where=area > 0
         )
 
     valid = (
@@ -326,40 +310,23 @@ def detect_profile_plateau(
     valid_indices = np.flatnonzero(valid)
 
     if valid_indices.size < window_size:
-        raise ValueError(
-            "Not enough valid radial bins for plateau detection."
-        )
+        raise ValueError("Not enough valid radial bins for plateau detection.")
 
-    n_outer = max(
-        window_size,
-        int(np.ceil(outer_fraction * valid_indices.size)),
-    )
+    n_outer = max(window_size, int(np.ceil(outer_fraction * valid_indices.size)))
 
     outer_indices = valid_indices[-n_outer:]
     outer_values = values[outer_indices]
 
     outer_median = float(np.median(outer_values))
-    noise_sigma = robust_sigma(
-        outer_values,
-        center=outer_median,
-    )
+    noise_sigma = robust_sigma(outer_values, center=outer_median)
 
     if not np.isfinite(noise_sigma):
-        raise ValueError(
-            "Unable to estimate a finite outer-profile noise level."
-        )
+        raise ValueError("Unable to estimate a finite outer-profile noise level.")
 
-    numerical_floor = (
-        10.0
-        * np.finfo(float).eps
-        * max(1.0, abs(outer_median))
-    )
+    numerical_floor = 10.0 * np.finfo(float).eps * max(1.0, abs(outer_median))
 
-    tolerance = max(
-        sigma_threshold * noise_sigma,
-        numerical_floor,
-    )
-    
+    tolerance = max(sigma_threshold * noise_sigma, numerical_floor)
+
     for start in range(values.size - window_size + 1):
         stop = start + window_size
         window_indices = np.arange(start, stop)
@@ -373,26 +340,14 @@ def detect_profile_plateau(
         deviations = np.abs(window_values - window_median)
 
         window_x = np.arange(window_size, dtype=float)
-        slope = float(
-            np.polyfit(
-                window_x,
-                window_values,
-                deg=1,
-            )[0]
-        )
+        slope = float(np.polyfit(window_x, window_values, deg=1)[0])
         total_trend = abs(slope) * (window_size - 1)
 
         is_stable = np.all(deviations <= tolerance)
         is_flat = total_trend <= tolerance
-        is_background_consistent = (
-            abs(window_median - outer_median) <= tolerance
-        )
+        is_background_consistent = abs(window_median - outer_median) <= tolerance
 
-        if (
-            is_stable
-            and is_flat
-            and is_background_consistent
-        ):
+        if is_stable and is_flat and is_background_consistent:
             return PlateauResult(
                 radius=float(radius[start]),
                 index=start,
@@ -448,11 +403,7 @@ def build_sky_region(
     inner_radius = float(plateau.radius + margin)
 
     radius_map = build_elliptical_radius_map(
-        shape,
-        x0=geometry.x0,
-        y0=geometry.y0,
-        q=geometry.q,
-        theta=geometry.theta,
+        shape, x0=geometry.x0, y0=geometry.y0, q=geometry.q, theta=geometry.theta
     )
 
     if outer_radius is None:
@@ -461,13 +412,10 @@ def build_sky_region(
         resolved_outer_radius = float(outer_radius)
 
     if resolved_outer_radius <= inner_radius:
-        raise ValueError(
-            "'outer_radius' must be greater than the inner sky radius."
-        )
+        raise ValueError("'outer_radius' must be greater than the inner sky radius.")
 
-    geometrical_region = (
-        (radius_map >= inner_radius)
-        & (radius_map <= resolved_outer_radius)
+    geometrical_region = (radius_map >= inner_radius) & (
+        radius_map <= resolved_outer_radius
     )
 
     sky_mask = geometrical_region.copy()
@@ -481,11 +429,7 @@ def build_sky_region(
     if n_pixels == 0:
         raise ValueError("The selected sky region contains no valid pixels.")
 
-    coverage = (
-        float(n_pixels / available_pixels)
-        if available_pixels > 0
-        else 0.0
-    )
+    coverage = float(n_pixels / available_pixels) if available_pixels > 0 else 0.0
 
     return SkyRegion(
         mask=sky_mask,

@@ -62,11 +62,9 @@ class AutoCutoutResult:
     geometry: TargetGeometry
     radial_profile: RadialProfile
     plateau: PlateauResult
-    
 
-def estimate_target_geometry_from_segment(
-    target_segment: np.ndarray,
-) -> TargetGeometry:
+
+def estimate_target_geometry_from_segment(target_segment: np.ndarray) -> TargetGeometry:
     """Estimate target geometry from a boolean segmentation mask.
 
     Parameters
@@ -105,10 +103,7 @@ def estimate_target_geometry_from_segment(
     dy = y.astype(float) - y0
 
     covariance = np.array(
-        [
-            [np.mean(dx * dx), np.mean(dx * dy)],
-            [np.mean(dx * dy), np.mean(dy * dy)],
-        ],
+        [[np.mean(dx * dx), np.mean(dx * dy)], [np.mean(dx * dy), np.mean(dy * dy)]],
         dtype=float,
     )
 
@@ -125,32 +120,17 @@ def estimate_target_geometry_from_segment(
         q = 1.0
         theta = 0.0
     else:
-        q = float(
-            np.sqrt(
-                max(minor_variance, 0.0) / major_variance
-            )
-        )
+        q = float(np.sqrt(max(minor_variance, 0.0) / major_variance))
         q = float(np.clip(q, np.finfo(float).eps, 1.0))
 
         major_axis = eigenvectors[:, 0]
-        theta = float(
-            np.arctan2(
-                major_axis[1],
-                major_axis[0],
-            )
-        )
+        theta = float(np.arctan2(major_axis[1], major_axis[0]))
 
-    return TargetGeometry(
-        x0=x0,
-        y0=y0,
-        q=q,
-        theta=theta,
-    )
+    return TargetGeometry(x0=x0, y0=y0, q=q, theta=theta)
 
 
 def estimate_target_geometry_from_image(
-    image: np.ndarray,
-    target_segment: np.ndarray,
+    image: np.ndarray, target_segment: np.ndarray
 ) -> TargetGeometry:
     """Estimate target geometry using image-weighted source moments.
 
@@ -176,14 +156,10 @@ def estimate_target_geometry_from_image(
     segment = np.asarray(target_segment, dtype=bool)
 
     if data.ndim != 2 or segment.ndim != 2:
-        raise ValueError(
-            "'image' and 'target_segment' must be two-dimensional arrays."
-        )
+        raise ValueError("'image' and 'target_segment' must be two-dimensional arrays.")
 
     if data.shape != segment.shape:
-        raise ValueError(
-            "'image' and 'target_segment' must have the same shape."
-        )
+        raise ValueError("'image' and 'target_segment' must have the same shape.")
 
     finite_source = segment & np.isfinite(data)
 
@@ -238,34 +214,13 @@ def estimate_target_geometry_from_image(
         q = 1.0
         theta = 0.0
     else:
-        q = float(
-            np.sqrt(
-                max(minor_variance, 0.0)
-                / major_variance
-            )
-        )
-        q = float(
-            np.clip(
-                q,
-                np.finfo(float).eps,
-                1.0,
-            )
-        )
+        q = float(np.sqrt(max(minor_variance, 0.0) / major_variance))
+        q = float(np.clip(q, np.finfo(float).eps, 1.0))
 
         major_axis = eigenvectors[:, 0]
-        theta = float(
-            np.arctan2(
-                major_axis[1],
-                major_axis[0],
-            )
-        )
+        theta = float(np.arctan2(major_axis[1], major_axis[0]))
 
-    return TargetGeometry(
-        x0=x0,
-        y0=y0,
-        q=q,
-        theta=theta,
-    )
+    return TargetGeometry(x0=x0, y0=y0, q=q, theta=theta)
 
 
 def build_target_radial_profile(
@@ -320,23 +275,12 @@ def estimate_target_sky(
     sigma_threshold: float = 1.0,
     outer_fraction: float = 0.25,
     min_coverage: float = 0.5,
-) -> tuple[
-    TargetGeometry,
-    RadialProfile,
-    PlateauResult,
-]:
+) -> tuple[TargetGeometry, RadialProfile, PlateauResult]:
     """Estimate target geometry, radial profile, and sky plateau."""
-    geometry = estimate_target_geometry_from_image(
-        image,
-        target_segment,
-    )
+    geometry = estimate_target_geometry_from_image(image, target_segment)
 
     radial_profile = build_target_radial_profile(
-        image,
-        geometry,
-        mask=mask,
-        statistic=statistic,
-        min_pixels=min_pixels,
+        image, geometry, mask=mask, statistic=statistic, min_pixels=min_pixels
     )
 
     plateau = detect_profile_plateau(

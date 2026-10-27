@@ -8,7 +8,6 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-
 TargetPosition = tuple[float, float]
 
 
@@ -33,10 +32,7 @@ class TargetSelector:
         on_confirm: Callable[[TargetPosition], None] | None = None,
         on_invalidate: Callable[[], None] | None = None,
     ) -> None:
-        data = np.asarray(
-            image,
-            dtype=float,
-        )
+        data = np.asarray(image, dtype=float)
 
         if data.ndim != 2:
             raise ValueError("TargetSelector requires a two-dimensional image.")
@@ -61,47 +57,32 @@ class TargetSelector:
         height, width = self.image.shape
 
         if initial_position is None:
-            initial_position = (
-                0.5 * (width - 1),
-                0.5 * (height - 1),
-            )
+            initial_position = (0.5 * (width - 1), 0.5 * (height - 1))
 
         self._initial_position = self._validate_position(initial_position)
         self._candidate = self._initial_position
         self._value: TargetPosition | None = None
 
     @property
-    def candidate(
-        self,
-    ) -> TargetPosition:
+    def candidate(self) -> TargetPosition:
         """Return the current, possibly unconfirmed, candidate position."""
         return self._candidate
 
     @property
-    def value(
-        self,
-    ) -> TargetPosition | None:
+    def value(self) -> TargetPosition | None:
         """Return the confirmed position, or None before confirmation."""
         return self._value
 
     @property
-    def is_confirmed(
-        self,
-    ) -> bool:
+    def is_confirmed(self) -> bool:
         """Return whether the current candidate was explicitly confirmed."""
         return self._value is not None
 
-    def _validate_position(
-        self,
-        position: TargetPosition,
-    ) -> TargetPosition:
+    def _validate_position(self, position: TargetPosition) -> TargetPosition:
         """Return a finite position inside the image bounds."""
         try:
             x, y = position
-        except (
-            TypeError,
-            ValueError,
-        ) as error:
+        except (TypeError, ValueError) as error:
             raise ValueError(
                 "Target position must contain exactly two coordinates."
             ) from error
@@ -109,14 +90,7 @@ class TargetSelector:
         x = float(x)
         y = float(y)
 
-        if not np.all(
-            np.isfinite(
-                [
-                    x,
-                    y,
-                ]
-            )
-        ):
+        if not np.all(np.isfinite([x, y])):
             raise ValueError("Target coordinates must be finite.")
 
         height, width = self.image.shape
@@ -128,23 +102,11 @@ class TargetSelector:
                 f"0 <= y <= {height - 1}."
             )
 
-        return (
-            x,
-            y,
-        )
+        return (x, y)
 
-    def set_candidate(
-        self,
-        x: float,
-        y: float,
-    ) -> TargetPosition:
+    def set_candidate(self, x: float, y: float) -> TargetPosition:
         """Set an unconfirmed target candidate and update the frontend."""
-        position = self._validate_position(
-            (
-                x,
-                y,
-            )
-        )
+        position = self._validate_position((x, y))
 
         was_confirmed = self._value is not None
 
@@ -158,9 +120,7 @@ class TargetSelector:
 
         return self._candidate
 
-    def confirm(
-        self,
-    ) -> TargetPosition:
+    def confirm(self) -> TargetPosition:
         """Confirm the current candidate and notify the owning advisor."""
         position = self._validate_position(self._candidate)
 
@@ -172,9 +132,7 @@ class TargetSelector:
 
         return position
 
-    def reset(
-        self,
-    ) -> TargetPosition:
+    def reset(self) -> TargetPosition:
         """Restore the initial candidate and clear any confirmation."""
         was_confirmed = self._value is not None
 
@@ -198,77 +156,29 @@ class TargetSelector:
     ]:
         """Return a robust display stretch and its original coordinates."""
         height, width = self.image.shape
-        stride = max(
-            1,
-            int(
-                np.ceil(
-                    max(
-                        height,
-                        width,
-                    )
-                    / self.max_preview_size
-                )
-            ),
-        )
+        stride = max(1, int(np.ceil(max(height, width) / self.max_preview_size)))
 
-        raw = self.image[
-            ::stride,
-            ::stride,
-        ]
+        raw = self.image[::stride, ::stride]
         finite = np.isfinite(raw)
         values = raw[finite]
 
-        lower, upper = np.percentile(
-            values,
-            [
-                1.0,
-                99.8,
-            ],
-        )
+        lower, upper = np.percentile(values, [1.0, 99.8])
 
         scale = float(upper - lower)
 
         if not np.isfinite(scale) or scale <= 0.0:
-            scale = max(
-                float(np.nanmax(np.abs(values))),
-                1.0,
-            )
+            scale = max(float(np.nanmax(np.abs(values))), 1.0)
 
-        filled = np.where(
-            finite,
-            raw,
-            lower,
-        )
-        clipped = np.clip(
-            filled,
-            lower,
-            upper,
-        )
+        filled = np.where(finite, raw, lower)
+        clipped = np.clip(filled, lower, upper)
         display = np.arcsinh(10.0 * (clipped - lower) / scale)
 
-        x = np.arange(
-            0,
-            width,
-            stride,
-            dtype=int,
-        )
-        y = np.arange(
-            0,
-            height,
-            stride,
-            dtype=int,
-        )
+        x = np.arange(0, width, stride, dtype=int)
+        y = np.arange(0, height, stride, dtype=int)
 
-        return (
-            display,
-            raw,
-            x,
-            y,
-        )
+        return (display, raw, x, y)
 
-    def _build_frontend(
-        self,
-    ) -> dict[str, Any]:
+    def _build_frontend(self) -> dict[str, Any]:
         """Construct the lazy Plotly and ipywidgets frontend."""
         try:
             import ipywidgets as widgets
@@ -307,10 +217,7 @@ class TargetSelector:
                             "symbol": "x",
                             "size": 18,
                             "color": "cyan",
-                            "line": {
-                                "color": "black",
-                                "width": 2,
-                            },
+                            "line": {"color": "black", "width": 2},
                         },
                         hoverinfo="skip",
                         showlegend=False,
@@ -327,33 +234,19 @@ class TargetSelector:
         height, width = self.image.shape
 
         figure.update_layout(
-            title={
-                "text": self.title,
-                "x": 0.5,
-            },
+            title={"text": self.title, "x": 0.5},
             template="plotly_white",
             height=700,
-            margin={
-                "l": 70,
-                "r": 20,
-                "t": 70,
-                "b": 70,
-            },
+            margin={"l": 70, "r": 20, "t": 70, "b": 70},
             dragmode="pan",
             xaxis={
                 "title": "X [pixel]",
-                "range": [
-                    -0.5,
-                    width - 0.5,
-                ],
+                "range": [-0.5, width - 0.5],
                 "constrain": "domain",
             },
             yaxis={
                 "title": "Y [pixel]",
-                "range": [
-                    -0.5,
-                    height - 0.5,
-                ],
+                "range": [-0.5, height - 0.5],
                 "scaleanchor": "x",
                 "scaleratio": 1,
                 "constrain": "domain",
@@ -376,14 +269,9 @@ class TargetSelector:
         )
 
         confirm_button = widgets.Button(
-            description="Confirm center",
-            button_style="success",
-            icon="check",
+            description="Confirm center", button_style="success", icon="check"
         )
-        reset_button = widgets.Button(
-            description="Reset",
-            icon="undo",
-        )
+        reset_button = widgets.Button(description="Reset", icon="undo")
         status = widgets.HTML()
 
         instructions = widgets.HTML(
@@ -394,22 +282,8 @@ class TargetSelector:
             "<code>image[y, x]</code>. Use the Plotly toolbar to zoom or pan."
         )
 
-        controls = widgets.HBox(
-            [
-                x_field,
-                y_field,
-                confirm_button,
-                reset_button,
-            ]
-        )
-        container = widgets.VBox(
-            [
-                instructions,
-                figure,
-                controls,
-                status,
-            ]
-        )
+        controls = widgets.HBox([x_field, y_field, confirm_button, reset_button])
+        container = widgets.VBox([instructions, figure, controls, status])
 
         frontend = {
             "container": container,
@@ -421,57 +295,33 @@ class TargetSelector:
             "status": status,
         }
 
-        def handle_click(
-            _trace: Any,
-            points: Any,
-            _state: Any,
-        ) -> None:
+        def handle_click(_trace: Any, points: Any, _state: Any) -> None:
             if not points.xs or not points.ys:
                 return
 
-            self.set_candidate(
-                points.xs[0],
-                points.ys[0],
-            )
+            self.set_candidate(points.xs[0], points.ys[0])
 
-        def handle_field_change(
-            _change: Any,
-        ) -> None:
+        def handle_field_change(_change: Any) -> None:
             if self._synchronizing:
                 return
 
-            self.set_candidate(
-                x_field.value,
-                y_field.value,
-            )
+            self.set_candidate(x_field.value, y_field.value)
 
-        def handle_confirm(
-            _button: Any,
-        ) -> None:
+        def handle_confirm(_button: Any) -> None:
             self.confirm()
 
-        def handle_reset(
-            _button: Any,
-        ) -> None:
+        def handle_reset(_button: Any) -> None:
             self.reset()
 
         frontend["image_trace"].on_click(handle_click)
-        x_field.observe(
-            handle_field_change,
-            names="value",
-        )
-        y_field.observe(
-            handle_field_change,
-            names="value",
-        )
+        x_field.observe(handle_field_change, names="value")
+        y_field.observe(handle_field_change, names="value")
         confirm_button.on_click(handle_confirm)
         reset_button.on_click(handle_reset)
 
         return frontend
 
-    def _synchronize_frontend(
-        self,
-    ) -> None:
+    def _synchronize_frontend(self) -> None:
         """Synchronize fields, marker, crosshair, and status text."""
         if self._frontend is None:
             return
@@ -497,11 +347,7 @@ class TargetSelector:
                     "x1": x,
                     "y0": -0.5,
                     "y1": height - 0.5,
-                    "line": {
-                        "color": "cyan",
-                        "width": 1,
-                        "dash": "dot",
-                    },
+                    "line": {"color": "cyan", "width": 1, "dash": "dot"},
                 },
                 {
                     "type": "line",
@@ -509,11 +355,7 @@ class TargetSelector:
                     "x1": width - 0.5,
                     "y0": y,
                     "y1": y,
-                    "line": {
-                        "color": "cyan",
-                        "width": 1,
-                        "dash": "dot",
-                    },
+                    "line": {"color": "cyan", "width": 1, "dash": "dot"},
                 },
             )
 
@@ -532,9 +374,7 @@ class TargetSelector:
             self._synchronizing = False
 
     @property
-    def widget(
-        self,
-    ) -> Any:
+    def widget(self) -> Any:
         """Return the lazily constructed notebook widget."""
         if self._frontend is None:
             self._frontend = self._build_frontend()
@@ -542,9 +382,7 @@ class TargetSelector:
 
         return self._frontend["container"]
 
-    def _ipython_display_(
-        self,
-    ) -> None:
+    def _ipython_display_(self) -> None:
         """Display the selector as the final expression of a notebook cell."""
         try:
             from IPython.display import display
@@ -554,7 +392,4 @@ class TargetSelector:
         display(self.widget)
 
 
-__all__ = [
-    "TargetPosition",
-    "TargetSelector",
-]
+__all__ = ["TargetPosition", "TargetSelector"]

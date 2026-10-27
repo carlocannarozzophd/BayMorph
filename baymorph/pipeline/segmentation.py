@@ -3,11 +3,7 @@
 import numpy as np
 
 
-def select_segment_near_position(
-    segmentation,
-    x: float,
-    y: float,
-):
+def select_segment_near_position(segmentation, x: float, y: float):
     """Select the segmentation label nearest to a target position.
 
     The requested position is first rounded to the nearest pixel. If that
@@ -59,10 +55,7 @@ def select_segment_near_position(
     pixel_x = int(round(target_x))
     pixel_y = int(round(target_y))
 
-    if (
-        0 <= pixel_y < data.shape[0]
-        and 0 <= pixel_x < data.shape[1]
-    ):
+    if 0 <= pixel_y < data.shape[0] and 0 <= pixel_x < data.shape[1]:
         label_at_position = int(data[pixel_y, pixel_x])
 
         if label_at_position > 0:
@@ -74,14 +67,9 @@ def select_segment_near_position(
     for label in labels:
         segment_y, segment_x = np.nonzero(data == label)
 
-        squared_distances = (
-            (segment_x - target_x) ** 2
-            + (segment_y - target_y) ** 2
-        )
+        squared_distances = (segment_x - target_x) ** 2 + (segment_y - target_y) ** 2
 
-        segment_squared_distance = float(
-            np.min(squared_distances)
-        )
+        segment_squared_distance = float(np.min(squared_distances))
 
         if segment_squared_distance < best_squared_distance:
             best_squared_distance = segment_squared_distance
