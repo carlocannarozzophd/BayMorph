@@ -37,16 +37,16 @@ Copies only the packaged example configurations.
 baymorph config fits_path (--target-center | --target-x X --target-y Y | --target-ra RA --target-dec DEC) [options]
 ```
 
-Writes a single-observation configuration for one FITS image. The target
-seed is required: either `--target-center`, or `--target-x` and `--target-y`
-together, or `--target-ra` and `--target-dec` together.
+Writes a single-observation configuration for one FITS image. The centre of
+the galaxy is required: either `--target-center`, or `--target-x` and
+`--target-y` together, or `--target-ra` and `--target-dec` together.
 
 | Option | Meaning | Default |
 | --- | --- | --- |
 | `fits_path` | Input FITS image. | required |
-| `--target-x`, `--target-y` | Target-identification seed in zero-based full-image pixel coordinates. | |
-| `--target-ra`, `--target-dec` | Target-identification seed on the sky (ICRS), in degrees or as texts with their units, such as `00h14m05.69s` and `-30d22m20.7s`. It is converted to pixels through the celestial WCS of the header, and the configuration holds the pixels. | |
-| `--target-center` | Use the detector centre as the target seed; cannot be combined with the other target options. | |
+| `--target-x`, `--target-y` | Centre of the galaxy in zero-based full-image pixel coordinates; the fit samples the centre within a window about it. | |
+| `--target-ra`, `--target-dec` | Centre of the galaxy on the sky (ICRS), in degrees or as texts with their units, such as `00h14m05.69s` and `-30d22m20.7s`. It is converted to pixels through the celestial WCS of the header, and the configuration holds the pixels. | |
+| `--target-center` | Use the detector centre as the centre of the galaxy; cannot be combined with the other target options. | |
 | `--hdu` | Index or `EXTNAME` of the HDU that holds the image, written to `data.hdu`. | selected by BayMorph |
 | `--region-size` | Side, in arcsec, of the square about the target within which the image is read, written to `data.region`. | the whole image up to 4096 pixels on a side, otherwise a square of 4096 pixels about the target |
 | `--whole-image` | Read the whole image, whatever its size: `data.region: whole`. Cannot be combined with `--region-size`. | |

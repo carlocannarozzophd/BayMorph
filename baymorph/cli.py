@@ -719,37 +719,38 @@ def _build_parser() -> argparse.ArgumentParser:
     config_parser.add_argument(
         "--target-center",
         action="store_true",
-        help=(
-            "Explicitly use the detector centre as the target-identification " "seed."
-        ),
+        help="Use the detector centre as the centre of the galaxy.",
     )
 
     config_parser.add_argument(
         "--target-x",
         type=float,
-        help="Target-identification seed x coordinate in zero-based pixels.",
+        help=(
+            "x of the centre of the galaxy, in zero-based pixels of the whole "
+            "image; the fit samples the centre within a window about it."
+        ),
     )
 
     config_parser.add_argument(
         "--target-y",
         type=float,
-        help="Target-identification seed y coordinate in zero-based pixels.",
+        help="y of the centre of the galaxy, in zero-based pixels of the whole image.",
     )
 
     config_parser.add_argument(
         "--target-ra",
         help=(
-            "Right ascension of the target (ICRS), in degrees or as a text "
-            "with its unit such as 00h14m05.69s; converted to pixels through "
-            "the celestial WCS of the header."
+            "Right ascension of the centre of the galaxy (ICRS), in degrees or "
+            "as a text with its unit such as 00h14m05.69s; converted to pixels "
+            "through the celestial WCS of the header."
         ),
     )
 
     config_parser.add_argument(
         "--target-dec",
         help=(
-            "Declination of the target (ICRS), in degrees or as a text with "
-            "its unit such as -30d22m20.7s."
+            "Declination of the centre of the galaxy (ICRS), in degrees or as "
+            "a text with its unit such as -30d22m20.7s."
         ),
     )
 

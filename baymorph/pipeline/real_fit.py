@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import math
 import warnings
+from collections.abc import Mapping
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
@@ -105,6 +107,13 @@ def run_real_fit_from_config(config: str | Path | dict[str, Any]):
     likelihood_cfg = resolved["fit"].get("likelihood", None)
     likelihood_state = prepare_real_fit_likelihood_state(resolved, image_products)
     require_complete_likelihood_normalization(likelihood_state)
+
+    _require_prepared_centre_within_priors(
+        resolved,
+        image_products=image_products,
+        references=prior_references,
+        observation=observation,
+    )
 
     # Accepted preparation and PSF products are validated before fit output
     # directories or inference configuration snapshots are written.
@@ -754,6 +763,174 @@ def _target_reference_coordinates(
         raise ValueError("cutout_bounds must define 'xmin' and 'ymin'.") from exc
 
     return {"target_x": full_x - xmin, "target_y": full_y - ymin}
+
+
+def _require_prepared_centre_within_priors(
+    resolved: Mapping[str, Any],
+    *,
+    image_products: Any,
+    references: Mapping[str, float],
+    observation: Observation | None,
+) -> None:
+    """Check the centre of the prepared target against every model's priors.
+
+    The priors of the centre stay about the target position (AD-055); the
+    centre that the preparation measured on the target must lie within them,
+    before any product of the fit is written.
+    """
+    geometry = image_products.geometry
+    centre = (
+        (float(image_products.target_x), float(image_products.target_y))
+        if geometry is None
+        else (float(geometry.x0), float(geometry.y0))
+    )
+    seed_on_target = position_on_segment(
+        image_products.target_segment, references["target_x"], references["target_y"]
+    )
+    pixel_scale = (
+        None
+        if observation is None or observation.metadata.pixel_scale is None
+        else float(observation.metadata.pixel_scale)
+    )
+    origin = (
+        float(image_products.cutout_bounds["xmin"]),
+        float(image_products.cutout_bounds["ymin"]),
+    )
+
+    for model_name in resolved["fit"]["models"]:
+        require_centre_within_priors(
+            centre=centre,
+            priors=resolved["fit"]["priors"].get(model_name, {}),
+            references=references,
+            origin=origin,
+            pixel_scale=pixel_scale,
+            seed_on_target=seed_on_target,
+            model_name=model_name,
+        )
+
+
+def position_on_segment(segment: np.ndarray, x: float, y: float) -> bool:
+    """Return whether the pixel nearest to ``(x, y)`` belongs to a segment.
+
+    ``x`` is the column and ``y`` the row of the boolean array ``segment``.
+    """
+    segment = np.asarray(segment, dtype=bool)
+    column = int(round(float(x)))
+    row = int(round(float(y)))
+
+    return bool(
+        0 <= row < segment.shape[0]
+        and 0 <= column < segment.shape[1]
+        and segment[row, column]
+    )
+
+
+def require_centre_within_priors(
+    *,
+    centre: tuple[float, float],
+    priors: Mapping[str, Any],
+    references: Mapping[str, float],
+    origin: tuple[float, float] = (0.0, 0.0),
+    pixel_scale: float | None = None,
+    seed_on_target: bool = True,
+    model_name: str | None = None,
+) -> None:
+    """Stop when the measured centre of the target lies outside its priors.
+
+    The priors of the centre stay about the target position that the user
+    gives, so that no prior depends on the image (AD-055). The centre that
+    the preparation measures on the detected target only checks them: when
+    it lies outside the support of the prior of ``x0`` or ``y0``, the
+    posterior would press on an edge of the prior, away from the galaxy. A
+    prior without bounds, such as a normal one, is not checked.
+
+    Parameters
+    ----------
+    centre : tuple of float
+        Measured centre ``(x, y)`` of the target, in the frame of
+        ``references``.
+    priors : mapping
+        Priors of one model, by parameter, as configured; those of ``x0``
+        and ``y0`` are checked, and a model without them passes.
+    references : mapping
+        ``target_x`` and ``target_y``, the target position in the same frame,
+        to which the priors may be relative.
+    origin : tuple of float, default=(0, 0)
+        Pixel of the whole image at which that frame starts, for the message.
+    pixel_scale : float, optional
+        Pixel scale in arcsec per pixel, for the message.
+    seed_on_target : bool, default=True
+        Whether the target position lies on the detected target.
+    model_name : str, optional
+        Model whose priors these are, for the message.
+
+    Raises
+    ------
+    ValueError
+        If the measured centre lies outside the support of the prior of
+        ``x0`` or ``y0``.
+    """
+    origin_x, origin_y = (float(origin[0]), float(origin[1]))
+    offsets = {"x0": origin_x, "y0": origin_y}
+    spans: dict[str, tuple[float, float]] = {}
+    outside = False
+
+    for name, value in (("x0", float(centre[0])), ("y0", float(centre[1]))):
+        try:
+            config = prior_config_for_parameter(name, priors)
+        except ValueError:
+            continue
+
+        prior = parse_prior_config(config, references=references)
+        lower = getattr(prior, "lower", None)
+        upper = getattr(prior, "upper", None)
+
+        if lower is None or upper is None:
+            continue
+
+        spans[name] = (float(lower), float(upper))
+        outside = outside or not float(lower) <= value <= float(upper)
+
+    if not outside:
+        return
+
+    centre_x = float(centre[0]) + origin_x
+    centre_y = float(centre[1]) + origin_y
+    seed_x = float(references["target_x"]) + origin_x
+    seed_y = float(references["target_y"]) + origin_y
+    distance = math.hypot(centre_x - seed_x, centre_y - seed_y)
+    on_sky = (
+        ""
+        if pixel_scale is None or not math.isfinite(float(pixel_scale))
+        else f" ({distance * float(pixel_scale):.2f} arcsec)"
+    )
+    windows = " and ".join(
+        f"{name} from {lower + offsets[name]:.1f} to {upper + offsets[name]:.1f}"
+        for name, (lower, upper) in spans.items()
+    )
+    lead = (
+        ""
+        if seed_on_target
+        else "No source was detected at the target position, so the target is "
+        "the detected source nearest to it. "
+    )
+    subject = (
+        "the priors of the centre"
+        if model_name is None
+        else f"the priors of the centre of {model_name}"
+    )
+
+    raise ValueError(
+        f"{lead}The centre of the detected target, x = {centre_x:.1f}, "
+        f"y = {centre_y:.1f} in pixels of the whole image, lies outside "
+        f"{subject}: {windows}, about the target position x = {seed_x:.1f}, "
+        f"y = {seed_y:.1f}, {distance:.1f} pixels{on_sky} from that centre. "
+        "BayMorph fits the centre within this window about the position you "
+        "give, so the position must be the centre of the galaxy: give its "
+        "catalogue position in RA and Dec, or click on its centre. If the "
+        "galaxy is centred where you placed it, as a disturbed or blended "
+        "system may be, declare wider priors for x0 and y0."
+    )
 
 
 def _build_parameter_list(

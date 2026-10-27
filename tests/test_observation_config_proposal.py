@@ -22,13 +22,23 @@ FAKE_SKY_SCALE = 2.0
 def fixed_input_stages(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Replace the preparation and PSF stages with known fixed inputs."""
+    """Replace the preparation and PSF stages with known fixed inputs.
+
+    The prepared target is centred on the target position, so the centre
+    checks pass.
+    """
 
     def fake_stages(self, resolved):
+        target = resolved["data"]["target_position"]
         products = SimpleNamespace(
             noise=np.full((60, 60), FAKE_SKY_SCALE),
             prepared_data=np.zeros((60, 60)),
             background=10.0,
+            cutout_bounds={"xmin": 0, "ymin": 0},
+            geometry=None,
+            target_x=float(target["x"]),
+            target_y=float(target["y"]),
+            target_segment=np.ones((60, 60), dtype=bool),
         )
         psf = None
 

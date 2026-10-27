@@ -13,6 +13,7 @@ from astropy.io import fits
 import baymorph
 from baymorph import ObservationAdvisor
 from baymorph.cli import main
+from baymorph.pipeline.preparation_steps import TargetGeometry
 
 
 def _write_fits(
@@ -554,10 +555,28 @@ def advisor_stages(
 
     def fake_stages(self, resolved):
         calls.append(dict(resolved))
+        target = resolved["data"]["target_position"]
+        xmin = int(round(float(target["x"]))) - 40
+        ymin = int(round(float(target["y"]))) - 30
         products = SimpleNamespace(
             noise=np.full((60, 80), 2.5),
             prepared_data=np.zeros((60, 80)),
             background=-0.4,
+            cutout_bounds={
+                "xmin": xmin,
+                "xmax": xmin + 80,
+                "ymin": ymin,
+                "ymax": ymin + 60,
+            },
+            geometry=TargetGeometry(
+                x0=float(target["x"]) - xmin,
+                y0=float(target["y"]) - ymin,
+                q=1.0,
+                theta=0.0,
+            ),
+            target_x=40,
+            target_y=30,
+            target_segment=np.ones((60, 80), dtype=bool),
         )
 
         return products, None

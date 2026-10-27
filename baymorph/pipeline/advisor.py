@@ -74,7 +74,11 @@ from baymorph.pipeline.psf_construction import (
     run_psf_construction_from_config,
 )
 from baymorph.observation.background import background_parameter_names
-from baymorph.pipeline.real_fit import _load_psf_from_config
+from baymorph.pipeline.real_fit import (
+    _load_psf_from_config,
+    position_on_segment,
+    require_centre_within_priors,
+)
 from baymorph.pipeline.preparation_steps import estimate_target_geometry_from_image
 from baymorph.pipeline.segmentation import select_segment_near_position
 from baymorph.simulation.psf import GaussianPSF
@@ -110,7 +114,10 @@ class ObservationInspection:
     region when it was read within one (AD-053), whose bounds, in pixels of
     the whole image, are ``working_region``. ``minimum``, ``maximum`` and
     ``median`` leave out the pixels without data (AD-053), a fraction
-    ``no_data_fraction`` of the pixels read.
+    ``no_data_fraction`` of the pixels read. ``target_centre_x`` and
+    ``target_centre_y`` are the centre of the target measured on its segment,
+    in pixels of the whole image, and ``target_seed_on_source`` says whether
+    the target position lies on a detected source (AD-055).
     """
 
     path: Path
@@ -141,6 +148,9 @@ class ObservationInspection:
     working_region: dict[str, int] | None = None
     region_description: str | None = None
     no_data_fraction: float = 0.0
+    target_centre_x: float | None = None
+    target_centre_y: float | None = None
+    target_seed_on_source: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +184,15 @@ class FixedInputs:
         its own sections.
     run_directory : str
         Directory of the products of the preparation and of the PSF.
+    target_centre : tuple of float
+        Centre ``(x, y)`` of the prepared target, measured on its segment, in
+        pixels of the whole image; it checks the priors of the centre and
+        never sets them (AD-055).
+    target_seed : tuple of float
+        Target position ``(x, y)`` that the preparation used, in pixels of the
+        whole image.
+    seed_on_target : bool
+        Whether the target position lies on the prepared target.
     """
 
     sky_scale: float
@@ -184,6 +203,9 @@ class FixedInputs:
     psf_noise_equivalent_area: float
     stage_identity: str
     run_directory: str
+    target_centre: tuple[float, float]
+    target_seed: tuple[float, float]
+    seed_on_target: bool
 
     def as_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable description of the fixed inputs."""
@@ -196,6 +218,9 @@ class FixedInputs:
             "psf_noise_equivalent_area": float(self.psf_noise_equivalent_area),
             "stage_identity": self.stage_identity,
             "run_directory": self.run_directory,
+            "target_centre": [float(value) for value in self.target_centre],
+            "target_seed": [float(value) for value in self.target_seed],
+            "seed_on_target": bool(self.seed_on_target),
         }
 
 
@@ -1126,6 +1151,9 @@ class ObservationAdvisor:
         target_axis_ratio = None
         target_position_angle = None
         target_area_pixels = None
+        target_centre_x = None
+        target_centre_y = None
+        target_seed_on_source = None
 
         segmentation = prepared.detection.segmentation
 
@@ -1140,6 +1168,12 @@ class ObservationAdvisor:
 
             geometry = estimate_target_geometry_from_image(
                 prepared.data, target_segment
+            )
+
+            target_centre_x = float(geometry.x0) + origin_x
+            target_centre_y = float(geometry.y0) + origin_y
+            target_seed_on_source = position_on_segment(
+                segmentation.data > 0, target_x - origin_x, target_y - origin_y
             )
 
             target_axis_ratio = float(geometry.q)
@@ -1189,6 +1223,9 @@ class ObservationAdvisor:
             working_region=None if region is None else region.as_dict(),
             region_description=describe_working_region(region, metadata),
             no_data_fraction=float(np.mean(no_data)),
+            target_centre_x=target_centre_x,
+            target_centre_y=target_centre_y,
+            target_seed_on_source=target_seed_on_source,
         )
 
         self._inspection = inspection
@@ -1337,6 +1374,7 @@ class ObservationAdvisor:
                         f"({inspection.target_x:.3f}, "
                         f"{inspection.target_y:.3f})" + _sky_text(self.target_position)
                     ),
+                    *_centre_lines(inspection),
                     (
                         "Segmented positive-flux scale: "
                         + _format_optional(
@@ -1699,6 +1737,15 @@ class ObservationAdvisor:
             raise ValueError("The FWHM of the PSF must be positive and finite.")
 
         rows, columns = np.shape(products.prepared_data)
+        origin_x = float(products.cutout_bounds["xmin"])
+        origin_y = float(products.cutout_bounds["ymin"])
+        geometry = products.geometry
+        centre = (
+            (float(products.target_x), float(products.target_y))
+            if geometry is None
+            else (float(geometry.x0), float(geometry.y0))
+        )
+        seed_x, seed_y = _configured_seed(resolved["data"], self.fits_path, self.hdu)
 
         return FixedInputs(
             sky_scale=sky_scale,
@@ -1710,6 +1757,11 @@ class ObservationAdvisor:
             stage_identity=_stage_identity(resolved),
             run_directory=str(
                 Path(resolved["outputs"]["root"]) / str(resolved["object"]["name"])
+            ),
+            target_centre=(centre[0] + origin_x, centre[1] + origin_y),
+            target_seed=(seed_x, seed_y),
+            seed_on_target=position_on_segment(
+                products.target_segment, seed_x - origin_x, seed_y - origin_y
             ),
         )
 
@@ -2138,6 +2190,21 @@ class ObservationAdvisor:
             for name in chosen
         }
 
+        # The priors of the centre stay about the target position (AD-055):
+        # the centre of the prepared target must lie within them, as the fit
+        # will check again before it writes anything.
+        seed_x, seed_y = fixed_inputs.target_seed
+
+        for name in chosen:
+            require_centre_within_priors(
+                centre=fixed_inputs.target_centre,
+                priors=config["fit"]["priors"][name],
+                references={"target_x": seed_x, "target_y": seed_y},
+                pixel_scale=pixel_scale,
+                seed_on_target=fixed_inputs.seed_on_target,
+                model_name=name,
+            )
+
         background_resolved = resolved["fit"]["background"]
         background_model_name = str(background_resolved["model"]).strip().lower()
         config["fit"]["background"] = {
@@ -2168,7 +2235,7 @@ class ObservationAdvisor:
 
         provenance = {
             "schema": "baymorph.advisor_proposal",
-            "schema_version": 3,
+            "schema_version": 4,
             "decision": "AD-049",
             "baymorph_version": _baymorph_version(),
             "image_path": config["data"]["image_path"],
@@ -2357,6 +2424,68 @@ class ObservationAdvisor:
             raise ValueError("target_position must contain exactly two coordinates.")
 
         return (float(target[0]), float(target[1]))
+
+
+def _configured_seed(
+    data: Mapping[str, Any], fits_path: Path, hdu: int | str | None
+) -> tuple[float, float]:
+    """Return the target position of a configuration, in pixels of the image."""
+    target = data["target_position"]
+
+    if isinstance(target, Mapping):
+        return (float(target["x"]), float(target["y"]))
+
+    metadata = read_observation_metadata(fits_path, hdu=hdu)
+
+    return (float(metadata.center_x), float(metadata.center_y))
+
+
+def _centre_lines(inspection: ObservationInspection) -> list[str]:
+    """Return the summary lines of the measured centre of the target."""
+    if inspection.target_centre_x is None or inspection.target_centre_y is None:
+        return []
+
+    distance = float(
+        np.hypot(
+            inspection.target_centre_x - inspection.target_x,
+            inspection.target_centre_y - inspection.target_y,
+        )
+    )
+    on_sky = (
+        ""
+        if inspection.pixel_scale is None
+        else f" ({distance * inspection.pixel_scale:.3g} arcsec)"
+    )
+    lines = [
+        (
+            "Target centre (moments of its segment): "
+            f"({inspection.target_centre_x:.3f}, {inspection.target_centre_y:.3f}), "
+            f"{distance:.3g} pixels{on_sky} from the seed"
+        )
+    ]
+
+    if inspection.target_seed_on_source is False:
+        lines.append(
+            "The target seed lies on no detected source: the target is the "
+            "detected source nearest to it."
+        )
+
+    return lines
+
+
+def _fixed_centre_lines(fixed: Mapping[str, Any]) -> list[str]:
+    """Return the summary line of the centre of the prepared target, if known."""
+    if "target_centre" not in fixed or "target_seed" not in fixed:
+        return []
+
+    centre_x, centre_y = fixed["target_centre"]
+    seed_x, seed_y = fixed["target_seed"]
+    distance = float(np.hypot(centre_x - seed_x, centre_y - seed_y))
+
+    return [
+        f"Centre of the prepared target: ({centre_x:.3f}, {centre_y:.3f}), "
+        f"{distance:.3g} pixels from the target position"
+    ]
 
 
 def _sky_or_given(target: TargetPosition) -> TargetPosition:
@@ -2705,6 +2834,7 @@ def _provenance_summary(provenance: Mapping[str, Any]) -> list[str]:
                     "PSF noise-equivalent area: "
                     f"{fixed['psf_noise_equivalent_area']:.4g} px^2"
                 ),
+                *_fixed_centre_lines(fixed),
                 f"Products: {fixed['run_directory']}",
             ]
         )

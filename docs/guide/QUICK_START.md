@@ -75,8 +75,9 @@ to the noise.
 
 ## 4. Fit your own image
 
-Copy a FITS image into `data/` and tell BayMorph where the galaxy is, in
-pixels or on the sky. The observation advisor reads the header, prepares the
+Copy a FITS image into `data/` and give BayMorph the centre of the galaxy,
+in pixels or on the sky, as a catalogue gives it. The observation advisor
+reads the header, prepares the
 image, builds the PSF from its stars and proposes a configuration, with the
 source of every prior:
 

@@ -557,6 +557,11 @@ def test_run_real_fit_passes_prepared_likelihood_state(
         },
     )
 
+    monkeypatch.setattr(
+        "baymorph.pipeline.real_fit._require_prepared_centre_within_priors",
+        lambda *args, **kwargs: None,
+    )
+
     def fake_prepare_state(
         config,
         image_products_arg,

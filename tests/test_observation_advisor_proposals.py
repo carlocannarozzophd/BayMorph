@@ -15,6 +15,8 @@ from baymorph import ObservationAdvisor
 from baymorph.models.labels import PARAMETER_KINDS
 from baymorph.pipeline.advisor import FixedInputs
 from baymorph.pipeline.config import resolve_config, validate_fit_priors
+from baymorph.pipeline.opening import read_observation_metadata
+from baymorph.pipeline.preparation_steps import TargetGeometry
 from baymorph.pipeline.prior_proposals import (
     noise_equivalent_area,
     point_source_flux_prior,
@@ -61,6 +63,42 @@ def _write_coadd(directory: Path, *, saturation_unit_known: bool = False) -> Pat
     return path
 
 
+def _prepared_products(resolved: dict, *, offset: float = 0.0) -> SimpleNamespace:
+    """Return prepared products whose target is centred on the target position.
+
+    ``offset`` moves the measured centre of the target along x, in pixels.
+    """
+    target = resolved["data"]["target_position"]
+
+    if isinstance(target, dict):
+        seed_x, seed_y = float(target["x"]), float(target["y"])
+    else:
+        metadata = read_observation_metadata(resolved["data"]["image_path"])
+        seed_x, seed_y = float(metadata.center_x), float(metadata.center_y)
+
+    rows, columns = CUTOUT_SHAPE
+    xmin = int(round(seed_x)) - columns // 2
+    ymin = int(round(seed_y)) - rows // 2
+
+    return SimpleNamespace(
+        noise=np.full(CUTOUT_SHAPE, SKY_SCALE),
+        prepared_data=np.zeros(CUTOUT_SHAPE),
+        background=-0.4,
+        cutout_bounds={
+            "xmin": xmin,
+            "xmax": xmin + columns,
+            "ymin": ymin,
+            "ymax": ymin + rows,
+        },
+        geometry=TargetGeometry(
+            x0=seed_x - xmin + offset, y0=seed_y - ymin, q=1.0, theta=0.0
+        ),
+        target_x=int(round(seed_x - xmin + offset)),
+        target_y=int(round(seed_y - ymin)),
+        target_segment=np.ones(CUTOUT_SHAPE, dtype=bool),
+    )
+
+
 def _psf_kernel(sigma: float = 1.2, size: int = 25) -> np.ndarray:
     """Return a normalized Gaussian kernel."""
     y, x = np.indices((size, size), dtype=float)
@@ -77,11 +115,7 @@ def stages(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
 
     def fake_stages(self, resolved):
         calls.append(dict(resolved))
-        products = SimpleNamespace(
-            noise=np.full(CUTOUT_SHAPE, SKY_SCALE),
-            prepared_data=np.zeros(CUTOUT_SHAPE),
-            background=-0.4,
-        )
+        products = _prepared_products(resolved)
         psf = None
 
         if resolved["psf"]["type"] == "empirical":
@@ -819,7 +853,7 @@ def test_the_calculator_gives_the_zeropoint_the_header_lacks(
 
     provenance = proposal.provenance
 
-    assert provenance["schema_version"] == 3
+    assert provenance["schema_version"] == 4
     assert provenance["online"] is True
     assert provenance["calibration"] == {
         "zeropoint": {"value": 25.931, "unit": "mag", "source": "stsci_acs_zeropoint"},
@@ -1067,11 +1101,7 @@ def test_a_proposal_rests_on_one_settlement_of_the_calibration(
 
     def stages_that_touch_the_file(self, resolved):
         fits_path.chmod(0o600 if fits_path.stat().st_mode & 0o777 != 0o600 else 0o644)
-        products = SimpleNamespace(
-            noise=np.full(CUTOUT_SHAPE, SKY_SCALE),
-            prepared_data=np.zeros(CUTOUT_SHAPE),
-            background=-0.4,
-        )
+        products = _prepared_products(resolved)
 
         return products, None
 
@@ -1254,3 +1284,67 @@ def test_calibrate_flux_prior_reads_the_current_calibration(
 
     assert advisor.calibrate_flux_prior(config) == "calibrated"
     assert seen["saturation_level"] == pytest.approx(8000.0)
+
+
+@pytest.mark.parametrize(("offset", "stops"), [(3.0, False), (20.0, True)])
+def test_a_proposal_stops_when_the_centre_of_the_target_leaves_its_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, offset: float, stops: bool
+) -> None:
+    """The priors of the centre stay about the target position (AD-055)."""
+    monkeypatch.setattr(
+        ObservationAdvisor,
+        "_run_fixed_input_stages",
+        lambda self, resolved: (_prepared_products(resolved, offset=offset), None),
+    )
+    advisor = ObservationAdvisor(_write_coadd(tmp_path), target_position=(40.0, 40.0))
+    output_path = tmp_path / "configs" / "coadd.yaml"
+    options = {
+        "output_path": output_path,
+        "outputs_root": tmp_path / "runs",
+        "psf_type": "gaussian",
+        "gaussian_fwhm_pixels": 2.74,
+    }
+
+    if stops:
+        with pytest.raises(ValueError) as error:
+            advisor.propose_config(**options)
+
+        message = str(error.value)
+
+        assert "lies outside the priors of the centre of single_sersic" in message
+        assert "x0 from 31.8 to 48.2" in message
+        assert "20.0 pixels" in message
+        assert not output_path.exists()
+
+        return
+
+    proposal = advisor.propose_config(**options)
+    fixed = proposal.provenance["fixed_inputs"]
+
+    assert fixed["target_centre"] == [pytest.approx(43.0), pytest.approx(40.0)]
+    assert fixed["target_seed"] == [pytest.approx(40.0), pytest.approx(40.0)]
+    assert fixed["seed_on_target"] is True
+    assert (
+        "Centre of the prepared target: (43.000, 40.000), 3 pixels from the target "
+        "position" in proposal.summary()
+    )
+
+
+def test_the_summary_gives_the_centre_of_the_target(tmp_path: Path) -> None:
+    """The inspection measures the centre of the target on its segment."""
+    fits_path = _write_coadd(tmp_path)
+
+    advisor = ObservationAdvisor(fits_path, target_position=(41.0, 40.0))
+    inspection = advisor.inspect()
+    summary = advisor.summary()
+
+    assert inspection.target_centre_x == pytest.approx(40.0, abs=0.5)
+    assert inspection.target_centre_y == pytest.approx(40.0, abs=0.5)
+    assert inspection.target_seed_on_source is True
+    assert "Target centre (moments of its segment): (" in summary
+    assert "lies on no detected source" not in summary
+
+    corner = ObservationAdvisor(fits_path, target_position=(3.0, 3.0))
+
+    assert corner.inspect().target_seed_on_source is False
+    assert "The target seed lies on no detected source" in corner.summary()

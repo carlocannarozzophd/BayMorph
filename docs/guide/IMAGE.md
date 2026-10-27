@@ -6,12 +6,25 @@ for the fit.
 
 ## The target
 
-`data.target_position` tells BayMorph which source to fit. It is a position
-in zero-based pixel coordinates of the full image, `x` along the columns
-and `y` along the rows, so that the pixel is `image[y, x]`; `center` uses
-the centre of the image. Any point on the galaxy will do: BayMorph detects
-the sources in the image, takes the one that contains this position as the
-target, and fits its centre as a free parameter.
+`data.target_position` is the centre of the galaxy to fit, in zero-based
+pixel coordinates of the full image, `x` along the columns and `y` along the
+rows, so that the pixel is `image[y, x]`; `center` uses the centre of the
+image. BayMorph detects the sources in the image and takes as the target the
+one that contains this position, or the nearest one when the position lies on
+no source.
+
+The fit samples the centre of the galaxy, `x0` and `y0`, within a window
+about this position: three times the FWHM of the PSF in a proposal of the
+observation advisor, 8 pixels by default. The window stays about the position
+you give, so that no prior is taken from the image it fits: give the centre
+of the galaxy, as a catalogue gives it, or click on its centre. Before it
+proposes or fits anything, BayMorph measures the centre of the detected
+target, from the moments of its light, and stops when that centre lies
+outside the window, with the distance and the remedy. A galaxy whose centre
+of light lies away from its catalogue position, such as a disturbed or
+blended system, needs wider priors of `x0` and `y0`, declared in
+`fit.priors`. The summary of the observation advisor gives the measured
+centre and its distance from the position you gave.
 
 The position from a catalogue can be given on the sky instead, to
 `baymorph config` with `--target-ra` and `--target-dec`, or to the advisor

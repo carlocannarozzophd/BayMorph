@@ -792,6 +792,10 @@ def _run_two_model_fit_for_comparison_test(
         lambda **kwargs: {},
     )
     monkeypatch.setattr(
+        "baymorph.pipeline.real_fit._require_prepared_centre_within_priors",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
         "baymorph.pipeline.real_fit._write_fit_completion_marker",
         lambda *args, **kwargs: None,
     )

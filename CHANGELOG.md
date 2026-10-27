@@ -119,6 +119,16 @@ and the project follows Semantic Versioning in spirit.
 
 ### Changed
 
+* The target position is the centre of the galaxy. The priors of the centre
+  stay about it, so that no prior depends on the image, and BayMorph now
+  checks them: the observation advisor, once it has prepared the image, and
+  the fit, before it writes anything, stop when the centre of the detected
+  target, measured from the moments of its light, lies outside the priors of
+  `x0` and `y0`, with the distance and the remedy. Before, a position anywhere
+  on the galaxy was accepted, and the posterior of the centre could press on
+  an edge of its prior. The summary of the observation advisor gives the
+  measured centre and its distance from the target position, and says when
+  the position lies on no detected source.
 * When several header conventions read the same quantity, the value of the
   one that decides is compared with the others, and two values that disagree
   make the quantity `conflicting`, with both sources in its note, unless the
@@ -135,11 +145,13 @@ and the project follows Semantic Versioning in spirit.
   ceiling from a declared saturation level, have the source `declaration`;
   a prior from a zeropoint that a calibration service gave names the
   service in its detail.
-* The report of a proposal has `schema_version` 3. It records the declared
+* The report of a proposal has `schema_version` 4. It records the declared
   calibration with the source of each value, the user or a calibration
   service, whether the advisor was online, and, under `bridges`, every
   calibration service that serves the image with what it was asked and
-  answered. A report written by an earlier version differs, so replacing it
+  answered; its fixed inputs record the centre of the prepared target, the
+  target position, and whether the position lies on the target. A report
+  written by an earlier version differs, so replacing it
   needs `overwrite=True` once in Python, or removing it before
   `baymorph config --advise --accept`.
 * Writing a proposal again keeps an existing report that differs only in
@@ -209,6 +221,10 @@ and the project follows Semantic Versioning in spirit.
   print a long message at every opening of the image: the header report
   says it once, in the note of the pixel scale. The terms are still
   applied, as Astropy applies them.
+* Figures are typeset with LaTeX by default, which needs `latex` and
+  `dvipng` on the `PATH`. Without them, drawing a figure stops and names the
+  environment variable `BAYMORPH_USETEX=0`, which, like `usetex=False` in
+  `make_plot`, keeps Matplotlib's own Computer Modern fonts.
 
 ### Fixed
 

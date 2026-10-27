@@ -38,12 +38,13 @@ outputs:
   root: runs
 ```
 
-`target_position` is the position of the target in zero-based pixel
+`target_position` is the centre of the galaxy in zero-based pixel
 coordinates of the full image: `x` is the column and `y` the row, as in
-`image[y, x]`. It only tells BayMorph which source to fit; the centre of the
-galaxy is a fitted parameter. `baymorph config --target-ra RA --target-dec
-DEC`, and the advisor, take the position on the sky instead and write it in
-pixels (see [Target and Cutout](IMAGE.md#the-target)).
+`image[y, x]`. It selects the source to fit, and the fit samples the centre
+of the galaxy within a window about it, so it must be the centre (see
+[Target and Cutout](IMAGE.md#the-target)). `baymorph config --target-ra RA
+--target-dec DEC`, and the advisor, take the position on the sky instead and
+write it in pixels.
 
 Every key, with its default, is listed in the
 [Configuration reference](../reference/CONFIGURATION.md).
@@ -120,7 +121,7 @@ from baymorph import ObservationAdvisor
 
 advisor = ObservationAdvisor.from_project("data/galaxy.fits")
 print(advisor.header_report())    # what the header holds
-advisor.select_target()           # click on the galaxy, then confirm
+advisor.select_target()           # click on its centre, then confirm
 advisor.inspect()
 print(advisor.summary())          # diagnostics of the image and the target
 
