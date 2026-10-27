@@ -60,6 +60,7 @@ the galaxy is required: either `--target-center`, or `--target-x` and
 | `--psf` | PSF strategy: `empirical` or `gaussian`. | `empirical` |
 | `--gaussian-fwhm-pixels` | FWHM of a Gaussian PSF in pixels, needed only when the FITS metadata do not provide it. | |
 | `--psf-max-peak` | Brightest peak pixel accepted for a star of the empirical PSF, in image units; keep it below the saturation level. | BayMorph default; with `--advise`, half the saturation level of the header when its unit is known |
+| `--psf-min-peak` | Faintest peak pixel accepted for a star of the empirical PSF, in image units. | BayMorph default; with `--advise`, 30 times the noise sigma of the image |
 | `--image-unit` | Unit of the pixel values, such as `ADU/s` or `electron/s`, declared in `data.calibration`. | read from the header |
 | `--zeropoint` | Zeropoint in magnitudes, with m = zeropoint − 2.5 log10(flux in image units), declared in `data.calibration`. | read from the header |
 | `--photometric-system` | `AB` or `Vega`, the system of the declared zeropoint; only together with `--zeropoint`. | |

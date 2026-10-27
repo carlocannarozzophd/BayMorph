@@ -182,15 +182,21 @@ def _cutout_config(mode: str, *, fixed_size: int | None) -> dict[str, Any]:
     raise ValueError("cutout_mode must be 'auto' or 'fixed'.")
 
 
-def _empirical_psf_config(*, max_peak: float | None = None) -> dict[str, Any]:
+def _empirical_psf_config(
+    *, max_peak: float | None = None, min_peak: float | None = None
+) -> dict[str, Any]:
     """Build empirical-PSF configuration without unit assumptions.
 
     FITS saturation keywords are intentionally not converted into a
     maximum-peak threshold. Production configurations must explicitly set
     that threshold after resolving its units against the science image;
-    ``max_peak`` carries that explicit declaration when the caller makes it.
+    ``max_peak`` carries that explicit declaration when the caller makes it,
+    and ``min_peak`` the floor on the peak of the stars, in the same units.
     """
     candidate_selection: dict[str, Any] = {}
+
+    if min_peak is not None:
+        candidate_selection["min_peak"] = min_peak
 
     if max_peak is not None:
         candidate_selection["max_peak"] = max_peak
@@ -201,20 +207,20 @@ def _empirical_psf_config(*, max_peak: float | None = None) -> dict[str, Any]:
     }
 
 
-def _normalize_psf_max_peak(max_peak: Any) -> float | None:
-    """Normalize an explicit PSF-candidate peak ceiling.
+def _normalize_psf_peak(peak: Any, *, name: str) -> float | None:
+    """Normalize an explicit limit on the peak of the PSF candidates.
 
-    Finiteness and positivity are enforced by configuration resolution; this
+    Finiteness and sign are enforced by configuration resolution; this
     helper only rejects non-numeric values and converts NumPy scalars into a
     YAML-serializable float.
     """
-    if max_peak is None:
+    if peak is None:
         return None
 
-    if isinstance(max_peak, bool) or not isinstance(max_peak, Real):
-        raise TypeError("psf_max_peak must be a real number in science-image units.")
+    if isinstance(peak, bool) or not isinstance(peak, Real):
+        raise TypeError(f"{name} must be a real number in science-image units.")
 
-    return float(max_peak)
+    return float(peak)
 
 
 def _normalize_background_config(
@@ -414,6 +420,7 @@ def make_config_from_fits(
     psf_type: str = "empirical",
     gaussian_fwhm_pixels: float | None = None,
     psf_max_peak: float | None = None,
+    psf_min_peak: float | None = None,
     preparation: Mapping[str, Any] | None = None,
     _require_complete_priors: bool = True,
 ) -> dict[str, Any]:
@@ -489,6 +496,13 @@ def make_config_from_fits(
         FITS saturation keywords are never converted automatically. Valid
         only with ``psf_type="empirical"``. If omitted, BayMorph uses its
         default ceiling, which is not unit-checked against the image.
+    psf_min_peak : float, optional
+        Explicit lower limit on the peak pixel of empirical-PSF candidate
+        stars, in science-image units. Valid only with
+        ``psf_type="empirical"``. If omitted, BayMorph uses its default
+        floor, which is not unit-checked against the image;
+        :class:`baymorph.ObservationAdvisor` proposes one from the noise of
+        the image.
     preparation : mapping, optional
         Explicit ``preparation`` section, such as the masking rule or the
         estimator of the sky correlation, written as given and validated by
@@ -539,17 +553,24 @@ def make_config_from_fits(
 
     normalized_psf_type = str(psf_type).strip().lower()
 
-    normalized_max_peak = _normalize_psf_max_peak(psf_max_peak)
+    normalized_max_peak = _normalize_psf_peak(psf_max_peak, name="psf_max_peak")
+    normalized_min_peak = _normalize_psf_peak(psf_min_peak, name="psf_min_peak")
 
     if normalized_psf_type == "empirical":
-        psf = _empirical_psf_config(max_peak=normalized_max_peak)
+        psf = _empirical_psf_config(
+            max_peak=normalized_max_peak, min_peak=normalized_min_peak
+        )
 
     elif normalized_psf_type == "gaussian":
-        if normalized_max_peak is not None:
-            raise ValueError(
-                "psf_max_peak applies only to psf_type='empirical': a "
-                "Gaussian PSF selects no candidate stars."
-            )
+        for name, value in (
+            ("psf_max_peak", normalized_max_peak),
+            ("psf_min_peak", normalized_min_peak),
+        ):
+            if value is not None:
+                raise ValueError(
+                    f"{name} applies only to psf_type='empirical': a "
+                    "Gaussian PSF selects no candidate stars."
+                )
 
         psf = _gaussian_psf_config(
             observation,

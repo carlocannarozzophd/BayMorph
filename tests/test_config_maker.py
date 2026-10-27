@@ -931,6 +931,43 @@ def test_config_maker_rejects_psf_max_peak_for_gaussian_psf(tmp_path):
             psf_max_peak=20000.0,
         )
 
+    with pytest.raises(ValueError, match="psf_min_peak applies only"):
+        make_config_from_fits(
+            fits_path,
+            target_position="center",
+            psf_type="gaussian",
+            psf_min_peak=0.5,
+        )
+
+
+def test_config_maker_writes_declared_psf_min_peak(tmp_path):
+    """A declared PSF peak floor must replace the default floor of 20."""
+    fits_path = tmp_path / "galaxy.fits"
+    _write_test_fits(fits_path)
+
+    config = make_config_from_fits(
+        fits_path,
+        target_position="center",
+        psf_min_peak=np.float64(0.25),
+    )
+
+    candidate = config["psf"]["empirical"]["candidate_selection"]
+
+    assert candidate["min_peak"] == pytest.approx(0.25)
+    assert type(candidate["min_peak"]) is float
+    assert resolve_config(config)["psf"]["empirical"]["candidate_selection"][
+        "min_peak"
+    ] == pytest.approx(0.25)
+
+    with pytest.raises(TypeError, match="psf_min_peak must be a real number"):
+        make_config_from_fits(fits_path, target_position="center", psf_min_peak="1")
+
+    for floor, match in ((-1.0, "finite non-negative"), (90000.0, "not below")):
+        with pytest.raises(ValueError, match=match):
+            make_config_from_fits(
+                fits_path, target_position="center", psf_min_peak=floor
+            )
+
 
 @pytest.mark.parametrize(
     ("max_peak", "error", "match"),

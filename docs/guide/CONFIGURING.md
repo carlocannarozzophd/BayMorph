@@ -209,7 +209,10 @@ resampled image, such as a drizzled one, and for any image in electrons per
 second, it is proposed only when you declare the resampling variance factor,
 1 for a single exposure that was not resampled, and is divided by it. When
 the header gives the saturation level in the units of the image, half of
-it becomes the brightest star allowed for the PSF.
+it becomes the brightest star allowed for the PSF. The faintest star
+allowed for the PSF is 30 times the noise sigma of the image, the peak
+signal-to-noise that the construction of the PSF demands of every star, so
+it holds whatever the units of the image.
 
 `models` holds one or more models, written to `fit.models`. Each receives
 its priors by the same rules, and the fit runs one fit per model on the same
@@ -219,7 +222,8 @@ validated classifier that ranks them, and fitting several is not a
 preference for any of them.
 
 Anything you declare is kept as declared: a prior through `model_priors`
-or `flux_prior`, `background`, `likelihood` or `psf_max_peak`. With
+or `flux_prior`, `background`, `likelihood`, `psf_max_peak` or
+`psf_min_peak`. With
 `models`, `model_priors` maps each model to its declared priors, for
 example `{"double_sersic": {"q_bulge": {...}}}`; `flux_prior` applies to a
 proposal of one model with one total flux. Each proposed flux prior states
@@ -248,6 +252,7 @@ fit:
 | The residual background prior | `fit.background.priors` | The default, −50 to 50 in image units, is not scaled to your image. |
 | The effective gain | `fit.likelihood.effective_gain` | It sets the Poisson noise of the galaxy; see [Sky and Noise](SKY_AND_NOISE.md). |
 | The brightest star for the PSF | `psf.empirical.candidate_selection.max_peak` | The default, 80000, is not scaled to your image: keep it below the saturation level, so that saturated stars are not used. |
+| The faintest star for the PSF | `psf.empirical.candidate_selection.min_peak` | The default, 20, is not scaled to your image either: on an image in electrons per second it can leave too few stars. |
 | The cutout | `data.cutout` | The cutout is the part of the image the fit sees; see [Target and Cutout](IMAGE.md). |
 | What the header does not say | `data.calibration` | A quantity that the header leaves `ambiguous` or `conflicting` is not used until you declare it; see [Opening an Image](OPENING.md). |
 

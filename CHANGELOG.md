@@ -235,6 +235,14 @@ and the project follows Semantic Versioning in spirit.
   `dvipng` on the `PATH`. Without them, drawing a figure stops and names the
   environment variable `BAYMORPH_USETEX=0`, which, like `usetex=False` in
   `make_plot`, keeps Matplotlib's own Computer Modern fonts.
+* The observation advisor proposes the faintest peak of a star of the
+  empirical PSF: 30 times the noise sigma of the image, the peak
+  signal-to-noise that the construction of the PSF demands of every star.
+  Before, the default of 20 in image units applied, which on an HST image in
+  electrons per second, with a sky noise near 0.01, rejected nearly every
+  star that is not saturated. A floor you declare is kept, through
+  `psf_min_peak` or `baymorph config --psf-min-peak`, and a configuration
+  whose `min_peak` is not below its `max_peak` is refused.
 
 ### Fixed
 

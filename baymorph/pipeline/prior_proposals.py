@@ -71,6 +71,13 @@ PSF_PEAK_SATURATION_FRACTION = 0.5
 """Fraction of the saturation level proposed as the ceiling on the peak of a
 star of the empirical PSF."""
 
+PSF_PEAK_MIN_SNR = float(
+    DEFAULT_CONFIG["psf"]["empirical"]["candidate_selection"]["min_peak_snr"]
+)
+"""Peak signal-to-noise that the PSF construction demands of every star; times
+the noise sigma of the image, the proposed floor on the peak of a star of the
+empirical PSF."""
+
 GAIN_RATIO_TOLERANCE = 0.15
 """Relative departure of the ratio of two sources of the effective gain from
 its prediction above which the advisor warns."""
@@ -1174,6 +1181,43 @@ def propose_effective_gain(
         expected_ratio=expected,
         notes=tuple(notes),
         warnings=tuple(warnings),
+    )
+
+
+def propose_psf_min_peak(
+    noise_sigma: float | None, *, peak_snr: float = PSF_PEAK_MIN_SNR
+) -> tuple[float | None, str]:
+    """Propose the floor on the peak of the stars of the empirical PSF.
+
+    The floor is the peak signal-to-noise that the PSF construction demands
+    of every star times the noise sigma of the image, so it holds in the
+    units of the image, whatever they are. It is not proposed for an image
+    without measurable noise.
+
+    Returns
+    -------
+    tuple
+        The floor in image units, or None, and how it was obtained or why it
+        was not.
+    """
+    ratio = _positive_finite(peak_snr, "peak_snr")
+
+    if (
+        noise_sigma is None
+        or isinstance(noise_sigma, bool)
+        or not math.isfinite(float(noise_sigma))
+        or float(noise_sigma) <= 0.0
+    ):
+        return None, (
+            f"not proposed: the noise sigma of the image is {noise_sigma!r}, "
+            "not a positive number"
+        )
+
+    sigma = float(noise_sigma)
+
+    return ratio * sigma, (
+        f"{ratio:g} times the noise sigma {sigma:.6g} of the image, the peak "
+        "signal-to-noise that the PSF construction demands of every star"
     )
 
 

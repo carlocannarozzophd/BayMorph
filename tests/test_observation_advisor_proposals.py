@@ -273,6 +273,7 @@ def test_declared_values_are_kept_and_recorded_as_the_users(
         background=background,
         likelihood=likelihood,
         psf_max_peak=12000.0,
+        psf_min_peak=5.0,
     )
 
     assert proposal.config["fit"]["priors"]["single_sersic"]["re"] == re_prior
@@ -292,6 +293,12 @@ def test_declared_values_are_kept_and_recorded_as_the_users(
     assert provenance["background"]["source"] == "user"
     assert provenance["effective_gain"]["source"] == "user"
     assert provenance["psf_max_peak"]["source"] == "user"
+    assert provenance["psf_min_peak"] == {
+        "value": 5.0,
+        "source": "user",
+        "detail": "declared by the user",
+    }
+    assert proposal.config["psf"]["empirical"]["candidate_selection"]["min_peak"] == 5.0
     assert provenance["fixed_inputs"]["psf_fwhm_pixels"] == pytest.approx(
         estimate_psf_core_fwhm(_psf_kernel())
     )
@@ -328,6 +335,44 @@ def test_psf_ceiling_is_proposed_before_the_psf_is_built(
     assert proposal.provenance["psf_max_peak"]["source"] == "header"
     assert proposal.flux_prior_source == "explicit user-declared scientific prior"
     assert not any("peak ceiling" in warning for warning in proposal.warnings)
+
+
+def test_psf_floor_is_proposed_from_the_noise_before_the_psf_is_built(
+    tmp_path: Path,
+    stages: list[dict],
+) -> None:
+    """The floor on the peak of the PSF stars must hold in image units."""
+    fits_path = _write_coadd(tmp_path)
+    advisor = ObservationAdvisor(fits_path, target_position=(40.0, 40.0))
+    expected = 30.0 * advisor.inspect().noise_sigma
+
+    fixed_inputs = advisor.measure_fixed_inputs(outputs_root=tmp_path / "runs")
+    proposal = advisor.propose_config(
+        output_path=tmp_path / "coadd.yaml",
+        outputs_root=tmp_path / "runs",
+        flux_prior={"type": "log_uniform", "lower": 10.0, "upper": 1.0e7},
+        fixed_inputs=fixed_inputs,
+    )
+
+    floor = proposal.config["psf"]["empirical"]["candidate_selection"]["min_peak"]
+
+    assert floor == pytest.approx(expected)
+    assert stages[0]["psf"]["empirical"]["candidate_selection"]["min_peak"] == (
+        pytest.approx(expected)
+    )
+    assert proposal.provenance["psf_min_peak"]["source"] == "image"
+    assert "30 times the noise sigma" in proposal.provenance["psf_min_peak"]["detail"]
+    assert "PSF peak floor" in proposal.summary()
+
+    gaussian = advisor.propose_config(
+        output_path=tmp_path / "gaussian.yaml",
+        outputs_root=tmp_path / "runs_gaussian",
+        flux_prior={"type": "log_uniform", "lower": 10.0, "upper": 1.0e7},
+        psf_type="gaussian",
+        gaussian_fwhm_pixels=2.5,
+    )
+
+    assert gaussian.provenance["psf_min_peak"] is None
 
 
 def test_fixed_inputs_must_match_the_configuration_of_the_proposal(
@@ -853,7 +898,7 @@ def test_the_calculator_gives_the_zeropoint_the_header_lacks(
 
     provenance = proposal.provenance
 
-    assert provenance["schema_version"] == 4
+    assert provenance["schema_version"] == 5
     assert provenance["online"] is True
     assert provenance["calibration"] == {
         "zeropoint": {"value": 25.931, "unit": "mag", "source": "stsci_acs_zeropoint"},

@@ -93,7 +93,7 @@ rejected.
 | `psf.empirical.candidate_selection.target_n_candidates` | integer | 30 | Largest number of candidates kept. |
 | `psf.empirical.candidate_selection.min_area` | integer | 10 | Smallest segment area of a candidate, in pixels. |
 | `psf.empirical.candidate_selection.max_area` | integer | 800 | Largest segment area of a candidate, in pixels. |
-| `psf.empirical.candidate_selection.min_peak` | number | 20 | Lowest peak of a candidate, in image units. |
+| `psf.empirical.candidate_selection.min_peak` | number | 20 | Lowest peak of a candidate, in image units; not scaled to the image, and below `max_peak`. |
 | `psf.empirical.candidate_selection.max_peak` | number | 80000 | Highest peak of a candidate, in image units; not scaled to the image, and `auto` is rejected. |
 | `psf.empirical.candidate_selection.min_peak_snr` | number | 30.0 | Lowest peak signal-to-noise ratio of a star used to build the PSF. |
 | `psf.empirical.candidate_selection.max_eccentricity` | number | 0.8 | Largest eccentricity. |

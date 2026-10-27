@@ -67,6 +67,7 @@ from baymorph.pipeline.prior_proposals import (
     propose_effective_gain,
     propose_model_priors,
     propose_psf_max_peak,
+    propose_psf_min_peak,
 )
 from baymorph.pipeline.psf_candidates import run_psf_candidate_selection_from_config
 from baymorph.pipeline.psf_construction import (
@@ -461,6 +462,51 @@ def _settle_psf_max_peak(
         "max_peak, which is not checked against the detector saturation "
         "level or the image units. Declare psf_max_peak=... in "
         "science-image units."
+    )
+
+
+def _settle_psf_min_peak(
+    noise_sigma: float, config_options: dict[str, Any]
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Settle the floor on the peak of the PSF stars in ``config_options``.
+
+    The floor is the value the user declares, else the peak signal-to-noise
+    that the PSF construction demands of every star times the noise sigma of
+    the image, measured where the stars are searched, else the BayMorph
+    default. The default is a number in image units, which keeps or rejects
+    the stars of an image according to its units: on an HST image in
+    electrons per second it rejects nearly every star that is not saturated.
+
+    Returns
+    -------
+    tuple
+        The provenance record of the floor, or None for a Gaussian PSF, and
+        a warning when the BayMorph default applies, or None.
+    """
+    psf_type = str(config_options.get("psf_type", "empirical")).strip().lower()
+
+    if psf_type != "empirical":
+        return None, None
+
+    if config_options.get("psf_min_peak") is not None:
+        return {
+            "value": float(config_options["psf_min_peak"]),
+            "source": "user",
+            "detail": "declared by the user",
+        }, None
+
+    peak, detail = propose_psf_min_peak(noise_sigma)
+
+    if peak is not None:
+        config_options["psf_min_peak"] = peak
+
+        return {"value": peak, "source": "image", "detail": detail}, None
+
+    return {"value": None, "source": "default", "detail": detail}, (
+        f"No floor on the peak of the PSF stars was declared or proposed "
+        f"({detail}). BayMorph will use its default min_peak, which is not "
+        "checked against the noise or the units of the image. Declare "
+        "psf_min_peak=... in science-image units."
     )
 
 
@@ -1676,10 +1722,11 @@ class ObservationAdvisor:
         already accepted for it are reused, so the fit that follows does not
         prepare the image again.
 
-        The ceiling on the peak of the PSF stars is settled as
-        :meth:`propose_config` settles it: when ``psf_max_peak`` is not
+        The ceiling and the floor on the peak of the PSF stars are settled
+        as :meth:`propose_config` settles them: when ``psf_max_peak`` is not
         declared, half the saturation level of the header, when its unit is
-        established, selects the stars.
+        established, and when ``psf_min_peak`` is not declared, 30 times the
+        noise sigma of the image select the stars.
 
         Parameters
         ----------
@@ -1688,8 +1735,8 @@ class ObservationAdvisor:
         **config_options
             Options of :func:`baymorph.make_config_from_fits` that the
             proposal will use, such as ``object_name``, ``outputs_root``,
-            ``cutout_mode``, ``psf_type``, ``psf_max_peak`` or
-            ``preparation``.
+            ``cutout_mode``, ``psf_type``, ``psf_max_peak``,
+            ``psf_min_peak`` or ``preparation``.
 
         Returns
         -------
@@ -1703,6 +1750,7 @@ class ObservationAdvisor:
             )
 
         _settle_psf_max_peak(self._header_reading(), config_options)
+        _settle_psf_min_peak(self._current_inspection().noise_sigma, config_options)
 
         resolved = self._stage_config(model_name=model_name, **config_options)
         products, psf = self._run_fixed_input_stages(resolved)
@@ -1813,6 +1861,9 @@ class ObservationAdvisor:
           divided by the resampling variance factor of a resampled image; the
           ceiling on the peak of the PSF stars is half the saturation level
           when its unit is established.
+        - The floor on the peak of the PSF stars is 30 times the noise sigma
+          of the image, the peak signal-to-noise that the PSF construction
+          demands of every star.
 
         One proposal may hold several models, chosen with ``models``. Each
         receives its priors by the same rules, and the fit runs one fit per
@@ -1821,9 +1872,9 @@ class ObservationAdvisor:
 
         The fixed inputs come from :meth:`measure_fixed_inputs`, which
         prepares the image and builds its PSF when they are not supplied. A
-        prior, background, likelihood or PSF ceiling that the caller supplies
-        is kept as declared. The chosen models remain an explicit user
-        decision, not a pre-fit evidence preference.
+        prior, background, likelihood, or PSF ceiling or floor that the
+        caller supplies is kept as declared. The chosen models remain an
+        explicit user decision, not a pre-fit evidence preference.
 
         Parameters
         ----------
@@ -1975,9 +2026,15 @@ class ObservationAdvisor:
                 "them through model_priors."
             )
 
-        # The ceiling on the peak of the PSF stars shapes the PSF, so it is
-        # settled before the stages run, as measure_fixed_inputs settles it.
+        # The limits on the peak of the PSF stars shape the PSF, so they are
+        # settled before the stages run, as measure_fixed_inputs settles them.
         max_peak_record, peak_warning = _settle_psf_max_peak(reading, config_options)
+        min_peak_record, floor_warning = _settle_psf_min_peak(
+            self._current_inspection().noise_sigma, config_options
+        )
+
+        if floor_warning is not None:
+            warnings.append(floor_warning)
 
         if peak_warning is not None:
             warnings.append(peak_warning)
@@ -2238,7 +2295,7 @@ class ObservationAdvisor:
 
         provenance = {
             "schema": "baymorph.advisor_proposal",
-            "schema_version": 4,
+            "schema_version": 5,
             "decision": "AD-049",
             "baymorph_version": _baymorph_version(),
             "image_path": config["data"]["image_path"],
@@ -2286,6 +2343,7 @@ class ObservationAdvisor:
             },
             "effective_gain": gain_record,
             "psf_max_peak": max_peak_record,
+            "psf_min_peak": min_peak_record,
             "warnings": list(warnings),
         }
 
@@ -2811,6 +2869,16 @@ def _provenance_summary(provenance: Mapping[str, Any]) -> list[str]:
             "PSF peak ceiling: "
             + ("BayMorph default" if value is None else f"{value:.6g}")
             + f" [{peak['source']}] {peak['detail']}"
+        )
+
+    floor = provenance.get("psf_min_peak")
+
+    if floor:
+        value = floor.get("value")
+        lines.append(
+            "PSF peak floor: "
+            + ("BayMorph default" if value is None else f"{value:.6g}")
+            + f" [{floor['source']}] {floor['detail']}"
         )
 
     bridges = provenance.get("bridges") or []

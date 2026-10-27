@@ -75,6 +75,7 @@ rejected, never repaired.
 | Setting | Default | Check |
 | --- | --- | --- |
 | `psf.empirical.candidate_selection.max_peak` | 80000 | Set it below the saturation level of your image, in image units: the default is not scaled to it. |
+| `psf.empirical.candidate_selection.min_peak` | 20 | Not scaled to your image either; the Advisor proposes 30 times the noise sigma of the image. |
 | `psf.empirical.candidate_selection.min_peak_snr` | 30 | Lower it only if the image has too few bright stars. |
 | `psf.empirical.candidate_selection.galaxy_exclusion_box` | none | A box where candidates are refused, for example around a large galaxy. |
 | `psf.empirical.construction.sky_inner_radius`, `sky_outer_radius` | 80, 160 | The ring where the sky of each star is measured, in pixels. |

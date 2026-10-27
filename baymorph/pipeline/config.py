@@ -611,6 +611,33 @@ def validate_config(config: dict[str, Any]) -> None:
                 "finite positive number."
             )
 
+    if "min_peak" in psf_candidate_config:
+        min_peak = psf_candidate_config["min_peak"]
+
+        if (
+            isinstance(min_peak, bool)
+            or not isinstance(min_peak, Real)
+            or not math.isfinite(float(min_peak))
+            or float(min_peak) < 0.0
+        ):
+            raise ValueError(
+                "psf.empirical.candidate_selection.min_peak must be a "
+                "finite non-negative number."
+            )
+
+    # The defaults apply after validation, so a declared limit is compared
+    # with the default of the other one.
+    candidate_defaults = DEFAULT_CONFIG["psf"]["empirical"]["candidate_selection"]
+    min_peak = psf_candidate_config.get("min_peak", candidate_defaults["min_peak"])
+    max_peak = psf_candidate_config.get("max_peak", candidate_defaults["max_peak"])
+
+    if float(min_peak) >= float(max_peak):
+        raise ValueError(
+            f"psf.empirical.candidate_selection.min_peak {float(min_peak):.6g} "
+            f"is not below max_peak {float(max_peak):.6g}, so no star can be "
+            "selected for the PSF."
+        )
+
     if "auto_size" in psf_construction_config:
         raise ValueError(
             "Unsupported configuration key "

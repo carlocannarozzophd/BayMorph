@@ -28,7 +28,8 @@ configuration for one FITS image, and writes it when `output_path` is
 given. Its keyword arguments are `hdu`, `calibration`, `region`, `output_path`,
 `object_name`, `model_name`, `model_priors`, `likelihood`, `background`,
 `sampler`, `outputs_root`, `overwrite`, `cutout_mode`, `fixed_size`,
-`psf_type`, `gaussian_fwhm_pixels`, `psf_max_peak` and `preparation`. See
+`psf_type`, `gaussian_fwhm_pixels`, `psf_max_peak`, `psf_min_peak` and
+`preparation`. See
 [Writing a Configuration](../guide/CONFIGURING.md).
 
 **`ObservationAdvisor(fits_path, *, target_position=None, hdu=None, calibration=None, online=True, region=None)`**

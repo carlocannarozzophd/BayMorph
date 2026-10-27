@@ -406,6 +406,7 @@ def _command_config(args: argparse.Namespace) -> int:
         psf_type=args.psf,
         gaussian_fwhm_pixels=args.gaussian_fwhm_pixels,
         psf_max_peak=args.psf_max_peak,
+        psf_min_peak=args.psf_min_peak,
         preparation=preparation,
     )
 
@@ -494,6 +495,7 @@ def _advise_config(
         psf_type=args.psf,
         gaussian_fwhm_pixels=args.gaussian_fwhm_pixels,
         psf_max_peak=args.psf_max_peak,
+        psf_min_peak=args.psf_min_peak,
         preparation=preparation,
     )
 
@@ -792,6 +794,16 @@ def _build_parser() -> argparse.ArgumentParser:
             "image units; keep it below the saturation level. With --advise "
             "and without this option, half the saturation level of the "
             "header is proposed when its unit is established."
+        ),
+    )
+
+    config_parser.add_argument(
+        "--psf-min-peak",
+        type=float,
+        help=(
+            "Faintest peak pixel accepted for an empirical-PSF star, in "
+            "image units. With --advise and without this option, 30 times "
+            "the noise sigma of the image is proposed."
         ),
     )
 

@@ -25,6 +25,7 @@ from baymorph.pipeline.prior_proposals import (
     propose_effective_gain,
     propose_model_priors,
     propose_psf_max_peak,
+    propose_psf_min_peak,
     reference_priors,
 )
 
@@ -628,3 +629,17 @@ def test_psf_ceiling_is_proposed_only_for_an_established_unit() -> None:
 
     assert peak is None
     assert "missing" in detail
+
+
+def test_psf_floor_is_the_construction_signal_to_noise_times_the_noise() -> None:
+    """The floor holds in the units of the image, whatever they are."""
+    peak, detail = propose_psf_min_peak(0.0084)
+
+    assert peak == pytest.approx(30.0 * 0.0084)
+    assert "30 times the noise sigma 0.0084" in detail
+
+    for noise in (0.0, -1.0, float("nan"), None):
+        peak, detail = propose_psf_min_peak(noise)
+
+        assert peak is None
+        assert detail.startswith("not proposed")
