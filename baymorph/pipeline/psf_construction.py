@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy.io import fits
 
-from baymorph.core.image import WorkingRegion
 from baymorph.core.mask import no_data_mask
 from baymorph.pipeline.config import load_resolved_config
 from baymorph.pipeline.empirical_psf_builder import (
@@ -28,7 +27,28 @@ from baymorph.pipeline.prepared_identity import (
     file_content_identity,
     sha256_file as _file_sha256,
 )
-from baymorph.pipeline.psf_candidates import load_psf_candidates
+from baymorph.pipeline.psf_candidate_screen import (
+    point_source_screen_marker,
+    point_source_screen_rule,
+    recorded_screen_rule,
+    screen_difference_note,
+)
+from baymorph.pipeline.psf_candidates import (
+    check_screen_change,
+    load_psf_candidate_screen,
+    load_psf_candidates,
+    screened_selection_identity,
+    validate_psf_candidate_screen,
+)
+
+# The cutout helpers moved to psf_cutouts, which the candidate screen shares;
+# they are imported back under their old names for existing callers.
+from baymorph.pipeline.psf_cutouts import (
+    _outer_border_pixels,
+    estimate_cutout_peak_snr,
+    extract_centered_cutout,
+    region_hint as _region_hint,
+)
 from baymorph.plotting.style import make_plot
 from baymorph.rendering.effective_psf import RENDERING_CONVENTION, SUBPIXEL_FACTOR
 from baymorph.simulation.psf import (
@@ -36,7 +56,6 @@ from baymorph.simulation.psf import (
     GaussianPSF,
     validate_finite_nonnegative_kernel,
 )
-from baymorph.stats.robust import robust_sigma
 
 EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION = 1
 EMPIRICAL_PSF_PRODUCT_SCHEMA_VERSION = 2
@@ -178,8 +197,31 @@ def validate_empirical_psf(
     }
 
 
+def _empirical_config_identity(empirical_config: Mapping[str, Any]) -> dict[str, Any]:
+    """Return ``psf.empirical`` as it enters the identity of the PSF.
+
+    The neutral point-source screen ``none`` is left out, so that a PSF
+    built before the screen existed keeps its identity; any other rule
+    enters by name.
+    """
+    identity = dict(empirical_config)
+    candidate_selection = screened_selection_identity(
+        identity.get("candidate_selection", {})
+    )
+
+    if "candidate_selection" in identity or candidate_selection:
+        identity["candidate_selection"] = candidate_selection
+
+    return identity
+
+
 def build_empirical_psf_provenance(config: Mapping[str, Any]) -> dict[str, Any]:
-    """Fingerprint the PSF and every file/config input used to build it."""
+    """Fingerprint the PSF and every file/config input used to build it.
+
+    Unless the point-source screen of the candidates is ``none``, its rule
+    and the digest of its constants are recorded, so a PSF built by code
+    that ignored the screen is refused.
+    """
     paths = pipeline_paths(dict(config))
     image_path = Path(config["data"]["image_path"]).expanduser().resolve()
     candidates_path = paths["psf"]["candidates"].resolve()
@@ -201,7 +243,7 @@ def build_empirical_psf_provenance(config: Mapping[str, Any]) -> dict[str, Any]:
     if region is not None:
         input_fits["region"] = region.as_dict()
 
-    return {
+    provenance = {
         "schema_version": EMPIRICAL_PSF_PROVENANCE_SCHEMA_VERSION,
         "input_fits": input_fits,
         "candidate_catalog": {
@@ -209,14 +251,30 @@ def build_empirical_psf_provenance(config: Mapping[str, Any]) -> dict[str, Any]:
             "sha256": _file_sha256(candidates_path),
         },
         "psf_fits": {"path": str(psf_path), "sha256": _file_sha256(psf_path)},
-        "empirical_config_sha256": _canonical_json_sha256(empirical_config),
+        "empirical_config_sha256": _canonical_json_sha256(
+            _empirical_config_identity(empirical_config)
+        ),
     }
+    marker = point_source_screen_marker(
+        point_source_screen_rule(empirical_config.get("candidate_selection", {}))
+    )
+
+    if marker is not None:
+        provenance["point_source_screen"] = marker
+
+    return provenance
 
 
 def validate_empirical_psf_provenance(
     config: Mapping[str, Any], metadata: Mapping[str, Any]
 ) -> None:
-    """Reject a PSF whose sidecar does not bind the current inputs."""
+    """Reject a PSF whose sidecar does not bind the current inputs.
+
+    A PSF that differs from the configuration only in the point-source
+    screen of its stars raises
+    :class:`~baymorph.pipeline.psf_candidate_screen.PointSourceScreenChangeError`,
+    whose message names the declaration that reuses it.
+    """
     recorded = metadata.get("provenance")
 
     if not isinstance(recorded, Mapping):
@@ -227,14 +285,29 @@ def validate_empirical_psf_provenance(
     current = build_empirical_psf_provenance(config)
 
     if dict(recorded) != current:
+        # A PSF that differs only in the screen of its stars is refused with
+        # the declaration that reuses it, never with a call to rebuild it.
+        check_screen_change(
+            recorded,
+            config,
+            build_empirical_psf_provenance,
+            products="empirical PSF and its stars",
+        )
         mismatched = sorted(
             key
             for key in set(recorded) | set(current)
             if recorded.get(key) != current.get(key)
         )
+        rule = point_source_screen_rule(
+            (config.get("psf") or {}).get("empirical", {}).get("candidate_selection")
+            or {}
+        )
         raise ValueError(
             "Empirical PSF provenance does not match the current immutable "
-            "inputs; rebuild the PSF. Mismatched fields: " + ", ".join(mismatched) + "."
+            "inputs; rebuild the PSF. Mismatched fields: "
+            + ", ".join(mismatched)
+            + "."
+            + screen_difference_note(recorded_screen_rule(recorded), rule)
         )
 
 
@@ -843,6 +916,16 @@ def run_psf_construction_from_config(config: str | Path | dict[str, Any]) -> np.
         resolved.get("psf", {}).get("empirical", {}).get("candidate_selection", {})
     )
 
+    # Candidates screened for point sources are built only with the record
+    # of their screen, which the metadata of the PSF summarizes.
+    screen_marker = point_source_screen_marker(point_source_screen_rule(candidate_cfg))
+    screen_record = (
+        None if screen_marker is None else load_psf_candidate_screen(resolved)
+    )
+
+    if screen_record is not None:
+        validate_psf_candidate_screen(screen_record, candidates)
+
     min_peak_snr = float(candidate_cfg.get("min_peak_snr", 30.0))
 
     if not np.isfinite(min_peak_snr) or min_peak_snr < 0.0:
@@ -1018,6 +1101,21 @@ def run_psf_construction_from_config(config: str | Path | dict[str, Any]) -> np.
             "provenance": provenance,
             "used_candidates": used_candidates,
             "rejected_candidates": rejected_candidates,
+            **(
+                {}
+                if screen_record is None
+                else {
+                    "point_source_screen": {
+                        **screen_marker,
+                        "n_pool": screen_record["n_pool"],
+                        "n_members": screen_record["n_members"],
+                        "n_kept": screen_record["n_kept"],
+                        "sequence_size_pix": (screen_record.get("sequence") or {}).get(
+                            "size_pix"
+                        ),
+                    }
+                }
+            ),
             "warnings": _empirical_psf_warnings(
                 psf,
                 n_candidates_used=len(build.stars),
@@ -1027,18 +1125,6 @@ def run_psf_construction_from_config(config: str | Path | dict[str, Any]) -> np.
     )
 
     return psf
-
-
-def _region_hint(region: WorkingRegion | None) -> str:
-    """Say where the stars were searched, when the image has a working region."""
-    if region is None:
-        return ""
-
-    return (
-        " The stars are searched within the working region x "
-        f"{region.xmin}-{region.xmax}, y {region.ymin}-{region.ymax} of the "
-        "image: a larger data.region, or data.region: whole, offers more."
-    )
 
 
 def normalize_psf(psf: np.ndarray) -> np.ndarray:
@@ -1065,117 +1151,6 @@ def normalize_psf(psf: np.ndarray) -> np.ndarray:
         raise ValueError("PSF sum must be positive and finite.")
 
     return psf / total
-
-
-def extract_centered_cutout(
-    image: np.ndarray, x: float, y: float, half_size: int
-) -> np.ndarray:
-    """Extract a square cutout centered on a source position.
-
-    Parameters
-    ----------
-    image : ndarray
-        Parent image.
-    x, y : float
-        Source position in image pixels.
-    half_size : int
-        Half-size of the requested cutout.
-
-    Returns
-    -------
-    ndarray
-        Extracted square cutout.
-
-    Raises
-    ------
-    ValueError
-        If the requested cutout extends outside the image boundaries.
-    """
-    x0 = int(round(x))
-    y0 = int(round(y))
-
-    y_min = y0 - half_size
-    y_max = y0 + half_size + 1
-    x_min = x0 - half_size
-    x_max = x0 + half_size + 1
-
-    if x_min < 0 or y_min < 0 or x_max > image.shape[1] or y_max > image.shape[0]:
-        raise ValueError("Requested PSF cutout extends outside the image boundaries.")
-
-    return image[y_min:y_max, x_min:x_max]
-
-
-def _outer_border_pixels(cutout: np.ndarray, *, border_width: int) -> np.ndarray:
-    """Return pixels in the outer border of a two-dimensional cutout."""
-    data = np.asarray(cutout, dtype=float)
-
-    if data.ndim != 2:
-        raise ValueError("PSF cutout must be 2D.")
-
-    if border_width <= 0:
-        raise ValueError("border_width must be positive.")
-
-    if 2 * border_width >= min(data.shape):
-        raise ValueError("border_width is too large for this cutout.")
-
-    return np.concatenate(
-        [
-            data[:border_width, :].ravel(),
-            data[-border_width:, :].ravel(),
-            data[:, :border_width].ravel(),
-            data[:, -border_width:].ravel(),
-        ]
-    )
-
-
-def estimate_cutout_peak_snr(
-    cutout: np.ndarray, *, border_width: int = 3
-) -> float | None:
-    """Estimate robust local peak signal-to-noise for a PSF candidate.
-
-    The local background and noise are estimated from the outer cutout
-    border. Noise is represented by the Gaussian-equivalent MAD scale.
-
-    Parameters
-    ----------
-    cutout : ndarray
-        Candidate image cutout before background subtraction.
-    border_width : int, default=3
-        Width of the outer region used for background and noise estimation.
-
-    Returns
-    -------
-    float or None
-        Peak signal-to-noise ratio, or ``None`` when a finite positive
-        local noise scale cannot be measured.
-    """
-    data = np.asarray(cutout, dtype=float)
-
-    border = _outer_border_pixels(data, border_width=border_width)
-
-    finite_border = border[np.isfinite(border)]
-
-    if finite_border.size == 0:
-        return None
-
-    background = float(np.median(finite_border))
-
-    local_sigma = robust_sigma(finite_border, center=background)
-
-    if not np.isfinite(local_sigma) or local_sigma <= 0.0:
-        return None
-
-    finite_data = data[np.isfinite(data)]
-
-    if finite_data.size == 0:
-        return None
-
-    peak_signal = float(np.max(finite_data) - background)
-
-    if not np.isfinite(peak_signal) or peak_signal <= 0.0:
-        return None
-
-    return float(peak_signal / local_sigma)
 
 
 def subtract_outer_background(cutout: np.ndarray, border_width: int = 3) -> np.ndarray:

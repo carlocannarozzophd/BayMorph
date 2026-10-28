@@ -753,3 +753,35 @@ def test_multi_observation_config_resolves_likelihood_per_observation(
         },
     }
     assert resolved["r"]["fit"]["likelihood"] == observation_override
+
+
+def test_multi_observation_config_forwards_the_point_source_screen(
+    tmp_path: Path,
+) -> None:
+    """Each observation may declare the screen of its PSF stars."""
+    observations = {"g": tmp_path / "g.fits", "r": tmp_path / "r.fits"}
+
+    for path in observations.values():
+        _write_fits(path)
+
+    output_dir = tmp_path / "configs"
+    joint = make_multi_observation_config(
+        observations,
+        target_positions={"g": "center", "r": "center"},
+        parameters=_sky_parameters(observations),
+        output_dir=output_dir,
+        outputs_root=tmp_path / "runs",
+        observation_options={"r": {"psf_point_source_screen": "none"}},
+    )
+    resolved = resolve_multi_observation_observation_configs(
+        joint, base_dir=output_dir
+    )
+
+    screens = {
+        name: config["psf"]["empirical"]["candidate_selection"][
+            "point_source_screen"
+        ]
+        for name, config in resolved.items()
+    }
+
+    assert screens == {"g": "size_sequence_v1", "r": "none"}

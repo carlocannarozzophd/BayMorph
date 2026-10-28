@@ -16,6 +16,10 @@ from baymorph.core.header_metadata import PHOTOMETRIC_SYSTEMS
 from baymorph.observation.background import BACKGROUND_PARAMETER_NAMES
 from baymorph.pipeline.advisor import ObservationAdvisor
 from baymorph.pipeline.config_maker import make_config_from_fits
+from baymorph.pipeline.psf_candidate_screen import (
+    PointSourceScreenError,
+    screen_record_lines,
+)
 from baymorph.pipeline.opening import (
     WHOLE_IMAGE_MAX_SIDE,
     SkyPosition,
@@ -407,6 +411,7 @@ def _command_config(args: argparse.Namespace) -> int:
         gaussian_fwhm_pixels=args.gaussian_fwhm_pixels,
         psf_max_peak=args.psf_max_peak,
         psf_min_peak=args.psf_min_peak,
+        psf_point_source_screen=args.psf_point_source_screen,
         preparation=preparation,
     )
 
@@ -496,6 +501,7 @@ def _advise_config(
         gaussian_fwhm_pixels=args.gaussian_fwhm_pixels,
         psf_max_peak=args.psf_max_peak,
         psf_min_peak=args.psf_min_peak,
+        psf_point_source_screen=args.psf_point_source_screen,
         preparation=preparation,
     )
 
@@ -807,6 +813,18 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    config_parser.add_argument(
+        "--psf-point-source-screen",
+        choices=("size_sequence_v1", "none"),
+        help=(
+            "Screen of the empirical-PSF stars. Default: size_sequence_v1, "
+            "which keeps the candidates that form the stellar sequence of "
+            "their sizes and rejects galaxies, cosmic rays and hot pixels; "
+            "none selects them by shape only. With --advise the screen is "
+            "written and its outcome reported."
+        ),
+    )
+
     calibration_group = config_parser.add_argument_group(
         "calibration declared in data.calibration",
         "Quantities that the header does not give, or gives wrongly. A "
@@ -923,6 +941,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return int(args.handler(args))
     except UsageError as error:
         args.command_parser.error(str(error))
+    except PointSourceScreenError as error:
+        # A stop of the screen of the PSF stars saves nothing, so the
+        # terminal gets the account of the candidates that the error holds.
+        print(f"baymorph: error: {error}", file=sys.stderr)
+
+        for line in screen_record_lines(error.record):
+            print(f"baymorph:   {line}", file=sys.stderr)
     except (OSError, RuntimeError, TypeError, ValueError) as error:
         print(f"baymorph: error: {error}", file=sys.stderr)
 

@@ -19,6 +19,10 @@ from baymorph.core.observation import Observation, resolve_seeing_fwhm_pixels
 from baymorph.fitting.execution import resolve_sampler_execution
 from baymorph.likelihood.factory import normalize_likelihood_type
 from baymorph.pipeline.opening import validate_region
+from baymorph.pipeline.psf_candidate_screen import (
+    DEFAULT_POINT_SOURCE_SCREEN,
+    POINT_SOURCE_SCREEN_RULES,
+)
 
 REQUIRED_TOP_LEVEL_KEYS = ("object", "data", "outputs")
 
@@ -87,6 +91,37 @@ DATA_KEYS = (
 """Entries of the ``data`` section; any other entry is refused."""
 
 
+PSF_CANDIDATE_SELECTION_KEYS = (
+    "auto",
+    "target_n_candidates",
+    "min_area",
+    "max_area",
+    "min_peak",
+    "max_peak",
+    "min_peak_snr",
+    "max_eccentricity",
+    "max_elongation",
+    "edge_margin",
+    "galaxy_exclusion_box",
+    "sigma_factor",
+    "size_margin",
+    "min_half_size",
+    "max_half_size",
+    "isolation_margin",
+    "point_source_screen",
+)
+"""Entries of ``psf.empirical.candidate_selection``; any other is refused."""
+
+PSF_CONSTRUCTION_KEYS = (
+    "centroid_tolerance_pixels",
+    "sky_inner_radius",
+    "sky_outer_radius",
+    "mask_growth_pixels",
+    "support_half_size",
+)
+"""Entries of ``psf.empirical.construction``; any other is refused."""
+
+
 DEFAULT_CONFIG = {
     "data": {
         "hdu": None,
@@ -141,6 +176,10 @@ DEFAULT_CONFIG = {
                 "min_half_size": 12,
                 "max_half_size": 30,
                 "isolation_margin": 2,
+                # The candidates are screened for point sources before the
+                # first target_n_candidates are kept; "none" selects them by
+                # shape only, as before the screen.
+                "point_source_screen": DEFAULT_POINT_SOURCE_SCREEN,
             },
             "construction": {
                 "centroid_tolerance_pixels": 0.05,
@@ -652,6 +691,29 @@ def validate_config(config: dict[str, Any]) -> None:
             "'psf.empirical.construction.normalize'. "
             "BayMorph always normalizes PSF kernels to unit sum."
         )
+
+    # An unknown entry would be ignored silently, so a misspelled setting
+    # never reached the PSF; it is refused instead.
+    for section, entries, known in (
+        ("candidate_selection", psf_candidate_config, PSF_CANDIDATE_SELECTION_KEYS),
+        ("construction", psf_construction_config, PSF_CONSTRUCTION_KEYS),
+    ):
+        unknown = sorted(set(entries) - set(known))
+
+        if unknown:
+            raise ValueError(
+                f"Unsupported configuration entries in psf.empirical.{section}: "
+                f"{unknown}. Available entries: {sorted(known)}."
+            )
+
+    if "point_source_screen" in psf_candidate_config:
+        screen = psf_candidate_config["point_source_screen"]
+
+        if not isinstance(screen, str) or screen not in POINT_SOURCE_SCREEN_RULES:
+            raise ValueError(
+                "psf.empirical.candidate_selection.point_source_screen must be "
+                f"one of {list(POINT_SOURCE_SCREEN_RULES)}, not {screen!r}."
+            )
 
     if "centroid_tolerance_pixels" in psf_construction_config:
         tolerance = psf_construction_config["centroid_tolerance_pixels"]

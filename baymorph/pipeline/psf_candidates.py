@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Mapping
+from copy import deepcopy
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -17,6 +19,19 @@ from baymorph.pipeline.image_preparation import detect_real_fits_sources
 from baymorph.pipeline.opening import open_configured_observation, working_region
 from baymorph.pipeline.outputs import make_output_tree, pipeline_paths
 from baymorph.pipeline.prepared_identity import file_content_identity
+from baymorph.pipeline.psf_candidate_screen import (
+    PSF_CANDIDATE_SCREEN_SCHEMA,
+    PSF_CANDIDATE_SCREEN_SCHEMA_VERSION,
+    PointSourceScreenChangeError,
+    PointSourceScreenError,
+    point_source_screen_marker,
+    point_source_screen_rule,
+    recorded_screen_rule,
+    screen_change_message,
+    screen_difference_note,
+    screen_psf_candidates,
+    screen_stop_message,
+)
 
 PSF_CANDIDATES_PROVENANCE_SCHEMA_VERSION = 1
 
@@ -129,16 +144,56 @@ def build_psf_candidates_provenance(config: dict[str, Any]) -> dict[str, Any]:
     if region is not None:
         input_fits["region"] = region.as_dict()
 
-    return {
+    candidate_selection = config["psf"]["empirical"]["candidate_selection"]
+    marker = point_source_screen_marker(point_source_screen_rule(candidate_selection))
+    provenance = {
         "schema_version": PSF_CANDIDATES_PROVENANCE_SCHEMA_VERSION,
         "input_fits": input_fits,
         "detection_config_sha256": canonical_json_sha256(
             config["preparation"]["detection"]
         ),
         "candidate_selection_config_sha256": canonical_json_sha256(
-            config["psf"]["empirical"]["candidate_selection"]
+            screened_selection_identity(candidate_selection)
         ),
     }
+
+    # A screen enters with its rule and the digest of its constants, so
+    # candidates selected by code that ignored the rule are refused; the
+    # neutral rule leaves the provenance of earlier candidates unchanged.
+    if marker is not None:
+        provenance["point_source_screen"] = marker
+
+    return provenance
+
+
+def screened_selection_identity(candidate_selection: dict[str, Any]) -> dict[str, Any]:
+    """Return the candidate-selection settings as they enter an identity.
+
+    The neutral point-source screen ``none`` is left out, so that products
+    selected before the screen existed keep their identity; any other rule
+    enters by name.
+
+    Parameters
+    ----------
+    candidate_selection : dict
+        The section ``psf.empirical.candidate_selection``.
+
+    Returns
+    -------
+    dict
+        The settings that the digest of the selection covers.
+    """
+    rule = point_source_screen_rule(candidate_selection)
+    settings = {
+        key: value
+        for key, value in candidate_selection.items()
+        if key != "point_source_screen"
+    }
+
+    if rule != "none":
+        settings["point_source_screen"] = rule
+
+    return settings
 
 
 def save_psf_candidates_provenance(config: dict[str, Any]) -> Path:
@@ -191,6 +246,9 @@ def validate_psf_candidates_provenance(config: dict[str, Any]) -> None:
 
     Raises
     ------
+    PointSourceScreenChangeError
+        If only the point-source screen differs; the message names the
+        declaration that reuses the candidates.
     ValueError
         If the recorded provenance differs from that of the current image,
         HDU, detection settings or candidate-selection settings.
@@ -198,13 +256,238 @@ def validate_psf_candidates_provenance(config: dict[str, Any]) -> None:
     path = pipeline_paths(config)["psf"]["candidates_provenance"]
     recorded = json.loads(path.read_text(encoding="utf-8"))
 
-    if recorded != build_psf_candidates_provenance(config):
+    if recorded == build_psf_candidates_provenance(config):
+        return
+
+    check_screen_change(
+        recorded,
+        config,
+        build_psf_candidates_provenance,
+        products=f"PSF candidates ({path})",
+    )
+    rule = point_source_screen_rule(config["psf"]["empirical"]["candidate_selection"])
+
+    raise ValueError(
+        "The saved PSF candidates were selected from another image, HDU, "
+        "working region, detection or candidate-selection setting than the "
+        "current "
+        f"configuration ({path}). Use a new output namespace, or set "
+        "outputs.overwrite: true to select them again."
+        + screen_difference_note(recorded_screen_rule(recorded), rule)
+    )
+
+
+def config_under_screen(config: Mapping[str, Any], rule: str) -> dict[str, Any]:
+    """Return a copy of a configuration whose stars are screened by ``rule``.
+
+    Parameters
+    ----------
+    config : mapping
+        Resolved pipeline configuration.
+    rule : str
+        One of the point-source screens.
+
+    Returns
+    -------
+    dict
+        A deep copy whose ``point_source_screen`` is ``rule``.
+    """
+    copy = deepcopy(dict(config))
+    psf = copy.setdefault("psf", {})
+    empirical = psf.setdefault("empirical", {})
+    selection = empirical.setdefault("candidate_selection", {})
+    selection["point_source_screen"] = rule
+
+    return copy
+
+
+def check_screen_change(
+    recorded: Mapping[str, Any],
+    config: Mapping[str, Any],
+    build_provenance: Callable[[Mapping[str, Any]], dict[str, Any]],
+    *,
+    products: str,
+) -> None:
+    """Refuse, with its own message, products that differ only in the screen.
+
+    Products selected before the screen existed, or under another rule,
+    are not reused under the rule of the configuration; when nothing else
+    differs, the refusal says which declaration reuses them, rather than
+    asking for an overwrite of accepted products.
+
+    Parameters
+    ----------
+    recorded : mapping
+        The recorded provenance, which differs from the current one.
+    config : mapping
+        Resolved pipeline configuration.
+    build_provenance : callable
+        The function that builds the provenance of these products from a
+        configuration.
+    products : str
+        What was saved, for the message.
+
+    Raises
+    ------
+    PointSourceScreenChangeError
+        If the recorded provenance is the one the configuration would give
+        under the screen it was made with.
+    """
+    selection = (config.get("psf") or {}).get("empirical", {})
+    current = point_source_screen_rule(selection.get("candidate_selection") or {})
+    made_with = recorded_screen_rule(recorded)
+
+    if made_with is None or made_with == current:
+        return
+
+    if dict(recorded) == build_provenance(config_under_screen(config, made_with)):
+        raise PointSourceScreenChangeError(
+            screen_change_message(products, recorded=made_with, current=current)
+        )
+
+
+def save_psf_candidate_screen(config: dict[str, Any], record: dict[str, Any]) -> Path:
+    """Save the record of the point-source screen of the PSF candidates.
+
+    Parameters
+    ----------
+    config : dict
+        Resolved pipeline configuration.
+    record : dict
+        The record returned by
+        :func:`baymorph.pipeline.psf_candidate_screen.screen_psf_candidates`.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the saved JSON file.
+
+    Raises
+    ------
+    FileExistsError
+        If the record exists and ``outputs.overwrite`` is disabled.
+    """
+    make_output_tree(config)
+    path = pipeline_paths(config)["psf"]["candidate_screen"]
+
+    if path.exists() and not bool(config["outputs"].get("overwrite", False)):
+        raise FileExistsError(
+            "PSF candidate screen output already exists and overwrite is "
+            f"disabled: {path}"
+        )
+
+    path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+
+    return path
+
+
+def psf_candidate_screen_exists(config: dict[str, Any]) -> bool:
+    """Return whether the record of the point-source screen exists.
+
+    Parameters
+    ----------
+    config : dict
+        Resolved pipeline configuration.
+
+    Returns
+    -------
+    bool
+        True when ``psf/psf_candidate_screen.json`` is present.
+    """
+    return pipeline_paths(config)["psf"]["candidate_screen"].is_file()
+
+
+def load_psf_candidate_screen(config: dict[str, Any]) -> dict[str, Any]:
+    """Load the record of the point-source screen of the saved candidates.
+
+    Parameters
+    ----------
+    config : dict
+        Resolved pipeline configuration whose point-source screen is not
+        ``none``.
+
+    Returns
+    -------
+    dict
+        The record of the screen.
+
+    Raises
+    ------
+    ValueError
+        If the record is missing, or was written by another rule, another
+        set of constants or another schema.
+    """
+    rule = point_source_screen_rule(config["psf"]["empirical"]["candidate_selection"])
+    marker = point_source_screen_marker(rule)
+    path = pipeline_paths(config)["psf"]["candidate_screen"]
+
+    if marker is None:
         raise ValueError(
-            "The saved PSF candidates were selected from another image, HDU, "
-            "working region, detection or candidate-selection setting than the "
-            "current "
-            f"configuration ({path}). Use a new output namespace, or set "
-            "outputs.overwrite: true to select them again."
+            "The PSF candidates are selected without a point-source screen "
+            "(point_source_screen: none), so they have no screen record."
+        )
+
+    if not path.is_file():
+        raise ValueError(
+            "The saved PSF candidates were selected with the point-source "
+            f"screen {rule}, but its record {path} is missing. Use a new "
+            "output namespace, or set outputs.overwrite: true to select them "
+            "again."
+        )
+
+    record = json.loads(path.read_text(encoding="utf-8"))
+
+    if (
+        not isinstance(record, dict)
+        or record.get("schema") != PSF_CANDIDATE_SCREEN_SCHEMA
+        or record.get("schema_version") != PSF_CANDIDATE_SCREEN_SCHEMA_VERSION
+        or record.get("rule") != marker["rule"]
+        or record.get("constants_sha256") != marker["constants_sha256"]
+        or record.get("outcome") != "found"
+    ):
+        raise ValueError(
+            f"The record of the point-source screen {path} was not written by "
+            f"the screen {rule} of this version of BayMorph for the saved "
+            "candidates. Use a new output namespace, or set outputs.overwrite: "
+            "true to select them again."
+        )
+
+    return record
+
+
+def validate_psf_candidate_screen(
+    record: dict[str, Any], candidates: list[PSFCandidate]
+) -> None:
+    """Reject a screen record that does not list the saved candidates.
+
+    The candidates that the screen kept, in its record, must be the saved
+    candidates, in the same order and at the same positions, so that the
+    record describes the stars that build the PSF.
+
+    Parameters
+    ----------
+    record : dict
+        Record returned by :func:`load_psf_candidate_screen`.
+    candidates : list of PSFCandidate
+        The saved candidates.
+
+    Raises
+    ------
+    ValueError
+        If the kept candidates of the record differ from the saved ones.
+    """
+    kept = [
+        (entry.get("label"), entry.get("x"), entry.get("y"))
+        for entry in record.get("candidates", [])
+        if entry.get("kept")
+    ]
+
+    if kept != [(c.label, c.x, c.y) for c in candidates]:
+        raise ValueError(
+            "The record of the point-source screen does not list the saved PSF "
+            "candidates as the stars it kept, so it does not describe them. Use "
+            "a new output namespace, or set outputs.overwrite: true to select "
+            "them again."
         )
 
 
@@ -274,6 +557,17 @@ def run_psf_candidate_selection_from_config(
     ------
     RuntimeError
         If source segmentation or source-catalog construction fails.
+    PointSourceScreenError
+        If the point-source screen finds no stellar sequence among the
+        candidates; nothing is saved, and the error carries the record.
+
+    Notes
+    -----
+    Unless ``psf.empirical.candidate_selection.point_source_screen`` is
+    ``none``, every candidate that passes the shape, isolation and no-data
+    cuts is screened, and the first ``target_n_candidates`` members of the
+    stellar sequence are kept; the record of the screen is saved in
+    ``psf/psf_candidate_screen.json``.
     """
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
@@ -283,6 +577,25 @@ def run_psf_candidate_selection_from_config(
     make_output_tree(resolved)
 
     image = open_configured_observation(resolved["data"], declarations=False).image
+    candidate_cfg = resolved["psf"]["empirical"]["candidate_selection"]
+    rule = point_source_screen_rule(candidate_cfg)
+    paths = pipeline_paths(resolved)["psf"]
+
+    # Nothing is written unless everything can be: without overwrite, saved
+    # candidates, or a record of a screen, are refused before the search,
+    # so that a selection never leaves candidates beside a stale record.
+    if not bool(resolved["outputs"].get("overwrite", False)):
+        existing = [
+            path
+            for path in (paths["candidates"], paths["candidate_screen"])
+            if path.exists()
+        ]
+
+        if existing:
+            raise FileExistsError(
+                "PSF candidate output already exists and overwrite is disabled: "
+                + ", ".join(str(path) for path in existing)
+            )
     region = image.region
     origin_x, origin_y = (0, 0) if region is None else (region.xmin, region.ymin)
 
@@ -312,29 +625,71 @@ def run_psf_candidate_selection_from_config(
 
     rows = source_catalog_to_candidate_rows(source_catalog)
 
-    candidate_cfg = resolved["psf"]["empirical"]["candidate_selection"]
-
-    candidates = select_psf_candidates_from_rows(
-        rows,
-        segmentation.data,
-        target_n_candidates=candidate_cfg["target_n_candidates"],
-        min_area=candidate_cfg["min_area"],
-        max_area=candidate_cfg["max_area"],
-        min_peak=candidate_cfg["min_peak"],
-        max_peak=candidate_cfg["max_peak"],
-        max_eccentricity=candidate_cfg["max_eccentricity"],
-        max_elongation=candidate_cfg["max_elongation"],
-        edge_margin=candidate_cfg["edge_margin"],
-        galaxy_exclusion_box=_box_in_region(
+    cuts = {
+        "min_area": candidate_cfg["min_area"],
+        "max_area": candidate_cfg["max_area"],
+        "min_peak": candidate_cfg["min_peak"],
+        "max_peak": candidate_cfg["max_peak"],
+        "max_eccentricity": candidate_cfg["max_eccentricity"],
+        "max_elongation": candidate_cfg["max_elongation"],
+        "edge_margin": candidate_cfg["edge_margin"],
+        "galaxy_exclusion_box": _box_in_region(
             candidate_cfg["galaxy_exclusion_box"], origin_x=origin_x, origin_y=origin_y
         ),
-        sigma_factor=candidate_cfg["sigma_factor"],
-        size_margin=candidate_cfg["size_margin"],
-        min_half_size=candidate_cfg["min_half_size"],
-        max_half_size=candidate_cfg["max_half_size"],
-        isolation_margin=candidate_cfg["isolation_margin"],
-        no_data=no_data,
-    )
+        "sigma_factor": candidate_cfg["sigma_factor"],
+        "size_margin": candidate_cfg["size_margin"],
+        "min_half_size": candidate_cfg["min_half_size"],
+        "max_half_size": candidate_cfg["max_half_size"],
+        "isolation_margin": candidate_cfg["isolation_margin"],
+        "no_data": no_data,
+    }
+    screen_record = None
+
+    if rule == "none":
+        candidates = select_psf_candidates_from_rows(
+            rows,
+            segmentation.data,
+            target_n_candidates=candidate_cfg["target_n_candidates"],
+            **cuts,
+        )
+    else:
+        # The whole pool, in the order of the selection, is screened before
+        # the first candidates are kept, so a rejected source is replaced by
+        # the next member of the stellar sequence.
+        pool = select_psf_candidates_from_rows(
+            rows, segmentation.data, target_n_candidates=max(1, len(rows)), **cuts
+        )
+
+        try:
+            screen = screen_psf_candidates(
+                image.data,
+                pool,
+                min_peak_snr=candidate_cfg["min_peak_snr"],
+                target_n_candidates=int(candidate_cfg["target_n_candidates"]),
+                origin=(origin_x, origin_y),
+            )
+        except PointSourceScreenError as error:
+            # A stop saves nothing: the record travels with the error, whose
+            # remedies name the region that was searched.
+            searched = (
+                "The whole image was searched."
+                if region is None
+                else "The stars were searched within the working region x "
+                f"{region.xmin}-{region.xmax}, y {region.ymin}-{region.ymax} of "
+                "the image."
+            )
+
+            raise PointSourceScreenError(
+                screen_stop_message(
+                    error.record, searched=searched, whole_image=region is None
+                ),
+                code=error.code,
+                record=error.record,
+                finding=error.finding,
+            ) from error
+
+        candidates = list(screen.kept)
+        screen_record = screen.record
 
     # The stars are found in the array of the working region; their positions
     # are saved in pixels of the whole image.
@@ -344,7 +699,17 @@ def run_psf_candidate_selection_from_config(
             for candidate in candidates
         ]
 
+    # The provenance is written last: it binds the candidates, and the
+    # record of their screen, to the image and the settings.
     save_psf_candidates(resolved, candidates)
+
+    if screen_record is not None:
+        save_psf_candidate_screen(resolved, screen_record)
+    else:
+        # Unscreened candidates have no record; one left by an earlier
+        # selection, which only an overwrite reaches, would describe others.
+        paths["candidate_screen"].unlink(missing_ok=True)
+
     save_psf_candidates_provenance(resolved)
 
     return candidates

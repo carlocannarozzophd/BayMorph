@@ -14,6 +14,12 @@ from baymorph import (
     ObservationAdvisor,
     ObservationConfigProposal,
 )
+from baymorph.pipeline.psf_candidate_screen import (
+    PSF_CANDIDATE_SCREEN_SCHEMA,
+    PSF_CANDIDATE_SCREEN_SCHEMA_VERSION,
+    SIZE_SEQUENCE_V1_SHA256,
+)
+from baymorph.pipeline.psf_candidates import save_psf_candidate_screen
 
 FAKE_SKY_SCALE = 2.0
 
@@ -46,6 +52,22 @@ def fixed_input_stages(
             y, x = np.indices((25, 25), dtype=float)
             psf = np.exp(-0.5 * ((x - 12.0) ** 2 + (y - 12.0) ** 2) / 1.2**2)
             psf /= psf.sum()
+            # The record that the screen of the stars leaves beside them.
+            save_psf_candidate_screen(
+                {**resolved, "outputs": {**resolved["outputs"], "overwrite": True}},
+                {
+                    "schema": PSF_CANDIDATE_SCREEN_SCHEMA,
+                    "schema_version": PSF_CANDIDATE_SCREEN_SCHEMA_VERSION,
+                    "rule": "size_sequence_v1",
+                    "constants_sha256": SIZE_SEQUENCE_V1_SHA256,
+                    "outcome": "found",
+                    "n_pool": 20,
+                    "n_members": 12,
+                    "n_kept": 12,
+                    "sequence": {"size_pix": 1.3},
+                    "counts": {"member": 12, "larger_than_stellar_sequence": 8},
+                },
+            )
 
         return products, psf
 

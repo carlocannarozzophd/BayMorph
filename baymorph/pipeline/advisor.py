@@ -8,6 +8,7 @@ from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import numpy as np
@@ -69,7 +70,20 @@ from baymorph.pipeline.prior_proposals import (
     propose_psf_max_peak,
     propose_psf_min_peak,
 )
-from baymorph.pipeline.psf_candidates import run_psf_candidate_selection_from_config
+from baymorph.pipeline.psf_candidate_screen import (
+    DEFAULT_POINT_SOURCE_SCREEN,
+    SIZE_SEQUENCE_V1_SHA256,
+    PointSourceScreenChangeError,
+    PointSourceScreenError,
+    point_source_screen_rule,
+    screen_stop_message,
+    screen_summary,
+)
+from baymorph.pipeline.psf_candidates import (
+    load_psf_candidate_screen,
+    run_psf_candidate_selection_from_config,
+)
+from baymorph.pipeline.outputs import pipeline_paths
 from baymorph.pipeline.psf_construction import (
     estimate_psf_core_fwhm,
     run_psf_construction_from_config,
@@ -194,6 +208,14 @@ class FixedInputs:
         whole image.
     seed_on_target : bool
         Whether the target position lies on the prepared target.
+    psf_star_screen : dict, optional
+        What the point-source screen of the PSF stars found: None for a
+        Gaussian PSF, ``{"rule": "none"}`` when the stars are selected by
+        shape only, otherwise the rule and the digest of its constants, the
+        numbers of candidates, members and kept stars, the size of the
+        stellar sequence in pixels and arcsec, its scatter, the count of its
+        core and its tail probability, the rejections by reason, and the
+        path of the record of the screen.
     """
 
     sky_scale: float
@@ -207,6 +229,7 @@ class FixedInputs:
     target_centre: tuple[float, float]
     target_seed: tuple[float, float]
     seed_on_target: bool
+    psf_star_screen: dict[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable description of the fixed inputs."""
@@ -222,6 +245,7 @@ class FixedInputs:
             "target_centre": [float(value) for value in self.target_centre],
             "target_seed": [float(value) for value in self.target_seed],
             "seed_on_target": bool(self.seed_on_target),
+            "psf_star_screen": deepcopy(self.psf_star_screen),
         }
 
 
@@ -508,6 +532,71 @@ def _settle_psf_min_peak(
         "checked against the noise or the units of the image. Declare "
         "psf_min_peak=... in science-image units."
     )
+
+
+ADVISOR_SCREEN_REMEDY_TERMS = MappingProxyType(
+    {
+        "larger": "a larger working region, region='whole' or "
+        "region={'size': <arcsec>},",
+        "smaller": "a smaller working region about the target, "
+        "region={'size': <arcsec>},",
+        "fallback": (
+            "use psf_type='gaussian' with gaussian_fwhm_pixels=..., or "
+            "psf_point_source_screen='none', which the proposal records as your "
+            "decision, with a warning that galaxies, cosmic rays and hot pixels "
+            "can enter the PSF"
+        ),
+    }
+)
+"""Remedies of a stop of the PSF-star screen in the options of the advisor."""
+
+PSF_SCREEN_NONE_WARNING = (
+    "The stars of the empirical PSF are selected by shape only "
+    "(psf_point_source_screen='none', declared by the user): galaxies, cosmic "
+    "rays and hot pixels can enter the PSF, and the check of its centroid "
+    "does not detect them."
+)
+
+
+def _settle_psf_point_source_screen(
+    config_options: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Settle the point-source screen of the PSF stars in ``config_options``.
+
+    The screen selects the stars of an empirical PSF, so the measurement of
+    the fixed inputs and the proposal settle it in the same way before the
+    stages run: the rule the user declares, recorded with a warning when it
+    is ``"none"``, else the BayMorph screen, which the advisor writes. The
+    advisor never declares ``"none"`` itself.
+
+    Returns
+    -------
+    tuple
+        The provenance record of the screen, or None for a Gaussian PSF,
+        and a warning when the user declares ``"none"``, or None.
+    """
+    psf_type = str(config_options.get("psf_type", "empirical")).strip().lower()
+
+    if psf_type != "empirical":
+        return None, None
+
+    declared = config_options.get("psf_point_source_screen")
+
+    if declared is not None:
+        return (
+            {"value": declared, "source": "user", "detail": "declared by the user"},
+            PSF_SCREEN_NONE_WARNING if declared == "none" else None,
+        )
+
+    config_options["psf_point_source_screen"] = DEFAULT_POINT_SOURCE_SCREEN
+
+    return {
+        "value": DEFAULT_POINT_SOURCE_SCREEN,
+        "source": "advisor",
+        "detail": (
+            "BayMorph screen of the PSF stars: the stellar sequence of their sizes"
+        ),
+    }, None
 
 
 def _chosen_models(
@@ -1726,7 +1815,10 @@ class ObservationAdvisor:
         as :meth:`propose_config` settles them: when ``psf_max_peak`` is not
         declared, half the saturation level of the header, when its unit is
         established, and when ``psf_min_peak`` is not declared, 30 times the
-        noise sigma of the image select the stars.
+        noise sigma of the image select the stars. Unless
+        ``psf_point_source_screen`` is declared, the stars are screened with
+        the BayMorph rule, and :attr:`FixedInputs.psf_star_screen` reports
+        what the screen found.
 
         Parameters
         ----------
@@ -1736,13 +1828,20 @@ class ObservationAdvisor:
             Options of :func:`baymorph.make_config_from_fits` that the
             proposal will use, such as ``object_name``, ``outputs_root``,
             ``cutout_mode``, ``psf_type``, ``psf_max_peak``,
-            ``psf_min_peak`` or ``preparation``.
+            ``psf_min_peak``, ``psf_point_source_screen`` or ``preparation``.
 
         Returns
         -------
         FixedInputs
             The sky scale, the measured sky level, the cutout shape, and the
             FWHM and noise-equivalent area of the PSF.
+
+        Raises
+        ------
+        PointSourceScreenError
+            If the screen of the PSF stars finds no stellar sequence; nothing
+            is saved, and the error carries the record of every candidate and
+            the remedies.
         """
         if self.target_position is None:
             raise ValueError(
@@ -1751,9 +1850,27 @@ class ObservationAdvisor:
 
         _settle_psf_max_peak(self._header_reading(), config_options)
         _settle_psf_min_peak(self._current_inspection().noise_sigma, config_options)
+        _settle_psf_point_source_screen(config_options)
 
         resolved = self._stage_config(model_name=model_name, **config_options)
-        products, psf = self._run_fixed_input_stages(resolved)
+
+        try:
+            products, psf = self._run_fixed_input_stages(resolved)
+        except PointSourceScreenError as error:
+            # The pipeline stops without a fallback; the advisor names the
+            # remedies in terms of its own options.
+            raise PointSourceScreenError(
+                self._screen_stop_message(error),
+                code=error.code,
+                record=error.record,
+                finding=error.finding,
+            ) from error
+        except PointSourceScreenChangeError as error:
+            raise PointSourceScreenChangeError(
+                f"{error} With the advisor, psf_point_source_screen='none' "
+                "reuses them unchanged, and another object_name selects screened "
+                "stars in a new namespace."
+            ) from error
 
         noise = np.asarray(products.noise, dtype=float)
         finite_noise = noise[np.isfinite(noise)]
@@ -1811,6 +1928,45 @@ class ObservationAdvisor:
             seed_on_target=position_on_segment(
                 products.target_segment, seed_x - origin_x, seed_y - origin_y
             ),
+            psf_star_screen=_psf_star_screen(
+                resolved,
+                pixel_scale=_finite_or_none(
+                    self._header_reading().value("pixel_scale")
+                ),
+            ),
+        )
+
+    def _screen_stop_message(self, error: PointSourceScreenError) -> str:
+        """Return the stop of the PSF-star screen with the advisor's remedies."""
+        inspection = self._current_inspection()
+        rows, columns = inspection.shape
+        scale = _finite_or_none(self._header_reading().value("pixel_scale"))
+        region = inspection.working_region
+
+        def sides(width: int, height: int) -> str:
+            text = f"{width} x {height} pixels"
+
+            if scale is not None:
+                text += f" ({width * scale:.0f} x {height * scale:.0f} arcsec)"
+
+            return text
+
+        if region is None:
+            searched = f"The whole image of {sides(columns, rows)} was searched."
+        else:
+            searched = (
+                "The stars were searched within "
+                + sides(
+                    region["xmax"] - region["xmin"], region["ymax"] - region["ymin"]
+                )
+                + f" of the {columns} x {rows} pixels of the image."
+            )
+
+        return screen_stop_message(
+            error.record,
+            searched=searched,
+            whole_image=region is None,
+            terms=ADVISOR_SCREEN_REMEDY_TERMS,
         )
 
     def propose_config(
@@ -2032,12 +2188,16 @@ class ObservationAdvisor:
         min_peak_record, floor_warning = _settle_psf_min_peak(
             self._current_inspection().noise_sigma, config_options
         )
+        screen_record, screen_warning = _settle_psf_point_source_screen(config_options)
 
         if floor_warning is not None:
             warnings.append(floor_warning)
 
         if peak_warning is not None:
             warnings.append(peak_warning)
+
+        if screen_warning is not None:
+            warnings.append(screen_warning)
 
         stage_identity = _stage_identity(
             self._stage_config(model_name=first, **config_options)
@@ -2295,7 +2455,7 @@ class ObservationAdvisor:
 
         provenance = {
             "schema": "baymorph.advisor_proposal",
-            "schema_version": 5,
+            "schema_version": 6,
             "decision": "AD-049",
             "baymorph_version": _baymorph_version(),
             "image_path": config["data"]["image_path"],
@@ -2326,6 +2486,12 @@ class ObservationAdvisor:
                 "background_sky_scale_multiple": (BACKGROUND_SKY_SCALE_MULTIPLE),
                 "psf_peak_saturation_fraction": PSF_PEAK_SATURATION_FRACTION,
                 "gain_ratio_tolerance": GAIN_RATIO_TOLERANCE,
+                # The rule the advisor writes when the user declares none;
+                # the rule of this proposal is under psf_point_source_screen.
+                "default_psf_point_source_screen_rule": DEFAULT_POINT_SOURCE_SCREEN,
+                "default_psf_point_source_screen_constants_sha256": (
+                    SIZE_SEQUENCE_V1_SHA256
+                ),
             },
             "header": reading.as_dict(),
             "fixed_inputs": fixed_inputs.as_dict(),
@@ -2344,6 +2510,7 @@ class ObservationAdvisor:
             "effective_gain": gain_record,
             "psf_max_peak": max_peak_record,
             "psf_min_peak": min_peak_record,
+            "psf_point_source_screen": screen_record,
             "warnings": list(warnings),
         }
 
@@ -2881,6 +3048,14 @@ def _provenance_summary(provenance: Mapping[str, Any]) -> list[str]:
             + f" [{floor['source']}] {floor['detail']}"
         )
 
+    screen = provenance.get("psf_point_source_screen")
+
+    if screen:
+        lines.append(
+            f"PSF star screen: {screen['value']} [{screen['source']}] "
+            f"{screen['detail']}"
+        )
+
     bridges = provenance.get("bridges") or []
 
     if bridges:
@@ -2906,8 +3081,100 @@ def _provenance_summary(provenance: Mapping[str, Any]) -> list[str]:
                     f"{fixed['psf_noise_equivalent_area']:.4g} px^2"
                 ),
                 *_fixed_centre_lines(fixed),
+                *_psf_star_lines(fixed.get("psf_star_screen")),
                 f"Products: {fixed['run_directory']}",
             ]
         )
 
     return lines
+
+
+_SCREEN_REASON_TEXT = {
+    "larger_than_stellar_sequence": "larger than the sequence",
+    "smaller_than_stellar_sequence": "smaller than the sequence",
+    "profile_unlike_stellar_sequence": "unlike its profile",
+    "peak_snr_below_threshold": "below the peak S/N",
+    "sharper_than_point_source": "sharper than a point source",
+    "larger_than_window": "larger than their cutout",
+    "size_not_measurable": "without a measurable size",
+}
+
+
+def _psf_star_lines(screen: Mapping[str, Any] | None) -> list[str]:
+    """Return the summary lines of the point-source screen of the PSF stars.
+
+    The first line gives the stars kept against those sought, so that a PSF
+    of few stars shows as such; the second gives the count, the scatter and
+    the tail probability of the sequence, by which a user can tell a narrow
+    sequence of stars from a looser crowd of barely resolved galaxies.
+    """
+    if not screen:
+        return []
+
+    if screen.get("rule") == "none":
+        return ["PSF stars: selected by shape only (none, declared by the user)"]
+
+    size = screen.get("sequence_size_pix")
+    arcsec = screen.get("sequence_size_arcsec")
+    where = "" if size is None else f" at {size:.2f} px"
+
+    if size is not None and arcsec is not None:
+        where += f" ({arcsec:.3f} arcsec)"
+
+    sought = screen.get("target_n_candidates")
+    kept = f"{screen['n_kept']} kept" + (
+        "" if sought is None else f" of the {sought} sought"
+    )
+    rejected = sorted(
+        (screen.get("rejected") or {}).items(), key=lambda item: (-item[1], item[0])
+    )
+    rejections = ", ".join(
+        f"{count} {_SCREEN_REASON_TEXT.get(reason, reason)}"
+        for reason, count in rejected
+    )
+    lines = [
+        f"PSF stars: {kept}, from the {screen['n_members']} members of the "
+        f"stellar sequence{where}, among {screen['n_pool']} candidates"
+        + (f"; rejected: {rejections}" if rejections else "")
+    ]
+    n_core = screen.get("n_core")
+    tau_hat = screen.get("tau_hat")
+    p_tail = screen.get("p_tail")
+
+    if n_core is not None and tau_hat is not None and p_tail is not None:
+        lines.append(
+            f"Stellar sequence: {n_core} sizes within 5 per cent, scatter "
+            f"{tau_hat:.4f} in ln s, chance {p_tail:.2g} against the sizes next "
+            "to it"
+        )
+
+    return lines
+
+
+def _psf_star_screen(
+    resolved: Mapping[str, Any], *, pixel_scale: float | None = None
+) -> dict[str, Any] | None:
+    """Return what the point-source screen of the PSF stars found.
+
+    ``pixel_scale`` is the pixel scale of the header reading, in arcsec per
+    pixel, which gives the size of the sequence on the sky.
+
+    Raises
+    ------
+    ValueError
+        If the stars were screened but the record of the screen is missing.
+    """
+    if str(resolved["psf"]["type"]).strip().lower() != "empirical":
+        return None
+
+    rule = point_source_screen_rule(resolved["psf"]["empirical"]["candidate_selection"])
+
+    if rule == "none":
+        return {"rule": "none"}
+
+    record = load_psf_candidate_screen(dict(resolved))
+
+    return {
+        **screen_summary(record, pixel_scale=pixel_scale),
+        "record_path": str(pipeline_paths(dict(resolved))["psf"]["candidate_screen"]),
+    }

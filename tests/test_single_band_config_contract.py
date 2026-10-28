@@ -325,3 +325,76 @@ def test_resolved_config_omits_empirical_psf_normalize_option() -> None:
     empirical = resolved["psf"]["empirical"]
 
     assert "normalize" not in empirical["construction"]
+
+
+def test_resolved_config_screens_the_psf_stars_by_default() -> None:
+    """The stars of an empirical PSF are screened unless none is declared."""
+    resolved = resolve_config(_minimal_config())
+    selection = resolved["psf"]["empirical"]["candidate_selection"]
+
+    assert selection["point_source_screen"] == "size_sequence_v1"
+
+    config = _minimal_config()
+    config["psf"] = {
+        "empirical": {"candidate_selection": {"point_source_screen": "none"}}
+    }
+    selection = resolve_config(config)["psf"]["empirical"]["candidate_selection"]
+
+    assert selection["point_source_screen"] == "none"
+
+
+@pytest.mark.parametrize("value", ["v1", "size_sequence", True, None])
+def test_an_unknown_point_source_screen_is_rejected(value) -> None:
+    config = _minimal_config()
+    config["psf"] = {
+        "empirical": {"candidate_selection": {"point_source_screen": value}}
+    }
+
+    with pytest.raises(
+        ValueError,
+        match=r"point_source_screen must be one of \['none', 'size_sequence_v1'\]",
+    ):
+        resolve_config(config)
+
+
+@pytest.mark.parametrize(
+    ("section", "entry"),
+    [
+        ("candidate_selection", "max_peaks"),
+        ("candidate_selection", "stellar_sequence"),
+        ("construction", "sky_inner_radiuss"),
+    ],
+)
+def test_an_unknown_empirical_psf_entry_is_rejected(section, entry) -> None:
+    """A misspelled entry is refused, never ignored."""
+    config = _minimal_config()
+    config["psf"] = {"empirical": {section: {entry: 1}}}
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            rf"Unsupported configuration entries in psf\.empirical\.{section}: "
+            rf"\['{entry}'\]\. Available entries: \["
+        ),
+    ):
+        resolve_config(config)
+
+
+def test_every_distributed_configuration_still_resolves() -> None:
+    """The example configurations use only known PSF entries."""
+    from pathlib import Path
+
+    from baymorph.pipeline.config import load_config
+
+    root = Path(__file__).resolve().parents[1]
+    paths = sorted(
+        [
+            *(root / "configs").glob("*.yaml"),
+            *(root / "baymorph" / "resources" / "configs").glob("*.yaml"),
+        ]
+    )
+
+    assert paths
+
+    for path in paths:
+        resolve_config(load_config(path))

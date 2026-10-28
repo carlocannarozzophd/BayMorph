@@ -1807,3 +1807,40 @@ def test_runner_multi_observation_fit_builds_noise_artifacts(
     }
     assert events[1][1] == "galaxy_g"
     assert events[1][2]["max_neighbors"] == 64
+
+
+def test_a_stop_of_the_psf_star_screen_names_its_observation(monkeypatch):
+    """In a joint run, the stop of the screen says which observation stopped."""
+    from baymorph.pipeline.psf_candidate_screen import PointSourceScreenError
+
+    observation_configs = {
+        "g": {"object": {"name": "galaxy_g"}},
+        "r": {"object": {"name": "galaxy_r"}},
+    }
+    monkeypatch.setattr(
+        "baymorph.runner.resolve_multi_observation_observation_configs",
+        lambda config, base_dir=None: observation_configs,
+    )
+
+    def fake_select(config):
+        if config["object"]["name"] == "galaxy_r":
+            raise PointSourceScreenError(
+                "PSF candidate screen size_sequence_v1: stopped.",
+                code="too_few",
+                record={"n_pool": 3},
+                finding="stopped.",
+            )
+
+        return []
+
+    monkeypatch.setattr("baymorph.runner.run_psf_candidate_selection", fake_select)
+    runner = BayMorphRunner(_multi_observation_runner_config(), verbose=False)
+
+    with pytest.raises(PointSourceScreenError) as error:
+        runner.select_psf_candidates()
+
+    assert str(error.value) == (
+        "Observation 'r': PSF candidate screen size_sequence_v1: stopped."
+    )
+    assert error.value.code == "too_few"
+    assert error.value.record == {"n_pool": 3, "observation": "r"}

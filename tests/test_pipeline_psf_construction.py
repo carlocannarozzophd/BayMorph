@@ -27,6 +27,10 @@ from baymorph.pipeline.psf_construction import (
     empirical_psf_centroid_tolerance_pixels,
     validate_empirical_psf,
 )
+from baymorph.pipeline.psf_candidate_screen import (
+    SIZE_SEQUENCE_V1_SHA256,
+    PointSourceScreenChangeError,
+)
 from baymorph.rendering.effective_psf import SUBPIXEL_FACTOR
 
 
@@ -720,6 +724,9 @@ def test_psf_construction_rejects_low_snr_candidates(
             "empirical": {
                 "candidate_selection": {
                     "min_peak_snr": 30.0,
+                    # The mocked candidates were not screened for point
+                    # sources, so they have no screen record.
+                    "point_source_screen": "none",
                 },
             },
         },
@@ -816,6 +823,9 @@ def test_psf_construction_fails_when_all_candidates_fail_snr(
             "empirical": {
                 "candidate_selection": {
                     "min_peak_snr": 30.0,
+                    # The mocked candidates were not screened for point
+                    # sources, so they have no screen record.
+                    "point_source_screen": "none",
                 },
             },
         },
@@ -930,3 +940,216 @@ def test_psf_core_fwhm_validates_sampling_parameters():
             psf,
             n_angles=4,
         )
+
+
+# The psf.empirical section of an accepted ground-based r-band run, copied
+# from its resolved configuration; no data are read.
+GROUND_EMPIRICAL = {
+    "candidate_selection": {
+        "auto": True,
+        "edge_margin": 30,
+        "galaxy_exclusion_box": None,
+        "isolation_margin": 2,
+        "max_area": 800,
+        "max_eccentricity": 0.8,
+        "max_elongation": 2.5,
+        "max_half_size": 30,
+        "max_peak": 20000.0,
+        "min_area": 10,
+        "min_half_size": 12,
+        "min_peak": 20,
+        "min_peak_snr": 30.0,
+        "sigma_factor": 4.0,
+        "size_margin": 4,
+        "target_n_candidates": 30,
+    },
+    "construction": {
+        "centroid_tolerance_pixels": 0.05,
+        "mask_growth_pixels": 5,
+        "sky_inner_radius": 80.0,
+        "sky_outer_radius": 160.0,
+        "support_half_size": 64,
+    },
+}
+
+
+def _ground_provenance_config(tmp_path, screen):
+    """Return a configuration with the ground-based settings and PSF files."""
+    image = tmp_path / "image.fits"
+
+    if not image.exists():
+        fits.writeto(image, np.zeros((8, 8)))
+
+    empirical = json.loads(json.dumps(GROUND_EMPIRICAL))
+    empirical["candidate_selection"]["point_source_screen"] = screen
+    config = resolve_config(
+        {
+            "object": {"name": "ground"},
+            "data": {"image_path": str(image)},
+            "psf": {"empirical": empirical},
+            "outputs": {"root": str(tmp_path / "runs")},
+        }
+    )
+    paths = pipeline_paths(config)["psf"]
+    paths["dir"].mkdir(parents=True, exist_ok=True)
+
+    for name in ("candidates", "psf_fits"):
+        if not paths[name].exists():
+            paths[name].write_bytes(b"product")
+
+    return config
+
+
+def test_the_neutral_screen_keeps_the_identity_of_accepted_psfs(tmp_path):
+    """Under none the PSF digest is that of earlier releases."""
+    neutral = build_empirical_psf_provenance(
+        _ground_provenance_config(tmp_path, "none")
+    )
+    screened = build_empirical_psf_provenance(
+        _ground_provenance_config(tmp_path, "size_sequence_v1")
+    )
+
+    assert neutral["empirical_config_sha256"] == (
+        "18ff40364e008139ecc208dbe084214f011b0ced6b85f58d432c19c4b8756bf7"
+    )
+    assert "point_source_screen" not in neutral
+    assert screened["empirical_config_sha256"] != neutral["empirical_config_sha256"]
+    assert screened["point_source_screen"]["rule"] == "size_sequence_v1"
+
+
+def test_a_psf_of_one_screen_is_refused_under_the_other(tmp_path):
+    """A PSF without the marker, or with it, binds its own rule only."""
+    from baymorph.pipeline.psf_construction import validate_empirical_psf_provenance
+
+    neutral = _ground_provenance_config(tmp_path, "none")
+    screened = _ground_provenance_config(tmp_path, "size_sequence_v1")
+    unmarked = {"provenance": build_empirical_psf_provenance(neutral)}
+    marked = {"provenance": build_empirical_psf_provenance(screened)}
+
+    validate_empirical_psf_provenance(neutral, unmarked)
+    validate_empirical_psf_provenance(screened, marked)
+
+    with pytest.raises(PointSourceScreenChangeError) as error:
+        validate_empirical_psf_provenance(screened, unmarked)
+
+    # Only the screen differs: the refusal names the declaration that reuses
+    # the PSF, and never asks to rebuild an accepted PSF in place.
+    assert "selected without the point-source screen" in str(error.value)
+    assert "point_source_screen: none to reuse them unchanged" in str(error.value)
+    assert "overwrite" not in str(error.value)
+    assert "rebuild" not in str(error.value)
+
+    with pytest.raises(PointSourceScreenChangeError, match="size_sequence_v1 to"):
+        validate_empirical_psf_provenance(neutral, marked)
+
+
+def test_a_psf_of_other_inputs_names_the_screen_among_the_differences(tmp_path):
+    """When more than the screen differs, the usual refusal names it too."""
+    from baymorph.pipeline.psf_construction import validate_empirical_psf_provenance
+
+    neutral = _ground_provenance_config(tmp_path, "none")
+    screened = _ground_provenance_config(tmp_path, "size_sequence_v1")
+    recorded = build_empirical_psf_provenance(neutral)
+    recorded["input_fits"] = {**recorded["input_fits"], "sha256": "0" * 64}
+
+    with pytest.raises(ValueError) as error:
+        validate_empirical_psf_provenance(screened, {"provenance": recorded})
+
+    assert not isinstance(error.value, PointSourceScreenChangeError)
+    assert "Mismatched fields: empirical_config_sha256, input_fits" in str(
+        error.value
+    )
+    assert "also selected with no point-source screen" in str(error.value)
+
+
+def test_the_metadata_of_a_screened_psf_summarizes_its_screen(monkeypatch):
+    """psf_metadata.json carries the rule, its digest and the counts."""
+    from types import SimpleNamespace
+
+    import baymorph.pipeline.psf_construction as module
+
+    image = np.zeros((31, 31), dtype=float)
+    image[10, 10] = 100.0
+    candidates = [SimpleNamespace(label=1, x=10.0, y=10.0, half_size=3)]
+    observation = SimpleNamespace(
+        image=SimpleNamespace(data=image, region=None, floating_point=False)
+    )
+    record = {
+        "n_pool": 41,
+        "n_members": 9,
+        "n_kept": 9,
+        "sequence": {"size_pix": 1.33, "tau_hat": 0.004},
+    }
+    checked = []
+    captured = {}
+
+    def fake_build(image, used, labels, settings, no_data=None):
+        psf = np.zeros((7, 7), dtype=float)
+        psf[3, 3] = 1.0
+
+        return SimpleNamespace(
+            native=psf,
+            subpixel_kernels=_replicated_phases(psf),
+            wing_profile={"radius": [], "value": [], "error": []},
+            stars=[{"label": candidate["label"]} for candidate in used],
+            windows=[psf],
+        )
+
+    patches = {
+        "open_configured_observation": lambda data, declarations=True: observation,
+        "load_psf_candidates": lambda _: candidates,
+        "load_psf_candidate_screen": lambda _: record,
+        "validate_psf_candidate_screen": lambda r, c: checked.append((r, c)),
+        "estimate_cutout_peak_snr": lambda cutout: float(np.max(cutout)),
+        "observation_metadata_dict": lambda _: {},
+        "save_empirical_psf_diagnostics": lambda *args, **kwargs: None,
+        "save_empirical_psf": lambda *args, **kwargs: None,
+        "build_empirical_psf_provenance": lambda *_: {"empirical_config_sha256": "c"},
+        "build_empirical_psf": fake_build,
+        "detect_real_fits_sources": lambda image, **kwargs: SimpleNamespace(
+            segmentation=None
+        ),
+        "save_empirical_psf_metadata": lambda config, metadata: captured.update(
+            metadata=metadata
+        ),
+    }
+
+    for name, value in patches.items():
+        monkeypatch.setattr(module, name, value)
+
+    config = {
+        "data": {"image_path": "unused.fits"},
+        "psf": {
+            "empirical": {
+                "candidate_selection": {
+                    "min_peak_snr": 30.0,
+                    "point_source_screen": "size_sequence_v1",
+                }
+            }
+        },
+    }
+
+    module.run_psf_construction_from_config(config)
+
+    assert checked == [(record, candidates)]
+    assert captured["metadata"]["point_source_screen"] == {
+        "rule": "size_sequence_v1",
+        "constants_sha256": SIZE_SEQUENCE_V1_SHA256,
+        "n_pool": 41,
+        "n_members": 9,
+        "n_kept": 9,
+        "sequence_size_pix": 1.33,
+    }
+
+
+def test_construction_of_screened_candidates_needs_their_record(tmp_path):
+    """Without the record of their screen, screened stars build no PSF."""
+    import baymorph.pipeline.psf_construction as module
+
+    config = _ground_provenance_config(tmp_path, "size_sequence_v1")
+    pipeline_paths(config)["psf"]["candidates"].write_text(
+        json.dumps([{"x": 4.0, "y": 4.0, "half_size": 3}])
+    )
+
+    with pytest.raises(ValueError, match="psf_candidate_screen.json is missing"):
+        module.run_psf_construction_from_config(config)

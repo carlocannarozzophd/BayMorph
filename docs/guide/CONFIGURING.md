@@ -212,7 +212,15 @@ the header gives the saturation level in the units of the image, half of
 it becomes the brightest star allowed for the PSF. The faintest star
 allowed for the PSF is 30 times the noise sigma of the image, the peak
 signal-to-noise that the construction of the PSF demands of every star, so
-it holds whatever the units of the image.
+it holds whatever the units of the image. The stars of the PSF are screened
+for point sources, and `measure_fixed_inputs` reports what the screen found:
+the stars kept against the 30 sought, the size of their stellar sequence in
+pixels and arcsec, its scatter, and how many candidates were rejected and
+why. When the candidates hold no stellar sequence, the Advisor stops, saves
+no PSF candidate, and names the remedies that can help: a larger or a
+smaller working region, a Gaussian PSF, or
+`psf_point_source_screen="none"`, which selects the stars by shape only and
+which the proposal records as your decision, with a warning.
 
 `models` holds one or more models, written to `fit.models`. Each receives
 its priors by the same rules, and the fit runs one fit per model on the same
@@ -222,8 +230,8 @@ validated classifier that ranks them, and fitting several is not a
 preference for any of them.
 
 Anything you declare is kept as declared: a prior through `model_priors`
-or `flux_prior`, `background`, `likelihood`, `psf_max_peak` or
-`psf_min_peak`. With
+or `flux_prior`, `background`, `likelihood`, `psf_max_peak`,
+`psf_min_peak` or `psf_point_source_screen`. With
 `models`, `model_priors` maps each model to its declared priors, for
 example `{"double_sersic": {"q_bulge": {...}}}`; `flux_prior` applies to a
 proposal of one model with one total flux. Each proposed flux prior states
@@ -253,6 +261,7 @@ fit:
 | The effective gain | `fit.likelihood.effective_gain` | It sets the Poisson noise of the galaxy; see [Sky and Noise](SKY_AND_NOISE.md). |
 | The brightest star for the PSF | `psf.empirical.candidate_selection.max_peak` | The default, 80000, is not scaled to your image: keep it below the saturation level, so that saturated stars are not used. |
 | The faintest star for the PSF | `psf.empirical.candidate_selection.min_peak` | The default, 20, is not scaled to your image either: on an image in electrons per second it can leave too few stars. |
+| The screen of the PSF stars | `psf.empirical.candidate_selection.point_source_screen` | The default keeps only the stellar sequence of the candidates' sizes; check the size and the scatter it reports, because in a field without stars a crowd of barely resolved galaxies can be taken for them (see [Limits](PSF.md#limits)). `none` lets galaxies, cosmic rays and hot pixels into the PSF. |
 | The cutout | `data.cutout` | The cutout is the part of the image the fit sees; see [Target and Cutout](IMAGE.md). |
 | What the header does not say | `data.calibration` | A quantity that the header leaves `ambiguous` or `conflicting` is not used until you declare it; see [Opening an Image](OPENING.md). |
 

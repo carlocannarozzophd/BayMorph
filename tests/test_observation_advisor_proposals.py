@@ -21,6 +21,13 @@ from baymorph.pipeline.prior_proposals import (
     noise_equivalent_area,
     point_source_flux_prior,
 )
+from baymorph.pipeline.psf_candidate_screen import (
+    PSF_CANDIDATE_SCREEN_SCHEMA,
+    PSF_CANDIDATE_SCREEN_SCHEMA_VERSION,
+    SIZE_SEQUENCE_V1,
+    SIZE_SEQUENCE_V1_SHA256,
+)
+from baymorph.pipeline.psf_candidates import save_psf_candidate_screen
 from baymorph.pipeline.psf_construction import estimate_psf_core_fwhm
 from baymorph.simulation.psf import GaussianPSF
 
@@ -99,6 +106,57 @@ def _prepared_products(resolved: dict, *, offset: float = 0.0) -> SimpleNamespac
     )
 
 
+SCREEN_COUNTS = {
+    "larger_than_stellar_sequence": 251,
+    "member": 41,
+    "peak_snr_below_threshold": 64,
+    "profile_unlike_stellar_sequence": 3,
+    "sharper_than_point_source": 12,
+    "size_not_measurable": 41,
+}
+
+
+def _write_screen_record(resolved: dict) -> None:
+    """Write the record of a stellar sequence, as the screen of the stars does.
+
+    The faked stages select no stars, so the record they would leave beside
+    the candidates is written for them, unless the stars are selected by
+    shape only.
+    """
+    selection = resolved["psf"]["empirical"]["candidate_selection"]
+
+    if selection["point_source_screen"] == "none":
+        return
+
+    record = {
+        "schema": PSF_CANDIDATE_SCREEN_SCHEMA,
+        "schema_version": PSF_CANDIDATE_SCREEN_SCHEMA_VERSION,
+        "rule": "size_sequence_v1",
+        "constants": dict(SIZE_SEQUENCE_V1),
+        "constants_sha256": SIZE_SEQUENCE_V1_SHA256,
+        "outcome": "found",
+        "finding": "",
+        "min_peak_snr": 30.0,
+        "target_n_candidates": 30,
+        "n_pool": sum(SCREEN_COUNTS.values()),
+        "n_search": 89,
+        "n_members": 41,
+        "n_kept": 30,
+        "modes": [],
+        "sequence": {
+            "size_pix": 1.21,
+            "n_core": 38,
+            "p_tail": 1.0e-12,
+            "tau_hat": 0.006,
+        },
+        "counts": dict(SCREEN_COUNTS),
+        "candidates": [],
+    }
+    save_psf_candidate_screen(
+        {**resolved, "outputs": {**resolved["outputs"], "overwrite": True}}, record
+    )
+
+
 def _psf_kernel(sigma: float = 1.2, size: int = 25) -> np.ndarray:
     """Return a normalized Gaussian kernel."""
     y, x = np.indices((size, size), dtype=float)
@@ -120,6 +178,7 @@ def stages(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
 
         if resolved["psf"]["type"] == "empirical":
             psf = _psf_kernel()
+            _write_screen_record(resolved)
 
         return products, psf
 
@@ -898,7 +957,7 @@ def test_the_calculator_gives_the_zeropoint_the_header_lacks(
 
     provenance = proposal.provenance
 
-    assert provenance["schema_version"] == 5
+    assert provenance["schema_version"] == 6
     assert provenance["online"] is True
     assert provenance["calibration"] == {
         "zeropoint": {"value": 25.931, "unit": "mag", "source": "stsci_acs_zeropoint"},
@@ -1393,3 +1452,217 @@ def test_the_summary_gives_the_centre_of_the_target(tmp_path: Path) -> None:
 
     assert corner.inspect().target_seed_on_source is False
     assert "The target seed lies on no detected source" in corner.summary()
+
+
+# --- point-source screen of the PSF stars -----------------------------------
+
+
+def test_the_advisor_screens_the_psf_stars_and_reports_what_it_found(
+    tmp_path: Path,
+    stages: list[dict],
+) -> None:
+    """The advisor writes the screen and reports the stars it kept."""
+    advisor = ObservationAdvisor(_write_coadd(tmp_path), target_position=(40.0, 40.0))
+    options = {"outputs_root": tmp_path / "runs"}
+
+    fixed_inputs = advisor.measure_fixed_inputs(**options)
+    proposal = advisor.propose_config(
+        output_path=tmp_path / "coadd.yaml",
+        flux_prior={"type": "log_uniform", "lower": 10.0, "upper": 1.0e7},
+        fixed_inputs=fixed_inputs,
+        **options,
+    )
+    selection = proposal.config["psf"]["empirical"]["candidate_selection"]
+    screen = fixed_inputs.psf_star_screen
+
+    assert stages[0]["psf"]["empirical"]["candidate_selection"][
+        "point_source_screen"
+    ] == ("size_sequence_v1")
+    assert selection["point_source_screen"] == "size_sequence_v1"
+    assert proposal.provenance["psf_point_source_screen"]["source"] == "advisor"
+    assert proposal.provenance["rules"]["default_psf_point_source_screen_rule"] == (
+        "size_sequence_v1"
+    )
+    assert proposal.provenance["rules"][
+        "default_psf_point_source_screen_constants_sha256"
+    ] == (SIZE_SEQUENCE_V1_SHA256)
+    assert (screen["n_kept"], screen["n_members"], screen["n_pool"]) == (30, 41, 412)
+    assert screen["sequence_size_arcsec"] == pytest.approx(1.21 * 0.21)
+    assert screen["rejected"]["larger_than_stellar_sequence"] == 251
+    assert screen["record_path"].endswith("psf_candidate_screen.json")
+    assert proposal.provenance["fixed_inputs"]["psf_star_screen"] == screen
+
+    summary = proposal.summary()
+
+    assert "PSF star screen: size_sequence_v1 [advisor]" in summary
+    assert (
+        "PSF stars: 30 kept of the 30 sought, from the 41 members of the stellar "
+        "sequence at 1.21 px (0.254 arcsec), among 412 candidates; rejected: 251 "
+        "larger than the sequence, 64 below the peak S/N, 41 without a measurable "
+        "size, 12 sharper than a point source, 3 unlike its profile"
+    ) in summary
+    assert (
+        "Stellar sequence: 38 sizes within 5 per cent, scatter 0.0060 in ln s, "
+        "chance 1e-12 against the sizes next to it"
+    ) in summary
+
+
+def test_a_declared_neutral_screen_is_the_users_decision_with_a_warning(
+    tmp_path: Path,
+    stages: list[dict],
+) -> None:
+    """Selecting the stars by shape only is recorded as the user's choice."""
+    advisor = ObservationAdvisor(_write_coadd(tmp_path), target_position=(40.0, 40.0))
+
+    proposal = advisor.propose_config(
+        output_path=tmp_path / "coadd.yaml",
+        outputs_root=tmp_path / "runs",
+        flux_prior={"type": "log_uniform", "lower": 10.0, "upper": 1.0e7},
+        psf_point_source_screen="none",
+    )
+    selection = proposal.config["psf"]["empirical"]["candidate_selection"]
+
+    assert selection["point_source_screen"] == "none"
+    assert proposal.provenance["psf_point_source_screen"] == {
+        "value": "none",
+        "source": "user",
+        "detail": "declared by the user",
+    }
+    assert any(
+        "selected by shape only (psf_point_source_screen='none'" in warning
+        for warning in proposal.warnings
+    )
+    assert proposal.provenance["fixed_inputs"]["psf_star_screen"] == {"rule": "none"}
+    assert (
+        "PSF stars: selected by shape only (none, declared by the user)"
+        in proposal.summary()
+    )
+
+
+def test_the_advisor_never_declares_the_neutral_screen() -> None:
+    """Without a declaration the advisor writes the BayMorph screen."""
+    from baymorph.pipeline.advisor import _settle_psf_point_source_screen
+
+    options: dict = {}
+    record, warning = _settle_psf_point_source_screen(options)
+
+    assert options == {"psf_point_source_screen": "size_sequence_v1"}
+    assert record["source"] == "advisor"
+    assert warning is None
+
+    gaussian = {"psf_type": "gaussian"}
+
+    assert _settle_psf_point_source_screen(gaussian) == (None, None)
+    assert gaussian == {"psf_type": "gaussian"}
+
+    declared = {"psf_point_source_screen": "size_sequence_v1"}
+    record, warning = _settle_psf_point_source_screen(declared)
+
+    assert record == {
+        "value": "size_sequence_v1",
+        "source": "user",
+        "detail": "declared by the user",
+    }
+    assert warning is None
+
+
+def _write_starless_field(directory: Path) -> Path:
+    """Write a field of galaxies of many sizes, with no star, and a header."""
+    rng = np.random.default_rng(4)
+    image = rng.normal(0.0, 1.0, (320, 320))
+    y, x = np.indices(image.shape, dtype=float)
+
+    for index in range(24):
+        row, column = divmod(index, 5)
+        cx = 40.0 + 60.0 * column + rng.uniform(-0.5, 0.5)
+        cy = 40.0 + 60.0 * row + rng.uniform(-0.5, 0.5)
+
+        if abs(cx - 160.0) < 30.0 and abs(cy - 160.0) < 30.0:
+            continue
+
+        sigma = rng.uniform(1.6, 3.6)
+        image += rng.uniform(60.0, 300.0) * np.exp(
+            -0.5 * ((x - cx) ** 2 + (y - cy) ** 2) / sigma**2
+        )
+
+    image += 400.0 * np.exp(
+        -0.5 * (((x - 160.0) / 5.0) ** 2 + ((y - 160.0) / 4.0) ** 2)
+    )
+
+    header = fits.Header()
+    header["CTYPE1"] = "RA---TAN"
+    header["CTYPE2"] = "DEC--TAN"
+    header["CRPIX1"] = 161.0
+    header["CRPIX2"] = 161.0
+    header["CRVAL1"] = 150.0
+    header["CRVAL2"] = 2.0
+    header["CDELT1"] = -0.2 / 3600.0
+    header["CDELT2"] = 0.2 / 3600.0
+    header["BUNIT"] = "ADU"
+
+    path = directory / "starless.fits"
+    fits.writeto(path, image, header)
+
+    return path
+
+
+def test_a_field_without_stars_stops_the_advisor_with_the_remedies(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The stop of the screen reaches the user with its record and remedies."""
+    from baymorph.pipeline.psf_candidate_screen import (
+        STOP_CODES,
+        PointSourceScreenError,
+    )
+    from baymorph.pipeline.psf_candidates import run_psf_candidate_selection_from_config
+
+    def selection_stages(self, resolved):
+        # The real selection of the stars; the preparation is not needed.
+        run_psf_candidate_selection_from_config(resolved)
+
+        return _prepared_products(resolved), _psf_kernel()
+
+    monkeypatch.setattr(ObservationAdvisor, "_run_fixed_input_stages", selection_stages)
+    advisor = ObservationAdvisor(
+        _write_starless_field(tmp_path), target_position=(160.0, 160.0)
+    )
+
+    with pytest.raises(PointSourceScreenError) as error:
+        advisor.measure_fixed_inputs(outputs_root=tmp_path / "runs")
+
+    message = str(error.value)
+    record = error.value.record
+
+    assert error.value.code in STOP_CODES
+    assert message.startswith("PSF candidate screen size_sequence_v1: ")
+    assert "No PSF candidate was saved" in message
+    assert (
+        "The whole image of 320 x 320 pixels (64 x 64 arcsec) was searched. No "
+        "larger region offers more stars."
+    ) in message
+    assert "psf_type='gaussian'" in message
+    assert "psf_point_source_screen='none'" in message
+    assert len(record["candidates"]) == record["n_pool"] > 0
+    assert not list((tmp_path / "runs").rglob("psf_candidates*.json"))
+    assert not list((tmp_path / "runs").rglob("psf_candidate_screen.json"))
+
+
+def test_products_of_another_screen_name_the_option_of_the_advisor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A namespace selected without the screen names the advisor's options."""
+    from baymorph.pipeline.psf_candidate_screen import PointSourceScreenChangeError
+
+    def refused_stages(self, resolved):
+        raise PointSourceScreenChangeError("The saved PSF candidates differ.")
+
+    monkeypatch.setattr(ObservationAdvisor, "_run_fixed_input_stages", refused_stages)
+    advisor = ObservationAdvisor(_write_coadd(tmp_path), target_position=(40.0, 40.0))
+
+    with pytest.raises(PointSourceScreenChangeError) as error:
+        advisor.measure_fixed_inputs(outputs_root=tmp_path / "runs")
+
+    assert "psf_point_source_screen='none' reuses them unchanged" in str(error.value)
+    assert "another object_name selects screened stars" in str(error.value)

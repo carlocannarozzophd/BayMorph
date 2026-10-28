@@ -30,10 +30,18 @@ from baymorph.pipeline.multi_observation_config import (
 from baymorph.pipeline.multi_observation_fit import (
     run_multi_observation_fit_from_config,
 )
+from baymorph.pipeline.psf_candidate_screen import (
+    PointSourceScreenChangeError,
+    PointSourceScreenError,
+    point_source_screen_marker,
+    point_source_screen_rule,
+)
 from baymorph.pipeline.psf_candidates import (
+    load_psf_candidate_screen,
     load_psf_candidates,
     psf_candidates_exist,
     psf_candidates_provenance_exists,
+    validate_psf_candidate_screen,
     validate_psf_candidates_provenance,
 )
 from baymorph.pipeline.psf_construction import empirical_psf_exists, load_empirical_psf
@@ -408,6 +416,8 @@ class BayMorphRunner:
         Candidates are the provenance of an accepted PSF, so they are reused
         rather than rewritten, but only when they were selected from the
         current image and settings; otherwise the stage fails closed.
+        Candidates screened for point sources are reused only with the
+        record of their screen.
         """
         if self._reuses_products(config) and psf_candidates_exist(config):
             if psf_candidates_provenance_exists(config):
@@ -415,7 +425,17 @@ class BayMorphRunner:
             else:
                 self._validate_candidates_without_provenance(config)
 
-            return (load_psf_candidates(config), True)
+            candidates = load_psf_candidates(config)
+            rule = point_source_screen_rule(
+                config["psf"]["empirical"]["candidate_selection"]
+            )
+
+            if point_source_screen_marker(rule) is not None:
+                validate_psf_candidate_screen(
+                    load_psf_candidate_screen(dict(config)), candidates
+                )
+
+            return (candidates, True)
 
         return (run_psf_candidate_selection(config), False)
 
@@ -447,6 +467,11 @@ class BayMorphRunner:
 
         try:
             load_empirical_psf(config)
+        except PointSourceScreenChangeError:
+            # The PSF, and so its stars, match the configuration but for the
+            # screen of the stars; the message names the declaration that
+            # reuses them, and an accepted PSF is never rewritten in place.
+            raise
         except ValueError as error:
             raise ValueError(
                 "The saved PSF candidates record no provenance, and the "
@@ -481,9 +506,18 @@ class BayMorphRunner:
             candidates = {}
 
             for name, observation_config in empirical_configs.items():
-                candidates[name], reused = self._select_one_psf_candidate_set(
-                    observation_config
-                )
+                try:
+                    candidates[name], reused = self._select_one_psf_candidate_set(
+                        observation_config
+                    )
+                except PointSourceScreenError as error:
+                    # A joint run names the observation whose stars stopped.
+                    raise PointSourceScreenError(
+                        f"Observation '{name}': {error}",
+                        code=error.code,
+                        record={**error.record, "observation": name},
+                        finding=error.finding,
+                    ) from error
 
                 self._stage_status(
                     "PSF candidate selection", reused=reused, observation_name=name

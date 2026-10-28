@@ -61,6 +61,7 @@ the galaxy is required: either `--target-center`, or `--target-x` and
 | `--gaussian-fwhm-pixels` | FWHM of a Gaussian PSF in pixels, needed only when the FITS metadata do not provide it. | |
 | `--psf-max-peak` | Brightest peak pixel accepted for a star of the empirical PSF, in image units; keep it below the saturation level. | BayMorph default; with `--advise`, half the saturation level of the header when its unit is known |
 | `--psf-min-peak` | Faintest peak pixel accepted for a star of the empirical PSF, in image units. | BayMorph default; with `--advise`, 30 times the noise sigma of the image |
+| `--psf-point-source-screen` | Screen of the stars of the empirical PSF: `size_sequence_v1` keeps the candidates that form the stellar sequence of their sizes, `none` selects them by shape only. With `--advise` the screen is written and what it found is reported. | `size_sequence_v1` |
 | `--image-unit` | Unit of the pixel values, such as `ADU/s` or `electron/s`, declared in `data.calibration`. | read from the header |
 | `--zeropoint` | Zeropoint in magnitudes, with m = zeropoint − 2.5 log10(flux in image units), declared in `data.calibration`. | read from the header |
 | `--photometric-system` | `AB` or `Vega`, the system of the declared zeropoint; only together with `--zeropoint`. | |
@@ -145,5 +146,5 @@ diagnostics. See [The Runner](../guide/RUNNER.md).
 | Status | Meaning |
 | --- | --- |
 | `0` | The command succeeded. |
-| `1` | The command failed while it ran, for example because a file is missing or is not a FITS file, a configuration is invalid, or a request to a calibration service that a proposal to write needed failed. The error is printed on one line, `baymorph: error: …`. |
+| `1` | The command failed while it ran, for example because a file is missing or is not a FITS file, a configuration is invalid, or a request to a calibration service that a proposal to write needed failed. The error is printed on one line, `baymorph: error: …`; when the screen of the PSF stars stops, an account of the candidates follows it: their verdicts counted by reason, the smallest groups of sizes, and the group taken for the stars. |
 | `2` | The options are invalid or do not go together, for example `--target-center` with `--target-x`. The error is printed after the usage of the command. |

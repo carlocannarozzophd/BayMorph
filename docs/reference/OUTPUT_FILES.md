@@ -51,6 +51,7 @@ The directory also holds intermediate arrays used by the diagnostics.
 | `psf_metadata.json` | how the kernel was built, and its properties |
 | `psf_candidates.json` | the stars selected for the PSF |
 | `psf_candidates_provenance.json` | the image, its HDU when declared, and the detection and selection settings the stars were selected with; a later run reuses the stars only when these are unchanged |
+| `psf_candidate_screen.json` | the screen of the candidate stars: the rule, the stellar sequence of sizes it found, and the size, profile and verdict of every candidate; absent when `point_source_screen` is `none` |
 | `diagnostics/` | the stamps of the stars and the profile of the kernel |
 
 ## `fits/<model>/`

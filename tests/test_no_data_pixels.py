@@ -30,7 +30,9 @@ from baymorph.pipeline.config_maker import image_sky_gives_the_gain
 from baymorph.pipeline.empirical_psf_builder import BuilderSettings, far_sky
 from baymorph.pipeline.noise_calibration import build_correlated_noise_calibration
 from baymorph.pipeline.psf_candidates import (
+    load_psf_candidate_screen,
     run_psf_candidate_selection_from_config,
+    save_psf_candidate_screen,
     save_psf_candidates,
     save_psf_candidates_provenance,
 )
@@ -585,8 +587,10 @@ def test_a_star_whose_cutout_holds_pixels_without_data_is_rejected(
     x, y = int(round(first.x)), int(round(first.y))
     blank = _star_field([(np.nan, slice(y + 2, y + 3), slice(x + 2, x + 3))])
     config = _psf_config(tmp_path, "blank", blank)
-    # The candidates of the clean field, as if found before the blank appeared.
+    # The candidates of the clean field, with the record of their screen, as
+    # if found before the blank appeared.
     save_psf_candidates(config, candidates)
+    save_psf_candidate_screen(config, load_psf_candidate_screen(clean))
     save_psf_candidates_provenance(config)
 
     psf_construction.run_psf_construction_from_config(config)

@@ -8,7 +8,9 @@ observations is described in
 [Several Observations](../guide/MULTI_OBSERVATION.md).
 
 Three keys are required: `object.name`, `data.image_path` and `outputs.root`.
-Unknown entries in the `data` and `fit` sections are rejected. An unknown top-level
+Unknown entries in the `data` and `fit` sections, and in
+`psf.empirical.candidate_selection` and `psf.empirical.construction`, are
+rejected. An unknown top-level
 section is not read: a `sampler` block written at the top level, for
 instance, is ignored, and the default backend is used.
 
@@ -105,6 +107,7 @@ rejected.
 | `psf.empirical.candidate_selection.min_half_size` | integer | 12 | Smallest stamp half-size. |
 | `psf.empirical.candidate_selection.max_half_size` | integer | 30 | Largest stamp half-size. |
 | `psf.empirical.candidate_selection.isolation_margin` | integer | 2 | Extra margin, in pixels, of the isolation check. |
+| `psf.empirical.candidate_selection.point_source_screen` | `size_sequence_v1` or `none` | `size_sequence_v1` | Screens the candidates before the first `target_n_candidates` are kept: only those that form the stellar sequence of their sizes are kept, and the selection stops when there is none. `none` selects by shape only and keeps the selection and the identity of products of earlier releases. |
 | `psf.empirical.construction.centroid_tolerance_pixels` | number | 0.05 | Tolerance, in pixels, of the validation of the kernel centroid. |
 | `psf.empirical.construction.sky_inner_radius` | number | 80.0 | Inner radius, in pixels, of the ring where the sky of each star is measured. |
 | `psf.empirical.construction.sky_outer_radius` | number | 160.0 | Outer radius of that ring. |

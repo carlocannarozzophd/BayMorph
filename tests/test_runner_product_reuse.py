@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -83,8 +84,14 @@ def _preparation_state(
 
 def _empirical_psf_runner(
     tmp_path: Path,
+    *,
+    point_source_screen: str = "none",
 ) -> tuple[BayMorphRunner, np.ndarray]:
-    """Return a runner whose accepted empirical PSF already exists on disk."""
+    """Return a runner whose accepted empirical PSF already exists on disk.
+
+    The candidates record no provenance, as those of BayMorph 0.5.1 and
+    earlier, which selected the stars by shape only.
+    """
     image_path = tmp_path / "image.fits"
     fits.writeto(
         image_path,
@@ -102,7 +109,12 @@ def _empirical_psf_runner(
             "root": str(tmp_path / "runs"),
             "overwrite": True,
         },
-        "psf": {"type": "empirical"},
+        "psf": {
+            "type": "empirical",
+            "empirical": {
+                "candidate_selection": {"point_source_screen": point_source_screen}
+            },
+        },
         "fit": {
             "models": ["single_sersic"],
             "priors": {
@@ -289,3 +301,153 @@ def test_psf_products_are_not_overwritten_in_place(
                 )
             ],
         )
+
+
+def _screened_candidate_runner(
+    tmp_path: Path, *, record: bool, point_source_screen: str | None = None
+) -> BayMorphRunner:
+    """Return a runner whose screened candidates already exist on disk.
+
+    The candidates and their provenance are written as the selection writes
+    them under ``point_source_screen`` (the default rule when None), with
+    the record of their screen when ``record`` is true. The runner reads
+    them under the default rule.
+    """
+    from baymorph.pipeline.psf_candidate_screen import (
+        PSF_CANDIDATE_SCREEN_SCHEMA,
+        PSF_CANDIDATE_SCREEN_SCHEMA_VERSION,
+        SIZE_SEQUENCE_V1_SHA256,
+    )
+    from baymorph.pipeline.psf_candidates import (
+        save_psf_candidate_screen,
+        save_psf_candidates_provenance,
+    )
+
+    image_path = tmp_path / "image.fits"
+    fits.writeto(image_path, np.zeros((9, 9)))
+    config = {
+        "object": {"name": "example_galaxy"},
+        "data": {"image_path": str(image_path)},
+        "outputs": {"root": str(tmp_path / "runs"), "overwrite": False},
+    }
+    written = json.loads(json.dumps(config))
+
+    if point_source_screen is not None:
+        written["psf"] = {
+            "empirical": {
+                "candidate_selection": {"point_source_screen": point_source_screen}
+            }
+        }
+
+    resolved = resolve_config(written)
+    save_psf_candidates(resolved, [PSFCandidate(x=4.0, y=4.0, half_size=4)])
+
+    if record:
+        save_psf_candidate_screen(
+            resolved,
+            {
+                "schema": PSF_CANDIDATE_SCREEN_SCHEMA,
+                "schema_version": PSF_CANDIDATE_SCREEN_SCHEMA_VERSION,
+                "rule": "size_sequence_v1",
+                "constants_sha256": SIZE_SEQUENCE_V1_SHA256,
+                "outcome": "found",
+                "n_pool": 1,
+                "n_members": 1,
+                "n_kept": 1,
+                "sequence": {"size_pix": 1.3},
+                "counts": {"member": 1},
+                "candidates": [
+                    {"label": None, "x": 4.0, "y": 4.0, "kept": True},
+                    {"label": 7, "x": 2.0, "y": 6.0, "kept": False},
+                ],
+            },
+        )
+
+    save_psf_candidates_provenance(resolved)
+
+    return BayMorphRunner(config, verbose=False)
+
+
+def test_screened_candidates_are_reused_with_the_record_of_their_screen(
+    tmp_path: Path,
+) -> None:
+    runner = _screened_candidate_runner(tmp_path, record=True)
+
+    candidates = runner.select_psf_candidates()
+
+    assert [(candidate.x, candidate.y) for candidate in candidates] == [(4.0, 4.0)]
+
+
+def test_screened_candidates_without_their_record_are_refused(
+    tmp_path: Path,
+) -> None:
+    runner = _screened_candidate_runner(tmp_path, record=False)
+
+    with pytest.raises(ValueError, match="psf_candidate_screen.json is missing"):
+        runner.select_psf_candidates()
+
+
+def test_candidates_selected_before_the_screen_are_refused_by_default(
+    tmp_path: Path,
+) -> None:
+    """Candidates selected by shape only are not reused under the screen.
+
+    Only the screen differs, so the refusal names the declaration that
+    reuses them; it never asks for an overwrite of accepted products.
+    """
+    from baymorph.pipeline.psf_candidate_screen import PointSourceScreenChangeError
+
+    runner = _screened_candidate_runner(
+        tmp_path, record=False, point_source_screen="none"
+    )
+
+    with pytest.raises(PointSourceScreenChangeError) as error:
+        runner.select_psf_candidates()
+
+    message = str(error.value)
+
+    assert "selected without the point-source screen" in message
+    assert "as BayMorph does by default" in message
+    assert "point_source_screen: none to reuse them unchanged" in message
+    assert "overwrite" not in message
+
+
+def test_candidates_of_earlier_releases_are_reused_only_without_the_screen(
+    tmp_path: Path,
+) -> None:
+    """A 0.5.1 set, without candidate provenance, binds only the none rule."""
+    from baymorph.pipeline.psf_candidate_screen import PointSourceScreenChangeError
+
+    (tmp_path / "neutral").mkdir()
+    (tmp_path / "screened").mkdir()
+    runner, _ = _empirical_psf_runner(tmp_path / "neutral")
+
+    assert [(c.x, c.y) for c in runner.select_psf_candidates()] == [(4.0, 4.0)]
+
+    legacy, _ = _empirical_psf_runner(tmp_path / "screened")
+    config = legacy.config
+    config["psf"]["empirical"]["candidate_selection"].pop("point_source_screen")
+    screened = BayMorphRunner(config, verbose=False)
+
+    # The accepted PSF binds its stars; only the screen differs, so the
+    # refusal names the declaration that reuses them, not an overwrite.
+    with pytest.raises(PointSourceScreenChangeError) as error:
+        screened.select_psf_candidates()
+
+    assert "empirical PSF and its stars were selected without" in str(error.value)
+    assert "overwrite" not in str(error.value)
+
+    with pytest.raises(PointSourceScreenChangeError):
+        screened.build_psf()
+
+
+def test_a_screen_record_of_other_candidates_is_refused(tmp_path: Path) -> None:
+    """The record must list the saved candidates as the stars it kept."""
+    runner = _screened_candidate_runner(tmp_path, record=True)
+    save_psf_candidates(
+        {**runner.config, "outputs": {**runner.config["outputs"], "overwrite": True}},
+        [PSFCandidate(x=5.0, y=4.0, half_size=4)],
+    )
+
+    with pytest.raises(ValueError, match="does not list the saved PSF candidates"):
+        runner.select_psf_candidates()

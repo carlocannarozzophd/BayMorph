@@ -28,6 +28,10 @@ from baymorph.pipeline.opening import (
 )
 from baymorph.pipeline.prior_config import parse_prior_config
 from baymorph.pipeline.config import resolve_config, validate_fit_priors
+from baymorph.pipeline.psf_candidate_screen import (
+    DEFAULT_POINT_SOURCE_SCREEN,
+    POINT_SOURCE_SCREEN_RULES,
+)
 from baymorph.pipeline.multi_observation_config import (
     build_multi_observation_parameter_layout,
     resolve_multi_observation_observation_configs,
@@ -44,6 +48,7 @@ _OBSERVATION_OPTION_KEYS = {
     "fixed_size",
     "psf_type",
     "gaussian_fwhm_pixels",
+    "psf_point_source_screen",
     "likelihood",
 }
 
@@ -183,7 +188,10 @@ def _cutout_config(mode: str, *, fixed_size: int | None) -> dict[str, Any]:
 
 
 def _empirical_psf_config(
-    *, max_peak: float | None = None, min_peak: float | None = None
+    *,
+    max_peak: float | None = None,
+    min_peak: float | None = None,
+    point_source_screen: str | None = None,
 ) -> dict[str, Any]:
     """Build empirical-PSF configuration without unit assumptions.
 
@@ -192,6 +200,9 @@ def _empirical_psf_config(
     that threshold after resolving its units against the science image;
     ``max_peak`` carries that explicit declaration when the caller makes it,
     and ``min_peak`` the floor on the peak of the stars, in the same units.
+    The point-source screen of the stars is always written, the default
+    rule when ``point_source_screen`` is None, so the configuration does not
+    depend on a default that a later version could change.
     """
     candidate_selection: dict[str, Any] = {}
 
@@ -201,10 +212,30 @@ def _empirical_psf_config(
     if max_peak is not None:
         candidate_selection["max_peak"] = max_peak
 
+    candidate_selection["point_source_screen"] = (
+        DEFAULT_POINT_SOURCE_SCREEN
+        if point_source_screen is None
+        else point_source_screen
+    )
+
     return {
         "type": "empirical",
         "empirical": {"candidate_selection": candidate_selection},
     }
+
+
+def _normalize_point_source_screen(rule: Any) -> str | None:
+    """Validate a declared point-source screen of the PSF stars."""
+    if rule is None:
+        return None
+
+    if not isinstance(rule, str) or rule not in POINT_SOURCE_SCREEN_RULES:
+        raise ValueError(
+            f"psf_point_source_screen must be one of {list(POINT_SOURCE_SCREEN_RULES)}"
+            f" or None, not {rule!r}."
+        )
+
+    return rule
 
 
 def _normalize_psf_peak(peak: Any, *, name: str) -> float | None:
@@ -421,6 +452,7 @@ def make_config_from_fits(
     gaussian_fwhm_pixels: float | None = None,
     psf_max_peak: float | None = None,
     psf_min_peak: float | None = None,
+    psf_point_source_screen: str | None = None,
     preparation: Mapping[str, Any] | None = None,
     _require_complete_priors: bool = True,
 ) -> dict[str, Any]:
@@ -503,6 +535,13 @@ def make_config_from_fits(
         floor, which is not unit-checked against the image;
         :class:`baymorph.ObservationAdvisor` proposes one from the noise of
         the image.
+    psf_point_source_screen : {"size_sequence_v1", "none"}, optional
+        Screen of the empirical-PSF candidates, written to
+        ``psf.empirical.candidate_selection.point_source_screen``:
+        ``"size_sequence_v1"``, the default, keeps the candidates that form
+        the stellar sequence of their sizes; ``"none"`` selects them by shape
+        only, so galaxies, cosmic rays and hot pixels can enter the PSF.
+        Valid only with ``psf_type="empirical"``.
     preparation : mapping, optional
         Explicit ``preparation`` section, such as the masking rule or the
         estimator of the sky correlation, written as given and validated by
@@ -555,16 +594,20 @@ def make_config_from_fits(
 
     normalized_max_peak = _normalize_psf_peak(psf_max_peak, name="psf_max_peak")
     normalized_min_peak = _normalize_psf_peak(psf_min_peak, name="psf_min_peak")
+    normalized_screen = _normalize_point_source_screen(psf_point_source_screen)
 
     if normalized_psf_type == "empirical":
         psf = _empirical_psf_config(
-            max_peak=normalized_max_peak, min_peak=normalized_min_peak
+            max_peak=normalized_max_peak,
+            min_peak=normalized_min_peak,
+            point_source_screen=normalized_screen,
         )
 
     elif normalized_psf_type == "gaussian":
         for name, value in (
             ("psf_max_peak", normalized_max_peak),
             ("psf_min_peak", normalized_min_peak),
+            ("psf_point_source_screen", normalized_screen),
         ):
             if value is not None:
                 raise ValueError(
@@ -854,7 +897,8 @@ def make_multi_observation_config(
     observation_options : mapping, optional
         Per-observation overrides accepted by ``make_config_from_fits``:
         ``object_name``, ``overwrite``, ``cutout_mode``, ``fixed_size``,
-        ``psf_type``, ``gaussian_fwhm_pixels``, and ``likelihood``.
+        ``psf_type``, ``gaussian_fwhm_pixels``, ``psf_point_source_screen``,
+        and ``likelihood``.
 
     Returns
     -------
@@ -939,6 +983,7 @@ def make_multi_observation_config(
             fixed_size=options.get("fixed_size"),
             psf_type=str(options.get("psf_type", "empirical")),
             gaussian_fwhm_pixels=options.get("gaussian_fwhm_pixels"),
+            psf_point_source_screen=options.get("psf_point_source_screen"),
         )
 
     object_names = [config["object"]["name"] for config in observation_configs.values()]

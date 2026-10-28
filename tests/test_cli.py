@@ -1125,3 +1125,126 @@ def test_accept_writes_a_consultation_that_did_not_fail(
     assert ("calibration" in written) is calibration
     assert (tmp_path / "acs.advisor.json").is_file()
     assert len(acs_calculator.calls) == requests
+
+
+def test_config_command_writes_the_declared_point_source_screen(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """--psf-point-source-screen none selects the PSF stars by shape only."""
+    fits_path = tmp_path / "galaxy.fits"
+    output_path = tmp_path / "galaxy.yaml"
+    _write_fits(fits_path)
+    arguments = [
+        "baymorph",
+        "config",
+        str(fits_path),
+        "--target-center",
+        "--uniform-prior",
+        "single_sersic.flux",
+        "1",
+        "1000",
+        "--output",
+        str(output_path),
+    ]
+
+    monkeypatch.setattr("sys.argv", arguments)
+
+    assert main() == 0
+
+    config = yaml.safe_load(output_path.read_text(encoding="utf-8"))
+    selection = config["psf"]["empirical"]["candidate_selection"]
+
+    assert selection["point_source_screen"] == "size_sequence_v1"
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [*arguments, "--overwrite", "--psf-point-source-screen", "none"],
+    )
+
+    assert main() == 0
+
+    config = yaml.safe_load(output_path.read_text(encoding="utf-8"))
+    selection = config["psf"]["empirical"]["candidate_selection"]
+
+    assert selection["point_source_screen"] == "none"
+
+
+def test_config_command_forwards_the_point_source_screen_to_the_advisor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With --advise, --psf-point-source-screen reaches the proposal."""
+    fits_path = tmp_path / "coadd.fits"
+    _write_coadd(fits_path)
+    received: dict = {}
+
+    def capture(self, **options):
+        received.update(options)
+        raise RuntimeError("stopped after the options were received")
+
+    monkeypatch.setattr(ObservationAdvisor, "propose_config", capture)
+    arguments = [
+        *_advise_arguments(tmp_path, fits_path, tmp_path / "coadd.yaml")[1:],
+        "--psf",
+        "empirical",
+        "--psf-point-source-screen",
+        "none",
+    ]
+
+    assert main(arguments) == 1
+    assert received["psf_type"] == "empirical"
+    assert received["psf_point_source_screen"] == "none"
+
+
+def test_a_stop_of_the_psf_star_screen_prints_its_account(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The terminal gets the counts, the groups of sizes and the verdicts."""
+    from baymorph.pipeline.psf_candidate_screen import PointSourceScreenError
+
+    record = {
+        "n_pool": 12,
+        "n_search": 9,
+        "counts": {"larger_than_stellar_sequence": 3, "searched": 9},
+        "modes": [
+            {
+                "size_pix": 1.33,
+                "n_core": 7,
+                "n_lo": 0,
+                "n_hi": 3,
+                "tau_hat": 0.0045,
+                "p_tail": 0.034,
+                "significant": False,
+            }
+        ],
+        "sequence": {"size_pix": 1.33},
+    }
+
+    def stop(args):
+        raise PointSourceScreenError(
+            "PSF candidate screen size_sequence_v1: stopped.",
+            code="no_sequence",
+            record=record,
+            finding="stopped.",
+        )
+
+    monkeypatch.setattr("baymorph.cli._command_config", stop)
+    fits_path = tmp_path / "galaxy.fits"
+    _write_fits(fits_path)
+
+    assert main(["config", str(fits_path), "--target-center"]) == 1
+
+    error = capsys.readouterr().err.splitlines()
+
+    assert error[0] == (
+        "baymorph: error: PSF candidate screen size_sequence_v1: stopped."
+    )
+    assert error[1] == (
+        "baymorph:   candidates: 12 after the shape cuts, 9 searched; verdicts: "
+        "3 larger_than_stellar_sequence, 9 searched"
+    )
+    assert error[2].startswith("baymorph:   group at 1.330 px: 7 within 5 per cent")
+    assert error[3] == "baymorph:   taken for the stars: the group at 1.330 px"

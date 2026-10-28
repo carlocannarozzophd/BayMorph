@@ -1026,3 +1026,61 @@ def test_config_maker_writes_a_declared_preparation(
             target_position="center",
             preparation=["noise"],
         )
+
+
+def test_config_maker_always_writes_the_point_source_screen(tmp_path):
+    """The screen of the PSF stars is written, the default rule unless declared."""
+    from baymorph.pipeline.config_maker import _empirical_psf_config
+
+    assert _empirical_psf_config()["empirical"]["candidate_selection"] == {
+        "point_source_screen": "size_sequence_v1"
+    }
+
+    fits_path = tmp_path / "galaxy.fits"
+    output_path = tmp_path / "galaxy.yaml"
+    _write_test_fits(fits_path)
+
+    config = make_config_from_fits(fits_path, target_position="center")
+    declared = make_config_from_fits(
+        fits_path,
+        target_position="center",
+        psf_point_source_screen="none",
+        output_path=output_path,
+    )
+    written = yaml.safe_load(output_path.read_text(encoding="utf-8"))
+
+    assert config["psf"]["empirical"]["candidate_selection"][
+        "point_source_screen"
+    ] == ("size_sequence_v1")
+    assert declared["psf"]["empirical"]["candidate_selection"][
+        "point_source_screen"
+    ] == ("none")
+    assert written["psf"]["empirical"]["candidate_selection"][
+        "point_source_screen"
+    ] == ("none")
+
+
+@pytest.mark.parametrize("value", ["v1", "size_sequence", True, 1])
+def test_config_maker_rejects_an_unknown_point_source_screen(tmp_path, value):
+    fits_path = tmp_path / "galaxy.fits"
+    _write_test_fits(fits_path)
+
+    with pytest.raises(ValueError, match="psf_point_source_screen must be one of"):
+        make_config_from_fits(
+            fits_path, target_position="center", psf_point_source_screen=value
+        )
+
+
+def test_config_maker_rejects_a_point_source_screen_for_a_gaussian_psf(tmp_path):
+    """A Gaussian PSF selects no stars, so a screen of them is an error."""
+    fits_path = tmp_path / "galaxy.fits"
+    _write_test_fits(fits_path)
+
+    with pytest.raises(ValueError, match="psf_point_source_screen applies only"):
+        make_config_from_fits(
+            fits_path,
+            target_position="center",
+            psf_type="gaussian",
+            gaussian_fwhm_pixels=2.5,
+            psf_point_source_screen="none",
+        )

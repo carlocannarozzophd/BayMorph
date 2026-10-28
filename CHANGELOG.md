@@ -116,9 +116,45 @@ and the project follows Semantic Versioning in spirit.
   not establish, and how it reads large mosaics, compressed files and pixels
   without data; and Supported Images, which says for each family of
   products what BayMorph reads from its header and what you declare.
+* The stars of an empirical PSF are screened before they are kept. Every
+  candidate that passes the shape and isolation cuts is measured on its own
+  cutout: its size, the second moment of its light within an elliptical
+  Gaussian window matched to it, which does not grow with its brightness,
+  and the fourth moment of its profile. The stars are the smallest dense,
+  narrow group of sizes that stands out from the sizes next to it. Sources
+  sharper than any point source, such as cosmic rays and hot pixels, larger
+  sources, such as galaxies, and sources unlike the group are rejected, and
+  the next candidates take their places. When the candidates hold no such
+  group, or two, the selection stops and saves no candidate; the error
+  holds the measurement and verdict of every candidate and names the
+  remedies that can help, and `baymorph` prints an account of them. The
+  rule is
+  `psf.empirical.candidate_selection.point_source_screen: size_sequence_v1`;
+  its limits, such as stops in fields rich in barely resolved galaxies, are
+  in the PSF guide.
+* `psf/psf_candidate_screen.json` records the rule, the group found and the
+  verdict of every candidate.
+* `make_config_from_fits(psf_point_source_screen=...)` and
+  `baymorph config --psf-point-source-screen` declare the rule; `none`
+  selects the stars by shape only, as before.
+* The observation advisor reports what the screen found, the stars kept
+  against those sought and the size and scatter of their sequence, and
+  passes on its stops with their remedies; `FixedInputs.psf_star_screen`
+  holds the same.
 
 ### Changed
 
+* The stars of an empirical PSF are screened by default. Selected by shape
+  alone, they also included galaxies, which broaden the kernel, and cosmic
+  rays and hot pixels, which narrow it, and the check of the kernel's
+  centroid did not detect them. A configuration that declares
+  `point_source_screen: none` keeps the selection and the identity of the
+  products of earlier releases. Any other configuration no longer reuses the
+  stars or PSF saved by earlier releases, and says so: declare
+  `point_source_screen: none` to keep reusing them, or use a new output
+  namespace to select screened stars.
+* An unknown entry under `psf.empirical.candidate_selection` or
+  `psf.empirical.construction` is refused; before, it was ignored.
 * The target position is the centre of the galaxy. The priors of the centre
   stay about it, so that no prior depends on the image, and BayMorph now
   checks them: the observation advisor, once it has prepared the image, and
