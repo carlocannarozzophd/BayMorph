@@ -523,8 +523,8 @@ products of 0.3.0 must be updated: see "Upgrading from 0.3.0" below.
   utilities.
 * Command-line utilities for project initialization and packaged example
   installation.
-* Complete project documentation, including API reference, contributing guide,
-  roadmap, architectural decisions, and citation metadata.
+* Complete project documentation, including API reference and citation
+  metadata.
 * Extensive automated test suite covering scientific workflows, packaging,
   command-line interfaces, and resource consistency.
 
