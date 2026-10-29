@@ -77,6 +77,11 @@ It does not cover stellar populations, spectral energy distributions, dust,
 radiative transfer, residual covariance between observations, or the
 inference of galaxy populations.
 
+## Documentation
+
+The full documentation, with the user guide, the models, the theory and the
+reference, is at **<https://carlocannarozzophd.github.io/BayMorph/>**.
+
 ## Installation
 
 BayMorph requires Python 3.11 or later. It is not on PyPI; install it from
@@ -138,17 +143,6 @@ from baymorph import BayMorphRunner
 fit = BayMorphRunner("galaxy.yaml").run(diagnostics=True)
 print(fit.posterior.summary("re"))
 ~~~
-
-## Documentation
-
-The documentation, <https://carlocannarozzophd.github.io/BayMorph/>, has a
-[quick start](docs/guide/QUICK_START.md), a [user guide](docs/guide/index.md)
-with one page for each stage of an analysis, the [models](docs/models/index.md),
-the [theory](docs/theory/BAYESIAN_INFERENCE.md) behind the fit, and the
-[reference](docs/reference/CONFIGURATION.md) of every command, configuration
-key and output file. Its source pages, in [`docs/`](docs/), can also be read
-on GitHub. To build it locally, install `requirements-docs.txt` and run
-`python -m zensical serve`.
 
 ## Contributing
 
