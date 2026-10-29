@@ -270,29 +270,32 @@ def test_sbc_campaign_builds_problem_with_fixed_sbc_prior(tmp_path):
 
     case = campaign.build_case(0)
 
-    assert case.problem.parameter_layout.parameter_set.bounds == pytest.approx(
-        {
-            "flux__g": (450.0, 1350.0),
-            "flux__r": (600.0, 1800.0),
-            "re_arcsec": (0.6, 1.8),
-            "n": (0.8, 4.0),
-            "q": (0.3, 1.0),
-            "position_angle": (
-                -0.5 * np.pi,
-                0.5 * np.pi,
-            ),
-            "ra": (
-                150.0 - 1.0 / 3600.0,
-                150.0 + 1.0 / 3600.0,
-            ),
-            "dec": (
-                30.0 - 1.0 / 3600.0,
-                30.0 + 1.0 / 3600.0,
-            ),
-            "background_level__g": (-20.0, 20.0),
-            "background_level__r": (-20.0, 20.0),
-        }
-    )
+    bounds = case.problem.parameter_layout.parameter_set.bounds
+    expected = {
+        "flux__g": (450.0, 1350.0),
+        "flux__r": (600.0, 1800.0),
+        "re_arcsec": (0.6, 1.8),
+        "n": (0.8, 4.0),
+        "q": (0.3, 1.0),
+        "position_angle": (
+            -0.5 * np.pi,
+            0.5 * np.pi,
+        ),
+        "ra": (
+            150.0 - 1.0 / 3600.0,
+            150.0 + 1.0 / 3600.0,
+        ),
+        "dec": (
+            30.0 - 1.0 / 3600.0,
+            30.0 + 1.0 / 3600.0,
+        ),
+        "background_level__g": (-20.0, 20.0),
+        "background_level__r": (-20.0, 20.0),
+    }
+    # pytest 9.2 rejects pytest.approx on a mapping of tuples: compare per key.
+    assert bounds.keys() == expected.keys()
+    for name, interval in expected.items():
+        assert bounds[name] == pytest.approx(interval), name
 
 
 def test_sbc_campaign_uses_isolated_case_paths(tmp_path):
