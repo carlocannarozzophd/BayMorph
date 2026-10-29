@@ -22,9 +22,11 @@ print(fit.posterior.summary("re"))
 
 !!! warning "Status"
 
-    BayMorph is under active scientific development. No fit of a real image
-    has yet been validated scientifically, and interfaces and defaults may
-    change.
+    BayMorph is a work in progress (pre-1.0): its interfaces, defaults and
+    output files may change between versions. It has been tested on simulated
+    images, most thoroughly for the single Sérsic model, and the
+    [model pages](models/index.md) state what has been validated for each
+    model. No fit of a real image has yet been validated scientifically.
 
 ![Four images: an intrinsic Sérsic galaxy, the same galaxy convolved with the PSF, plus a residual background plane, and with noise added](models/figures/forward_model-light.png#gh-light-mode-only)
 ![Four images: an intrinsic Sérsic galaxy, the same galaxy convolved with the PSF, plus a residual background plane, and with noise added](models/figures/forward_model-dark.png#gh-dark-mode-only)
@@ -41,9 +43,10 @@ chain backwards.*
 - **Prepares the image**: cuts out the target, masks the other sources,
   subtracts the sky and measures the noise.
 - **Builds the PSF** from the stars of the same image.
-- **Fits the model** with a nested sampler, Nautilus by default, with a
-  likelihood that describes the noise of the sky, the Poisson noise of the
-  galaxy and the correlation of neighbouring pixels.
+- **Fits the model** with a likelihood that describes the noise of the sky,
+  the Poisson noise of the galaxy and the correlation of neighbouring
+  pixels, and samples the posterior with Nautilus, the default, or with
+  Dynesty or pocoMC.
 - **Reports** the posterior of every parameter, the evidence for comparing
   models, and diagnostic figures of the residuals and the radial profile.
 
@@ -55,7 +58,7 @@ chain backwards.*
 
     ---
 
-    Install BayMorph and run a first fit in a few minutes.
+    Install BayMorph from GitHub and run a first fit on a simulated galaxy.
 
     [Quick Start](guide/QUICK_START.md)
 

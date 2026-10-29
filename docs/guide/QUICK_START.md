@@ -23,8 +23,10 @@ baymorph run configs/simulated_galaxy.yaml
 
 The example makes a 201 x 201 px image of one Sérsic galaxy, with a
 Gaussian PSF and Gaussian noise, and fits it with a single Sérsic model. It
-takes about a minute and a half on a laptop. The runner prints one line per
-step:
+takes about a minute and a half on a laptop. Its figures are typeset with
+LaTeX: without `latex` and `dvipng`, set `BAYMORPH_USETEX=0` first, as
+[Installation](INSTALLATION.md#requirements) explains. The runner prints one
+line per step:
 
 ```text
 ✓ Synthetic observation generated
@@ -33,9 +35,12 @@ step:
 ✓ Ready: nearest-neighbour factorization
 ...
 Completed Nautilus fit: single_sersic
+...
+✓ Bayesian fitting completed
 ✓ Corner plots generated
 ✓ Residual maps generated
 ✓ Radial profiles generated
+✓ Configured diagnostics generated
 BayMorph analysis completed.
 ```
 
@@ -61,12 +66,14 @@ chi2 = 40071.934
 ndof = 40368
 reduced_chi2 = 0.99266583
 logZ = -85483.241
+...
 
 Best-fit parameters
 flux = 20004.168
 re = 6.0102793
 n = 2.0188553
 q = 0.75213613
+...
 ```
 
 The simulated galaxy has `flux` 20000, `re` 6 px, `n` 2 and `q` 0.75, and a
@@ -111,6 +118,20 @@ The fit reuses the image, the masks and the PSF that the advisor prepared,
 fits the model and draws the diagnostics. Without `--advise`,
 `baymorph config` writes the configuration at once, and every flux prior
 must then be declared with `--uniform-prior`, in the units of the image.
+
+Without `--offline`, the advisor may ask the ACS Zeropoint Calculator of
+STScI for the zeropoint of a drizzled ACS image whose header gives no usable
+one; with it, the advisor asks no service. When neither the header nor the
+sky gives the effective gain of the noise model, the proposal says
+`Effective gain: not proposed`: `--accept` still writes the configuration,
+but the fit stops before sampling until you declare
+`fit.likelihood.effective_gain` in it, as
+[Sky and Noise](SKY_AND_NOISE.md#the-effective-gain) explains.
+
+If the preparation stops because the cutout does not contain the plateau of
+the galaxy and its sky margin, declare a fixed cutout large enough to hold
+them, with `--cutout-mode fixed` and `--cutout-size` followed by its side in
+pixels; see [Target and Cutout](IMAGE.md#the-cutout).
 
 ## 5. The same from Python
 
