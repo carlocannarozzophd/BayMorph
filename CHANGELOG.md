@@ -15,6 +15,11 @@ and the project follows Semantic Versioning in spirit.
   Roman WFI would see it in F158, with an undersampled PSF rendered at
   sub-pixel phases, fits it by nested sampling and compares the posterior with
   the truth.
+* `examples/roman_isim_fits.ipynb`, an executed example: it shows the
+  diagnostics of a single-Sérsic and a bulge plus disc fit of one galaxy in an
+  STScI Roman I-Sim exposure (F184), with the CRDS reference PSF, and what the
+  pre-registered comparison with the input catalogue found. It reads the
+  products of a local run and does not fit.
 * `data.calibration` declares the calibration quantities that the header
   does not give, or gives wrongly: the image unit, the zeropoint and its
   photometric system, the exposure time, the gain of the detector and the

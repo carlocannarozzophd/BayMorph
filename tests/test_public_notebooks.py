@@ -19,7 +19,10 @@ EXPECTED_NOTEBOOKS: set[str] = {
     OBSERVED_FIT_NOTEBOOK,
 }
 # Executed examples: tracked, not packaged, not copied by baymorph init.
-EXAMPLE_NOTEBOOKS: set[Path] = {Path("examples") / "roman_cases.ipynb"}
+EXAMPLE_NOTEBOOKS: set[Path] = {
+    Path("examples") / "roman_cases.ipynb",
+    Path("examples") / "roman_isim_fits.ipynb",
+}
 
 
 def _load_notebook(
