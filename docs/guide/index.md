@@ -13,7 +13,7 @@ configuration file describes the whole analysis, and one object, the
 | 2. Configure | Write the YAML file that declares the image, the target, the model and the priors. | | [Writing a Configuration](CONFIGURING.md) |
 | 3. Prepare | Cut out the target, mask the other sources, subtract the sky and measure the noise. | `prepare_image()` | [Target and Cutout](IMAGE.md), [Masks](MASKS.md), [Sky and Noise](SKY_AND_NOISE.md) |
 | 4. PSF | Select isolated stars and build the point-spread function from them, or use an analytic one. | `select_psf_candidates()`, `build_psf()` | [Point-Spread Function](PSF.md) |
-| 5. Fit | Sample the posterior of the model parameters with a nested sampler. | `fit()` | [Fitting](FITTING.md) |
+| 5. Fit | Sample the posterior of the model parameters, with a nested sampler by default. | `fit()` | [Fitting](FITTING.md) |
 | 6. Results | Read the parameter estimates and the evidence, and draw the diagnostic figures. | `diagnostics()` | [Results](RESULTS.md), [Plotting](PLOTTING.md) |
 
 The whole sequence is one call:
@@ -47,9 +47,10 @@ option.
 The code on these pages was run on a synthetic 1000 x 1000 px image in
 counts: a Sérsic galaxy at the centre, two smaller galaxies next to it,
 forty stars, a flat sky of 400 counts, Poisson noise and read noise. The
-configuration was written by `baymorph config` as in the
-[Quick Start](QUICK_START.md), with a fixed cutout of 251 px. Your own
-image will give different numbers, but the same objects and attributes.
+configuration was written by `baymorph config` as in
+[Writing a Configuration](CONFIGURING.md#from-the-terminal), with a fixed
+cutout of 251 px. Your own image will give different numbers, but the same
+objects and attributes.
 
 ## Several observations and simulations
 

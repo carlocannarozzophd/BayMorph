@@ -79,8 +79,10 @@ residuals and in the reduced chi-square, not in the posterior widths.
   fixed fraction of the profile, so it becomes comparable with the noise
   above a peak signal-to-noise that depends on n and Rₑ: from 1.2e3 for
   n = 6 and Rₑ = 1 px to about 2e4 for shallower profiles.
-- **Calibration.** On fifty simulated images with independent noise, a
-  Gaussian PSF and Gaussian noise, the posteriors were found calibrated.
+- **Calibration.** On fifty noise realizations of one simulated galaxy,
+  with a Gaussian PSF and Gaussian noise, the posteriors were found
+  calibrated. That campaign used the likelihood of independent pixels that
+  preceded the current noise model, and it has not been repeated with it.
 - **Noise model.** On simulated coadds whose noise has a Poisson term from
   the galaxy and a correlated sky, a model of independent pixels reported
   intervals up to three times too narrow; the noise model of BayMorph brings

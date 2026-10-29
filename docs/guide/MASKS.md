@@ -36,7 +36,7 @@ are released and enter the fit like every other pixel.
 ```yaml
 preparation:
   masking:
-    contaminant_rule: local_excess   # or all_segments, which masks every segment
+    contaminant_rule: local_excess   # the default; all_segments masks every segment
 ```
 
 `all_segments` masks every detected segment, as earlier versions of
@@ -77,8 +77,9 @@ The growth applies to the detected segments only: with `mask_mode: exact`,
 the external mask is used as drawn and nothing is grown.
 
 Pixels far below the sky, by default more than five noise units, are also
-excluded: source detection only looks for positive excursions, and a
-negative artefact, such as a bad column, would otherwise enter the fit.
+excluded, whatever the `mask_mode`: source detection only looks for
+positive excursions, and a negative artefact, such as a bad column, would
+otherwise enter the fit.
 `preparation.masking.negative_threshold_sigma` sets the threshold, and
 `null` disables it.
 
@@ -97,7 +98,7 @@ data:
 | `mask_mode` | Excluded pixels |
 | --- | --- |
 | `union` | the automatic mask and the external mask together (default) |
-| `exact` | the external mask only, used as it is |
+| `exact` | the external mask, used as it is, and the pixels far below the sky |
 
 `exact` is the choice when you have already decided every pixel, and
 `replace` is an alias of it.

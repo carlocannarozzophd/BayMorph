@@ -32,13 +32,14 @@ calibration service that serves the image was asked and answered.
 | `prepared_image.fits` | the cutout with the sky subtracted: the data of the fit |
 | `noise_map.fits` | the noise scale of the sky in every pixel |
 | `fitting_mask.fits` | the mask of the fit, non-zero for excluded pixels |
-| `mask.fits` | the automatic mask of the detected sources |
+| `mask.fits` | the contaminants: the detected sources other than the target that the contaminant rule keeps masked, before their growth |
 | `segmentation.npy`, `target_segment.npy` | the detected sources and the target |
 | `radial_profile.npz`, `sky_region.npz` | the radial profile of the target and the sky region |
 | `image_preparation_metadata.json` | the cutout, the target, the subtracted sky level, the plateau, the sky gradient, the contaminant rule with the segments it left unmasked, the growth of the masks, and the working region when the image was read within one |
 | `original_image.npy` | the image as read: the whole image, or its working region |
 | `correlated_gaussian_noise.npz` | the correlation of the sky, measured before the first fit, and the estimator that measured it |
 | `correlated_gaussian_vecchia/m24/` | the nearest-neighbour factorization of that correlation used by the likelihood |
+| `image_preparation_artifacts.json` | the size and checksum of every product, checked before the products are reused |
 | `IMAGE_PREPARATION_COMPLETE.json` | written last, when every product is valid |
 
 The directory also holds intermediate arrays used by the diagnostics.
@@ -47,12 +48,12 @@ The directory also holds intermediate arrays used by the diagnostics.
 
 | File | Content |
 | --- | --- |
-| `psf.fits` | the PSF kernel; its `SUBPIXEL` extension holds the kernel at eleven sub-pixel phases per axis |
+| `psf.fits` | the PSF kernel; for an empirical PSF, its `SUBPIXEL` extension holds the kernel at eleven sub-pixel phases per axis |
 | `psf_metadata.json` | how the kernel was built, and its properties |
 | `psf_candidates.json` | the stars selected for the PSF |
-| `psf_candidates_provenance.json` | the image, its HDU when declared, and the detection and selection settings the stars were selected with; a later run reuses the stars only when these are unchanged |
+| `psf_candidates_provenance.json` | the image, its HDU when declared, its working region when there is one, and the detection and selection settings the stars were selected with; a later run reuses the stars only when these are unchanged |
 | `psf_candidate_screen.json` | the screen of the candidate stars: the rule, the stellar sequence of sizes it found, and the size, profile and verdict of every candidate; absent when `point_source_screen` is `none` |
-| `diagnostics/` | the stamps of the stars and the profile of the kernel |
+| `diagnostics/` | the stamps of the stars and the profile of the kernel, in PDF, drawn when the PSF is built, also with `--no-diagnostics` |
 
 ## `fits/<model>/`
 
@@ -63,12 +64,12 @@ The directory also holds intermediate arrays used by the diagnostics.
 | `fit_summary.json`, `fit_summary.txt` | the evidence, the goodness of fit, the sampler and the noise model used |
 | `best_model_image.npy` | the model image at the best sample |
 | `residual.npy` | data minus model |
-| `norm_residual.npy` | the residual divided by the noise of each pixel, `NaN` on masked pixels |
+| `norm_residual.npy` | the residual divided by the marginal standard deviation of each pixel under the noise model, `NaN` on masked pixels |
 | `noise.npy` | the noise scale of the sky |
 | `config_resolved.yaml` | the configuration of this fit |
-| `corner.pdf`, `data_model_residual.pdf`, `radial_profile.pdf` | the diagnostic figures, in the format of `diagnostics.format` |
+| `corner.pdf`, `data_model_residual.pdf`, `radial_profile.pdf` | the diagnostic figures, in the format of `diagnostics.format`; absent when they were not drawn: `baymorph run --no-diagnostics`, `BayMorphRunner.run()` without `diagnostics=True`, or a figure turned off in `diagnostics` |
 | `nautilus_checkpoint.hdf5`, `pocomc_state.h5` | the checkpoint, when `auto` was requested, with its signature in a `.target.json` file |
-| `COMPLETE.json` | written last, when every product is valid |
+| `COMPLETE.json` | written when the other products of the fit are saved, before the figures |
 
 With `fit.comparison.enabled`, `model_comparison/bayes_factor.json` holds the
 Bayes factor of `double_sersic` over `single_sersic`.
@@ -76,9 +77,10 @@ Bayes factor of `double_sersic` over `single_sersic`.
 ## Simulations
 
 A configuration with a `simulation` section also writes the synthetic image
-to `data.image_path`, usually under `input/` in the run directory, and the
-true parameters to `truth/truth.json`. The corner plot marks the truth when
-that file exists.
+to `data.image_path`, usually under `input/` in the run directory, the true
+parameters to `truth/truth.json` and, when `simulation.psf` is set, its
+Gaussian kernel to `psf/psf.fits`, with `psf_metadata.json` and the profile
+in `diagnostics/`. The corner plot marks the truth when that file exists.
 
 ## Joint analyses
 
@@ -90,7 +92,7 @@ run directory of that image, and its own products under
 runs/galaxy_joint/
 └── fits/
     └── single_sersic/
-        ├── posterior.npz, best_parameters.json, fit_summary.json
+        ├── posterior.npz, best_parameters.json, fit_summary.json, COMPLETE.json
         ├── corner.pdf
         └── observations/
             ├── g/    best_model_image.npy, residual.npy, norm_residual.npy,

@@ -52,9 +52,9 @@ simulation:
 ```
 
 Here the angle is given in degrees, `theta_deg`. `runner.simulate()`, or
-`baymorph run`, writes the image to `data.image_path` and the truth to
-`truth/truth.json` in the run directory, and the corner plot of the fit
-marks the true values.
+`baymorph run`, writes the image to `data.image_path`, the truth to
+`truth/truth.json` in the run directory and the Gaussian PSF, with a figure
+of it, to `psf/`; the corner plot of the fit marks the true values.
 
 ```python
 runner = BayMorphRunner("configs/simulated_galaxy.yaml")

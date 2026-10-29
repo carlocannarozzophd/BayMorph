@@ -120,10 +120,12 @@ fit:
 `measured_sky` and `sky_level` assume that the sky noise is the Poisson
 noise of the sky. They require a sky level at least ten times the sky noise,
 and they return a slightly lower gain when read noise is not negligible: on
-the example image, 0.944 instead of 1. `baymorph config` and
-`make_config_from_fits` write `measured_sky` when the sky is still in the
-image, and otherwise leave the gain for you to declare: the fit refuses to
-start without it.
+the example image, 0.944 instead of 1. Without `--advise`,
+`baymorph config` and `make_config_from_fits` write `measured_sky` when the
+sky is still in the image, and otherwise leave the gain for you to declare:
+the fit refuses to start without it. The observation advisor also proposes
+a sky level that the header records, or the gain of the detector (see
+[Writing a Configuration](CONFIGURING.md#interactively-in-a-notebook)).
 
 The gain used by a fit is recorded in its summary:
 

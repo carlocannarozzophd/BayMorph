@@ -3,8 +3,9 @@
 The noise model is the probability of the observed image given the expected
 image of a model: the likelihood of the fit. It decides how much each pixel
 counts and how wide the posterior is, and its normalization makes the
-Bayesian evidence absolute. `fit.likelihood.type` selects it; every fit run
-from a configuration uses the correlated Gaussian below.
+Bayesian evidence absolute. `fit.likelihood.type` selects it; a fit run from
+a configuration uses the correlated Gaussian below, unless it declares one
+of the experimental likelihoods at the end of this page.
 
 ## Correlated Gaussian (`correlated_gaussian`)
 

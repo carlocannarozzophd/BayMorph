@@ -14,14 +14,15 @@ what BayMorph has read, and how to declare the rest.
 | --- | --- | --- |
 | Pixel scale, from the celestial WCS | the lengths that the advisor proposes, 0.1 to 120 arcsec; a working region in arcsec; a target in RA and Dec | the proposed lengths keep their default ranges in pixels; declare `data.pixel_scale` for a region in arcsec |
 | Zeropoint | the flux priors that the advisor proposes, magnitudes 8 to 30 | the flux priors that need no zeropoint, from the sky and the PSF |
-| Image unit | whether a zeropoint can be derived, and whether a value in the units of the image, such as the saturation level, can be used | those quantities are not used |
+| Image unit | whether a zeropoint can be derived; a declared unit that differs from the one in the header sets aside the values that the header gives in the units of the image, such as the saturation level | the zeropoints that need it are not used |
 | Saturation level, in the units of the image | half of it is the brightest star the advisor accepts for the PSF | the default ceiling, 80000, unless you set `--psf-max-peak` |
 | Sky level subtracted before BayMorph, gain | where the effective gain of the noise model may come from; see [Sky and Noise](../guide/SKY_AND_NOISE.md#the-effective-gain) | the effective gain comes from the sky of the image, or you declare it |
 | FWHM of the PSF | a Gaussian PSF requested without its FWHM | give `--gaussian-fwhm-pixels` |
-| Detector, filter, dates of the observation | a request to a calibration service | no request |
+| Telescope, instrument, detector, filter, dates of the observation | a request to a calibration service | no request |
 
-The exposure time, the telescope, the instrument and the other quantities
-are recorded in the reports.
+The exposure time, and whether the image was combined or resampled, also
+enter the effective gain that the advisor proposes from the gain of the
+detector. Every quantity is recorded in the reports.
 
 ## Every image
 
@@ -38,6 +39,7 @@ and the conventions below take precedence where they read the same quantity.
 | Saturation level | `SATURATE`, or its synonym `SATLEVEL` | the units of the image |
 | FWHM of the PSF | `FWHM` | arcsec or pixels, as `FWHMUNIT`, `SEEUNIT` or the comment of the card states |
 | Zeropoint | `PHOTZP` | `ambiguous`: outside the conventions that define it, its meaning is not established |
+| Background level | `BKGMED` | `ambiguous`: it has no generally documented meaning |
 
 The pixel scale comes from the celestial WCS, as the mean of its projected
 scales along the two axes.
@@ -59,7 +61,7 @@ family recognizes is read through the keywords of every image.
 | Coadds of the Legacy Surveys | `LEGPIPEV` | a zeropoint of 22.5 for pixels in nanomaggies, without a photometric system: the optical bands are AB and the WISE bands Vega | |
 | DECam images of the NOIRLab Community Pipeline | `INSTRUME = 'DECam'` | the zeropoint `MAGZERO` for pixel values in ADU | the detector, with `data.hdu`, in a file with one extension per detector; the zeropoint of an image in ADU per second, for which the pipeline writes `MAGZPT`; the saturation level, when you need it: `SATURATA` and `SATURATB` give the two amplifiers in ADU before the calibration of the image |
 | Images of hscPipe that record `FLUXMAG0` | `FLUXMAG0` | the zeropoint 2.5 log10(`FLUXMAG0`) | |
-| Pan-STARRS1 stacks | `BSOFTEN` with `BOFFSET` | the encoding of the pixels, compressed through `asinh`, which BayMorph refuses | use the FITS cutouts of the PS1 image cutout service, which are linear |
+| Pan-STARRS1 stacks | `BSOFTEN` | the encoding of the pixels, compressed through `asinh` when `BOFFSET` is present too, and otherwise not established; BayMorph refuses both | use the FITS cutouts of the PS1 image cutout service, which are linear |
 | Cutouts linearized by astrocut | the `HISTORY` card of the conversion to linear flux | linear pixels, although `BSOFTEN` and `BOFFSET` remain in the header | |
 
 From hscPipe 7 on, the header of a coadd records no `FLUXMAG0`: the manual
@@ -80,7 +82,7 @@ correction, and the zeropoint must be declared.
 For a drizzled ACS image of the WFC or HRC detector in electrons per second
 whose header gives no usable zeropoint, and for which you declare none, the
 observation advisor asks the ACS Zeropoint Calculator of STScI for the
-zeropoint of its detector, filter and dates; see
+zeropoint of its detector, filter and dates, unless you keep it offline; see
 [Writing a Configuration](../guide/CONFIGURING.md#interactively-in-a-notebook).
 
 ## When conventions disagree

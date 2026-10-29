@@ -96,5 +96,5 @@ directory. Every flux needs a declared prior, and the other parameters have
 the default priors of the
 [Configuration reference](../reference/CONFIGURATION.md#priors).
 `fit.comparison.enabled` computes the Bayes factor of `double_sersic` over
-`single_sersic` when both are fitted. BayMorph ranks models; it never
-selects one for the user.
+`single_sersic`, and requires that `fit.models` lists exactly these two.
+BayMorph ranks models; it never selects one for the user.

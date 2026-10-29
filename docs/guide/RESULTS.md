@@ -91,7 +91,8 @@ posterior while accounting for the correlations:
 ```python
 truth = {"flux": 4.0e5, "re": 15.0, "n": 2.5}
 posterior.mahalanobis_distance(truth)
-# {'parameters': [...], 'distance': ..., 'dof': 3, 'p_value': ...}
+# {'parameters': [...], 'distance_squared': ..., 'distance': ...,
+#  'dof': 3, 'p_value': ...}
 ```
 
 ## Reading results later

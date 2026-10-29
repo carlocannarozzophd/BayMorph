@@ -55,7 +55,10 @@ around it, where BayMorph measures the sky and the noise.
 
     A square of `size` pixels centred on the target position. Choose it
     from the extent of the galaxy: the light of the galaxy must reach the
-    sky well inside the cutout.
+    sky well inside the cutout. BayMorph measures on the cutout the radius
+    where the radial profile of the galaxy flattens into the sky, the
+    plateau, and stops the preparation with an error when the plateau plus
+    a margin of `sky_margin` pixels, 20 by default, does not fit inside it.
 
 === "Automatic"
 
@@ -69,10 +72,11 @@ around it, where BayMorph measures the sky and the noise.
     BayMorph cuts a large preliminary region, measures the radius where the
     radial profile of the galaxy flattens into the sky, the plateau, and
     cuts the plateau radius plus `sky_margin` pixels on each side.
-    `min_size` and `max_size` bound the result. When the cutout cannot
-    contain the plateau and its margin, preparation stops with an error
-    rather than fitting a galaxy that does not fit in its cutout; a fixed
-    cutout is then the remedy.
+    `min_size` and `max_size` bound the result. The plateau is then
+    measured again on this cutout, and it can come out larger there. When
+    the cutout cannot contain it and its margin, preparation stops with an
+    error rather than fitting a galaxy that does not fit in its cutout; a
+    fixed cutout is then the remedy.
 
 The cutout, together with the mask, is the part of the image the likelihood
 uses. A different cutout is a different scientific problem: results from

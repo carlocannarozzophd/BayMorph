@@ -41,12 +41,12 @@ psf = runner.build_psf()
 **Selecting the stars.** `select_psf_candidates()` keeps up to 30 sources
 that look like isolated stars: compact, round, away from the image edges
 and from other sources, with a peak between `min_peak` and `max_peak`, so
-that saturated stars are left out. Each candidate is a dictionary with its
-position, peak, flux and shape:
+that saturated stars are left out. Each candidate is a `PSFCandidate`
+record with its position, peak, flux and shape:
 
 ```python
 len(candidates)              # 30
-candidates[0]["x"], candidates[0]["y"], candidates[0]["max_value"]
+candidates[0].x, candidates[0].y, candidates[0].max_value
 ```
 
 **Screening the stars.** Shape alone does not tell a star from a compact
@@ -99,10 +99,14 @@ Every option is in the [Configuration reference](../reference/CONFIGURATION.md#p
 
 ## Files
 
-`build_psf()` writes `psf/psf.fits` and `psf/psf_metadata.json`, the
-selected stars in `psf/psf_candidates.json`, and two diagnostic figures in
-`psf/diagnostics/`: the stamps of the stars and the profile of the kernel.
-The screen of the stars is recorded in `psf/psf_candidate_screen.json`.
+`select_psf_candidates()` writes the selected stars in
+`psf/psf_candidates.json`, with their provenance in
+`psf/psf_candidates_provenance.json`, and the screen of the stars in
+`psf/psf_candidate_screen.json`. `build_psf()` writes `psf/psf.fits`,
+`psf/psf_metadata.json` and two diagnostic figures in `psf/diagnostics/`:
+the stamps of the stars and the profile of the kernel. Drawing them needs
+LaTeX unless `BAYMORPH_USETEX=0` is set (see
+[The BayMorph style](PLOTTING.md#the-baymorph-style)).
 
 ## Limits
 
@@ -115,10 +119,11 @@ The screen of the stars is recorded in `psf/psf_candidate_screen.json`.
   3 of them next to the stars the group needs 11 stars, with 4 it needs 12,
   and the message of the stop gives the count. Expect stops in deep fields,
   where such galaxies are many.
-- It stops when the size of the PSF changes by more than about 4 per cent
-  across the region searched, and when six or more sources smaller than
-  the stars but above the floor of 0.6 pixels in size, such as cosmic rays
-  smoothed by resampling, lie below them.
+- It stops when the size of the PSF varies across the region searched by
+  more than about ±4 per cent, and when sources smaller than the stars but
+  above the floor of 0.6 pixels in size, such as cosmic rays smoothed by
+  resampling, lie below them: six or more of one size, or more than two in
+  all, or more than a fifth as many as the stars when that is more.
 - On a PSF sampled with little more than two pixels per FWHM and not
   resampled, the profile of a bright star changes with its position within
   a pixel, and the screen can stop although every candidate is a star.
@@ -126,7 +131,7 @@ The screen of the stars is recorded in `psf/psf_candidate_screen.json`.
 - Without stars, a crowd of barely resolved galaxies of nearly one size can
   be taken for them. In synthetic fields with at most three stars among 60
   compact galaxies whose median size is 3 to 10 per cent above that of the
-  PSF, the screen returned a list in 25 of 48, with kernels up to 11 per
+  PSF, the screen returned a list in 25 of 48, with kernels up to 11.5 per
   cent too broad, and every one of them passed the check of the kernel's
   centroid. Check the size and the scatter of the stellar sequence that the
   Advisor reports: in those fields, sequences of stars of one PSF scattered

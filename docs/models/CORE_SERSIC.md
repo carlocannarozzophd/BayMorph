@@ -30,7 +30,7 @@ $I'$ follows from it by a radial integral computed numerically.
 | `flux` | total flux of the profile | image units | none: must be declared |
 | `re` | half-light radius of the outer Sérsic profile | pixels | uniform 1 to 120 |
 | `n` | Sérsic index of the outer profile | | uniform 0.5 to 6 |
-| `rb` | break radius | pixels | uniform 0.1 to 20 |
+| `rb` | break radius | pixels | uniform 0.5 to 20 |
 | `gamma` | slope of the inner power law | | uniform 0 to 0.9 |
 | `alpha` | sharpness of the transition | | uniform 0.5 to 2 |
 | `q` | axis ratio | | uniform 0.4 to 1 |

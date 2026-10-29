@@ -80,9 +80,10 @@ FITS standard otherwise. The conventions cover ESO products and the VST-Tube
 pipeline, SWarp coadds, SDSS frames, the coadds of the Legacy Surveys, HST
 and JWST images, two High Level Science Products of HST, DECam images of the
 NOIRLab Community Pipeline, hscPipe images that record `FLUXMAG0`,
-Pan-STARRS stacks and the mosaics of grizli, such as those of the DAWN JWST
-Archive. [Supported Images](../reference/SUPPORTED_IMAGES.md) says, for each
-of them, what BayMorph reads and what you have to declare.
+Pan-STARRS stacks, the cutouts that astrocut linearizes, and the mosaics of
+grizli, such as those of the DAWN JWST Archive.
+[Supported Images](../reference/SUPPORTED_IMAGES.md) says, for each of them,
+what BayMorph reads and what you have to declare.
 
 Where a quantity follows from others, BayMorph derives it only for the
 products whose documentation covers it. The AB zeropoint of HST follows from

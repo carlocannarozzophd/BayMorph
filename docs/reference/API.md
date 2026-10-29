@@ -46,12 +46,12 @@ centre of the image.
 
 | Member | Description |
 | --- | --- |
-| `ObservationAdvisor.from_project(fits_path)` | Create an advisor, with paths relative to the project; it takes the same keyword arguments. |
+| `ObservationAdvisor.from_project(fits_path)` | Create an advisor, with paths relative to the project, which is searched for from `start`, by default the current directory, toward its parents; it takes the same keyword arguments. |
 | `header_report()` | The quantities read from the header, with their values, units, statuses and sources, as a table to print, and what each calibration service that serves the image was asked and answered. |
 | `select_target()`, `set_target_position(x, y)` | Choose the target, by clicking or explicitly. |
-| `inspect()`, `summary()` | Measure and print header metadata and image diagnostics. |
-| `prior_guidance(model_name)` | The prior family of every parameter of any of the ten models and the rule that proposes it, as `PriorGuidance` objects. |
-| `measure_fixed_inputs(...)` | Prepare the image and build its PSF, and return the sky scale, the cutout and the FWHM of the PSF as `FixedInputs`. |
+| `inspect()`, `summary()` | Measure header metadata and image diagnostics, as an `ObservationInspection`, and summarize them as text to print. |
+| `prior_guidance(model_name)` | The prior family of every parameter of any of the ten models and the rule that proposes it, as a dictionary of `PriorGuidance` objects by parameter. |
+| `measure_fixed_inputs(...)` | Prepare the image and build its PSF, and return the sky scale, the measured sky level, the cutout, and the FWHM and noise-equivalent area of the PSF as `FixedInputs`. |
 | `propose_config(...)` | Propose every prior of one model (`model_name`) or of several (`models`) from the header, physics and the fixed inputs, and build an `ObservationConfigProposal` in memory. |
 
 `ObservationConfigProposal.summary()` lists the proposal, the source of
@@ -79,8 +79,8 @@ build a joint analysis. See [Several Observations](../guide/MULTI_OBSERVATION.md
 | `best_model_image`, `residual`, `norm_residual`, `noise` | The model, the residuals and the sky noise, on the cutout. |
 | `chi2`, `ndof`, `reduced_chi2` | The goodness of fit. |
 | `summary()` | Model, statistics, evidence, best parameters and noise model. |
-| `corner(**kwargs)` | Draw the corner plot. |
-| `radial_profile()` | Draw the radial profile, once the diagnostics have measured it. |
+| `corner(parameter_labels=None, **kwargs)` | Draw the corner plot. |
+| `radial_profile(ax=None)` | Draw the radial profile, once the diagnostics have measured it. |
 
 **`InferenceResult`** holds the weighted posterior and the evidence, whatever
 the sampler.
@@ -107,7 +107,7 @@ the sampler.
 | `SyntheticSersic(flux, re, n, q, theta, x0, y0)` | A Sérsic galaxy to simulate; `theta` in radians. |
 | `make_observation(galaxy, shape, sky, psf_fwhm, poisson_noise, read_noise_sigma, seed)` | A synthetic image, returned as a `SyntheticObservation`. |
 | `SyntheticObservation` | The image, its noise-free stages and the truth; `to_fits(path)` writes it. |
-| `GaussianPSF(fwhm)`, `EmpiricalPSF(kernel, ...)` | PSF objects. |
+| `GaussianPSF(fwhm)`, `EmpiricalPSF(kernel_array, ...)` | PSF objects. |
 
 See [Simulated Images](../guide/SIMULATIONS.md).
 
@@ -118,8 +118,8 @@ From `baymorph.plotting`; see [Plotting](../guide/PLOTTING.md).
 | Function | Draws |
 | --- | --- |
 | `plot_log_image(image, title="", ...)` | One image on a logarithmic scale. |
-| `plot_log_data_model_residual(data, model, *, norm_residual=None, ...)` | Data, model and residuals. |
-| `corner_plot(samples, parameter_labels=None, truths=None, ...)` | A corner plot. |
+| `plot_log_data_model_residual(data, model, noise=None, ..., *, norm_residual=None)` | Data, model and residuals. |
+| `corner_plot(parameters, sigma=None, parameter_labels=None, ..., truths=None, ...)` | A corner plot. |
 | `plot_radial_profile_diagnostics(radius, profile_data, profile_model, ...)` | A radial profile with its residuals. |
 | `make_plot(nrows=1, ncols=1, ...)` | A figure in the BayMorph style. |
 | `set_plot_style()`, `style_axes(ax)` | Apply the BayMorph style. |
@@ -141,6 +141,8 @@ your decision.
 
 ## Stability
 
-The names on this page are the public interface: they change only with a
-documented migration. A change that corrects a scientifically wrong
+BayMorph is a work in progress (pre-1.0): the names on this page are its
+public interface, but they, their arguments and defaults, and the output
+files may still change between versions, and the changelog of the repository
+records every notable change. A change that corrects a scientifically wrong
 behaviour takes priority over compatibility.

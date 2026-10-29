@@ -60,10 +60,13 @@ fit:
 | `normal` | `mean`, `sigma` |
 | `beta` | `alpha`, `beta`, and optionally `lower` and `upper` |
 
-Angles can be written with `pi`. `relative_to: target_x` or `target_y`
-centres a uniform prior on the target position, so `x0` above may lie
-within 5 pixels of the position given in `data.target_position`. Parameters
-not listed keep their defaults, which every model page gives.
+Angles can be written as `pi`, `pi/2`, `-pi/2` or `-pi`.
+`relative_to: target_x` or `target_y` centres a uniform prior on the target
+position, so `x0` above may lie within 5 pixels of the position given in
+`data.target_position`. The fit stops before it writes anything when the
+centre that the preparation measures on the target lies outside the priors
+of `x0` and `y0`. Parameters not listed keep their defaults, which every
+model page gives.
 
 The residual background has its own priors, under `fit.background`: see
 [Sky and Noise](SKY_AND_NOISE.md).
@@ -108,10 +111,16 @@ fit:
 The options under `init` and `run` are passed unchanged to the sampler, with
 the names and defaults of its own documentation: for Nautilus, `n_live`
 live points, 2000 by default, and `n_eff`, the effective number of
-posterior samples at which it stops, 10000 by default. BayMorph owns only
-the likelihood, the priors and the parameters, which cannot be overridden
-there. `processes: auto` uses the available processors minus two, at most
-ten. A `seed` makes the run reproducible.
+posterior samples at which it stops, 10000 by default. The one exception
+is Nautilus's `discard_exploration`, which BayMorph sets to `true` unless
+you declare it. BayMorph owns the likelihood, the priors and the
+parameters, which cannot be overridden there, and `execution` owns the
+parallel pool and the progress output. `processes: auto` uses the
+available processors minus two, at most ten. A `seed` makes the run
+reproducible.
+
+pocoMC accepts only `uniform`, `normal` and `beta` priors: a fit with a
+`log_uniform` prior runs with Nautilus or Dynesty.
 
 All three samplers return the same result: weighted posterior samples and
 the Bayesian evidence. The choice of sampler changes how the posterior is
@@ -133,8 +142,9 @@ The evidence of each fit measures how well its model explains the image,
 penalized by the volume of its prior. Two models fitted to the same
 prepared image, with the same mask, PSF and noise model, can be compared by
 the difference of their log-evidences, the logarithm of the Bayes factor.
-With `fit.comparison.enabled: true` and `fit.models: [single_sersic,
-double_sersic]`, BayMorph computes that Bayes factor and writes it to
-`model_comparison/bayes_factor.json`. BayMorph ranks models; it never picks
-one for you. [Bayesian Inference](../theory/BAYESIAN_INFERENCE.md#the-evidence-and-model-comparison)
+With `fit.comparison.enabled: true`, which requires exactly
+`fit.models: [single_sersic, double_sersic]`, BayMorph computes that Bayes
+factor and writes it to `model_comparison/bayes_factor.json`; other models
+are compared from the log-evidences of their fits. BayMorph ranks models;
+it never picks one for you. [Bayesian Inference](../theory/BAYESIAN_INFERENCE.md#the-evidence-and-model-comparison)
 explains how to read a Bayes factor.

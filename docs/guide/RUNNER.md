@@ -15,8 +15,9 @@ fit = runner.run(diagnostics=True)
 `run()` executes the stages in order and returns the fit products, or, when
 `fit.models` lists several models, a dictionary of them by model name;
 `diagnostics=True` also writes the diagnostic figures. The
-command line does the same, figures included unless `--no-diagnostics` is
-given:
+command line does the same, diagnostic figures included unless
+`--no-diagnostics` is given; the PSF stage draws its own figures whenever it
+builds a PSF (see [Plotting](PLOTTING.md#the-baymorph-style)):
 
 ```bash
 baymorph run configs/galaxy.yaml
@@ -69,7 +70,8 @@ listed in [Output Files](../reference/OUTPUT_FILES.md).
 
 The preparation and PSF stages can be run again at no cost: when the
 products of the same configuration already exist and still match their
-inputs, the runner loads them and says so instead of rebuilding them. An
+inputs, the runner loads them and says so instead of rebuilding them; when
+they no longer match, it stops with an error rather than use them. An
 interrupted analysis therefore continues by running it again.
 
 A finished fit is never overwritten by accident: with

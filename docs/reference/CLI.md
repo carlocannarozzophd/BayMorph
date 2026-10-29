@@ -24,7 +24,8 @@ notebooks into it.
 baymorph examples [--force] [destination]
 ```
 
-Copies only the packaged example configurations.
+Copies only the packaged example configurations, into the `configs/`
+directory of `destination`.
 
 | Option | Meaning |
 | --- | --- |
@@ -55,8 +56,8 @@ the galaxy is required: either `--target-center`, or `--target-x` and
 | `--model` | Registered morphology model, one of the ten of the [Models](../models/index.md) section, such as `single_sersic`, `bulge_disk` or `core_sersic`. Repeat it with `--advise` for a configuration of several models. | `single_sersic` |
 | `--sampler` | Inference backend: `nautilus`, `dynesty` or `pocomc`. | `nautilus` |
 | `--uniform-prior PARAMETER LOWER UPPER` | Uniform prior of one model parameter; repeat it for several. Without `--advise` it is required for every parameter without a default prior, such as `flux`, or `flux_bulge` and `flux_disk`. With several `--model` options, write the parameter as `MODEL.PARAMETER`, such as `double_sersic.q_bulge`. | |
-| `--cutout-mode` | `auto` derives the cutout from the sky plateau of the target; `fixed` uses `--cutout-size`. | `auto` |
-| `--cutout-size` | Cutout size in pixels for `--cutout-mode fixed`. | |
+| `--cutout-mode` | Cutout mode written to `data.cutout`: `auto` derives the cutout from the sky plateau of the target; `fixed` uses `--cutout-size`. | `auto` |
+| `--cutout-size` | Cutout size in pixels, required with `--cutout-mode fixed` and refused otherwise. | |
 | `--psf` | PSF strategy: `empirical` or `gaussian`. | `empirical` |
 | `--gaussian-fwhm-pixels` | FWHM of a Gaussian PSF in pixels, needed only when the FITS metadata do not provide it. | |
 | `--psf-max-peak` | Brightest peak pixel accepted for a star of the empirical PSF, in image units; keep it below the saturation level. | BayMorph default; with `--advise`, half the saturation level of the header when its unit is known |
@@ -130,16 +131,24 @@ report of the advisor from Python, as
 baymorph run [--no-diagnostics] config_path
 ```
 
-Executes the configured workflow, as `BayMorphRunner(config_path).run()`
-does: simulation when the configuration has a `simulation` section, image
-preparation, empirical-PSF construction when the PSF is empirical, the
-measurement of the sky correlation for the noise model, fitting and
-diagnostics. See [The Runner](../guide/RUNNER.md).
+Executes the configured workflow, as
+`BayMorphRunner(config_path).run(diagnostics=True)` does: simulation when the
+configuration has a `simulation` section, image preparation, empirical-PSF
+construction when the PSF is empirical, the measurement of the sky correlation
+for the noise model, fitting and diagnostics. See
+[The Runner](../guide/RUNNER.md).
 
 | Option | Meaning |
 | --- | --- |
 | `config_path` | YAML configuration to execute. |
 | `--no-diagnostics` | Fit without generating the configured diagnostics. |
+
+The figures are typeset with LaTeX, which needs `latex` and `dvipng` on the
+`PATH`; without them, set the environment variable `BAYMORPH_USETEX=0`, as
+[Plotting](../guide/PLOTTING.md) describes. The figures of the PSF are drawn
+whenever an empirical PSF is built or a simulation with a PSF is run, even
+with `--no-diagnostics`, and `baymorph config --advise` draws those of the
+PSF it builds.
 
 ## Exit status
 

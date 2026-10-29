@@ -18,7 +18,7 @@ instance, is ignored, and the default backend is used.
 
 | Keys | Enter | Effect of a change |
 | --- | --- | --- |
-| `object.name`, `data.*`, `preparation.*` | the identity of the prepared products | the products of the namespace no longer match and are rejected; use a new namespace or `outputs.overwrite` |
+| `object.name`, `data.*` except `data.calibration`, `preparation.*` | the identity of the prepared products | the products of the namespace no longer match and are rejected; use a new namespace or `outputs.overwrite` |
 | `psf.empirical.*` | the identity of the empirical PSF | as above, for the PSF product |
 | `fit.*` | the signature of the fit checkpoint | a checkpoint made with other settings is not resumed |
 | `diagnostics.*` | nothing scientific | only how completed products are displayed |
@@ -38,8 +38,8 @@ instance, is ignored, and the default backend is used.
 | `data.region` | `null`, `whole` or `{size}` | `null` | Part of the image that BayMorph reads. `null` reads the whole image when no side exceeds 4096 pixels, otherwise a square of 4096 pixels about `data.target_position`; `whole` always reads the whole image; `{size: S}` reads a square of S arcsec about the target. The square is shifted inside the image and never padded, and every position, of the target, of the cutout or of the PSF stars, stays in pixels of the whole image. A cutout, or an `auto` target, that leaves the region stops with the side to declare. What would cover the whole image covers the region: the first detection of an `auto` cutout and the search of the PSF stars. The region enters the identity of the prepared products and of the PSF only when it is not the whole image. |
 | `data.target_position` | `{x, y}` or `center` | `null` | Centre of the galaxy in zero-based full-image pixel coordinates, or the detector centre. Required to prepare and fit. It selects the target, and it is the reference of the priors declared with `relative_to`, such as the default priors of the centre; the fit stops when the centre that the preparation measures on the target lies outside the priors of `x0` and `y0`. A position on the sky is converted to pixels by `baymorph config --target-ra --target-dec` or by the observation advisor; the configuration itself takes pixels. |
 | `data.cutout` | mapping | | Cutout of the target. |
-| `data.cutout.mode` | `fixed` or `auto` | `fixed` | `fixed` cuts `data.cutout.size` pixels about the target seed; `auto` cuts a preliminary region, measures where the radial profile of the target reaches the sky plateau, and cuts the plateau plus a margin. |
-| `data.cutout.size` | integer | `null` | Cutout size in pixels for `fixed`. |
+| `data.cutout.mode` | `fixed` or `auto` | `fixed` | `fixed` cuts `data.cutout.size` pixels about the target seed; `auto` cuts a preliminary region, measures where the radial profile of the target reaches the sky plateau, and cuts the plateau plus a margin. `baymorph config` writes `auto` unless given `--cutout-mode fixed`. |
+| `data.cutout.size` | integer | `null` | Cutout size in pixels, required for `fixed`. |
 | `data.cutout.initial_factor` | number | 4.0 | `auto`: size of the preliminary region in units of the detected target extent. |
 | `data.cutout.min_size` | integer | 100 for the preliminary region | `auto`: smallest cutout. |
 | `data.cutout.max_size` | integer | none | `auto`: largest cutout. |
@@ -63,7 +63,7 @@ replaced by `data.mask_path`.
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `outputs.root` | path | required | Root of the run directories, relative to the working directory. |
+| `outputs.root` | path | required | Root of the run directories. A relative path, here and in `data.image_path`, is read from the working directory; when the configuration file lives in a `configs/` directory, it is read from the parent of `configs/`, the project directory. |
 | `outputs.overwrite` | boolean | `false` | Allow the products of an existing run to be rebuilt. With `false`, completed preparation and PSF products are reused and a completed fit raises `FileExistsError`. |
 
 ## `preparation`
@@ -82,15 +82,15 @@ replaced by `data.mask_path`.
 
 `preparation.detection.npixels` (now `n_pixels`), a top-level `masking`
 section, a `method` under `preparation.background` or
-`preparation.noise`, and any other entry under `preparation.noise` are
-rejected.
+`preparation.noise`, and any other entry under `preparation.masking` or
+`preparation.noise` are rejected.
 
 ## `psf`
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `psf.type` | `empirical` or `gaussian` | `empirical` | An empirical PSF is built from stars of the image; a Gaussian PSF is analytic. |
-| `psf.gaussian.fwhm` | number | | FWHM in pixels of a Gaussian PSF. |
+| `psf.gaussian.fwhm` | number | | FWHM in pixels of a Gaussian PSF, required with `gaussian`. |
 | `psf.empirical.candidate_selection.auto` | boolean | `true` | Not read by the current code. |
 | `psf.empirical.candidate_selection.target_n_candidates` | integer | 30 | Largest number of candidates kept. |
 | `psf.empirical.candidate_selection.min_area` | integer | 10 | Smallest segment area of a candidate, in pixels. |
@@ -123,9 +123,10 @@ rejected.
 | `fit.likelihood.include_normalization` | boolean | `true` | Normalize the correlated Gaussian likelihood, which every fit requires. |
 | `fit.likelihood.factorization.type` | string | `nearest_neighbor` | Factorization of the sky correlation. |
 | `fit.likelihood.factorization.max_neighbors` | integer | `24` | Neighbours of the factorization; fits use 24. |
+| `fit.likelihood.effective_gain` | mapping | required, no default | Source of the effective gain of the noise model; see below. |
 | `fit.sampler.name` | `nautilus`, `dynesty`, `pocomc` | `nautilus` | Inference backend. |
 | `fit.comparison.enabled` | boolean | `false` | Compare models by Bayes factor; requires `fit.models` to be exactly `single_sersic` and `double_sersic`. |
-| `fit.comparison.metric` | string | `bayes_factor` | Comparison metric. |
+| `fit.comparison.metric` | string | `bayes_factor` | Comparison metric; only `bayes_factor` is supported. |
 | `fit.background.model` | `constant` or `plane` | `constant` | Residual background fitted with the morphology. |
 | `fit.background.priors` | mapping | | Priors of the background parameters. |
 | `fit.priors` | mapping | | Priors of the morphology parameters, by model. |
@@ -134,7 +135,7 @@ rejected.
 
 | Type | Options | Note |
 | --- | --- | --- |
-| `correlated_gaussian` | `include_normalization` (default `true`), `factorization` (`type: nearest_neighbor`, `max_neighbors: 24`, the defaults), `effective_gain` (required) | The noise model of BayMorph and the default: the variance of each pixel is the prepared sky scale squared plus the source part of the model over the effective gain, and the stationary sky correlation, estimated on the whole sky region with one plane removed, no taper and lags up to 8, enters through a nearest-neighbour factorization with 24 neighbours. The estimator is fixed, so `calibration` options are rejected. |
+| `correlated_gaussian` | `include_normalization` (default `true`), `factorization` (`type: nearest_neighbor`, `max_neighbors: 24`, the defaults), `effective_gain` (required) | The noise model of BayMorph and the default: the variance of each pixel is the prepared sky scale squared plus the source part of the model over the effective gain, and the stationary sky correlation, estimated on the whole sky region with one plane removed, no taper and lags up to 8, enters through a nearest-neighbour factorization with 24 neighbours. The estimators are fixed, `preparation.noise.sky_correlation` declares which one applies, and a `calibration` block is rejected. |
 | `gaussian` | `include_normalization` | Independent pixels with the prepared noise scale. Rejected for every fit run from a configuration; it remains for simulations and tests through the Python API. |
 | `cash` | `include_data_term`, `require_integer_data`, `integer_tolerance` | Poisson likelihood of images in counts. |
 | `poisson_gaussian` | `read_noise`, `tail_probability`, `minimum_terms`, `maximum_terms` | Marginalized Poisson-Gaussian likelihood of images in counts. |
@@ -179,12 +180,13 @@ fit:
 | `fit.sampler.execution.processes` | `auto` | Worker processes; `auto` uses the available CPUs minus two, at most ten. |
 | `fit.sampler.execution.progress` | `true` | Show the sampler's progress. |
 | `fit.sampler.init` | `{}` | Passed unchanged to the sampler constructor, with its native names. |
-| `fit.sampler.run` | `{}` | Passed unchanged to the sampler's run method. |
+| `fit.sampler.run` | `{}` | Passed to the sampler's run method; for Nautilus, BayMorph sets `discard_exploration: true` unless it is declared. |
 
 BayMorph keeps the native names of each sampler and does not translate them;
 see the documentation of the installed Nautilus, Dynesty or pocoMC version.
 The likelihood, prior transform, parameter order and dimension belong to
-BayMorph and cannot be overridden there. `init.filepath` for Nautilus and
+BayMorph and cannot be overridden there, and `execution` owns the parallel
+pool and the progress output. `init.filepath` for Nautilus and
 `run.resume_state_path` for pocoMC accept `auto`, a signed checkpoint inside
 the run directory.
 
@@ -201,13 +203,17 @@ the keys of its type:
 | `beta` | `alpha`, `beta`, and optionally both `lower` and `upper` |
 | `fixed` | `value`; accepted by the parser, not yet validated in the single-observation production path |
 
-Angles may be written as expressions of `pi`, such as `-pi/2`. A prior with
+pocoMC accepts only `uniform`, `normal` and `beta` priors for the sampled
+parameters.
+
+Angles may be written as `pi`, `pi/2`, `-pi/2` or `-pi`. A prior with
 `relative_to` is centred on the target seed transformed to cutout
 coordinates, which is a deterministic change of coordinates, not information
 taken from the pixels.
 
-The defaults are uniform priors in pixels. No model has a default prior for
-its fluxes, which must always be declared.
+The defaults are uniform priors, with lengths and centres in pixels and
+angles in radians. No model has a default prior for its fluxes, which must
+always be declared.
 
 | Model | Parameters | Default priors |
 | --- | --- | --- |
@@ -240,10 +246,12 @@ multi-observation fit with any of these models. Within the domain, the
 rendering of a bright bar, or of a compact bright bulge, can still reach the
 noise of a very deep image; the page of each model states where.
 
-For `double_sersic` and `bulge_disk`, a prior declared under `q` or `theta`
-applies to both components (`q_bulge` and `q_disk`, `theta_bulge` and
-`theta_disk`) unless a component-specific prior is declared. The two
-components remain separate parameters.
+For `double_sersic`, a prior declared under `q` or `theta` applies to both
+components (`q_bulge` and `q_disk`, `theta_bulge` and `theta_disk`) unless a
+component-specific prior is declared. The two components remain separate
+parameters. The other models with a bulge and a disc, `bulge_disk` among
+them, have default priors for each component, which take precedence over a
+prior under `q` or `theta`: declare their component priors instead.
 
 The background priors are declared under `fit.background.priors`:
 
@@ -263,7 +271,7 @@ belongs to `fit.background`.
 | `diagnostics.format` | string | `pdf` | File format of the figures. |
 | `diagnostics.corner` | boolean | `true` | Corner plot of the weighted posterior. |
 | `diagnostics.residual` | boolean | `true` | Data, model and residual images. |
-| `diagnostics.radial_profile` | boolean | `true` | Radial profile of data and model. |
+| `diagnostics.radial_profile` | boolean or mapping | `true` | Radial profile of data and model. A mapping draws it with its bins: `binning`, `fixed` (the default), `adaptive` or `logarithmic`; `dr`, the bin width in pixels (the smallest with `adaptive`, the first edge with `logarithmic`), by default half the FWHM of the PSF and at least 1; `min_pixels`, 50, for `adaptive`; `log_n_bins`, 40, for `logarithmic`. |
 | `diagnostics.posterior_profile_bands` | boolean | `true` | Posterior percentile bands on the radial profile. |
 | `diagnostics.titles` | mapping | none | Figure title by model name. |
 

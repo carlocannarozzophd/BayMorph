@@ -58,6 +58,7 @@ baymorph config data/galaxy.fits \
   --target-x 500 --target-y 500 \
   --model single_sersic \
   --uniform-prior flux 100 1000000 \
+  --cutout-mode fixed --cutout-size 251 \
   --output configs/galaxy.yaml
 ```
 
@@ -72,6 +73,7 @@ baymorph config data/galaxy.fits \
   --target-x 500 --target-y 500 \
   --advise \
   --model single_sersic --model double_sersic \
+  --cutout-mode fixed --cutout-size 251 \
   --output configs/galaxy.yaml
 ```
 
@@ -129,6 +131,8 @@ proposal = advisor.propose_config(
     output_path="configs/galaxy.yaml",
     models=["single_sersic", "double_sersic"],
     background_model="plane",
+    cutout_mode="fixed",
+    fixed_size=251,
 )
 print(proposal.summary())
 proposal.write(accept=True)
@@ -177,11 +181,11 @@ different flux priors, and their evidences are not comparable.
 `ObservationAdvisor(..., online=False)` asks nothing, as for a batch of
 images on a computer without network. Writing the same proposal again keeps
 the report that is already there when it differs only in when the service
-was asked, or in the verbatim text of the error a failed request met;
-another answer, after a recalibration of the observatory, even one that
-fails for the same reason, or a failure for another reason, is a different
-proposal, and `write` refuses to replace the files and names the keys that
-differ.
+was asked, in the verbatim text of the error a failed request met, or in
+whether the Advisor was online; another answer, after a recalibration of
+the observatory, even one that fails for the same reason, or a failure for
+another reason, is a different proposal, and `write` refuses to replace the
+files and names the keys that differ.
 
 The Advisor first prepares the image and builds its PSF, the inputs of the
 observation model that come before any prior; the fit then reuses them. To
@@ -239,13 +243,18 @@ its rule and its numbers beside it, with or without a zeropoint; without a
 pixel scale, the lengths keep the default ranges in pixels, and the summary
 says so.
 
-Without the interactive widgets, `advisor.set_target_position(x, y)` sets
-the target instead of the click. The configuration is written only by
-`proposal.write(accept=True)`. The summary lists every prior with its
-source, and the written YAML comes with a report, `galaxy.advisor.json`,
-that records where every proposed value comes from. The diagnostics the
-Advisor prints, such as a flux or radius measured on the image, are there
-to check that a prior is sensible, never to set its bounds.
+The click needs the `interactive` extra (see
+[Installation](INSTALLATION.md#optional-extras)); without the interactive
+widgets, `advisor.set_target_position(x, y)` sets the target instead. The
+configuration is written only by `proposal.write(accept=True)`. The summary
+lists every prior with its source, and the written YAML comes with a report,
+`galaxy.advisor.json`, that records where every proposed value comes from.
+The diagnostics the Advisor prints, such as a flux or radius measured on the
+image, are there to check that a prior is sensible, never to set its bounds.
+When the flux measured on the target lies outside the total-flux prior of
+the proposal, or within the first or last 5 percent of its prior
+probability, the summary says that the flux prior needs review and `write`
+refuses the proposal; a declared flux prior is checked in the same way.
 
 ## What you have to decide
 
@@ -258,7 +267,7 @@ fit:
 | The flux prior | `fit.priors.<model>.flux` | No model has a default flux prior: the range depends on the units and depth of your image. |
 | The other priors | `fit.priors.<model>` | The defaults are wide uniform ranges in pixels; check them against the size of your galaxy. |
 | The residual background prior | `fit.background.priors` | The default, −50 to 50 in image units, is not scaled to your image. |
-| The effective gain | `fit.likelihood.effective_gain` | It sets the Poisson noise of the galaxy; see [Sky and Noise](SKY_AND_NOISE.md). |
+| The effective gain | `fit.likelihood.effective_gain` | It sets the Poisson noise of the galaxy and has no default: the fit refuses to start without it; see [Sky and Noise](SKY_AND_NOISE.md). |
 | The brightest star for the PSF | `psf.empirical.candidate_selection.max_peak` | The default, 80000, is not scaled to your image: keep it below the saturation level, so that saturated stars are not used. |
 | The faintest star for the PSF | `psf.empirical.candidate_selection.min_peak` | The default, 20, is not scaled to your image either: on an image in electrons per second it can leave too few stars. |
 | The screen of the PSF stars | `psf.empirical.candidate_selection.point_source_screen` | The default keeps only the stellar sequence of the candidates' sizes; check the size and the scatter it reports, because in a field without stars a crowd of barely resolved galaxies can be taken for them (see [Limits](PSF.md#limits)). `none` lets galaxies, cosmic rays and hot pixels into the PSF. |

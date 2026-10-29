@@ -26,8 +26,11 @@ how.
 
 ## Sky coordinates
 
-By default the joint parameters live on the sky, so that images with
-different pixel grids describe the same galaxy:
+With `parameter_frame: sky`, which `make_multi_parameters` and
+`make_multi_observation_config` write by default, the joint parameters live
+on the sky, so that images with different pixel grids describe the same
+galaxy (a joint configuration that does not declare `parameter_frame` uses
+`detector`, the pixel parameters of the model):
 
 | Parameter | Meaning | Units |
 | --- | --- | --- |
@@ -76,10 +79,11 @@ make_multi_observation_config(
 
 Parameters not listed in `shared` are `independent`. `prior_bounds` gives
 uniform priors; parameters without one keep their defaults, and a parameter
-with no default, such as the flux, must have one. The function writes
-`configs/joint/g.yaml`, `configs/joint/r.yaml` and
-`configs/joint/joint.yaml`. `observation_options` sets the PSF, the cutout
-or the likelihood of each image, for example
+with no default, such as the flux, must have one, as must a shared
+`re_arcsec`. The function writes `configs/joint/g.yaml`,
+`configs/joint/r.yaml` and `configs/joint/joint.yaml`.
+`observation_options` sets the PSF, the cutout or the likelihood of each
+image, for example
 `{"g": {"psf_type": "gaussian", "gaussian_fwhm_pixels": 3.0}}`.
 
 The joint file lists the images and the coupling of every parameter:
@@ -140,15 +144,38 @@ The same runner runs a joint analysis:
 from baymorph import BayMorphRunner
 
 runner = BayMorphRunner("configs/joint/joint.yaml")
-result = runner.run(diagnostics=True)
+result = runner.run()
 ```
 
-or `baymorph run configs/joint/joint.yaml`. The runner prepares every image
-and builds every PSF in the run directory of that image, then fits them
-together. The joint posterior, the evidence and the corner plot are written
-once, under `runs/galaxy_joint/fits/<model>/`; the model, the residuals and
-their figures are written for each image under `observations/<name>/` in
-the same directory.
+or `baymorph run --no-diagnostics configs/joint/joint.yaml`. The runner
+prepares every image and builds every PSF in the run directory of that
+image, then fits them together. The joint posterior and the evidence are
+written once, under `runs/galaxy_joint/fits/<model>/`; the model and the
+residuals of each image are written under `observations/<name>/` in the
+same directory.
+
+!!! warning "Diagnostics of a joint analysis"
+
+    `runner.diagnostics()`, and so `runner.run(diagnostics=True)` and
+    `baymorph run` without `--no-diagnostics`, look for the configuration
+    of each image in the working directory instead of beside the joint
+    file, and stop when it is not there. Draw the figures from the path of
+    the joint file instead:
+
+    ```python
+    from baymorph.pipeline import (
+        run_corner_diagnostics,
+        run_radial_profile_diagnostics,
+        run_residual_map_diagnostics,
+    )
+
+    for draw in (run_corner_diagnostics, run_residual_map_diagnostics,
+                 run_radial_profile_diagnostics):
+        draw("configs/joint/joint.yaml", result)
+    ```
+
+    The corner plot is written under `fits/<model>/`, and the figures of
+    each image under `observations/<name>/`.
 
 ## Results
 
@@ -171,9 +198,9 @@ result.observations["g"].norm_residual     # its normalized residual
 [Results](RESULTS.md)), and `result.observations` holds, for each image,
 the best model, the residuals and the parameters in the pixel frame of that
 image. A hierarchical parameter appears in the posterior through its sampled
-coordinates, `<name>__rho` and one latent value `<name>__z__<image>` per
-image; its value in each image at the best sample is in
-`result.observations`.
+coordinates, `<name>__rho` (`<name>__rstar` with `coupling: wavelength`) and
+one latent value `<name>__z__<image>` per image; its value in each image at
+the best sample is in `result.observations`.
 
 ## Limits
 
@@ -182,3 +209,9 @@ image; its value in each image at the best sample is in
 - Each image declares its own effective gain, in its own configuration.
 - The six models with bars, rings, spiral arms, broken discs, boxy
   isophotes or cores are single-image models: a joint analysis refuses them.
+- A joint analysis fits one model. The configuration of an image may not
+  declare `data.hdu` or `data.calibration`: each image is the one BayMorph
+  selects by default in its file, and its header is read as it is.
+- The posterior holds the latent coordinates of a hierarchical or
+  wavelength parameter: BayMorph does not yet turn its samples into the
+  value of that parameter in each image.

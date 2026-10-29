@@ -31,7 +31,9 @@ diagnostics:
 `runner.corner()`, `runner.residual_maps()` and `runner.radial_profile()`
 draw one figure each. All of them need a fit run in the same session; a
 fit loaded from disk is plotted with the functions below. `build_psf()`
-draws the diagnostics of the PSF by itself, in `psf/diagnostics/`.
+draws the diagnostics of the PSF by itself, in `psf/diagnostics/`, when it
+builds a PSF rather than loading an accepted one, and `simulate()` draws
+there the profile of the Gaussian PSF of a simulation.
 
 ## Plotting in a notebook
 
@@ -96,9 +98,14 @@ Every BayMorph figure uses the same style: text typeset with LaTeX in
 Computer Modern, thick axes, ticks pointing outwards with minor ticks, and
 panels of 15 x 15 inches with 35-point text, which keeps the proportions of a
 figure in a paper. BayMorph therefore needs a TeX distribution (`latex` and
-`dvipng` on the `PATH`) to draw figures. Where LaTeX is not available, set the
-environment variable `BAYMORPH_USETEX=0` (or pass `usetex=False` to
-`make_plot`): the figures then use Matplotlib's own Computer Modern fonts.
+`dvipng` on the `PATH`) to draw figures. They are drawn by the diagnostics,
+which `baymorph run` draws unless `--no-diagnostics` is given and
+`runner.run()` only with `diagnostics=True`, by `build_psf()` and by the
+observation advisor when it builds a PSF, and by `simulate()`: a run
+without diagnostics still needs LaTeX when it builds a PSF or simulates an
+image with one. Where LaTeX is not available, set the environment variable
+`BAYMORPH_USETEX=0` (or pass `usetex=False` to `make_plot`): the figures
+then use Matplotlib's own Computer Modern fonts.
 Use the style for your own figures with `make_plot`, which works like
 `matplotlib.pyplot.subplots`:
 

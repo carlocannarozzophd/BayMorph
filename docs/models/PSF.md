@@ -53,7 +53,8 @@ each axis; every phase is non-negative with unit sum, and the zero phase
 equals the native kernel.
 
 **Construction.** `select_psf_candidates()` selects isolated, round stars
-whose area and peak lie within declared limits
+whose area and peak lie within declared limits and, by default, keeps those
+that form the stellar sequence of their sizes
 (`psf.empirical.candidate_selection`); `build_psf()` then:
 
 1. fits each kernel pixel as a weighted quadratic in the sub-pixel phase of
