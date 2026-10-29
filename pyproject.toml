@@ -75,7 +75,7 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/carlocannarozzophd/BayMorph"
 Repository = "https://github.com/carlocannarozzophd/BayMorph"
-Documentation = "https://github.com/carlocannarozzophd/BayMorph/tree/main/docs"
+Documentation = "https://carlocannarozzophd.github.io/BayMorph/"
 Issues = "https://github.com/carlocannarozzophd/BayMorph/issues"
 Changelog = "https://github.com/carlocannarozzophd/BayMorph/blob/main/CHANGELOG.md"
 
