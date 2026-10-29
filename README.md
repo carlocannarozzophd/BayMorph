@@ -31,7 +31,7 @@
 >
 > Need a relaxing afternoon by the bay?
 >
-> Sorry. We only borrowed the name.
+> Sorry. We only borrowed part of the name.
 
 ---
 
