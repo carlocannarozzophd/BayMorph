@@ -11,6 +11,10 @@ and the project follows Semantic Versioning in spirit.
 
 ### Added
 
+* `examples/roman_cases.ipynb`, an executed example: it simulates a galaxy as
+  Roman WFI would see it in F158, with an undersampled PSF rendered at
+  sub-pixel phases, fits it by nested sampling and compares the posterior with
+  the truth.
 * `data.calibration` declares the calibration quantities that the header
   does not give, or gives wrongly: the image unit, the zeropoint and its
   photometric system, the exposure time, the gain of the detector and the

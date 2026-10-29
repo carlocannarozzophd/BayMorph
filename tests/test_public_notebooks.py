@@ -18,6 +18,8 @@ EXPECTED_NOTEBOOKS: set[str] = {
     ASSESSMENT_NOTEBOOK,
     OBSERVED_FIT_NOTEBOOK,
 }
+# Executed examples: tracked, not packaged, not copied by baymorph init.
+EXAMPLE_NOTEBOOKS: set[Path] = {Path("examples") / "roman_cases.ipynb"}
 
 
 def _load_notebook(
@@ -73,7 +75,8 @@ def _tracked_notebooks() -> set[Path]:
 
 
 def test_only_public_and_packaged_notebooks_exist() -> None:
-    """The repository holds the public notebooks and their packaged copies only.
+    """The repository holds the public notebooks, their packaged copies and the
+    executed examples only.
 
     Only tracked files count: notebooks that a developer keeps on disk
     outside the repository, or copies left in a build directory, are not
@@ -84,7 +87,9 @@ def test_only_public_and_packaged_notebooks_exist() -> None:
         Path("baymorph/resources/notebooks") / name for name in EXPECTED_NOTEBOOKS
     }
 
-    assert _tracked_notebooks() == expected_public | expected_packaged
+    assert _tracked_notebooks() == (
+        expected_public | expected_packaged | EXAMPLE_NOTEBOOKS
+    )
 
 
 def test_public_notebooks_avoid_parent_relative_paths() -> None:

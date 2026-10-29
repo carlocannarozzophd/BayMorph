@@ -15,6 +15,11 @@ distributes no data. The YAML written by 02A is what 02B runs: if you change
 a declaration after 02B has run, write it under a new analysis name, so that
 the earlier results are kept.
 
+An executed example,
+[`examples/roman_cases.ipynb`](https://github.com/carlocannarozzophd/BayMorph/blob/main/examples/roman_cases.ipynb),
+fits a simulated Roman WFI F158 galaxy whose PSF is undersampled; it is not
+packaged and `baymorph init` does not copy it.
+
 The notebooks draw their figures with LaTeX. Without `latex` and `dvipng`,
 start Jupyter with the environment variable `BAYMORPH_USETEX=0` set, as
 [Installation](INSTALLATION.md#requirements) explains.
