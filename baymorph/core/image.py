@@ -429,8 +429,10 @@ def read_image_header(
     """Read the header of the image of a FITS file without reading its pixels.
 
     The HDU is chosen and its header read as :meth:`ImageData.from_fits` does,
-    so the reading equals the one of the opened image, but no pixel is read: a
-    mosaic of several gigabytes costs the same as a small stamp.
+    so the reading equals the one of the opened image, but no pixel is read:
+    an uncompressed mosaic of several gigabytes costs about the same as a
+    small stamp, while a file compressed as a whole, such as a ``.gz``, is
+    decompressed to read its header.
 
     Parameters
     ----------

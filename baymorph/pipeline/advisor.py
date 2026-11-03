@@ -1225,8 +1225,10 @@ class ObservationAdvisor:
         calibration service gave, whose note names the service; a last
         section states what each service that serves the image was asked
         and answered, or why it was not asked (AD-054). Only the header is
-        read, never the pixels, so the report of a mosaic of several
-        gigabytes costs the same as the report of a small stamp.
+        read, never the pixels, so the report of an uncompressed mosaic of
+        several gigabytes costs about the same as the report of a small
+        stamp; a mosaic compressed as a whole, such as a ``.gz``, is
+        decompressed to read its header.
 
         Returns
         -------

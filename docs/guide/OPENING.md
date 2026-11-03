@@ -47,8 +47,10 @@ advisor = ObservationAdvisor.from_project("data/galaxy.fits")
 print(advisor.header_report())
 ```
 
-The report reads only the header, never the pixels, so the report of a
-mosaic of several gigabytes costs the same as the report of a small stamp.
+The report reads only the header, never the pixels, so the report of an
+uncompressed mosaic of several gigabytes costs about the same as the report
+of a small stamp. A mosaic compressed as a whole, with gzip or bzip2, is
+decompressed to read its header, which takes seconds for a large file.
 `baymorph config --advise` prints the same report before it prepares the
 image.
 
@@ -183,8 +185,11 @@ the region only.
 
 Only the pixels of the region are read from an uncompressed file, and only
 the tiles that cross it from a tile-compressed file such as a `.fits.fz`. A
-file compressed as a whole, with gzip (`.fits.gz`) or bzip2, is read through
-up to the region, in one pass. The interactive selection of the target, in a
+file compressed as a whole, with gzip (`.fits.gz`) or bzip2, has no random
+access: BayMorph decompresses it from its start every time it reads it, for
+its header as for its pixels, so a large mosaic opens more slowly than the
+same file uncompressed. Decompress it once, with `gunzip` or `bunzip2`, to
+work on it repeatedly. The interactive selection of the target, in a
 notebook, always shows the whole image.
 
 ## Pixels without data
