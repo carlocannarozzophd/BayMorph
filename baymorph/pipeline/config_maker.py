@@ -27,7 +27,11 @@ from baymorph.pipeline.opening import (
     validate_region,
 )
 from baymorph.pipeline.prior_config import parse_prior_config
-from baymorph.pipeline.config import resolve_config, validate_fit_priors
+from baymorph.pipeline.config import (
+    resolve_config,
+    validate_fit_priors,
+    validate_prior_names,
+)
 from baymorph.pipeline.psf_candidate_screen import (
     DEFAULT_POINT_SOURCE_SCREEN,
     POINT_SOURCE_SCREEN_RULES,
@@ -395,8 +399,14 @@ def _normalize_sampler_config(
 
 def _normalize_model_priors(
     priors: Mapping[str, Any] | None,
+    model_name: str,
 ) -> dict[str, dict[str, Any]]:
-    """Normalize explicit scientific model-prior overrides."""
+    """Normalize explicit scientific model-prior overrides.
+
+    Each prior must parse, and its name must be one that ``model_name``
+    reads (see :func:`baymorph.pipeline.config.validate_prior_names`), so
+    that no configuration is written with a prior that would have no effect.
+    """
     if priors is None:
         return {}
 
@@ -426,6 +436,8 @@ def _normalize_model_priors(
         parse_prior_config(prior_mapping, references=references)
 
         normalized[name] = prior_mapping
+
+    validate_prior_names(model_name, normalized)
 
     return normalized
 
@@ -631,7 +643,7 @@ def make_config_from_fits(
 
     sampler_config = _normalize_sampler_config(sampler)
 
-    normalized_model_priors = _normalize_model_priors(model_priors)
+    normalized_model_priors = _normalize_model_priors(model_priors, model_name)
 
     if preparation is not None and not isinstance(preparation, Mapping):
         raise TypeError("preparation must be a mapping or None.")

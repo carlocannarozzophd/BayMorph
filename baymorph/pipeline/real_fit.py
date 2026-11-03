@@ -78,6 +78,7 @@ def run_real_fit_from_config(config: str | Path | dict[str, Any]):
         resolved = resolve_config(config)
 
     validate_fit_priors(resolved)
+    _refuse_fixed_priors(resolved)
 
     try:
         image_products = load_image_preparation_products(resolved)
@@ -931,6 +932,62 @@ def require_centre_within_priors(
         "galaxy is centred where you placed it, as a disturbed or blended "
         "system may be, declare wider priors for x0 and y0."
     )
+
+
+def _is_fixed_prior(prior: Any) -> bool:
+    """Return whether a prior configuration declares a fixed value."""
+    return (
+        isinstance(prior, Mapping)
+        and str(prior.get("type", "")).strip().lower() == "fixed"
+    )
+
+
+def _refuse_fixed_priors(config: dict[str, Any]) -> None:
+    """Refuse fixed priors, which the fit of one observation cannot yet use.
+
+    The samplers explore the sampled parameters only, and the best model, the
+    fit statistics and the products of this fit are built from those alone,
+    so a fixed parameter would stop the fit after the sampling. The check runs
+    before any product is read or written. The joint fit of several
+    observations reconstructs fixed values and is not concerned.
+    """
+    fit_config = config.get("fit") or {}
+    configured_priors = fit_config.get("priors") or {}
+    fixed = []
+
+    # A missing prior is reported by validate_fit_priors; only the priors that
+    # exist are inspected here.
+    for model_name in fit_config.get("models", []):
+        model_priors = configured_priors.get(model_name)
+
+        if not isinstance(model_priors, Mapping):
+            continue
+
+        for parameter_name in get_model(model_name).parameter_names:
+            try:
+                prior = prior_config_for_parameter(parameter_name, model_priors)
+            except ValueError:
+                continue
+
+            if _is_fixed_prior(prior):
+                fixed.append(f"{model_name}.{parameter_name}")
+
+    background_cfg = fit_config.get("background") or {}
+    background_priors = background_cfg.get("priors") or {}
+
+    for parameter_name in background_parameter_names(
+        background_cfg.get("model", "constant")
+    ):
+        if _is_fixed_prior(background_priors.get(parameter_name)):
+            fixed.append(f"background.{parameter_name}")
+
+    if fixed:
+        raise ValueError(
+            "The fit of a single observation does not yet support fixed "
+            f"priors: {', '.join(fixed)}. It builds its results from the "
+            "sampled parameters only, so a fixed parameter would stop it "
+            "after the sampling. Declare a sampled prior for each."
+        )
 
 
 def _build_parameter_list(

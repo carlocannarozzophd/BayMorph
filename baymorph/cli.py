@@ -31,6 +31,10 @@ from baymorph.runner import BayMorphRunner
 
 _RESOURCE_PACKAGE = "baymorph.resources"
 
+# The target coordinate about which a prior of each centre parameter given on
+# the command line is declared, as the default priors of the centre are.
+_CENTRE_REFERENCES = {"x0": "target_x", "y0": "target_y"}
+
 
 class UsageError(ValueError):
     """An invalid combination of command-line options.
@@ -185,6 +189,8 @@ def _model_priors_from_args(
 
     A prior names its parameter, or ``MODEL.PARAMETER`` to name the model it
     belongs to. The plain name is allowed only when one model is requested.
+    A prior of ``x0`` or ``y0`` is about the target position, as the default
+    priors of the centre are, and is written with its ``relative_to``.
 
     Returns
     -------
@@ -234,6 +240,9 @@ def _model_priors_from_args(
             "lower": float(lower),
             "upper": float(upper),
         }
+
+        if name in _CENTRE_REFERENCES:
+            model_priors[name]["relative_to"] = _CENTRE_REFERENCES[name]
 
     return priors
 
@@ -672,7 +681,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "Repeat for multiple parameters, for example "
             "'--uniform-prior flux 100 1000000'. With several --model "
             "options, name the model too: "
-            "'--uniform-prior double_sersic.q_bulge 0.4 1'."
+            "'--uniform-prior double_sersic.q_bulge 0.4 1'. A prior of x0 "
+            "or y0 is about the target position."
         ),
     )
 

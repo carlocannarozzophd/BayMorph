@@ -201,7 +201,14 @@ the keys of its type:
 | `log_uniform` | `lower`, `upper` |
 | `normal` | `mean`, `sigma` |
 | `beta` | `alpha`, `beta`, and optionally both `lower` and `upper` |
-| `fixed` | `value`; accepted by the parser, not yet validated in the single-observation production path |
+| `fixed` | `value`; refused by the fit of a single observation, which does not yet reconstruct fixed parameters |
+
+A declared prior replaces the default prior of its parameter entirely, under
+`fit.priors.<model>` and under `fit.background.priors`: no key of the default
+is kept. `q: {type: beta, alpha: 2, beta: 2}` is a beta prior on 0–1, not on
+the bounds of the default prior of `q`. A prior of `x0` or `y0` is about the
+target only when it declares `relative_to`. The parameters without a declared
+prior keep their defaults.
 
 pocoMC accepts only `uniform`, `normal` and `beta` priors for the sampled
 parameters.
@@ -249,9 +256,13 @@ noise of a very deep image; the page of each model states where.
 For `double_sersic`, a prior declared under `q` or `theta` applies to both
 components (`q_bulge` and `q_disk`, `theta_bulge` and `theta_disk`) unless a
 component-specific prior is declared. The two components remain separate
-parameters. The other models with a bulge and a disc, `bulge_disk` among
-them, have default priors for each component, which take precedence over a
-prior under `q` or `theta`: declare their component priors instead.
+parameters. For `bulge_disk`, `bulge_broken_disk`, `bulge_disk_bar`,
+`bulge_disk_ring` and `bulge_disk_spiral`, whose components have default
+priors of their own, a prior declared under `q` or `theta` is refused: declare
+priors under `q_bulge` and `q_disk`, or `theta_bulge` and `theta_disk`,
+instead. A prior under any other name that is not a parameter of the model,
+such as `n` for `double_sersic` or a misspelt `re_bulge`, is refused with the
+parameters of the model, because it would have no effect.
 
 The background priors are declared under `fit.background.priors`:
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from copy import deepcopy
 from numbers import Integral, Real
 from pathlib import Path
@@ -936,15 +937,86 @@ def _require_validated_support(
         )
 
 
+def validate_prior_names(model_name: str, priors: Mapping[str, Any]) -> None:
+    """Refuse priors declared under names that a model does not read.
+
+    A prior is read under the name of a parameter of the model, or under a
+    shared name, ``q`` or ``theta``, that serves its component parameters. A
+    prior under any other name, such as a misspelt parameter, would have no
+    effect, and the parameter it was meant for would keep its default prior.
+
+    Parameters
+    ----------
+    model_name : str
+        Name of a registered morphology model.
+    priors : mapping
+        Priors declared for the model, with or without the defaults merged in.
+
+    Raises
+    ------
+    ValueError
+        If a name is neither a parameter of the model nor a shared name that
+        serves one. The message names the priors and the parameters of the
+        model.
+    """
+    from baymorph.models import get_model
+    from baymorph.pipeline.prior_config import (
+        ineffective_shared_priors,
+        shared_prior_names,
+        unknown_prior_names,
+    )
+
+    if not priors:
+        return
+
+    parameter_names = tuple(get_model(model_name).parameter_names)
+    unknown = unknown_prior_names(parameter_names, priors)
+
+    if not unknown:
+        return
+
+    shared = shared_prior_names(parameter_names)
+    ineffective = ineffective_shared_priors(
+        parameter_names,
+        dict.fromkeys(shared, {}),
+        DEFAULT_CONFIG["fit"]["priors"].get(model_name, {}),
+    )
+    effective_shared = [name for name in shared if name not in ineffective]
+
+    declared = " and ".join(f"fit.priors.{model_name}.{name}" for name in unknown)
+    noun = "parameter" if len(unknown) == 1 else "parameters"
+
+    message = (
+        f"{declared} would have no effect: '{model_name}' has no {noun} "
+        f"{' and '.join(unknown)}. Its parameters are "
+        f"{', '.join(parameter_names)}"
+    )
+
+    if effective_shared:
+        message += (
+            f", and a prior under {' or '.join(effective_shared)} applies to "
+            "both of its components"
+        )
+
+    raise ValueError(message + ".")
+
+
 def validate_fit_priors(config: dict[str, Any]) -> None:
     """Validate that every sampled morphology parameter has a typed prior.
 
     For the families of AD-048 the support of every prior must also lie in
     the domain in which the rendering of the model is validated.
+
+    A prior under a name that the model does not read is refused (see
+    :func:`validate_prior_names`). A prior under ``q`` or ``theta`` is refused
+    when the model has a default prior for every component parameter that it
+    would serve, because those defaults take precedence and it would have no
+    effect.
     """
     from baymorph.models import get_model
     from baymorph.models.validated_domains import validated_domain
     from baymorph.pipeline.prior_config import (
+        ineffective_shared_priors,
         parse_prior_config,
         prior_config_for_parameter,
     )
@@ -970,6 +1042,30 @@ def validate_fit_priors(config: dict[str, Any]) -> None:
             )
 
         model_definition = get_model(model_name)
+
+        validate_prior_names(model_name, model_priors)
+
+        ineffective = ineffective_shared_priors(
+            model_definition.parameter_names,
+            model_priors,
+            DEFAULT_CONFIG["fit"]["priors"].get(model_name, {}),
+        )
+
+        if ineffective:
+            messages = []
+
+            for shared_name, served in ineffective.items():
+                served_names = " and ".join(served)
+
+                messages.append(
+                    f"fit.priors.{model_name}.{shared_name} would have no effect: "
+                    f"'{model_name}' has default priors for {served_names}, "
+                    f"which take precedence over a prior under {shared_name}. "
+                    f"Declare priors under {served_names} instead."
+                )
+
+            raise ValueError(" ".join(messages))
+
         domain = validated_domain(model_name)
 
         missing = []
@@ -1073,6 +1169,7 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
         user_likelihood = config_without_sampler["fit"].pop("likelihood", None)
 
     resolved = deep_update(deepcopy(DEFAULT_CONFIG), config_without_sampler)
+    _replace_declared_priors(resolved, config_without_sampler.get("fit"))
     resolved["fit"]["likelihood"] = resolve_likelihood_config(user_likelihood)
 
     # The default growth of the contaminant masks depends on the mask mode:
@@ -1259,6 +1356,41 @@ def deep_update(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]
             result[key] = value
 
     return result
+
+
+def _replace_declared_priors(resolved: dict[str, Any], fit_config: Any) -> None:
+    """Put every declared prior in place of the default prior of its parameter.
+
+    :func:`deep_update` merges nested mappings key by key, which for a prior
+    would keep the keys of the default that the declaration omits, such as the
+    bounds of a default uniform prior under a declared beta prior, or the
+    ``relative_to`` of a default centre prior. A prior is one unit: a prior
+    declared under ``fit.priors.<model>`` or ``fit.background.priors``
+    replaces the default prior of its parameter whole, and the parameters
+    without a declared prior keep their defaults.
+    """
+    if not isinstance(fit_config, Mapping):
+        return
+
+    def replace(resolved_priors: Any, declared_priors: Any) -> None:
+        if isinstance(resolved_priors, dict) and isinstance(declared_priors, Mapping):
+            for name, prior in declared_priors.items():
+                resolved_priors[name] = deepcopy(prior)
+
+    declared_models = fit_config.get("priors")
+    resolved_models = resolved["fit"].get("priors")
+
+    if isinstance(declared_models, Mapping) and isinstance(resolved_models, dict):
+        for model_name, declared_priors in declared_models.items():
+            replace(resolved_models.get(model_name), declared_priors)
+
+    declared_background = fit_config.get("background")
+    resolved_background = resolved["fit"].get("background")
+
+    if isinstance(declared_background, Mapping) and isinstance(
+        resolved_background, dict
+    ):
+        replace(resolved_background.get("priors"), declared_background.get("priors"))
 
 
 def validate_sampler_config(sampler_config: dict[str, Any]) -> None:

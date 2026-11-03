@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from baymorph.fitting.priors import (
@@ -320,7 +320,119 @@ def prior_config_for_parameter(
     )
 
 
+def ineffective_shared_priors(
+    parameter_names: Sequence[str],
+    priors: Mapping[str, Any],
+    default_priors: Mapping[str, Any],
+) -> dict[str, tuple[str, ...]]:
+    """Return the declared shared geometry priors that would have no effect.
+
+    A prior under a shared name, ``q`` or ``theta``, applies to a component
+    parameter such as ``q_bulge`` only when that parameter has no prior of its
+    own (see :func:`prior_config_for_parameter`). When the default priors of a
+    model hold a prior for every component parameter that the shared name
+    serves, and none under the shared name, every resolved configuration holds
+    a prior for each of these parameters, so a prior under the shared name has
+    no effect.
+
+    Parameters
+    ----------
+    parameter_names : sequence of str
+        Parameter names of the model, in model order.
+    priors : mapping
+        Priors configured for the model, with or without the defaults merged in.
+    default_priors : mapping
+        Default priors of the model, empty when it has none.
+
+    Returns
+    -------
+    dict of str to tuple of str
+        Each ineffective shared name, ``q`` before ``theta``, mapped to the
+        component parameters that it serves, in model order. Empty when no
+        shared prior is ineffective.
+    """
+    ineffective: dict[str, tuple[str, ...]] = {}
+
+    for name in sorted(set(_PARAMETER_PRIOR_ALIASES.values())):
+        served = tuple(
+            parameter
+            for parameter in parameter_names
+            if _PARAMETER_PRIOR_ALIASES.get(parameter) == name
+        )
+
+        if (
+            name in priors
+            and name not in parameter_names
+            and name not in default_priors
+            and served
+            and all(parameter in default_priors for parameter in served)
+        ):
+            ineffective[name] = served
+
+    return ineffective
+
+
+def shared_prior_names(parameter_names: Sequence[str]) -> tuple[str, ...]:
+    """Return the shared geometry names that serve parameters of a model.
+
+    A shared name, ``q`` or ``theta``, serves the component parameters, such
+    as ``q_bulge`` and ``q_disk``, that take its prior when they have none of
+    their own (see :func:`prior_config_for_parameter`).
+
+    Parameters
+    ----------
+    parameter_names : sequence of str
+        Parameter names of the model, in model order.
+
+    Returns
+    -------
+    tuple of str
+        The shared names that serve at least one parameter of the model and
+        are not parameters themselves, ``q`` before ``theta``.
+    """
+    return tuple(
+        name
+        for name in sorted(set(_PARAMETER_PRIOR_ALIASES.values()))
+        if name not in parameter_names
+        and any(
+            _PARAMETER_PRIOR_ALIASES.get(parameter) == name
+            for parameter in parameter_names
+        )
+    )
+
+
+def unknown_prior_names(
+    parameter_names: Sequence[str],
+    priors: Mapping[str, Any],
+) -> tuple[str, ...]:
+    """Return the declared prior names that no parameter of a model reads.
+
+    A prior is read under the name of a parameter of the model or under a
+    shared name that serves one (see :func:`shared_prior_names`). A prior
+    under any other name would have no effect.
+
+    Parameters
+    ----------
+    parameter_names : sequence of str
+        Parameter names of the model, in model order.
+    priors : mapping
+        Priors configured for the model, with or without the defaults merged in.
+
+    Returns
+    -------
+    tuple of str
+        The names of ``priors`` that are neither parameters of the model nor
+        shared names that serve them, sorted. Empty when every name is read.
+    """
+    known = set(parameter_names) | set(shared_prior_names(parameter_names))
+
+    return tuple(sorted(str(name) for name in priors if str(name) not in known))
+
+
 __all__ = [
+    "ineffective_shared_priors",
     "parse_prior_config",
     "prior_config_for_parameter",
+    "shared_prior_names",
+    "unknown_prior_names",
 ]
