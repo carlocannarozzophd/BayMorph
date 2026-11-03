@@ -9,17 +9,29 @@ and the project follows Semantic Versioning in spirit.
 
 ## [Unreleased]
 
+---
+
+## [0.6.0] - 2026-11-03
+
+This release extends what BayMorph reads from an image and how it selects
+the stars of an empirical PSF. BayMorph now takes from the configuration
+the calibration that a header lacks or gives wrongly, and the observation
+advisor can ask the ACS Zeropoint Calculator of STScI for the zeropoint of
+a drizzled ACS image whose header gives no usable one. New header
+conventions cover HST images drizzled to counts per second, grizli mosaics
+and two High Level Science Products of MAST. A large mosaic is read by
+default only within a working region about the target, pixels without data
+are accepted outside the cutout, and the target can be given in RA and
+Dec. The stars of an empirical PSF are screened by default to reject
+galaxies, cosmic rays and hot pixels. The target position must now be the
+centre of the galaxy: the observation advisor and the fit of a single
+observation stop when the centre of the detected target lies outside the
+priors of `x0` and `y0`. Two executed example notebooks show fits of
+simulated Roman images. Some configurations and products of 0.5.1 must be
+updated: see "Upgrading from 0.5.1" below.
+
 ### Added
 
-* `examples/roman_cases.ipynb`, an executed example: it simulates a galaxy as
-  Roman WFI would see it in F158, with an undersampled PSF rendered at
-  sub-pixel phases, fits it by nested sampling and compares the posterior with
-  the truth.
-* `examples/roman_isim_fits.ipynb`, an executed example: it shows the
-  diagnostics of a single-Sérsic and a bulge plus disc fit of one galaxy in an
-  STScI Roman I-Sim exposure (F184), with the CRDS reference PSF, and what the
-  pre-registered comparison with the input catalogue found. It reads the
-  products of a local run and does not fit.
 * `data.calibration` declares the calibration quantities that the header
   does not give, or gives wrongly: the image unit, the zeropoint and its
   photometric system, the exposure time, the gain of the detector and the
@@ -93,8 +105,10 @@ and the project follows Semantic Versioning in spirit.
   in double precision whatever the size of the mosaic; `whole` reads the
   whole image, and `{size: S}` a square of S arcsec. Only the pixels of the
   region are read: the bytes that hold them in an uncompressed file and the
-  tiles that cross it in a tile-compressed one, while a file compressed as a
-  whole, gzip or bzip2, is still read through up to the region, in one pass.
+  tiles that cross it in a tile-compressed one. A file compressed as a
+  whole, gzip or bzip2, has no random access: BayMorph decompresses it from
+  its start every time it reads it, for its header as for its pixels, so a
+  large mosaic opens more slowly than the same file uncompressed.
   Every position stays in pixels of the whole image: the target, the cutout
   bounds, the PSF stars, and the axes of the first panel of the fit report.
   A cutout, or a target of an automatic cutout, that leaves the region stops
@@ -120,11 +134,6 @@ and the project follows Semantic Versioning in spirit.
   header, stops when it falls outside the image, and writes the pixels in
   the configuration, which takes the target in pixels only. The summary of
   the advisor, and its report, record the position on the sky.
-* Two pages of documentation: Opening an Image, the first page of the user
-  guide, on what BayMorph reads from a header, how to declare what it does
-  not establish, and how it reads large mosaics, compressed files and pixels
-  without data; and Supported Images, which says for each family of
-  products what BayMorph reads from its header and what you declare.
 * The stars of an empirical PSF are screened before they are kept. Every
   candidate that passes the shape and isolation cuts is measured on its own
   cutout: its size, the second moment of its light within an elliptical
@@ -150,6 +159,20 @@ and the project follows Semantic Versioning in spirit.
   against those sought and the size and scatter of their sequence, and
   passes on its stops with their remedies; `FixedInputs.psf_star_screen`
   holds the same.
+* `examples/roman_cases.ipynb`, an executed example: it simulates a galaxy as
+  Roman WFI would see it in F158, with an undersampled PSF rendered at
+  sub-pixel phases, fits it by nested sampling and compares the posterior with
+  the truth.
+* `examples/roman_isim_fits.ipynb`, an executed example: it shows the
+  diagnostics of a single-Sérsic and a bulge plus disc fit of one galaxy in an
+  STScI Roman I-Sim exposure (F184), with the CRDS reference PSF, and what the
+  pre-registered comparison with the input catalogue found. It reads the
+  products of a local run and does not fit.
+* Two pages of documentation: Opening an Image, the first page of the user
+  guide, on what BayMorph reads from a header, how to declare what it does
+  not establish, and how it reads large mosaics, compressed files and pixels
+  without data; and Supported Images, which says for each family of
+  products what BayMorph reads from its header and what you declare.
 
 ### Changed
 
@@ -167,13 +190,14 @@ and the project follows Semantic Versioning in spirit.
 * The target position is the centre of the galaxy. The priors of the centre
   stay about it, so that no prior depends on the image, and BayMorph now
   checks them: the observation advisor, once it has prepared the image, and
-  the fit, before it writes anything, stop when the centre of the detected
-  target, measured from the moments of its light, lies outside the priors of
-  `x0` and `y0`, with the distance and the remedy. Before, a position anywhere
-  on the galaxy was accepted, and the posterior of the centre could press on
-  an edge of its prior. The summary of the observation advisor gives the
-  measured centre and its distance from the target position, and says when
-  the position lies on no detected source.
+  the fit of a single observation, before it writes anything, stop when the
+  centre of the detected target, measured from the moments of its light,
+  lies outside the priors of `x0` and `y0`, with the distance and the
+  remedy. Before, a position anywhere on the galaxy was accepted, and the
+  posterior of the centre could press on an edge of its prior. The summary
+  of the observation advisor gives the measured centre and its distance
+  from the target position, and says when the position lies on no detected
+  source.
 * The observation advisor proposes the effective gain of an image in
   electrons, 1, as it proposes the gain keyword of an image in ADU, and of an
   image in electrons per second, its exposure time divided by the declared
@@ -196,14 +220,16 @@ and the project follows Semantic Versioning in spirit.
   ceiling from a declared saturation level, have the source `declaration`;
   a prior from a zeropoint that a calibration service gave names the
   service in its detail.
-* The report of a proposal has `schema_version` 4. It records the declared
+* The report of a proposal has `schema_version` 6. It records the declared
   calibration with the source of each value, the user or a calibration
   service, whether the advisor was online, and, under `bridges`, every
   calibration service that serves the image with what it was asked and
-  answered; its fixed inputs record the centre of the prepared target, the
-  target position, and whether the position lies on the target. A report
-  written by an earlier version differs, so replacing it
-  needs `overwrite=True` once in Python, or removing it before
+  answered. It also records the rule that screens the PSF stars and the
+  floor on their peaks, each with its source. Its fixed inputs record the
+  centre of the prepared target, the target position, whether the position
+  lies on the target, and what the screen of the PSF stars found. A report
+  written by an earlier version differs, so replacing it needs
+  `overwrite=True` once in Python, or removing it before
   `baymorph config --advise --accept`.
 * Writing a proposal again keeps an existing report that differs only in
   when a calibration service was asked, in the verbatim text of the error a
@@ -225,7 +251,6 @@ and the project follows Semantic Versioning in spirit.
   in an image in ADU/s, is `None` there and stays in the header reading with
   its raw value; it is no longer used as if it were in the units of the
   image.
-
 * A command that fails while it runs prints its error on one line,
   `baymorph: error: …`, and exits with status 1, also when a file is not
   FITS. Options that are invalid or do not go together still exit with
@@ -235,8 +260,10 @@ and the project follows Semantic Versioning in spirit.
   shared by every stage, instead of five times and eight times for one
   saved preparation. The shared image is read-only.
 * `ObservationAdvisor.header_report()` reads only the header of the image,
-  never its pixels, so the report of a mosaic of several gigabytes costs the
-  same as the report of a small stamp.
+  never its pixels, so the report of an uncompressed mosaic of several
+  gigabytes costs about the same as the report of a small stamp. A mosaic
+  compressed as a whole, with gzip or bzip2, is decompressed to read its
+  header, which takes seconds for a large file.
 * A configuration that still holds the retired `data.external_mask_path`
   is refused as soon as it is read, by every command, rather than only
   when the image is prepared. Declare the curated mask under
@@ -299,6 +326,91 @@ and the project follows Semantic Versioning in spirit.
   them still matches the current inputs.
 * An accepted PSF records a declared `data.hdu`, so it is no longer reused
   for another HDU of the same file.
+* The user guide, the reference and the model pages now describe what the
+  code does where they had fallen behind it, such as the bins of the radial
+  profile, the `discard_exploration: true` that BayMorph sets for Nautilus
+  unless it is declared, and the restriction of pocoMC to uniform, normal
+  and beta priors.
+* A prior declared under `q` or `theta` for `bulge_disk`,
+  `bulge_broken_disk`, `bulge_disk_bar`, `bulge_disk_ring` or
+  `bulge_disk_spiral` is refused, and the error names the priors to declare
+  instead, `q_bulge` and `q_disk` or `theta_bulge` and `theta_disk`. Before,
+  such a prior was accepted but ignored, because the default priors of the
+  components took precedence. The documentation said that such a prior
+  applied to both components of `bulge_disk`. For `double_sersic`, a prior
+  declared under `q` or `theta` still applies to both components unless a
+  component-specific prior is declared.
+* A declared prior replaces the default prior of its parameter entirely,
+  under `fit.priors.<model>` and under `fit.background.priors`. Before, it
+  was merged key by key with the default, so a prior took the keys of the
+  default that it did not declare: `q: {type: beta, alpha: 2, beta: 2}`
+  became a beta prior on the 0.4–1 bounds of the default prior of `q`
+  without a message, a prior of `x0` or `y0` without `relative_to` became
+  relative to the target, and a normal or fixed prior of a parameter with a
+  default was refused for the `lower` and `upper` it had not declared. A
+  prior of `x0` or `y0` given to `baymorph config --uniform-prior` is still
+  about the target, and the configuration now says so with its
+  `relative_to`.
+* A prior under a name that is not a parameter of the model, such as `n`
+  for `double_sersic`, `sersic_index` or a misspelt `re_bulge`, is refused,
+  also by `make_config_from_fits` and `baymorph config` before they write a
+  file, and the error names the parameters of the model. Before, it was accepted and
+  ignored, and the parameter kept its default prior.
+* The fit of a single observation refuses a fixed prior before it reads or
+  writes anything. Before, a fixed prior was accepted and the fit stopped
+  after the sampling, with a `KeyError`, because its results are built from
+  the sampled parameters only.
+
+### Upgrading from 0.5.1
+
+* A configuration with an empirical PSF that does not declare
+  `psf.empirical.candidate_selection.point_source_screen` screens the
+  stars, and so refuses those that 0.5.1 saved, with their PSF. Declare
+  `point_source_screen: none` to keep reusing them, together with the rest
+  of the preparation of 0.5.1 when its inputs are unchanged. A new output
+  namespace instead prepares the image again under the rules of this
+  release, among them the screen and the treatment of pixels without data.
+  Each observation of a joint configuration follows the same rule.
+* Give the centre of the galaxy as `data.target_position`: the fit of a
+  single observation now stops, before it writes anything, when the centre
+  of the detected target lies outside the priors of `x0` and `y0`.
+* Install `latex` and `dvipng`, or set `BAYMORPH_USETEX=0`, to draw
+  figures: they are typeset with LaTeX by default.
+* Remove any unknown entry under `data`,
+  `psf.empirical.candidate_selection` or `psf.empirical.construction`,
+  such as a misspelt key: it is refused.
+* For `bulge_disk`, `bulge_broken_disk`, `bulge_disk_bar`,
+  `bulge_disk_ring` and `bulge_disk_spiral`, replace a prior declared
+  under `q` or `theta` with priors under `q_bulge` and `q_disk`, or
+  `theta_bulge` and `theta_disk`: it is refused. A fit made by 0.5.1 with
+  such a prior ignored it.
+* Write every key of a declared prior: the keys it omits are no longer
+  taken from the default prior. Add `relative_to: target_x` or `target_y`
+  to a prior of `x0` or `y0` that is meant about the target, and `lower`
+  and `upper` to a beta prior whose support is not 0–1. A fit made by 0.5.1
+  with such a prior used the keys of the default.
+* Remove or rename a prior under a name that is not a parameter of its
+  model: it is refused. A fit made by 0.5.1 with such a prior ignored it.
+* Replace a fixed prior in the configuration of a single observation with
+  a sampled prior: it is refused.
+* Declare `data.region: whole` to keep reusing the preparation that 0.5.1
+  made of an image with a side larger than 4096 pixels, which it read
+  whole. Such an image is now read by default within a square of 4096
+  pixels about the target, and the region enters the identity of its
+  products.
+* Prepare again, in a new output namespace, an image whose header holds
+  SIP terms that its `CTYPE` does not declare with the `-SIP` suffix. Its
+  celestial WCS now leaves them out, so the preparation that 0.5.1 made of
+  it is refused.
+* Add `overrides: [generic]` to a header convention of your own that reads
+  a quantity differently from the FITS standard, such as a gain from
+  another keyword than `GAIN`. Without it, the quantity becomes
+  `conflicting` when the two readings disagree.
+* To replace a report of a proposal written by 0.5.1, pass
+  `overwrite=True` in Python, or remove the report before
+  `baymorph config --advise --accept`.
+* Checkpoints written by 0.5.1 do not resume: a checkpoint resumes only
+  under the release that wrote it.
 
 ---
 
@@ -556,7 +668,8 @@ products of 0.3.0 must be updated: see "Upgrading from 0.3.0" below.
 
 ---
 
-[Unreleased]: https://github.com/carlocannarozzophd/BayMorph/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/carlocannarozzophd/BayMorph/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.6.0
 [0.5.1]: https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.5.1
 [0.5.0]: https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.5.0
 [0.4.0]: https://github.com/carlocannarozzophd/BayMorph/releases/tag/v0.4.0
