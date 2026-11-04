@@ -30,12 +30,12 @@ from baymorph.core.correlated_noise import (
     FIELD_SEPARATED_GROWTH_PIXELS,
     SKY_CORRELATION_ESTIMATORS,
 )
-from baymorph.core.header_metadata import validate_declarations
 from baymorph.pipeline.opening import validate_region
 from baymorph.pipeline.psf_candidate_screen import (
     DEFAULT_POINT_SOURCE_SCREEN,
     POINT_SOURCE_SCREEN_RULES,
 )
+from baymorph.preparation.header import validate_declarations
 
 SCHEMA_VERSION = 1
 """Version of the table of keys."""
@@ -312,7 +312,7 @@ def region(value: Any, where: str) -> Any:
 
 
 def calibration(value: Any, where: str) -> dict[str, Any] | None:
-    """Check the declared calibration (AD-053) with the rule of the opening."""
+    """Check the declared calibration (AD-053) with the rule of the header engine."""
     if value is None:
         return None
 

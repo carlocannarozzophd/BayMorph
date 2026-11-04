@@ -1,0 +1,29 @@
+# Mosaics produced by grizli, such as those of the DAWN JWST Archive (DJA),
+# which record the grizli version in GRIZLIV. Their pixels are rescaled to
+# flux densities of PHOTFNU janskys, 10 nJy in the DJA mosaics.
+name: grizli
+title: Mosaics produced by grizli
+priority: 55
+references:
+  - "G. Brammer, DJA Imaging Data Products, 2023-07-18: 'All sci mosaics have intensity units of 10 nJy / pix, corresponding to an AB magnitude zeropoint 28.9', and 'The PHOTFNU / OPHOTFNU term accounts for any final scaling of the output mosaic': https://dawn-cph.github.io/dja/blog/2023/07/18/image-data-products/"
+match:
+  - keyword: GRIZLIV
+    present: true
+quantities:
+  pipeline:
+    keywords: [GRIZLIV]
+    value: grizli
+    note: "GRIZLIV records the version of grizli."
+  zeropoint:
+    formula: "-2.5 * log10(PHOTFNU / 3631)"
+    unit: mag
+    note: "PHOTFNU is the flux density in janskys of one unit of the pixels,
+      and 3631 Jy the AB reference; PHOTFNU = 1e-8 gives 28.9. The keywords
+      ZP, OPHOTFNU and PIXAR_SR describe the original unit and the native
+      pixel of the inputs, not the pixels of the mosaic."
+  photometric_system:
+    value: AB
+    requires:
+      - quantity: zeropoint
+        present: true
+    note: "The zeropoint derived from PHOTFNU is on the AB system."

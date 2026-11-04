@@ -5,7 +5,9 @@ stage of the preparation is a function that takes declared inputs and returns
 one immutable product; :mod:`baymorph.preparation.store` saves, checks and
 reuses every product in the same way, and :mod:`baymorph.preparation.identity`
 gives each product an identity computed from the content of its inputs, never
-from their paths.
+from their paths. :mod:`baymorph.preparation.schema` checks the configuration
+when it is read, and :mod:`baymorph.preparation.header` reads the calibration
+of an observation from its FITS header.
 
 Nothing here is used by :class:`baymorph.runner.BayMorphRunner` or by the
 command-line interface yet. The public behaviour of the package is unchanged

@@ -1,0 +1,42 @@
+# The Hubble eXtreme Deep Field (XDF) mosaics of the HUDF region, a High
+# Level Science Product of MAST that records its version in XDFVER. The
+# mosaics combine ten years of ACS/WFC and WFC3/IR exposures, so their headers
+# carry neither PHOTFLAM nor an observation date; the release documents one AB
+# zeropoint per filter for pixels in electrons per second.
+name: xdf
+title: Hubble eXtreme Deep Field mosaics
+priority: 60
+references:
+  - "MAST, High Level Science Product XDF, Science Images: 'The pixel values of the science images report the flux count rate calibrated in electron/second', and the table of zero points in ABMAG: https://archive.stsci.edu/prepds/xdf/"
+  - "G. D. Illingworth et al. 2013, ApJS 209, 6, p. 10 (arXiv): the zeropoints do not follow the drift of the ACS zeropoints over the ten years: https://ui.adsabs.harvard.edu/abs/2013ApJS..209....6I/abstract"
+match:
+  - keyword: XDFVER
+    present: true
+quantities:
+  zeropoint:
+    by: filter
+    table:
+      F435W: 25.68
+      F606W: 26.51
+      F775W: 25.69
+      F814W: 25.94
+      F850LP: 24.87
+      F105W: 26.27
+      F125W: 26.23
+      F140W: 26.45
+      F160W: 25.94
+    unit: mag
+    requires:
+      - quantity: image_unit
+        equals: electron/s
+    overrides: [hst, hst_drizzle]
+    note: "The AB zeropoint of the XDF release for the filter of the image,
+      for count rates in electrons per second. The release does not correct
+      the drift of the ACS zeropoints over the years it combines, of order
+      one per cent."
+  photometric_system:
+    value: AB
+    requires:
+      - quantity: zeropoint
+        present: true
+    note: "The zeropoints of the XDF release are on the AB system."

@@ -94,6 +94,7 @@ include = ["baymorph*"]
     "configs/*.yaml",
     "header_conventions/*.yaml",
     "notebooks/*.ipynb",
+    "preparation/header_conventions/*.yaml",
 ]
 
 [tool.ruff]

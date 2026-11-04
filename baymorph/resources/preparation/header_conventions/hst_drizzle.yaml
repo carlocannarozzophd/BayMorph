@@ -1,0 +1,47 @@
+# Images drizzled from HST exposures by the drizzle software of STScI, which
+# records for each input, in D###OUUN, the units of the output image: counts
+# or counts per second. An ACS or WFC3 image drizzled to cps from exposures
+# in electrons is in electrons per second, although some products keep the
+# BUNIT of their inputs, ELECTRONS.
+name: hst_drizzle
+title: HST images drizzled to count rates
+priority: 55
+references:
+  - "STScI, ACS Data Handbook, section 2.4, Headers and Keywords: D???OUUN, 'Units of output image (counts or counts/second)'; BUNIT, 'Brightness units (counts, electrons, electrons/second)': https://hst-docs.stsci.edu/acsdhb/chapter-2-acs-data-structure/2-4-headers-and-keywords"
+  - "STScI, drizzle 1.15.2, README: 'Two units are understood: counts and cps (counts per second).': https://github.com/spacetelescope/drizzle/blob/1.15.2/README.rst"
+  - "STScI, ACS zeropoints: https://www.stsci.edu/hst/instrumentation/acs/data-analysis/zeropoints"
+match:
+  - keyword: D001OUUN
+    equals: cps
+quantities:
+  image_unit:
+    value: electron/s
+    requires:
+      - keyword: TELESCOP
+        equals: HST
+      - keyword: BUNIT
+        startswith: ELECTRONS
+    overrides: [generic]
+    note: "D001OUUN says the drizzled image is in counts per second, and
+      BUNIT that the counts of its inputs are electrons, so the pixels are
+      electrons per second whatever BUNIT says of the output. When BUNIT
+      does not name electrons, the counts may be DN, and the unit stays
+      ambiguous."
+  zeropoint:
+    formula: "-2.5 * log10(PHOTFLAM) - 5 * log10(PHOTPLAM) - 2.408"
+    unit: mag
+    requires:
+      - quantity: image_unit
+        equals: electron/s
+    note: "PHOTFLAM is the inverse sensitivity in erg cm-2 A-1 per electron
+      and PHOTPLAM the pivot wavelength in A. The keywords D###OUUN show that
+      the image is drizzled, also when FILENAME names an input exposure. A
+      PHOTFLAM of 0 means that the pipeline did not populate the photometric
+      keywords (PHOTCORR = OMIT): declare the zeropoint."
+  photometric_system:
+    value: AB
+    requires:
+      - quantity: zeropoint
+        present: true
+    note: "The zeropoint derived from PHOTFLAM and PHOTPLAM is on the AB
+      system."

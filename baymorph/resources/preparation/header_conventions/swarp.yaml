@@ -1,0 +1,23 @@
+# Coadds written by SWarp, which records its configuration and the
+# properties of the combined data in the output header.
+name: swarp
+title: Coadds written by SWarp
+priority: 30
+references:
+  - "E. Bertin, SWarp user's guide, version 2.16.4: https://star.herts.ac.uk/~pwl/Lucas/rho_oph/swarp.pdf"
+match:
+  - keyword: SOFTNAME
+    equals: SWarp
+quantities:
+  gain:
+    keywords: [GAIN]
+    unit: electron/adu
+    note: "SWarp writes the maximum equivalent gain of the coadd, which accounts for the flux scaling and the stacking of the inputs."
+  saturation:
+    keywords: [SATURATE]
+    unit: image
+    note: "SWarp writes the saturation level of the combined data."
+  resampling_kernel:
+    keywords: [RESAMPT1]
+  combine_type:
+    keywords: [COMBINET]
