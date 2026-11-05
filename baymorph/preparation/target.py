@@ -11,8 +11,9 @@ before any detection:
   read, or on a pixel without data stops the preparation, with the remedy.
 
 Whether a source lies at the position needs a detection. It is checked where a
-detection first selects the target segment: the automatic cutout, or the
-masks when the cutout is fixed. Both call :func:`select_target_segment`:
+detection first selects the target segment, the cutout stage, which detects
+the sources of the working region whether the cutout is automatic or fixed,
+through :func:`select_target_segment`:
 
 - a position on a segment selects it;
 - a position on no segment selects the nearest segment, with a warning, when

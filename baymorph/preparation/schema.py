@@ -34,6 +34,7 @@ from baymorph.pipeline.psf_candidate_screen import (
     DEFAULT_POINT_SOURCE_SCREEN,
     POINT_SOURCE_SCREEN_RULES,
 )
+from baymorph.preparation.cutout import CUTOUT_LIGHT_THRESHOLD, NOISE_LIGHT_THRESHOLD
 from baymorph.preparation.header import validate_declarations
 from baymorph.preparation.opening import validate_region
 
@@ -391,7 +392,13 @@ CUTOUT = Section(
             "initial_factor",
             number(above=1.0),
             4.0,
-            "Side of the first automatic cutout over the side of the target segment.",
+            "No effect: the automatic cutout has no preliminary cutout (kept for 0.6).",
+        ),
+        Key(
+            "light_threshold",
+            number(above=0.0),
+            CUTOUT_LIGHT_THRESHOLD,
+            "Light of the galaxy at the edge of an automatic cutout, in sky scales.",
         ),
         Key(
             "sky_margin",
@@ -507,6 +514,13 @@ PREPARATION = Section(
                     choice(*SKY_CORRELATION_ESTIMATORS),
                     DEFAULT_SKY_CORRELATION,
                     "Estimator of the sky correlation (AD-047, AD-051).",
+                ),
+                Key(
+                    "light_threshold",
+                    number(above=0.0),
+                    NOISE_LIGHT_THRESHOLD,
+                    "Light of the galaxy below which the noise region begins, in sky "
+                    "scales.",
                 ),
             ),
             "The noise model inputs.",

@@ -61,6 +61,9 @@ def test_a_minimal_configuration_gets_every_default_with_its_source():
     assert settings.get("preparation.detection.n_pixels") == 20
     assert settings.get("psf.type") == "empirical"
     assert settings.get("outputs.overwrite") is False
+    # The two thresholds of the cutout stage, in sky scales.
+    assert settings.get("data.cutout.light_threshold") == 1.0
+    assert settings.get("preparation.noise.light_threshold") == 0.3
 
     assert settings.sources["data.image_path"] == USER
     assert settings.sources["data.cutout.size"] == USER
@@ -168,6 +171,11 @@ def test_retired_keys_are_refused_with_their_remedy(path, value, message):
         ("data.cutout.size", 201.5),
         ("data.cutout.initial_factor", 1.0),
         ("data.cutout.sky_margin", -1.0),
+        ("data.cutout.light_threshold", 0.0),
+        ("data.cutout.light_threshold", float("nan")),
+        ("data.cutout.light_threshold", True),
+        ("preparation.noise.light_threshold", -0.3),
+        ("preparation.noise.light_threshold", float("inf")),
         ("outputs.overwrite", "yes please"),
         ("preparation.detection.n_sigma", 0.0),
         ("preparation.detection.n_levels", True),
