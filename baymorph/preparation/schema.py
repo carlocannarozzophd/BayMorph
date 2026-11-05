@@ -30,12 +30,12 @@ from baymorph.core.correlated_noise import (
     FIELD_SEPARATED_GROWTH_PIXELS,
     SKY_CORRELATION_ESTIMATORS,
 )
-from baymorph.pipeline.opening import validate_region
 from baymorph.pipeline.psf_candidate_screen import (
     DEFAULT_POINT_SOURCE_SCREEN,
     POINT_SOURCE_SCREEN_RULES,
 )
 from baymorph.preparation.header import validate_declarations
+from baymorph.preparation.opening import validate_region
 
 SCHEMA_VERSION = 1
 """Version of the table of keys."""
