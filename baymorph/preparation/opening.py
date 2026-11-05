@@ -1508,7 +1508,7 @@ def resolve_working_region(
         if side >= width and side >= height:
             return None, reason + " It holds the whole image, which is read whole."
 
-    center = _region_center(target_position, image_shape)
+    center = seed_position(target_position, image_shape)
 
     if center is None:
         raise ValueError(
@@ -1531,10 +1531,33 @@ def resolve_working_region(
     return working, reason
 
 
-def _region_center(
+def seed_position(
     target_position: Any, image_shape: tuple[int, int]
 ) -> tuple[float, float] | None:
-    """Return the position about which a region is taken, or None."""
+    """Return the target position in pixels of the whole image, or None.
+
+    The opening takes the working region about this position, and the target
+    stage checks it (:mod:`baymorph.preparation.target`).
+
+    Parameters
+    ----------
+    target_position : None, "center" or mapping
+        ``data.target_position`` as the schema returns it: ``"center"`` is the
+        centre of the whole image, ``{x: ..., y: ...}`` a position in pixels.
+    image_shape : tuple of int
+        Shape of the whole image as ``(ny, nx)``.
+
+    Returns
+    -------
+    tuple of float or None
+        The position ``(x, y)``, or None when no position is set. It is not
+        checked against the image.
+
+    Raises
+    ------
+    ValueError
+        If ``target_position`` has none of the forms above.
+    """
     if target_position is None:
         return None
 
@@ -1590,5 +1613,6 @@ __all__ = [
     "read_image_headers",
     "resolve_pixel_scale",
     "resolve_working_region",
+    "seed_position",
     "validate_region",
 ]
