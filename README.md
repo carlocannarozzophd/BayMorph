@@ -79,8 +79,40 @@ inference of galaxy populations.
 
 ## Documentation
 
-The full documentation, with the user guide, the models, the theory and the
-reference, is at **<https://carlocannarozzophd.github.io/BayMorph/>**.
+<p align="center">
+  <a href="https://carlocannarozzophd.github.io/BayMorph/">
+    <img alt="Read the BayMorph documentation" src="https://img.shields.io/badge/Read%20the%20Documentation-%E2%86%92-2ea44f?style=for-the-badge&logo=readthedocs&logoColor=white" width="360">
+  </a>
+</p>
+
+<p align="center">
+  <em>From your first fit to the statistics behind it.</em>
+</p>
+
+<table>
+  <tr>
+    <td align="center" valign="top" width="20%">
+      <a href="https://carlocannarozzophd.github.io/BayMorph/guide/INSTALLATION/"><b>Getting started</b></a><br>
+      <sub>Install BayMorph and run a first fit on a simulated galaxy.</sub>
+    </td>
+    <td align="center" valign="top" width="20%">
+      <a href="https://carlocannarozzophd.github.io/BayMorph/guide/"><b>User guide</b></a><br>
+      <sub>Each step of an analysis, with the code to run it and inspect the results.</sub>
+    </td>
+    <td align="center" valign="top" width="20%">
+      <a href="https://carlocannarozzophd.github.io/BayMorph/models/"><b>Models</b></a><br>
+      <sub>Galaxy models, components, PSFs, noise models and sky, with their default priors.</sub>
+    </td>
+    <td align="center" valign="top" width="20%">
+      <a href="https://carlocannarozzophd.github.io/BayMorph/theory/BAYESIAN_INFERENCE/"><b>Theory</b></a><br>
+      <sub>Bayesian inference, nested sampling and hierarchical models for several images.</sub>
+    </td>
+    <td align="center" valign="top" width="20%">
+      <a href="https://carlocannarozzophd.github.io/BayMorph/reference/CLI/"><b>Reference</b></a><br>
+      <sub>Commands, configuration keys, output files and the Python API.</sub>
+    </td>
+  </tr>
+</table>
 
 ## Installation
 
