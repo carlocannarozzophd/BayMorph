@@ -201,4 +201,5 @@ BayMorph is distributed under the MIT License; see [`LICENSE`](LICENSE).
 
 Questions, bug reports and suggestions are welcome as
 [GitHub issues](https://github.com/carlocannarozzophd/BayMorph/issues).
+Any question can also be sent by email to [carlo.cannarozzo@nyu.edu](mailto:carlo.cannarozzo@nyu.edu).
 BayMorph is developed by [Carlo Cannarozzo](https://carlocannarozzoastro.com).
