@@ -13,7 +13,7 @@ from, each linked to its record in NASA ADS.
 The expected value of the pixel at position $\mathbf{x}$ is
 
 $$
-\mu(\mathbf{x})=\left[ P \circledast I \right](\mathbf{x})+B(\mathbf{x}),
+\mu(\mathbf{x}) = (P \circledast I)(\mathbf{x}) + B(\mathbf{x}),
 $$
 
 where $I$ is the intrinsic surface brightness of the galaxy, the sum of its
