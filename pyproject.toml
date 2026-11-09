@@ -44,6 +44,9 @@ dependencies = [
     "scipy",
     "astropy",
     "photutils>=3.0",
+    # Photutils 3.0, the newest Photutils for Python 3.11, deblends sources
+    # with scikit-image.
+    "scikit-image>=0.23",
     "matplotlib",
     "pyyaml",
     "dynesty>=3.0,<4",

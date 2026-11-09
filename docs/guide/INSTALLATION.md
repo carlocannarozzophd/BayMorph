@@ -4,9 +4,10 @@
 
 BayMorph requires Python 3.11 or later. Installing the package also installs
 its scientific and inference dependencies: NumPy, SciPy, Astropy, Photutils
-3.0 or later, Matplotlib, PyYAML, and the three supported inference backends,
-Nautilus (the default), Dynesty and pocoMC, with h5py, multiprocess and
-threadpoolctl. pocoMC requires PyTorch, which pip installs with it.
+3.0 or later, scikit-image, Matplotlib, PyYAML, and the three supported
+inference backends, Nautilus (the default), Dynesty and pocoMC, with h5py,
+multiprocess and threadpoolctl. pocoMC requires PyTorch, which pip installs
+with it.
 
 BayMorph typesets its figures with LaTeX: the `latex` and `dvipng` programs
 of a TeX distribution must be on the `PATH`. Without them, drawing a figure

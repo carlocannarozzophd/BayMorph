@@ -36,3 +36,10 @@ def test_screening_training_dependency_is_declared() -> None:
     )
 
     assert "scikit-learn" in development
+
+
+def test_deblending_dependency_is_declared() -> None:
+    """Photutils 3.0, the newest for Python 3.11, deblends with scikit-image."""
+    dependencies = project_metadata()["project"]["dependencies"]
+
+    assert any(entry.startswith("scikit-image") for entry in dependencies)

@@ -9,6 +9,13 @@ and the project follows Semantic Versioning in spirit.
 
 ## [Unreleased]
 
+### Fixed
+
+* BayMorph depends on scikit-image, which Photutils 3.0, the newest
+  Photutils for Python 3.11, needs to deblend sources. Before, on Python
+  3.11 without scikit-image, the preparation of an image stopped with an
+  error as soon as the detection had to split blended sources.
+
 ---
 
 ## [0.6.0] - 2026-11-03
