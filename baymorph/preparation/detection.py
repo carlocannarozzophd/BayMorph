@@ -61,7 +61,8 @@ class Detection:
         gradient_y)``, with the level at the centre of the image and the
         gradients per pixel.
     noise : float
-        The clipped scale of the smoothed image about the plane.
+        The clipped scale of the smoothed image about the plane; 0.0 for an
+        image without noise, which then has no sources.
     threshold : float
         The detection threshold above the plane, ``n_sigma * noise``.
     excluded : ndarray of bool
@@ -201,7 +202,10 @@ def fit_sky_plane(
 
     Each pass fits the plane by least squares to the kept pixels and keeps
     those within ``clip`` standard deviations of it, until the kept pixels do
-    not change. Sources lie above the sky, so they are clipped first.
+    not change. Sources lie above the sky, so they are clipped first. On an
+    image without noise, such as a flat image, the residuals are only the
+    rounding of the fit, a few units of the last place on some platforms and
+    none on others; a scale within that rounding is zero and ends the passes.
 
     Parameters
     ----------
@@ -220,7 +224,10 @@ def fit_sky_plane(
         ``(level, gradient_x, gradient_y)``, with the level at the centre of
         the image, ``((nx - 1) / 2, (ny - 1) / 2)``.
     scale : float
-        The standard deviation of the kept residuals.
+        The standard deviation of the kept residuals, or 0.0 when it does not
+        exceed their rounding: the machine epsilon times the number of kept
+        pixels times their largest absolute value, the tolerance of
+        :func:`numpy.linalg.matrix_rank`.
 
     Raises
     ------
@@ -247,11 +254,14 @@ def fit_sky_plane(
     scale = 0.0
 
     for _ in range(int(max_iterations)):
-        coefficients, *_ = np.linalg.lstsq(design[keep], values[keep], rcond=None)
+        kept = values[keep]
+        coefficients, *_ = np.linalg.lstsq(design[keep], kept, rcond=None)
         residual = values - design @ coefficients
         scale = float(np.std(residual[keep]))
 
-        if scale == 0.0:
+        if scale <= np.finfo(float).eps * kept.size * np.max(np.abs(kept)):
+            # Only rounding is left: the image has no noise.
+            scale = 0.0
             break
 
         updated = np.abs(residual) < float(clip) * scale

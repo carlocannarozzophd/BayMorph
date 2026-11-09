@@ -129,6 +129,32 @@ def test_an_image_without_sources_gives_empty_maps() -> None:
     assert constant.count == 0
 
 
+@pytest.mark.parametrize(
+    ("level", "shape"),
+    [
+        (7.0, (64, 64)),
+        (0.1, (41, 41)),
+        (0.3, (41, 41)),
+        (7.1, (37, 53)),
+        (math.pi, (101, 101)),
+        (math.e, (40, 40)),
+        (123.456, (100, 100)),
+        (1000.1, (37, 53)),
+    ],
+)
+def test_a_flat_image_has_no_noise_and_no_sources(level, shape) -> None:
+    # The fit of the plane leaves a flat image only its rounding, a few units
+    # of the last place on some platforms and none on others: neither noise
+    # nor a source.
+    image = np.full(shape, level)
+    detection = detect(image)
+
+    assert fit_sky_plane(image)[1] == 0.0
+    assert detection.noise == 0.0
+    assert detection.count == 0
+    assert not np.any(detection.parents)
+
+
 def test_the_maps_are_read_only_and_record_their_settings() -> None:
     detection = detect(_noise((81, 81)) + _blob((81, 81), 40.0, 40.0, 30.0, 3.0))
 
