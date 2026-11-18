@@ -943,6 +943,48 @@ def read_image_headers(
     )
 
 
+def image_hdu(path: str | Path, hdu: int | str | None = None) -> HduHeader:
+    """Return the HDU that holds the image of a FITS file, by its header alone.
+
+    The HDU is chosen by the rule of :func:`read_image_headers`, whose
+    headers are kept for reuse in the same way; the header is not read as a
+    calibration.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        The FITS file.
+    hdu : int, str or None, optional
+        An index, or an extension name compared without regard to case and
+        surrounding spaces; by default, the rule of :func:`read_image_headers`.
+
+    Returns
+    -------
+    HduHeader
+        The HDU, with a copy of its header.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the file does not exist.
+    ValueError
+        If the headers cannot be read or the HDU cannot be chosen.
+    """
+    resolved = Path(path).expanduser().resolve()
+
+    if not resolved.is_file():
+        raise FileNotFoundError(f"FITS file not found: {resolved}")
+
+    chosen = _select_image_hdu(_scan(resolved), hdu)
+
+    return HduHeader(
+        index=chosen.index,
+        name=chosen.name,
+        kind=chosen.kind,
+        header=chosen.header.copy(),
+    )
+
+
 # --- The pixels ---------------------------------------------------------------
 
 
@@ -951,18 +993,51 @@ def _read_pixels(
 ) -> tuple[NDArray[np.float64], np.dtype]:
     """Read the pixels of a window of the image, or of the whole image.
 
+    Returns the pixels in float64 and the type in which Astropy returned
+    them, for a header whose BITPIX cannot say how they were stored.
+    """
+    return read_hdu_pixels(headers.path, headers.hdu.index, headers.image_shape, window)
+
+
+def read_hdu_pixels(
+    path: Path,
+    index: int,
+    image_shape: tuple[int, int],
+    window: WorkingRegion | None,
+) -> tuple[NDArray[np.float64], np.dtype]:
+    """Read the pixels of a window of an image HDU, or of the whole HDU.
+
     A file compressed as a whole can only be decompressed from its start, and
     Astropy goes back to its earlier place after each row of a section, so a
     section of such a file would be decompressed again for every row; its
     whole rows that cross the window are read at once instead.
 
-    Returns the pixels in float64 and the type in which Astropy returned
-    them, for a header whose BITPIX cannot say how they were stored.
-    """
-    index = headers.hdu.index
+    Parameters
+    ----------
+    path : pathlib.Path
+        The FITS file.
+    index : int
+        The index of the HDU.
+    image_shape : tuple of int
+        The shape of the whole image of the HDU, ``(ny, nx)``, from its
+        header.
+    window : WorkingRegion or None
+        The window to read, or None for the whole image.
 
+    Returns
+    -------
+    pixels : ndarray of float64
+        The pixels.
+    stored : numpy.dtype
+        The type in which Astropy returned them.
+
+    Raises
+    ------
+    ValueError
+        If the pixels cannot be read or do not have the expected shape.
+    """
     try:
-        with fits.open(headers.path) as hdul:
+        with fits.open(path) as hdul:
             hdu = hdul[index]
 
             if window is None:
@@ -984,15 +1059,15 @@ def _read_pixels(
             pixels = np.array(values, dtype=np.float64)
     except (OSError, EOFError, TypeError, ValueError) as error:
         raise ValueError(
-            f"BayMorph cannot read the pixels of HDU {index} of {headers.path}: "
+            f"BayMorph cannot read the pixels of HDU {index} of {path}: "
             f"{type(error).__name__}: {error}"
         ) from error
 
-    expected = headers.image_shape if window is None else window.shape
+    expected = tuple(image_shape) if window is None else window.shape
 
     if pixels.shape != expected:
         raise ValueError(
-            f"The pixels read from HDU {index} of {headers.path} have the shape "
+            f"The pixels read from HDU {index} of {path} have the shape "
             f"{pixels.shape}, not the {expected} of the header."
         )
 
@@ -1607,9 +1682,11 @@ __all__ = [
     "WorkingRegion",
     "file_compression",
     "forget_kept_headers",
+    "image_hdu",
     "no_data_mask",
     "open_image",
     "open_observation",
+    "read_hdu_pixels",
     "read_image_headers",
     "resolve_pixel_scale",
     "resolve_working_region",

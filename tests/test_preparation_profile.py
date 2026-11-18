@@ -3,8 +3,9 @@
 These tests check the pieces of the rule against answers they build: the
 ellipse of the annuli, the completeness of an annulus against an unbounded
 grid and against areas without data, the profile of a known radial function,
-the reference plane and its checks, the non-increasing fit and the radius it
-reads.
+the reference plane and its checks, among them the comparison of its halves
+without the angular sectors whose halves are lopsided, the non-increasing fit
+and the radius it reads.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ from baymorph.preparation.profile import (
     COMPLETE_FRACTION,
     LINEAR_BINS_UNTIL,
     MINIMUM_REFERENCE_PIXELS,
+    SECTOR_HALF_SHARE,
     Ellipse,
     Profile,
     annulus_edges,
@@ -250,6 +252,48 @@ def test_galaxy_light_on_the_reference_sky_breaks_the_agreement() -> None:
 
     assert reference.inner_minus_outer > 0.0
     assert not reference.consistent
+
+
+def test_a_lopsided_sector_leaves_the_comparison_of_the_halves() -> None:
+    # Light of the galaxy makes the inner half of the far sky brighter than the
+    # outer one. In two sectors the outer half keeps 25 pixels, which hold the
+    # edge of something else, against thousands in the inner one: their
+    # differences inflate the error until the check passes, unless a sector
+    # enters only when each of its halves holds a tenth of its pixels.
+    ellipse = Ellipse(x0=250.0, y0=250.0, q=1.0, theta=0.0)
+    shape = (501, 501)
+    radius, angle = ellipse.coordinates(shape)
+    image = np.random.default_rng(6).normal(0.0, 1.0, shape)
+    image += 0.3 * np.exp(-(radius - 150.0) / 60.0)
+    sector = np.minimum(((angle + math.pi) / (2.0 * math.pi) * 8).astype(int), 7)
+    masked = np.zeros(shape, bool)
+
+    for number in (4, 5):
+        cut = (sector == number) & (radius >= 170.0)
+        kept = np.zeros(shape, bool).ravel()
+        kept[
+            np.flatnonzero((cut & (radius >= 300.0) & (radius < 302.0)).ravel())[:25]
+        ] = True
+        kept = kept.reshape(shape)
+        masked |= cut & ~kept
+        image[kept] += 2.0
+
+    every = reference_sky(image, masked, ellipse, radius=150.0)
+    balanced = reference_sky(
+        image, masked, ellipse, radius=150.0, half_share=SECTOR_HALF_SHARE
+    )
+
+    assert every.compared_sectors == 8
+    assert every.consistent
+    assert balanced.compared_sectors == 6
+    assert balanced.inner_minus_outer > 10.0 * balanced.inner_outer_error > 0.0
+    assert not balanced.consistent
+    assert balanced.as_dict()["compared_sectors"] == 6
+    assert balanced.plane == every.plane
+
+    for share in (-0.1, 0.6, True):
+        with pytest.raises(ValueError, match="share of each half"):
+            reference_sky(image, masked, ellipse, radius=150.0, half_share=share)
 
 
 def test_a_reference_sky_needs_enough_pixels() -> None:

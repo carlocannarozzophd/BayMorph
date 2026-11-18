@@ -12,7 +12,8 @@ of the sky scale ``s``. This module measures that light and that radius:
 - the reference sky is a plane fitted with sigma clipping to the pixels far
   from the galaxy, beyond a radius, with every source masked; its level
   carries an error from the scatter among angular sectors, which holds the
-  large-scale field of the sky, and its inner and outer halves must agree;
+  large-scale field of the sky, and its inner half must not be brighter than
+  its outer half beyond their errors and a floor of the sky scale;
 - the profile is the clipped mean of each annulus less the reference plane,
   in units of the scale of the reference sky;
 - the radius at which the profile falls below a fraction ``f`` is where the
@@ -31,6 +32,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from numbers import Real
 from typing import Any
 
 import numpy as np
@@ -70,6 +72,24 @@ MINIMUM_REFERENCE_PIXELS = 10_000
 AGREEMENT_SIGMA = 3.0
 """Largest difference, in combined errors, between the inner and the outer
 halves of the reference sky."""
+
+FAR_SKY_FLOOR = 0.05
+"""Smallest difference, in sky scales, by which the inner half of the
+reference sky must be brighter than the outer half, beside its significance
+(:data:`AGREEMENT_SIGMA`), for the light of the galaxy to count as reaching
+it. Where the light of the galaxy falls across the far sky at least as
+steeply as the radius to the power -2.5, as a Sérsic profile with n up to 10
+does there, a difference below it leaves at most about three times the floor
+of that light in the plane; an envelope that falls more slowly leaves more.
+The significance alone, on a large far sky, flags differences of a few
+hundredths of the sky scale as often as not."""
+
+SECTOR_HALF_SHARE = 0.1
+"""Smallest share of the pixels of a sector of the reference sky that each of
+its halves, inner and outer, must hold for the sector to enter the comparison
+of the two halves. A sector whose outer half holds a few pixels against
+thousands in its inner one, as a nearly round ellipse can leave at the edge
+of an image, gives a noisy difference that would weigh as much as any other."""
 
 
 # --- The ellipse of the annuli ------------------------------------------------
@@ -524,6 +544,8 @@ class ReferenceSky:
         radius, less that of the outer half.
     inner_outer_error : float
         Its error, from the sectors.
+    compared_sectors : int, default=0
+        The sectors whose halves entered the comparison; 0 when not counted.
     """
 
     radius: float
@@ -533,6 +555,7 @@ class ReferenceSky:
     pixels: int
     inner_minus_outer: float
     inner_outer_error: float
+    compared_sectors: int = 0
 
     @property
     def consistent(self) -> bool:
@@ -540,6 +563,33 @@ class ReferenceSky:
         return bool(
             math.isfinite(self.inner_outer_error)
             and abs(self.inner_minus_outer) <= AGREEMENT_SIGMA * self.inner_outer_error
+        )
+
+    @property
+    def difference_in_scales(self) -> float:
+        """float : The difference of the two halves in sky scales; NaN when
+        either is not finite or the scale is not positive."""
+        if not (
+            math.isfinite(self.inner_minus_outer)
+            and math.isfinite(self.scale)
+            and self.scale > 0.0
+        ):
+            return math.nan
+
+        return self.inner_minus_outer / self.scale
+
+    @property
+    def inner_half_brighter(self) -> bool:
+        """bool : Whether the inner half is brighter than the outer half by
+        more than :data:`AGREEMENT_SIGMA` combined errors and by more than
+        :data:`FAR_SKY_FLOOR` sky scales: the light of the galaxy reaches the
+        reference sky."""
+        difference = self.difference_in_scales
+
+        return bool(
+            not self.consistent
+            and math.isfinite(difference)
+            and difference > FAR_SKY_FLOOR
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -553,11 +603,20 @@ class ReferenceSky:
             "inner_minus_outer": self.inner_minus_outer,
             "inner_outer_error": self.inner_outer_error,
             "consistent": self.consistent,
+            "compared_sectors": self.compared_sectors,
+            "difference_in_sky_scales": self.difference_in_scales,
+            "floor_in_sky_scales": FAR_SKY_FLOOR,
+            "inner_half_brighter": self.inner_half_brighter,
         }
 
 
 def reference_sky(
-    image: ArrayLike, masked: ArrayLike, ellipse: Ellipse, *, radius: float
+    image: ArrayLike,
+    masked: ArrayLike,
+    ellipse: Ellipse,
+    *,
+    radius: float,
+    half_share: float = 0.0,
 ) -> ReferenceSky:
     """Fit the reference sky beyond a radius.
 
@@ -572,6 +631,12 @@ def reference_sky(
         The ellipse whose radius selects the pixels.
     radius : float
         The pixels at this radius and beyond belong to the reference sky.
+    half_share : float, default=0.0
+        A sector enters the comparison of the inner and outer halves only
+        when each of its halves holds at least this share of its pixels, and
+        at least :data:`MINIMUM_SECTOR_PIXELS`; the cutout stage uses
+        :data:`SECTOR_HALF_SHARE`. With 0 every sector with enough pixels
+        enters, as in version 1 of the stage.
 
     Returns
     -------
@@ -581,8 +646,18 @@ def reference_sky(
     Raises
     ------
     ValueError
-        If fewer than :data:`MINIMUM_REFERENCE_PIXELS` pixels are left.
+        If fewer than :data:`MINIMUM_REFERENCE_PIXELS` pixels are left, or
+        ``half_share`` does not lie in [0, 0.5].
     """
+    if (
+        isinstance(half_share, bool)
+        or not isinstance(half_share, Real)
+        or not 0.0 <= half_share <= 0.5
+    ):
+        raise ValueError(
+            f"The share of each half of a sector lies in [0, 0.5]; got {half_share!r}."
+        )
+
     data = np.asarray(image, dtype=float)
     out = np.asarray(masked, dtype=bool)
     radii, angle = ellipse.coordinates(data.shape)
@@ -627,11 +702,12 @@ def reference_sky(
     for sector in range(SECTORS):
         inner_part = kept[(sectors == sector) & ~outer]
         outer_part = kept[(sectors == sector) & outer]
+        smallest = max(
+            float(MINIMUM_SECTOR_PIXELS),
+            float(half_share) * (inner_part.size + outer_part.size),
+        )
 
-        if (
-            inner_part.size >= MINIMUM_SECTOR_PIXELS
-            and outer_part.size >= MINIMUM_SECTOR_PIXELS
-        ):
+        if inner_part.size >= smallest and outer_part.size >= smallest:
             differences.append(float(np.mean(inner_part) - np.mean(outer_part)))
 
     if len(differences) >= 4:
@@ -650,6 +726,7 @@ def reference_sky(
         pixels=int(kept.size),
         inner_minus_outer=difference,
         inner_outer_error=difference_error,
+        compared_sectors=len(differences),
     )
 
 
@@ -780,10 +857,12 @@ __all__ = [
     "CLIP_ITERATIONS",
     "CLIP_SIGMA",
     "COMPLETE_FRACTION",
+    "FAR_SKY_FLOOR",
     "LINEAR_BINS_UNTIL",
     "MINIMUM_REFERENCE_PIXELS",
     "MINIMUM_SECTOR_PIXELS",
     "SECTORS",
+    "SECTOR_HALF_SHARE",
     "Ellipse",
     "Profile",
     "ReferenceSky",

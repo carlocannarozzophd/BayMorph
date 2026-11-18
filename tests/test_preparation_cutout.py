@@ -33,15 +33,19 @@ from baymorph.preparation.cutout import (
     FAR_SKY_LIMITATION,
     MINIMUM_NOISE_PIXELS,
     NOISE_LIGHT_THRESHOLD,
+    RELEASE_LIMITATION,
     cutout_from_settings,
     noise_region,
     resolve_cutout,
     rule,
     source_mask,
 )
+from baymorph.preparation.masks import read_curated_mask
 from baymorph.preparation.opening import open_image
 from baymorph.preparation.profile import (
+    FAR_SKY_FLOOR,
     MINIMUM_REFERENCE_PIXELS,
+    SECTOR_HALF_SHARE,
     Ellipse,
     ReferenceSky,
     elliptical_profile,
@@ -191,7 +195,7 @@ def test_a_fixed_cutout_keeps_its_side_and_is_checked_against_the_radius(
     assert fixed.noise_radius == automatic.noise_radius
     assert fixed.noise_pixels == automatic.noise_pixels
     assert fixed.warnings == ()
-    assert fixed.record["limitations"] == [FAR_SKY_LIMITATION]
+    assert fixed.record["limitations"] == [FAR_SKY_LIMITATION, RELEASE_LIMITATION]
     assert fixed.identity != automatic.identity
 
     assert small.shape == (41, 41)
@@ -224,9 +228,23 @@ def test_a_cutout_that_leaves_the_image_stops_with_the_side_that_fits(
 
     assert resolve_cutout(opened, target, mode="fixed", size=121).bounds["xmin"] == 0
 
+    # Thirty pixels from the edge, the far sky lies on one side of the target:
+    # fewer than four angular sectors hold both of its halves, and the stage
+    # stops before it measures the galaxy.
     closer = (30.3, 300.2)
     opened, target = _inputs(
         tmp_path, _sersic(shape, *closer) + _noise(shape, 2), closer, name="edge.fits"
+    )
+
+    with pytest.raises(ValueError, match="does not spread over enough directions"):
+        resolve_cutout(opened, target, mode="auto")
+
+    # In a taller image the far sky surrounds the target above and below it,
+    # and the galaxy needs more than the side that fits.
+    tall = (1201, 601)
+    closer = (30.3, 600.2)
+    opened, target = _inputs(
+        tmp_path, _sersic(tall, *closer) + _noise(tall, 2), closer, name="tall.fits"
     )
 
     with pytest.raises(ValueError, match=r"at most 61 pixels fit.*The galaxy needs"):
@@ -365,14 +383,97 @@ def test_a_galaxy_whose_light_never_falls_below_the_threshold_stops(tmp_path) ->
 def test_galaxy_light_on_the_far_sky_stops(tmp_path) -> None:
     shape = (601, 601)
     rows, columns = np.indices(shape)
-    envelope = 3.0 * np.exp(-np.hypot(columns - CENTRE[0], rows - CENTRE[1]) / 150.0)
+    envelope = 6.0 * np.exp(-np.hypot(columns - CENTRE[0], rows - CENTRE[1]) / 150.0)
     opened, target = _inputs(tmp_path, _galaxy(seed=4) + envelope)
 
     with pytest.raises(
         ValueError,
-        match="inner and outer halves of the far sky.*times the error, more than 3",
+        match=(
+            "inner and outer halves of the far sky.*differ by .* sky scales, the "
+            r"inner half the brighter \(.*times the error, more than 3\), more than "
+            "the floor of 0.05 sky scales: light of the galaxy"
+        ),
     ):
         resolve_cutout(opened, target, mode="auto")
+
+
+def test_the_far_sky_stops_only_on_a_brighter_inner_half_beyond_the_floor() -> None:
+    sky = ReferenceSky(
+        radius=100.0,
+        plane=(0.0, 0.0, 0.0),
+        error=0.01,
+        scale=2.0,
+        pixels=20_000,
+        inner_minus_outer=0.0,
+        inner_outer_error=0.01,
+    )
+    floor = FAR_SKY_FLOOR * sky.scale
+
+    # The inner half brighter beyond the errors and the floor: the light of
+    # the galaxy reaches the far sky, and the stage stops.
+    bright = replace(sky, inner_minus_outer=2.0 * floor)
+
+    assert bright.inner_half_brighter
+
+    with pytest.raises(
+        ValueError, match="inner half the brighter.*more than the floor.*the galaxy"
+    ):
+        cutout_module._check_far_sky(bright, 100.0, "")
+
+    # Within the floor: the stage goes on and warns.
+    faint = replace(sky, inner_minus_outer=0.5 * floor)
+    warning = cutout_module._check_far_sky(faint, 100.0, "")
+
+    assert not faint.consistent and not faint.inner_half_brighter
+    assert faint.difference_in_scales == pytest.approx(0.5 * FAR_SKY_FLOOR)
+    assert "below the floor of 0.05 sky scales" in warning
+    assert "radii may come out slightly small" in warning
+
+    # The outer half brighter, however much: a sky that is not a plane or a
+    # neighbour near the edges, warned, not a stop.
+    outer = replace(sky, inner_minus_outer=-4.0 * floor)
+    warning = cutout_module._check_far_sky(outer, 100.0, "")
+
+    assert not outer.consistent and not outer.inner_half_brighter
+    assert "the outer half the brighter" in warning
+    assert "not a plane" in warning and "data.mask_path" in warning
+
+    # Within the errors: no warning, however large the difference in sky scales.
+    wide = replace(sky, inner_minus_outer=2.0 * floor, inner_outer_error=floor)
+
+    assert wide.consistent and not wide.inner_half_brighter
+    assert cutout_module._check_far_sky(wide, 100.0, "") is None
+
+
+def test_a_faint_difference_of_the_far_sky_is_warned_and_recorded(
+    tmp_path, monkeypatch
+) -> None:
+    # Halves that differ beyond their errors but within the floor: the stage
+    # measures the galaxy against that far sky and says so.
+    measure = cutout_module.reference_sky
+
+    def faint(image, masked, ellipse, **keywords):
+        reference = measure(image, masked, ellipse, **keywords)
+
+        return replace(
+            reference,
+            inner_minus_outer=0.6 * FAR_SKY_FLOOR * reference.scale,
+            inner_outer_error=0.05 * FAR_SKY_FLOOR * reference.scale,
+        )
+
+    monkeypatch.setattr(cutout_module, "reference_sky", faint)
+    opened, target = _inputs(tmp_path, _galaxy())
+
+    cutout = resolve_cutout(opened, target, mode="auto")
+    far_sky = cutout.record["far_sky"]
+
+    assert far_sky["consistent"] is False
+    assert far_sky["inner_half_brighter"] is False
+    assert far_sky["difference_in_sky_scales"] == pytest.approx(0.6 * FAR_SKY_FLOOR)
+    assert far_sky["floor_in_sky_scales"] == FAR_SKY_FLOOR
+    assert cutout.record["rule"]["far_sky_floor_sky_scales"] == FAR_SKY_FLOOR
+    assert sum("below the floor" in warning for warning in cutout.warnings) == 1
+    assert cutout.record["warnings"] == list(cutout.warnings)
 
 
 def test_a_far_sky_without_enough_pixels_stops(tmp_path) -> None:
@@ -437,20 +538,197 @@ def test_a_target_on_the_edge_of_the_image_stops(tmp_path) -> None:
         resolve_cutout(opened, target, mode="auto")
 
 
-def test_a_galaxy_split_into_pieces_stops_when_its_profile_is_empty(
-    tmp_path,
-) -> None:
-    # A flat disc of 1.5 sky scales: the deblending splits its noise into
-    # many segments, and every piece but the target segment is masked.
-    shape = (201, 2401)
+def _split_disc(tmp_path: Path):
+    """Return the cutout of a flat disc of 1.5 sky scales and 105 pixels, whose
+    noise the deblending splits into many segments."""
+    shape = (601, 601)
     rows, columns = np.indices(shape)
-    disc = np.where(np.hypot(columns - 1200.0, rows - 100.0) <= 105.0, 1.5, 0.0)
-    opened, target = _inputs(tmp_path, disc + _noise(shape, 3), (1200.0, 100.0))
+    disc = np.where(np.hypot(columns - CENTRE[0], rows - CENTRE[1]) <= 105.0, 1.5, 0.0)
+    opened, target = _inputs(tmp_path, disc + _noise(shape, 3))
 
-    with pytest.raises(
-        ValueError, match="holds no pixel on its complete annuli.*n_levels"
-    ):
-        resolve_cutout(opened, target, mode="auto")
+    return resolve_cutout(opened, target, mode="auto")
+
+
+def test_the_radii_of_a_split_galaxy_follow_its_light(tmp_path) -> None:
+    cutout = _split_disc(tmp_path)
+
+    assert len(cutout.release.siblings) >= 10
+    assert cutout.cutout_radius == pytest.approx(105.0, abs=6.0)
+    assert cutout.noise_radius == pytest.approx(105.0, abs=8.0)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "A known limitation of the release, to be settled before the release "
+        "enters the mask of the likelihood: the ellipse of the annuli comes from "
+        "the small piece of the disc that the deblending keeps as the target "
+        "segment, q of about 0.51 for a round disc, and the level about it "
+        "releases only 67 of its 108 pieces."
+    ),
+)
+def test_the_pieces_of_a_split_galaxy_stay_in_its_profile(tmp_path) -> None:
+    # The pieces hold no source above the light of the disc: all of them should
+    # be released, so that the profile keeps them.
+    cutout = _split_disc(tmp_path)
+
+    assert len(cutout.release.released_siblings) >= 0.9 * len(cutout.release.siblings)
+
+
+def test_the_release_reads_the_far_sky_beyond_the_last_complete_annulus(
+    tmp_path, monkeypatch
+) -> None:
+    # The far sky of each ellipse is measured once: the release reads its
+    # plane beyond the last complete annulus, the profile its plane and scale.
+    calls = []
+    measure = cutout_module.reference_sky
+
+    def counted(image, masked, ellipse, **keywords):
+        calls.append((ellipse, keywords["half_share"]))
+
+        return measure(image, masked, ellipse, **keywords)
+
+    monkeypatch.setattr(cutout_module, "reference_sky", counted)
+
+    for passes in (1, 2):
+        monkeypatch.setattr(cutout_module, "RELEASE_PASSES", passes)
+        opened, target = _inputs(tmp_path, _galaxy(), name=f"passes_{passes}.fits")
+        calls.clear()
+        cutout = resolve_cutout(opened, target, mode="auto")
+        ellipses = [ellipse for ellipse, _ in calls]
+        level = cutout.record["release"]["level"]
+
+        assert 1 <= len(calls) <= passes
+        assert len(set(ellipses)) == len(ellipses)
+        assert ellipses[-1] == cutout.ellipse
+        assert {share for _, share in calls} == {SECTOR_HALF_SHARE}
+        assert cutout.release.passes == passes
+        assert cutout.release.sky_radius == cutout.reference.radius
+        assert level["first_pass_leaves_out"] == "the other detections"
+        assert level["beyond_the_last_complete_annulus"] == "the plane of the far sky"
+        assert cutout.record["far_sky"]["compared_sectors"] >= 4
+        assert cutout.record["rule"]["release_passes"] == passes
+
+    assert rule()["far_sky_sector_half_share"] == SECTOR_HALF_SHARE
+    assert rule()["release_level_first_pass_leaves_out"] == "the other detections"
+
+
+# --- The curated mask --------------------------------------------------------------
+
+
+def _curated(tmp_path: Path, opened, mask, name="mask.fits"):
+    """Write a curated mask on the whole image and read it on the opening."""
+    path = tmp_path / name
+    fits.PrimaryHDU(np.asarray(mask, np.uint8)).writeto(path)
+
+    return read_curated_mask(path, opened, project_root=tmp_path)
+
+
+def test_the_curated_mask_is_left_out_of_the_detection(tmp_path) -> None:
+    # A trail at 60 noise scales across the galaxy (s4:code S4-07), under a
+    # curated band: the detection, the release, the ellipse and the radii are
+    # those of the same image without the trail.
+    image = _galaxy()
+    band = np.zeros(image.shape, dtype=bool)
+    band[:, 340:346] = True
+    trail = image.copy()
+    trail[band] += 60.0
+    opened_clean, target_clean = _inputs(tmp_path, image, name="clean.fits")
+    opened_trail, target_trail = _inputs(tmp_path, trail, name="trail.fits")
+
+    clean = resolve_cutout(
+        opened_clean,
+        target_clean,
+        mode="auto",
+        curated=_curated(tmp_path, opened_clean, band, "clean_band.fits"),
+    )
+    curated = resolve_cutout(
+        opened_trail,
+        target_trail,
+        mode="auto",
+        curated=_curated(tmp_path, opened_trail, band, "trail_band.fits"),
+    )
+    bare = resolve_cutout(opened_trail, target_trail, mode="auto")
+
+    assert np.array_equal(curated.detection.labels, clean.detection.labels)
+    assert not np.any(curated.detection.labels[band])
+    assert curated.release.kept == clean.release.kept
+    assert curated.ellipse == clean.ellipse
+    assert curated.cutout_radius == clean.cutout_radius
+    assert curated.noise_radius == clean.noise_radius
+    assert curated.noise_pixels == clean.noise_pixels
+    # Without the mask the trail joins the detection.
+    assert np.any(bare.detection.labels[band])
+    assert curated.record["curated_mask"]["excluded_pixels"] == int(band.sum())
+    assert curated.identity != bare.identity
+
+
+def test_a_target_on_the_curated_mask_is_named(tmp_path) -> None:
+    opened, target = _inputs(tmp_path, _galaxy())
+    small = np.zeros(opened.pixels.shape, dtype=bool)
+    small[299:302, 299:302] = True
+    large = np.zeros(opened.pixels.shape, dtype=bool)
+    large[285:316, 285:316] = True
+
+    cutout = resolve_cutout(
+        opened, target, mode="auto", curated=_curated(tmp_path, opened, small)
+    )
+
+    assert any(
+        "lies on a pixel of the curated mask" in item for item in cutout.warnings
+    )
+
+    with pytest.raises(ValueError, match="lies on a pixel of the curated mask"):
+        resolve_cutout(
+            opened,
+            target,
+            mode="auto",
+            curated=_curated(tmp_path, opened, large, "large.fits"),
+        )
+
+
+def test_the_curated_mask_must_match_the_opening(tmp_path) -> None:
+    opened, target = _inputs(tmp_path, _galaxy())
+    region = open_image(
+        tmp_path / "image.fits",
+        project_root=tmp_path,
+        region={"size": 401.0},
+        target_position={"x": CENTRE[0], "y": CENTRE[1]},
+        pixel_scale=1.0,
+    )
+    mask = np.zeros(opened.pixels.shape, dtype=bool)
+    mask[:, :3] = True
+    other = _curated(tmp_path, region, mask)
+
+    with pytest.raises(ValueError, match="another working region"):
+        resolve_cutout(opened, target, mode="auto", curated=other)
+
+    with pytest.raises(TypeError, match="CuratedMask"):
+        resolve_cutout(opened, target, mode="auto", curated=mask)
+
+
+def test_the_configuration_and_the_curated_mask_must_agree(tmp_path) -> None:
+    opened, target = _inputs(tmp_path, _galaxy())
+    mask = np.zeros(opened.pixels.shape, dtype=bool)
+    mask[:, :3] = True
+    curated = _curated(tmp_path, opened, mask)
+    declared = _config()
+    declared["data"]["mask_path"] = "mask.fits"
+
+    with pytest.raises(ValueError, match="declares a curated mask"):
+        cutout_from_settings(read_preparation_settings(declared), opened, target)
+
+    with pytest.raises(ValueError, match="declares none"):
+        cutout_from_settings(
+            read_preparation_settings(_config()), opened, target, curated
+        )
+
+    cutout = cutout_from_settings(
+        read_preparation_settings(declared), opened, target, curated
+    )
+
+    assert cutout.curated is curated
+    assert cutout.record["curated_mask"]["excluded_pixels"] == int(mask.sum())
 
 
 # --- Warnings, settings, identity and record ---------------------------------------
@@ -562,7 +840,13 @@ def test_the_record_is_json_and_the_product_round_trips(tmp_path) -> None:
     assert record["noise_region"]["minimum"] == MINIMUM_NOISE_PIXELS
     assert record["far_sky"]["consistent"] is True
     assert record["rule"] == rule()
-    assert record["limitations"] == [FAR_SKY_LIMITATION, AUTOMATIC_CUTOUT_LIMITATION]
+    assert record["limitations"] == [
+        FAR_SKY_LIMITATION,
+        RELEASE_LIMITATION,
+        AUTOMATIC_CUTOUT_LIMITATION,
+    ]
+    assert record["release"] == json.loads(json.dumps(cutout.release.as_dict()))
+    assert record["curated_mask"] is None
     assert record["image_identity"] == opened.image_identity
     assert record["target_identity"] == target.identity
 

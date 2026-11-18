@@ -15,42 +15,63 @@ the galaxy reaches, and reads two radii from it:
 The measurement is the same in both modes:
 
 1. the sources of the working region are detected on the image less a sky
-   plane (:func:`baymorph.preparation.detection.detect`), and the target
+   plane (:func:`baymorph.preparation.detection.detect`), without the pixels
+   without data and those of the curated mask, ``data.mask_path``; the target
    segment is selected, with its warnings
    (:func:`baymorph.preparation.target.select_target_segment`);
-2. the annuli are ellipses about the target position, with the axis ratio and
-   the position angle of the target segment;
-3. the far sky is the working region beyond the last complete annulus, with
-   every source masked and its mask grown by :data:`MASK_GROWTH_PIXELS`
-   pixels; the plane fitted to it is the reference of the profile, its scale
-   is the sky scale of the thresholds, and its inner and outer halves must
-   agree;
-4. the profile is the clipped mean of each complete annulus less that plane,
-   with the other sources masked, and each radius is where the
-   non-increasing fit of the profile crosses its threshold
+2. every other segment is tested against the light of the target (AD-050,
+   :func:`baymorph.preparation.contaminants.release_segments`): a segment
+   that holds no source above the light level of the target, a piece of the
+   galaxy that the deblending split from it or a peak of the noise that its
+   wings lift above the threshold, is released. The level of the first pass
+   leaves out only the segments of the other detections
+   (:data:`RELEASE_LEVEL_MASKS`), so the pieces of the target's own detection
+   enter its medians, and beyond the last complete annulus it is the plane of
+   the far sky; the release takes one pass (:data:`RELEASE_PASSES`), with the
+   ellipse of the target segment;
+3. the annuli are ellipses about the target position, with the axis ratio and
+   the position angle of the release;
+4. the far sky is the working region beyond the last complete annulus, with
+   every source masked, the released ones included, and its mask grown by
+   :data:`MASK_GROWTH_PIXELS` pixels; the plane fitted to it is the reference
+   of the profile, its scale is the sky scale of the thresholds, and its inner
+   and outer halves must agree, over the angular sectors in which each half
+   holds at least :data:`~baymorph.preparation.profile.SECTOR_HALF_SHARE` of
+   the pixels: the inner half must not be brighter beyond their errors and
+   beyond :data:`~baymorph.preparation.profile.FAR_SKY_FLOOR` sky scales,
+   and a difference beyond the errors that does not stop the stage is
+   warned. The far sky of the ellipse of each pass gives the level of that
+   pass beyond its radius, and that of the last pass is checked;
+5. the profile is the clipped mean of each complete annulus less that plane,
+   with the segments that hold a source masked and grown, and each radius is
+   where the non-increasing fit of the profile crosses its threshold
    (:mod:`baymorph.preparation.profile`).
 
+The pixels of the curated mask are left out of the detection, of the profile,
+of the far sky and of the noise region, whatever ``data.mask_mode`` declares,
+since the modes govern the support of the likelihood; and the profile uses the
+release whatever ``preparation.masking.contaminant_rule`` declares, since that
+key, too, governs the support of the likelihood, while this stage measures
+where the light of the galaxy ends.
+
 The stage stops, with the remedy, when no annulus about the target is
-complete, when the far sky is too small, has no scatter or its halves
-disagree, when the masks of the other sources leave the profile no pixel,
-when the light of the galaxy does not fall below a threshold within the last
-complete annulus (the sky is not reached), when the noise region holds fewer
+complete, when the far sky is too small or has no scatter, when its inner half
+is brighter than its outer half beyond both their errors and the floor, when
+the masks of the other sources leave the profile no pixel, when the light of
+the galaxy does not fall below a threshold within the last complete annulus
+(the sky is not reached), when the noise region holds fewer
 than :data:`MINIMUM_NOISE_PIXELS` pixels, or when the cutout, centred on the
 pixel of the target position, exceeds ``data.cutout.max_size`` or leaves the
 working region.
 
-Two limitations follow from the rule. Under a large-scale field of the sky
-(AD-052) the far sky may hold galaxy light at the level of the field, which no
-check on the far sky can see; every product records it. Every segment but the
-target segment is masked in the profile, grown by :data:`MASK_GROWTH_PIXELS`
-pixels: the pieces into which the deblending splits the detection of the
-target, and the peaks of the noise that the light of its wings lifts above the
-threshold (AD-050), carry positive noise or light of the galaxy, so the
-profile of the wings comes out low and the radii somewhat small. On synthetic
-galaxies of index 4 and 6 the light at the radius of 0.3 sky scales is then
-1.1 to 1.2 times that threshold; a galaxy that the deblending splits into many
-pieces, such as a flat or clumpy disc, loses more, and the products record
-when the detection of the target was split.
+Two limitations follow from the rule, and every product records them. Under a
+large-scale field of the sky (AD-052) the far sky may hold galaxy light at the
+level of the field, which no check on the far sky can see. And the release
+compares each segment with one median level about one ellipse, and keeps or
+releases it whole: isophotes that twist or change their ellipticity keep some
+pieces of the galaxy masked, and a source on the envelope of the galaxy stays
+masked over its whole segment, which the deblending may extend over the
+envelope behind it, out to the edge of the detection.
 
 Positions are zero-based pixels of the whole image, ``x`` along the columns;
 the bounds of a cutout are half-open, like those of a working region.
@@ -67,6 +88,11 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from baymorph.preparation.contaminants import (
+    OTHER_DETECTIONS,
+    Release,
+    release_segments,
+)
 from baymorph.preparation.detection import (
     PLANE_CLIP_SIGMA,
     PLANE_MAX_ITERATIONS,
@@ -76,6 +102,7 @@ from baymorph.preparation.detection import (
     detect,
 )
 from baymorph.preparation.identity import stage_identity
+from baymorph.preparation.masks import CuratedMask
 from baymorph.preparation.opening import OpenedObservation
 from baymorph.preparation.profile import (
     AGREEMENT_SIGMA,
@@ -83,15 +110,16 @@ from baymorph.preparation.profile import (
     CLIP_ITERATIONS,
     CLIP_SIGMA,
     COMPLETE_FRACTION,
+    FAR_SKY_FLOOR,
     LINEAR_BINS_UNTIL,
     MINIMUM_REFERENCE_PIXELS,
     MINIMUM_SECTOR_PIXELS,
+    SECTOR_HALF_SHARE,
     SECTORS,
     Ellipse,
     Profile,
     ReferenceSky,
     complete_radius,
-    ellipse_of_segment,
     elliptical_profile,
     grown,
     monotone_fit,
@@ -104,8 +132,23 @@ from baymorph.preparation.target import Target, TargetSegment, select_target_seg
 CUTOUT_STAGE = "cutout"
 """Name of the stage in the product store."""
 
-CUTOUT_VERSION = 1
-"""Version of the rules of the stage; raising it changes every identity."""
+CUTOUT_VERSION = 2
+"""Version of the rules of the stage; raising it changes every identity.
+Version 2 releases the segments that hold no source above the light of the
+target from the masks of the profile, and leaves the curated mask out of the
+detection."""
+
+RELEASE_PASSES = 1
+"""Passes of the release of the segments (AD-050): one, with the ellipse of the
+target segment. A second pass, which measures the ellipse and the light level
+again with the released pieces of the detection of the target, made the radii
+no more accurate on synthetic galaxies and cost about 1.4 times the first."""
+
+RELEASE_LEVEL_MASKS = OTHER_DETECTIONS
+"""What the light level of the first pass of the release leaves out: only the
+segments of the other detections. When the target segment is a small piece of
+the galaxy, masking its other pieces too leaves the annuli they cover empty,
+and the level interpolated across them falls below the light of the galaxy."""
 
 CUTOUT_LIGHT_THRESHOLD = 1.0
 """Default light of the galaxy at the edge of an automatic cutout, in sky
@@ -139,9 +182,22 @@ FAR_SKY_LIMITATION = (
     "The far sky lies beyond the last complete annulus. Galaxy light left there "
     "at the level of the large-scale field of the sky (AD-052) is invisible to "
     "every check on the far sky, and the profile, the radii and the noise region "
-    "are measured against it."
+    "are measured against it. Galaxy light that leaves the inner half of the far "
+    "sky brighter than its outer half by less than the floor of the check passes "
+    "it; an envelope that falls more slowly than the radius to the power -2.5 "
+    "leaves more than about three times that floor in the plane of the far sky."
 )
 """The limitation that every product of the stage records."""
+
+RELEASE_LIMITATION = (
+    "The masks of the profile hold the segments that hold a source above the "
+    "light of the target, a median level about one ellipse (AD-050): isophotes "
+    "that twist or change their ellipticity keep some pieces of the galaxy "
+    "masked, and a source on the envelope of the galaxy is masked over its whole "
+    "segment, which the deblending may extend over the envelope behind it, out "
+    "to the edge of the detection."
+)
+"""The limitation of the release that every product of the stage records."""
 
 AUTOMATIC_CUTOUT_LIMITATION = (
     "The automatic cutout holds the galaxy out to where its light falls below the "
@@ -157,10 +213,19 @@ def rule() -> dict[str, Any]:
     return {
         "far_sky": "beyond the last complete annulus",
         "radius": "where the non-increasing fit of the profile crosses a threshold",
+        "profile_masks": (
+            "the segments that hold a source above the light level of the target, "
+            "whole, grown; the curated mask"
+        ),
+        "release_passes": RELEASE_PASSES,
+        "release_level_first_pass_leaves_out": RELEASE_LEVEL_MASKS,
+        "release_level_beyond_the_last_complete_annulus": "the plane of the far sky",
+        "far_sky_sector_half_share": SECTOR_HALF_SHARE,
         "mask_growth_pixels": MASK_GROWTH_PIXELS,
         "minimum_noise_pixels": MINIMUM_NOISE_PIXELS,
         "minimum_far_sky_pixels": MINIMUM_REFERENCE_PIXELS,
         "agreement_sigma": AGREEMENT_SIGMA,
+        "far_sky_floor_sky_scales": FAR_SKY_FLOOR,
         "complete_fraction": COMPLETE_FRACTION,
         "linear_bins_until": LINEAR_BINS_UNTIL,
         "bin_growth": BIN_GROWTH,
@@ -198,6 +263,11 @@ class Cutout:
         The sources of the working region.
     selection : TargetSegment
         The target segment and how it was selected.
+    release : Release
+        The segments that hold a source above the light of the target, which
+        the profile masks, and those it releases.
+    curated : CuratedMask or None
+        The curated mask on the working region, when one is declared.
     reference : ReferenceSky
         The far sky, whose plane is given about the target position.
     profile : Profile
@@ -233,6 +303,8 @@ class Cutout:
     ellipse: Ellipse
     detection: Detection = field(repr=False)
     selection: TargetSegment = field(repr=False)
+    release: Release = field(repr=False)
+    curated: CuratedMask | None = field(repr=False)
     reference: ReferenceSky = field(repr=False)
     profile: Profile = field(repr=False)
     excess: NDArray[np.float64] = field(repr=False)
@@ -292,8 +364,10 @@ class Cutout:
 # --- The masks of the sky -----------------------------------------------------
 
 
-def source_mask(labels: ArrayLike, no_data: ArrayLike) -> NDArray[np.bool_]:
-    """Return every source with its mask grown, and the pixels without data.
+def source_mask(
+    labels: ArrayLike, no_data: ArrayLike, curated: ArrayLike | None = None
+) -> NDArray[np.bool_]:
+    """Return every source with its mask grown, and the pixels left out.
 
     Parameters
     ----------
@@ -301,13 +375,15 @@ def source_mask(labels: ArrayLike, no_data: ArrayLike) -> NDArray[np.bool_]:
         A map of segments, 0 where there is no source.
     no_data : array-like of bool
         The pixels without data, of the same shape.
+    curated : array-like of bool, optional
+        The pixels of the curated mask, of the same shape.
 
     Returns
     -------
     ndarray of bool
         The pixels left out of the far sky and of the noise region: every
         segment grown by :data:`MASK_GROWTH_PIXELS`, and the pixels without
-        data, which are not grown.
+        data and of the curated mask, which are not grown.
     """
     sources = np.asarray(labels) > 0
     missing = np.asarray(no_data, dtype=bool)
@@ -318,7 +394,20 @@ def source_mask(labels: ArrayLike, no_data: ArrayLike) -> NDArray[np.bool_]:
             f"segments {sources.shape}."
         )
 
-    return grown(sources, MASK_GROWTH_PIXELS) | missing
+    masked = grown(sources, MASK_GROWTH_PIXELS) | missing
+
+    if curated is not None:
+        declared = np.asarray(curated, dtype=bool)
+
+        if declared.shape != sources.shape:
+            raise ValueError(
+                f"The curated mask has the shape {declared.shape}, the map of "
+                f"segments {sources.shape}."
+            )
+
+        masked |= declared
+
+    return masked
 
 
 def noise_region(
@@ -364,6 +453,7 @@ def resolve_cutout(
     n_pixels: int = 20,
     n_levels: int = 32,
     without_effect: Sequence[str] = (),
+    curated: CuratedMask | None = None,
 ) -> Cutout:
     """Measure where the sky begins and set the cutout, as the cutout stage.
 
@@ -393,6 +483,9 @@ def resolve_cutout(
     without_effect : sequence of str, default=()
         Keys of :data:`WITHOUT_EFFECT` that the configuration declares; each
         is warned and recorded.
+    curated : CuratedMask, optional
+        The curated mask of the observation, read on the same working region
+        (:func:`baymorph.preparation.masks.read_curated_mask`).
 
     Returns
     -------
@@ -403,11 +496,12 @@ def resolve_cutout(
     Raises
     ------
     TypeError
-        If ``opened`` or ``target`` is not the product of its stage.
+        If ``opened``, ``target`` or ``curated`` is not the product of its
+        stage.
     ValueError
-        If a setting is not valid, the target was checked against other
-        pixels, no source lies at the target position, or the stage stops
-        (see the module docstring).
+        If a setting is not valid, the target or the curated mask was checked
+        against other pixels, no source lies at the target position, or the
+        stage stops (see the module docstring).
     """
     if not isinstance(opened, OpenedObservation):
         raise TypeError(
@@ -426,6 +520,21 @@ def resolve_cutout(
             "The target position was checked against other pixels than those of "
             "this opening: run the target stage on this opening."
         )
+
+    if curated is not None:
+        if not isinstance(curated, CuratedMask):
+            raise TypeError(
+                "resolve_cutout takes the CuratedMask of read_curated_mask, not "
+                f"{type(curated).__name__}."
+            )
+
+        if curated.region != opened.region or curated.pixels.shape != (
+            opened.pixels.shape
+        ):
+            raise ValueError(
+                "The curated mask was read on another working region than that of "
+                "this opening: read it on this opening."
+            )
 
     settings = _checked_settings(
         mode=mode,
@@ -451,50 +560,74 @@ def resolve_cutout(
         # A declared side that cannot fit stops before the detection.
         _check_inside(settings, settings["size"], None, target, opened)
 
+    curated_pixels = None if curated is None else curated.pixels
+    excluded = no_data if curated_pixels is None else no_data | curated_pixels
     detection = detect(
         image,
-        excluded=no_data,
+        excluded=excluded,
         n_sigma=settings["detection"]["n_sigma"],
         n_pixels=settings["detection"]["n_pixels"],
         n_levels=settings["detection"]["n_levels"],
         contrast=DEBLEND_CONTRAST,
     )
-    selection = select_target_segment(
-        detection.labels,
-        target.position,
-        parents=detection.parents,
-        flux=detection.smoothed,
-        origin=origin,
+    on_curated = curated_pixels is not None and bool(
+        curated_pixels[target.row - origin[1], target.column - origin[0]]
     )
+    curated_target = (
+        f"The target position lies on a pixel of the curated mask (data.mask_path), "
+        f"({target.column}, {target.row}), which the detection leaves out: the "
+        "non-zero pixels of a curated mask are excluded, so a mask whose 1 marks "
+        "the good pixels must be inverted."
+    )
+
+    try:
+        selection = select_target_segment(
+            detection.labels,
+            target.position,
+            parents=detection.parents,
+            flux=detection.smoothed,
+            origin=origin,
+        )
+    except ValueError as error:
+        if on_curated:
+            raise ValueError(f"{error} {curated_target}") from error
+
+        raise
+
     labels = detection.labels
-    segment = labels == selection.label
-    ellipse = ellipse_of_segment(
-        image, segment, x0=target.x - origin[0], y0=target.y - origin[1]
+    masked = source_mask(labels, no_data, curated_pixels)
+    skies: dict[Ellipse, tuple[ReferenceSky, int]] = {}
+
+    def far_sky(ellipse: Ellipse) -> ReferenceSky:
+        # The far sky of each ellipse is measured once: the release reads its
+        # plane for the light level, the profile its plane and its scale.
+        if ellipse not in skies:
+            skies[ellipse] = _far_sky(
+                image, masked, ellipse, no_data, target, area, remedy
+            )
+
+        return skies[ellipse][0]
+
+    release = release_segments(
+        detection,
+        selection.label,
+        image,
+        x0=target.x - origin[0],
+        y0=target.y - origin[1],
+        passes=RELEASE_PASSES,
+        level_masks=RELEASE_LEVEL_MASKS,
+        far_sky=far_sky,
     )
-    others = grown((labels > 0) & ~segment, MASK_GROWTH_PIXELS)
-    masked = source_mask(labels, no_data)
-    far_radius = complete_radius(image.shape, ellipse, no_data=no_data)
+    ellipse = release.ellipse
+    others = grown(release.kept_segments(labels), MASK_GROWTH_PIXELS)
 
-    if far_radius <= 0.0:
-        raise ValueError(
-            f"No annulus about the target position ({target.x:g}, {target.y:g}) is "
-            f"complete in {area}: the target lies too close to its edge, or to "
-            f"pixels without data, to measure the light of the galaxy. {remedy}"
-        )
+    if curated_pixels is not None:
+        others |= curated_pixels
 
-    far_pixels = int(np.count_nonzero(noise_region(masked, ellipse, far_radius)))
-
-    if far_pixels < MINIMUM_REFERENCE_PIXELS:
-        raise ValueError(
-            f"The far sky, the pixels of {area} beyond the last complete annulus, "
-            f"{far_radius:.0f} pixels from the target position along the major "
-            f"axis, holds {far_pixels} pixels outside the masks of the sources, "
-            f"fewer than the {MINIMUM_REFERENCE_PIXELS} that its plane needs. "
-            f"{remedy}"
-        )
-
-    reference = reference_sky(image, masked, ellipse, radius=far_radius)
-    _check_far_sky(reference, far_radius, remedy)
+    reference = far_sky(ellipse)
+    far_pixels = skies[ellipse][1]
+    far_radius = reference.radius
+    far_sky_warning = _check_far_sky(reference, far_radius, remedy)
     profile = elliptical_profile(
         image, others, ellipse, plane=reference.plane, no_data=no_data
     )
@@ -504,12 +637,14 @@ def resolve_cutout(
     if not np.any(np.isfinite(fitted)):
         raise ValueError(
             "The profile of the galaxy holds no pixel on its complete annuli: the "
-            f"masks of the other sources, grown by {MASK_GROWTH_PIXELS:g} pixels, "
-            "cover them. The deblending split the detection of the target into "
-            f"{selection.siblings} segments, and every one but the target segment "
-            "is masked as another source. If they are parts of the galaxy, let the "
-            "deblending split it less, with a lower preparation.detection.n_levels "
-            "or a larger n_pixels."
+            f"masks of the {len(release.kept)} segments that hold a source above "
+            f"the light of the galaxy, grown by {MASK_GROWTH_PIXELS:g} pixels"
+            + (
+                ""
+                if curated_pixels is None
+                else ", and the curated mask (data.mask_path)"
+            )
+            + f", cover them. {remedy}"
         )
 
     cutout_radius = monotone_radius(profile, excess, settings["cutout_threshold"])
@@ -555,6 +690,16 @@ def resolve_cutout(
         )
 
     warnings = list(selection.warnings)
+
+    if curated is not None:
+        warnings.extend(curated.warnings)
+
+    if on_curated:
+        warnings.append(curated_target)
+
+    if far_sky_warning is not None:
+        warnings.append(far_sky_warning)
+
     margin = settings["sky_margin"]
     needed = (
         None if cutout_radius is None else 2 * math.ceil(cutout_radius + margin) + 1
@@ -606,11 +751,16 @@ def resolve_cutout(
 
     rows = slice(ymin - origin[1], ymax - origin[1])
     columns = slice(xmin - origin[0], xmax - origin[0])
+    upstream = {"image": opened.image_identity, "target": target.identity}
+
+    if curated is not None:
+        upstream["curated_mask"] = curated.identity
+
     identity = stage_identity(
         stage=CUTOUT_STAGE,
         version=CUTOUT_VERSION,
         settings={**settings, "rule": rule(), "without_effect": list(declared)},
-        upstream={"image": opened.image_identity, "target": target.identity},
+        upstream=upstream,
     )
     record = _record(
         settings=settings,
@@ -624,6 +774,8 @@ def resolve_cutout(
         no_data_in_cutout=int(np.count_nonzero(no_data[rows, columns])),
         detection=detection,
         selection=selection,
+        release=release,
+        curated=curated,
         ellipse=ellipse,
         reference=reference,
         profile=profile,
@@ -648,6 +800,8 @@ def resolve_cutout(
         ellipse=ellipse,
         detection=detection,
         selection=selection,
+        release=release,
+        curated=curated,
         reference=reference,
         profile=profile,
         excess=excess,
@@ -662,7 +816,10 @@ def resolve_cutout(
 
 
 def cutout_from_settings(
-    settings: Any, opened: OpenedObservation, target: Target
+    settings: Any,
+    opened: OpenedObservation,
+    target: Target,
+    curated: CuratedMask | None = None,
 ) -> Cutout:
     """Run the cutout stage with the settings of a configuration.
 
@@ -675,16 +832,39 @@ def cutout_from_settings(
         The product of the opening.
     target : Target
         The product of the target stage.
+    curated : CuratedMask, optional
+        The curated mask that ``data.mask_path`` declares, as
+        :func:`baymorph.preparation.masks.curated_from_settings` reads it.
 
     Returns
     -------
     Cutout
         As :func:`resolve_cutout`; a key of :data:`WITHOUT_EFFECT` that the
         configuration declares is warned and recorded.
+
+    Raises
+    ------
+    ValueError
+        As :func:`resolve_cutout`, or if the curated mask is missing while the
+        configuration declares one, or given while it declares none.
     """
     declared = tuple(
         key for key in WITHOUT_EFFECT if settings.sources.get(key) == "user"
     )
+    path = settings.get("data.mask_path")
+
+    if path is not None and curated is None:
+        raise ValueError(
+            f"The configuration declares a curated mask, data.mask_path: {path}. "
+            "Read it with baymorph.preparation.masks.curated_from_settings and pass "
+            "it to the cutout stage."
+        )
+
+    if path is None and curated is not None:
+        raise ValueError(
+            "A curated mask was given to the cutout stage, but the configuration "
+            "declares none in data.mask_path."
+        )
 
     return resolve_cutout(
         opened,
@@ -700,6 +880,7 @@ def cutout_from_settings(
         n_pixels=settings.get("preparation.detection.n_pixels"),
         n_levels=settings.get("preparation.detection.n_levels"),
         without_effect=declared,
+        curated=curated,
     )
 
 
@@ -827,8 +1008,55 @@ def _more_image(opened: OpenedObservation) -> str:
     )
 
 
-def _check_far_sky(reference: ReferenceSky, far_radius: float, remedy: str) -> None:
-    """Stop when the far sky cannot serve as the reference of the profile."""
+def _far_sky(
+    image: NDArray[np.float64],
+    masked: NDArray[np.bool_],
+    ellipse: Ellipse,
+    no_data: NDArray[np.bool_],
+    target: Target,
+    area: str,
+    remedy: str,
+) -> tuple[ReferenceSky, int]:
+    """Return the far sky of an ellipse and its pixels before the clipping, or
+    stop when it cannot be measured."""
+    far_radius = complete_radius(image.shape, ellipse, no_data=no_data)
+
+    if far_radius <= 0.0:
+        raise ValueError(
+            f"No annulus about the target position ({target.x:g}, {target.y:g}) is "
+            f"complete in {area}: the target lies too close to its edge, or to "
+            f"pixels without data, to measure the light of the galaxy. {remedy}"
+        )
+
+    far_pixels = int(np.count_nonzero(noise_region(masked, ellipse, far_radius)))
+
+    if far_pixels < MINIMUM_REFERENCE_PIXELS:
+        raise ValueError(
+            f"The far sky, the pixels of {area} beyond the last complete annulus, "
+            f"{far_radius:.0f} pixels from the target position along the major "
+            f"axis, holds {far_pixels} pixels outside the masks of the sources, "
+            f"fewer than the {MINIMUM_REFERENCE_PIXELS} that its plane needs. "
+            f"{remedy}"
+        )
+
+    reference = reference_sky(
+        image, masked, ellipse, radius=far_radius, half_share=SECTOR_HALF_SHARE
+    )
+
+    return reference, far_pixels
+
+
+def _check_far_sky(
+    reference: ReferenceSky, far_radius: float, remedy: str
+) -> str | None:
+    """Stop when the far sky cannot serve as the reference of the profile.
+
+    The stage stops when the inner half of the far sky is brighter than the
+    outer half beyond their errors and beyond :data:`FAR_SKY_FLOOR` sky
+    scales. Returns the warning of a difference beyond the errors that does
+    not stop the stage, a brighter inner half within the floor or a brighter
+    outer half, or None.
+    """
     if not (math.isfinite(reference.scale) and reference.scale > 0.0):
         raise ValueError(
             "The far sky has no scatter about its plane, so the light of the "
@@ -843,19 +1071,46 @@ def _check_far_sky(reference: ReferenceSky, far_radius: float, remedy: str) -> N
             f"and outer halves. {remedy}"
         )
 
-    if not reference.consistent:
-        difference = reference.inner_minus_outer
-        error = reference.inner_outer_error
+    if reference.consistent:
+        return None
 
+    difference = reference.inner_minus_outer
+    error = reference.inner_outer_error
+    brighter = "inner" if difference > 0.0 else "outer"
+    measured = (
+        "The inner and outer halves of the far sky, beyond "
+        f"{far_radius:.0f} pixels from the target position along the major axis, "
+        f"differ by {abs(reference.difference_in_scales):.3g} sky scales, the "
+        f"{brighter} half the brighter ({difference:.3g} ± {error:.2g} in the "
+        f"units of the image, {abs(difference) / error:.1f} times the error, more "
+        f"than {AGREEMENT_SIGMA:g})"
+    )
+    measured_against = (
+        "The profile, the radii and the noise region are measured against this "
+        "far sky."
+    )
+
+    if reference.inner_half_brighter:
         raise ValueError(
-            "The inner and outer halves of the far sky, beyond "
-            f"{far_radius:.0f} pixels from the target position, differ by "
-            f"{difference:.3g} ± {error:.2g} in the units of the image, "
-            f"{abs(difference) / error:.1f} times the error, more than "
-            f"{AGREEMENT_SIGMA:g}: light of the galaxy or of a large neighbour, or "
-            f"a sky that is not a plane, reaches the far sky. {remedy} Check also "
-            "the image for a background that the reduction left."
+            f"{measured}, more than the floor of {FAR_SKY_FLOOR:g} sky scales: "
+            f"light of the galaxy or of a large neighbour reaches the far sky. "
+            f"{remedy} Check also the image for a background that the reduction "
+            "left."
         )
+
+    if difference > 0.0:
+        return (
+            f"{measured}, below the floor of {FAR_SKY_FLOOR:g} sky scales at which "
+            "the stage stops: light of the galaxy or of a large neighbour faintly "
+            "reaches the far sky, so the radii may come out slightly small. "
+            f"{measured_against}"
+        )
+
+    return (
+        f"{measured}: the sky is not a plane over the far sky, or a large "
+        "neighbour lies near the edges of the image, which data.mask_path can "
+        f"mask. {measured_against}"
+    )
 
 
 def _sky_not_reached(
@@ -980,6 +1235,8 @@ def _record(
     no_data_in_cutout: int,
     detection: Detection,
     selection: TargetSegment,
+    release: Release,
+    curated: CuratedMask | None,
     ellipse: Ellipse,
     reference: ReferenceSky,
     profile: Profile,
@@ -999,18 +1256,12 @@ def _record(
     far_sky["plane_about"] = "the target position"
     far_sky["pixels_before_clipping"] = far_pixels
     far_sky["error_in_sky_scales"] = _finite(reference.error / reference.scale)
-    limitations = [FAR_SKY_LIMITATION]
+    limitations = [FAR_SKY_LIMITATION, RELEASE_LIMITATION]
 
     if settings["mode"] == "auto":
         limitations.append(AUTOMATIC_CUTOUT_LIMITATION)
 
-    if selection.siblings is not None and selection.siblings > 1:
-        limitations.append(
-            f"The deblending split the detection of the target into "
-            f"{selection.siblings} segments, and the other "
-            f"{selection.siblings - 1} are masked in the profile as other sources: "
-            "if they are parts of the galaxy, its radii come out small."
-        )
+    masks = f"every source grown by {MASK_GROWTH_PIXELS:g} pixels, and the pixels "
 
     return {
         "stage": CUTOUT_STAGE,
@@ -1042,11 +1293,11 @@ def _record(
             "radius": noise_radius,
             "pixels": noise_pixels,
             "minimum": MINIMUM_NOISE_PIXELS,
-            "masks": (
-                f"every source grown by {MASK_GROWTH_PIXELS:g} pixels, and the "
-                "pixels without data"
-            ),
+            "masks": masks
+            + ("without data" if curated is None else "without data or curated"),
         },
+        "release": release.as_dict(),
+        "curated_mask": None if curated is None else dict(curated.record),
         "ellipse": {
             "x0": ellipse.x0 + origin[0],
             "y0": ellipse.y0 + origin[1],
@@ -1094,6 +1345,8 @@ __all__ = [
     "MASK_GROWTH_PIXELS",
     "MINIMUM_NOISE_PIXELS",
     "NOISE_LIGHT_THRESHOLD",
+    "RELEASE_LIMITATION",
+    "RELEASE_PASSES",
     "WITHOUT_EFFECT",
     "Cutout",
     "cutout_from_settings",
