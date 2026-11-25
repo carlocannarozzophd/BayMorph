@@ -17,6 +17,7 @@ from baymorph.pipeline import (
 from baymorph.pipeline.config import (
     load_config,
     load_resolved_config,
+    normalize_inference_mode,
     resolve_config,
     resolve_likelihood_config,
 )
@@ -244,6 +245,42 @@ class BayMorphRunner:
     def is_multi_observation(self) -> bool:
         """Return whether this runner represents multiple observations."""
         return self.workflow_mode == "multi_observation"
+
+    def set_inference_mode(self, mode: str) -> None:
+        """Select the inference mode of AD-057 for the next fit.
+
+        Parameters
+        ----------
+        mode : {"evidence", "fast"}
+            ``"evidence"`` runs ``fit.sampler`` and writes the Bayesian
+            evidence; ``"fast"`` runs ``fit.fast``, an approximate posterior
+            without evidence.
+
+        Raises
+        ------
+        ValueError
+            If the mode is unknown, if the fast mode is asked for a joint
+            analysis, or if the fast mode meets an enabled model comparison.
+        """
+        normalized = normalize_inference_mode(mode)
+
+        if self.is_multi_observation:
+            if normalized == "fast":
+                raise ValueError(
+                    "The fast inference mode is not yet available for joint "
+                    "fits: its validation covers single observations."
+                )
+
+            return
+
+        if normalized == "fast" and self.config["fit"]["comparison"]["enabled"]:
+            raise ValueError(
+                "Model comparison needs the Bayesian evidence, which the fast "
+                "mode does not compute: disable fit.comparison or use the "
+                "evidence mode."
+            )
+
+        self.config["fit"]["mode"] = normalized
 
     def _require_single_observation(self, operation: str) -> None:
         """Reject not-yet-integrated multi-observation workflow stages."""

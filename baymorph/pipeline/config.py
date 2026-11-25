@@ -18,6 +18,7 @@ from baymorph.core.correlated_noise import (
 from baymorph.core.header_metadata import validate_declarations
 from baymorph.core.observation import Observation, resolve_seeing_fwhm_pixels
 from baymorph.fitting.execution import resolve_sampler_execution
+from baymorph.fitting.fast import FAST_DEFAULTS, resolve_fast_settings
 from baymorph.likelihood.factory import normalize_likelihood_type
 from baymorph.pipeline.opening import validate_region
 from baymorph.pipeline.psf_candidate_screen import (
@@ -196,6 +197,10 @@ DEFAULT_CONFIG = {
     "fit": {
         "models": ["single_sersic"],
         "likelihood": deepcopy(LIKELIHOOD_DEFAULTS["correlated_gaussian"]),
+        # AD-057: "evidence" runs fit.sampler; "fast" runs fit.fast and writes
+        # no evidence.
+        "mode": "evidence",
+        "fast": deepcopy(FAST_DEFAULTS),
         "sampler": {"name": "nautilus"},
         "comparison": {"enabled": False, "metric": "bayes_factor"},
         "background": {
@@ -737,6 +742,8 @@ def validate_config(config: dict[str, Any]) -> None:
     allowed_fit_keys = {
         "models",
         "likelihood",
+        "mode",
+        "fast",
         "sampler",
         "comparison",
         "background",
@@ -751,6 +758,15 @@ def validate_config(config: dict[str, Any]) -> None:
             f"{unknown_fit_keys}. Available entries: "
             f"{sorted(allowed_fit_keys)}."
         )
+
+    if "mode" in fit_config:
+        normalize_inference_mode(fit_config["mode"])
+
+    if "fast" in fit_config:
+        if not isinstance(fit_config["fast"], Mapping):
+            raise TypeError("fit.fast must be a mapping.")
+
+        resolve_fast_settings(fit_config["fast"])
 
     background_config = fit_config.get("background", {})
 
@@ -1190,6 +1206,19 @@ def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
 
     validate_sampler_config(resolved["fit"]["sampler"])
 
+    resolved["fit"]["mode"] = normalize_inference_mode(resolved["fit"]["mode"])
+    resolve_fast_settings(resolved["fit"]["fast"])
+
+    if (
+        resolved["fit"]["mode"] == "fast"
+        and resolved["fit"]["comparison"]["enabled"] is True
+    ):
+        raise ValueError(
+            "Model comparison needs the Bayesian evidence, which the fast mode "
+            "does not compute: set fit.mode to 'evidence' or disable "
+            "fit.comparison."
+        )
+
     if resolved["fit"]["comparison"]["enabled"] is True:
         comparison_models = resolved["fit"]["models"]
         expected_models = {"single_sersic", "double_sersic"}
@@ -1391,6 +1420,35 @@ def _replace_declared_priors(resolved: dict[str, Any], fit_config: Any) -> None:
         resolved_background, dict
     ):
         replace(resolved_background.get("priors"), declared_background.get("priors"))
+
+
+INFERENCE_MODES = ("evidence", "fast")
+
+
+def normalize_inference_mode(mode: Any) -> str:
+    """Return a validated inference mode of AD-057.
+
+    Parameters
+    ----------
+    mode : str
+        ``"evidence"`` (nested sampling with Bayesian evidence, configured by
+        ``fit.sampler``) or ``"fast"`` (an approximate posterior without
+        evidence, configured by ``fit.fast``).
+
+    Raises
+    ------
+    ValueError
+        If the mode is not one of :data:`INFERENCE_MODES`.
+    """
+    normalized = str(mode).strip().lower()
+
+    if normalized not in INFERENCE_MODES:
+        raise ValueError(
+            f"Unknown fit.mode {mode!r}. Available modes: "
+            f"{', '.join(INFERENCE_MODES)}."
+        )
+
+    return normalized
 
 
 def validate_sampler_config(sampler_config: dict[str, Any]) -> None:

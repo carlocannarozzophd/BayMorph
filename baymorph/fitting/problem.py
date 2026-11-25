@@ -39,3 +39,13 @@ class InferenceProblem(ABC):
         theta: FloatArray,
     ) -> float:
         """Evaluate the log-likelihood."""
+
+    @property
+    def cyclic_coordinates(self) -> tuple[int, ...]:
+        """Sampled coordinates whose unit-cube coordinate is cyclic.
+
+        The prior of such a coordinate is uniform over exactly one period of a
+        likelihood periodic in it, so a backend may shift the coordinate
+        cyclically without changing the posterior. None by default.
+        """
+        return ()

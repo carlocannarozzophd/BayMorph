@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
+
+# An ellipse rotated by half a turn is the same ellipse: the position angle of
+# an elliptical structure is periodic with period pi.
+ELLIPSE_POSITION_ANGLE_PERIOD = math.pi
 
 
 @dataclass(frozen=True)
@@ -83,6 +88,29 @@ def get_model_geometry(
         )
 
     return definition.geometry
+
+
+def parameter_periods(
+    model_name: str,
+) -> dict[str, float]:
+    """Return the declared periods of the periodic parameters of a model.
+
+    The position angle of every elliptical structure of the geometry contract
+    has period pi. A model without a geometry contract declares no period.
+    """
+    from baymorph.models.registry import get_model
+
+    definition = get_model(
+        model_name
+    )
+
+    if definition.geometry is None:
+        return {}
+
+    return {
+        structure.position_angle: ELLIPSE_POSITION_ANGLE_PERIOD
+        for structure in definition.geometry.elliptical_structures
+    }
 
 
 def sky_parameter_names(

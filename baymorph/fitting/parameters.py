@@ -26,6 +26,7 @@ class Parameter:
 
     name: str
     prior: Prior
+    period: float | None
 
     def __init__(
         self,
@@ -34,6 +35,7 @@ class Parameter:
         upper: float | None = None,
         *,
         prior: Prior | None = None,
+        period: float | None = None,
     ) -> None:
         if not isinstance(name, str) or not name:
             raise ValueError(
@@ -66,8 +68,35 @@ class Parameter:
                 upper=upper,
             )
 
+        if period is not None:
+            if isinstance(period, bool) or not (
+                np.isfinite(float(period)) and float(period) > 0.0
+            ):
+                raise ValueError(
+                    "Parameter period must be a positive finite number."
+                )
+
+            period = float(period)
+
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "prior", resolved_prior)
+        object.__setattr__(self, "period", period)
+
+    @property
+    def is_cyclic(self) -> bool:
+        """Return whether the unit-cube coordinate of the parameter is cyclic.
+
+        It is when the model declares a period for the parameter and the prior
+        is uniform over exactly one period: a cyclic shift of the coordinate
+        then leaves the prior unchanged and, the likelihood being periodic,
+        the posterior too.
+        """
+        if self.period is None or not isinstance(self.prior, UniformPrior):
+            return False
+
+        width = self.prior.upper - self.prior.lower
+
+        return bool(abs(width - self.period) <= 1e-9 * self.period)
 
     @property
     def is_fixed(self) -> bool:
@@ -168,6 +197,15 @@ class ParameterSet:
     def ndim(self) -> int:
         """Return the number of sampled parameters."""
         return len(self.parameters)
+
+    @property
+    def cyclic_coordinates(self) -> tuple[int, ...]:
+        """Return the sampled coordinates whose unit-cube coordinate is cyclic."""
+        return tuple(
+            index
+            for index, parameter in enumerate(self.parameters)
+            if parameter.is_cyclic
+        )
 
     @property
     def fixed_values(self) -> dict[str, float]:

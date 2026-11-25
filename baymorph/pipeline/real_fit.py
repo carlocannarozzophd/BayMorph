@@ -28,6 +28,7 @@ from baymorph.likelihood.vecchia_gaussian import (
     VecchiaCorrelatedGaussianImageLikelihood,
 )
 from baymorph.models import get_model
+from baymorph.models.geometry import parameter_periods
 from baymorph.observation.background import background_parameter_names
 from baymorph.pipeline.checkpoint_signing import (
     baymorph_source_signature as _baymorph_source_signature,
@@ -154,6 +155,8 @@ def run_real_fit_from_config(config: str | Path | dict[str, Any]):
             likelihood_state=likelihood_state,
             sampler_cfg=model_config["fit"]["sampler"],
             checkpoint_directory=model_paths["dir"],
+            mode=model_config["fit"].get("mode", "evidence"),
+            fast_cfg=model_config["fit"].get("fast"),
         )
 
         save_real_fit_products(
@@ -270,9 +273,29 @@ def _write_fit_completion_marker(
         "logz": (None if posterior is None else posterior.logz),
         "logz_error": (None if posterior is None else posterior.logz_error),
         "evidence_method": (None if evidence is None else evidence.method),
+        "mode": str(config.get("fit", {}).get("mode", "evidence")),
+        "status": fit_status(products),
     }
 
     _write_json_atomic(path, payload)
+
+
+FIT_STATUS_COMPLETE = "complete"
+FIT_STATUS_UNRELIABLE = "unreliable"
+
+
+def fit_status(products: RealFitProducts) -> str:
+    """Return ``"unreliable"`` for a fast fit with a reliability flag (AD-057).
+
+    Every other completed fit is ``"complete"``.
+    """
+    posterior = products.posterior
+
+    if posterior is not None and posterior.diagnostics.get("backend") == "fast":
+        if not bool(posterior.diagnostics.get("reliable", False)):
+            return FIT_STATUS_UNRELIABLE
+
+    return FIT_STATUS_COMPLETE
 
 
 def _real_fit_problem_signature(
@@ -382,8 +405,15 @@ def _execute_single_model_fit(
     likelihood_state: RealFitLikelihoodState,
     sampler_cfg,
     checkpoint_directory=None,
+    mode="evidence",
+    fast_cfg=None,
 ):
-    """Execute one complete Bayesian fit for one morphology model."""
+    """Execute one complete Bayesian fit for one morphology model.
+
+    ``mode`` selects the inference of AD-057: ``"evidence"`` runs the nested
+    sampler of ``sampler_cfg`` with its signed checkpoint, ``"fast"`` runs the
+    fast backend with ``fast_cfg`` and writes no evidence.
+    """
     parameter_names, parameters = _build_parameter_set(
         model_name,
         prior_cfg=prior_cfg,
@@ -405,17 +435,24 @@ def _execute_single_model_fit(
         effective_gain=likelihood_state.effective_gain,
     )
 
-    runtime_sampler_cfg = _prepare_sampler_checkpoint(
-        sampler_cfg,
-        model_name=model_name,
-        problem=problem,
-        likelihood_cfg=likelihood_cfg,
-        data_fit=image_products.prepared_data,
-        noise_fit=likelihood_state.noise,
-        mask_fit=image_products.fitting_mask,
-        correlation_kernel_fit=(likelihood_state.correlation_kernel),
-        checkpoint_directory=checkpoint_directory,
-    )
+    if str(mode).strip().lower() == "fast":
+        # The fast backend keeps no checkpoint: it is rerun from the start.
+        runtime_sampler_cfg = {
+            **({} if fast_cfg is None else dict(fast_cfg)),
+            "name": "fast",
+        }
+    else:
+        runtime_sampler_cfg = _prepare_sampler_checkpoint(
+            sampler_cfg,
+            model_name=model_name,
+            problem=problem,
+            likelihood_cfg=likelihood_cfg,
+            data_fit=image_products.prepared_data,
+            noise_fit=likelihood_state.noise,
+            mask_fit=image_products.fitting_mask,
+            correlation_kernel_fit=(likelihood_state.correlation_kernel),
+            checkpoint_directory=checkpoint_directory,
+        )
 
     backend = make_sampler(runtime_sampler_cfg, problem=problem)
 
@@ -556,6 +593,9 @@ def save_real_fit_products(
             else products.posterior.evidence.uncertainty_kind
         ),
         "sampler": json_compatible_metadata(sampler_cfg),
+        "inference": json_compatible_metadata(
+            _inference_summary(config, products)
+        ),
         "likelihood": (
             None
             if products.likelihood_metadata is None
@@ -579,6 +619,30 @@ def save_real_fit_products(
     )
 
 
+def _inference_summary(
+    config: dict[str, Any], products: RealFitProducts
+) -> dict[str, Any]:
+    """Return the inference mode of a fit and, for the fast mode, its reliability."""
+    mode = str(config.get("fit", {}).get("mode", "evidence"))
+    summary: dict[str, Any] = {"mode": mode}
+
+    if products.posterior is not None and mode == "fast":
+        diagnostics = products.posterior.diagnostics
+        summary.update(
+            {
+                "evidence": None,
+                "reliable": diagnostics.get("reliable"),
+                "flags": list(diagnostics.get("flags", [])),
+                "pareto_k": diagnostics.get("pareto_k"),
+                "effective_sample_size": diagnostics.get("effective_sample_size"),
+                "calls": diagnostics.get("calls"),
+                "seconds": diagnostics.get("seconds"),
+            }
+        )
+
+    return summary
+
+
 def save_fit_summary_text(
     path: Path,
     *,
@@ -596,6 +660,31 @@ def save_fit_summary_text(
     )
 
     lines = [f"Model: {model_title}"]
+    diagnostics = {} if products.posterior is None else products.posterior.diagnostics
+    fast = diagnostics.get("backend") == "fast"
+
+    if fast:
+        reliable = bool(diagnostics.get("reliable"))
+        flags = list(diagnostics.get("flags", []))
+        lines.extend(
+            [
+                "Inference mode: fast (approximate posterior, no Bayesian evidence)",
+                (
+                    "Posterior approximation reliable: yes"
+                    if reliable
+                    else "Posterior approximation reliable: NO; run the "
+                    "evidence mode for this target"
+                ),
+                f"Pareto k = {float(diagnostics.get('pareto_k', float('nan'))):.3g}",
+                (
+                    "Effective sample size = "
+                    f"{float(diagnostics.get('effective_sample_size', 0.0)):.4g}"
+                ),
+                f"Flags: {', '.join(flags) if flags else 'none'}",
+            ]
+        )
+    else:
+        lines.append("Inference mode: evidence")
 
     if likelihood_metadata is not None:
         normalization_complete = bool(
@@ -622,7 +711,15 @@ def save_fit_summary_text(
             f"chi2 = {products.chi2:.8g}",
             f"ndof = {products.ndof:d}",
             f"reduced_chi2 = {products.reduced_chi2:.8g}",
-            (f"logZ = {logz:.8g}" if logz is not None else "logZ = None"),
+            (
+                f"logZ = {logz:.8g}"
+                if logz is not None
+                else (
+                    "logZ = None (the fast mode computes no evidence)"
+                    if fast
+                    else "logZ = None"
+                )
+            ),
             (f"logZerr = {logzerr:.8g}" if logzerr is not None else "logZerr = None"),
             "",
             "Best-fit parameters",
@@ -648,15 +745,33 @@ def save_bayesian_model_comparison(
 
 
 def load_real_fit_products(
-    config: str | Path | dict[str, Any], model_name: str
+    config: str | Path | dict[str, Any],
+    model_name: str,
+    *,
+    allow_unreliable: bool = False,
 ) -> RealFitProducts:
-    """Load saved real-galaxy fit products from disk."""
+    """Load saved real-galaxy fit products from disk.
+
+    A fast fit whose completion marker records the status ``"unreliable"``
+    (AD-057) is refused unless ``allow_unreliable`` is true.
+    """
     if isinstance(config, (str, Path)):
         resolved = load_resolved_config(config)
     else:
         resolved = resolve_config(config)
 
     paths = pipeline_paths(resolved)["fits"][model_name]
+
+    if paths["complete"].exists() and not allow_unreliable:
+        marker = json.loads(paths["complete"].read_text())
+
+        if marker.get("status") == FIT_STATUS_UNRELIABLE:
+            raise ValueError(
+                f"The fast fit of {model_name!r} in {paths['dir']} is marked "
+                "unreliable: its posterior approximation failed its checks. "
+                "Run the evidence mode for this target, or pass "
+                "allow_unreliable=True to read it anyway."
+            )
 
     best_model_image = np.load(paths["dir"] / "best_model_image.npy")
     residual = np.load(paths["dir"] / "residual.npy")
@@ -991,16 +1106,25 @@ def _refuse_fixed_priors(config: dict[str, Any]) -> None:
 
 
 def _build_parameter_list(
-    parameter_names: list[str], prior_cfg: dict, *, references: dict[str, float]
+    parameter_names: list[str],
+    prior_cfg: dict,
+    *,
+    references: dict[str, float],
+    periods: Mapping[str, float] | None = None,
 ) -> ParameterSet:
     """Build parameters exclusively from typed scientific priors."""
     parameters = []
+    periods = {} if periods is None else dict(periods)
 
     for name in parameter_names:
         cfg = prior_config_for_parameter(name, prior_cfg)
 
         parameters.append(
-            Parameter(name, prior=parse_prior_config(cfg, references=references))
+            Parameter(
+                name,
+                prior=parse_prior_config(cfg, references=references),
+                period=periods.get(name),
+            )
         )
 
     return ParameterSet(parameters)
@@ -1024,7 +1148,10 @@ def _build_parameter_set(
     morphology_parameter_names = list(model_definition.parameter_names)
 
     morphology_parameters = _build_parameter_list(
-        morphology_parameter_names, model_prior_cfg, references=references
+        morphology_parameter_names,
+        model_prior_cfg,
+        references=references,
+        periods=parameter_periods(model_name),
     )
 
     background_names = list(background_parameter_names(background_cfg["model"]))

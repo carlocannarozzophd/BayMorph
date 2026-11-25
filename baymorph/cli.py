@@ -560,11 +560,44 @@ def _command_run(args: argparse.Namespace) -> int:
 
     runner = BayMorphRunner(config_path)
 
+    if args.mode is not None:
+        runner.set_inference_mode(args.mode)
+
     runner.run(diagnostics=not args.no_diagnostics)
+
+    unreliable = _unreliable_fast_fits(getattr(runner, "fit_result", None))
+
+    if unreliable:
+        print(
+            "BayMorph analysis completed, but the fast fit of "
+            f"{', '.join(unreliable)} is unreliable: its posterior "
+            "approximation failed its checks. Run the evidence mode "
+            "(--mode evidence) for this target."
+        )
+
+        return 3
 
     print("BayMorph analysis completed.")
 
     return 0
+
+
+def _unreliable_fast_fits(fit_result) -> list[str]:
+    """Return the models whose fast fit is unreliable (AD-057)."""
+    if fit_result is None:
+        return []
+
+    products = fit_result if isinstance(fit_result, dict) else {None: fit_result}
+    unreliable = []
+
+    for name, item in products.items():
+        posterior = getattr(item, "posterior", None)
+        diagnostics = {} if posterior is None else posterior.diagnostics
+
+        if diagnostics.get("backend") == "fast" and not diagnostics.get("reliable"):
+            unreliable.append(str(name or getattr(item, "model_name", "model")))
+
+    return unreliable
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -914,6 +947,17 @@ def _build_parser() -> argparse.ArgumentParser:
 
     run_parser.add_argument(
         "config_path", help="BayMorph YAML configuration to execute."
+    )
+
+    run_parser.add_argument(
+        "--mode",
+        choices=("evidence", "fast"),
+        default=None,
+        help=(
+            "Inference mode, overriding fit.mode: 'evidence' (nested sampling "
+            "with Bayesian evidence) or 'fast' (an approximate posterior in "
+            "minutes, without evidence)."
+        ),
     )
 
     run_parser.add_argument(

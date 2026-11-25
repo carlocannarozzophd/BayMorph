@@ -9,6 +9,22 @@ and the project follows Semantic Versioning in spirit.
 
 ## [Unreleased]
 
+### Added
+
+* A fast inference mode. With `fit.mode: fast`, or `baymorph run --mode
+  fast`, BayMorph approximates the posterior in minutes instead of running
+  a nested sampler. It finds the posterior modes from several starting
+  points, measures their curvature, and reweights draws from that
+  approximation with the exact likelihood, with Pareto-smoothed importance
+  weights. The priors, the likelihood and the parameters are those of the
+  default mode, now called `evidence`, which stays the default. The fast
+  mode computes no Bayesian evidence, so it refuses model comparison, and it
+  is not yet available for joint fits of several observations. Each fast fit
+  is written to `fits/<model>/fast/` and reports whether its approximation
+  is reliable. It is not when its weighted draws are too poor or when the
+  posterior has several modes; then `baymorph run` ends with exit status 3
+  and the evidence mode is the one to run. Its settings live in `fit.fast`.
+
 ### Fixed
 
 * BayMorph depends on scikit-image, which Photutils 3.0, the newest

@@ -271,6 +271,7 @@ def test_builtin_backends_register_cleanly():
 
     assert registry.names == (
         "dynesty",
+        "fast",
         "nautilus",
         "pocomc",
     )

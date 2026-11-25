@@ -156,9 +156,14 @@ def pipeline_paths(config: dict[str, Any]) -> dict[str, Any]:
     plot_format = diagnostic_format(config)
 
     fit_paths = {}
+    # AD-057: a fast fit never shares the directory of an evidence fit.
+    fast_mode = str(config["fit"].get("mode", "evidence")) == "fast"
 
     for model_name in config["fit"]["models"]:
         fit_dir = base / "fits" / model_name
+
+        if fast_mode:
+            fit_dir = fit_dir / "fast"
 
         fit_paths[model_name] = {
             "dir": fit_dir,

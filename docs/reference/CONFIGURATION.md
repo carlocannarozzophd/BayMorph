@@ -119,13 +119,14 @@ section, a `method` under `preparation.background` or
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `fit.models` | list | `[single_sersic]` | Registered morphology models to fit, each in its own fit directory. |
+| `fit.mode` | `evidence` or `fast` | `evidence` | Inference mode. `evidence` runs the nested sampler of `fit.sampler` and gives the Bayesian evidence; `fast` approximates the same posterior with the settings of `fit.fast`, in minutes, and gives no evidence. `baymorph run --mode` overrides it. See below and [Fitting](../guide/FITTING.md#the-inference-mode). |
 | `fit.likelihood.type` | string | `correlated_gaussian` | Image likelihood; see below. |
 | `fit.likelihood.include_normalization` | boolean | `true` | Normalize the correlated Gaussian likelihood, which every fit requires. |
 | `fit.likelihood.factorization.type` | string | `nearest_neighbor` | Factorization of the sky correlation. |
 | `fit.likelihood.factorization.max_neighbors` | integer | `24` | Neighbours of the factorization; fits use 24. |
 | `fit.likelihood.effective_gain` | mapping | required, no default | Source of the effective gain of the noise model; see below. |
-| `fit.sampler.name` | `nautilus`, `dynesty`, `pocomc` | `nautilus` | Inference backend. |
-| `fit.comparison.enabled` | boolean | `false` | Compare models by Bayes factor; requires `fit.models` to be exactly `single_sersic` and `double_sersic`. |
+| `fit.sampler.name` | `nautilus`, `dynesty`, `pocomc` | `nautilus` | Nested sampler of the evidence mode. |
+| `fit.comparison.enabled` | boolean | `false` | Compare models by Bayes factor; requires `fit.models` to be exactly `single_sersic` and `double_sersic`, and the evidence mode. |
 | `fit.comparison.metric` | string | `bayes_factor` | Comparison metric; only `bayes_factor` is supported. |
 | `fit.background.model` | `constant` or `plane` | `constant` | Residual background fitted with the morphology. |
 | `fit.background.priors` | mapping | | Priors of the background parameters. |
@@ -189,6 +190,40 @@ BayMorph and cannot be overridden there, and `execution` owns the parallel
 pool and the progress output. `init.filepath` for Nautilus and
 `run.resume_state_path` for pocoMC accept `auto`, a signed checkpoint inside
 the run directory.
+
+### Fast mode
+
+```yaml
+fit:
+  mode: fast
+  fast:
+    seed: 42                # makes the fit reproducible
+    starts: 4               # local searches of the posterior
+    scan: 256               # points of the initial scan of the prior
+    draws: 2000             # weighted draws of the posterior
+    max_iterations: 500     # per local search
+    execution:
+      processes: auto       # auto or a positive integer
+      progress: true
+```
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `fit.fast.seed` | `42` | Seed of the scan and of the draws, an integer of at least 0. The same seed gives the same draws, in one process or in several. |
+| `fit.fast.starts` | `4` | Local searches of the posterior, started from the best points of the scan; at least 1. |
+| `fit.fast.scan` | `256` | Points of the initial scan of the prior, a scrambled Sobol sequence; at least `fit.fast.starts`. |
+| `fit.fast.draws` | `2000` | Draws from the approximation of the posterior, each weighted with the exact likelihood; at least 100. |
+| `fit.fast.max_iterations` | `500` | Largest number of iterations of each local search. |
+| `fit.fast.execution.processes` | `auto` | Worker processes, as for `fit.sampler.execution.processes`. |
+| `fit.fast.execution.progress` | `true` | Show the progress of the fit. |
+
+`fit.fast` configures only the fast mode and `fit.sampler` only the evidence
+mode; both are validated in either mode, and an unknown key of `fit.fast` is
+refused. The fast mode refuses `fit.comparison`, since it computes no
+evidence, and a joint configuration refuses `fit.mode: fast` and any
+`fit.fast`. A fast fit is written to `fits/<model>/fast/` and reports whether
+its approximation is reliable; the flags that make it unreliable are listed
+in [Fitting](../guide/FITTING.md#the-inference-mode).
 
 ### Priors
 

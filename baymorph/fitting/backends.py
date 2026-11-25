@@ -12,6 +12,7 @@ from baymorph.fitting.backend import (
 )
 from baymorph.fitting.dynesty import DynestyFitter
 from baymorph.fitting.execution import resolve_sampler_execution
+from baymorph.fitting.fast import FastBackend
 from baymorph.fitting.nautilus import NautilusFitter
 from baymorph.fitting.pocomc import PocoMCFitter
 from baymorph.fitting.problem import InferenceProblem
@@ -268,6 +269,17 @@ def _make_nautilus_backend(
     )
 
 
+def _make_fast_backend(
+    problem: InferenceProblem,
+    config: Mapping[str, Any],
+) -> InferenceBackend:
+    """Construct the built-in fast backend (AD-057)."""
+    return FastBackend(
+        problem=problem,
+        config=config,
+    )
+
+
 def register_builtin_backends(
     registry: BackendRegistry = backend_registry,
     *,
@@ -277,6 +289,12 @@ def register_builtin_backends(
     registry.register(
         "dynesty",
         _make_dynesty_backend,
+        replace=replace,
+    )
+
+    registry.register(
+        "fast",
+        _make_fast_backend,
         replace=replace,
     )
 

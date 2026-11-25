@@ -61,6 +61,11 @@ class ImageInferenceProblem(InferenceProblem):
         return self.parameters.names
 
     @property
+    def cyclic_coordinates(self) -> tuple[int, ...]:
+        """Return the cyclic coordinates declared by the parameters."""
+        return self.parameters.cyclic_coordinates
+
+    @property
     def image_shape(self) -> tuple[int, ...]:
         """Return the image shape required by the likelihood."""
         return self.likelihood.image_shape

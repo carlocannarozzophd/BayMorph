@@ -415,6 +415,8 @@ def _build_multi_observation_context(
     raw_config: Mapping[str, Any], *, base_dir: str | Path
 ) -> _MultiObservationBuildContext:
     """Build the inference problem and retain observation data products."""
+    _refuse_fast_mode(raw_config)
+
     observation_configs, parameter_layout = resolve_multi_observation_config(
         raw_config, base_dir=base_dir
     )
@@ -660,6 +662,24 @@ def _build_sky_parameter_transforms(
         )
 
     return transforms
+
+
+def _refuse_fast_mode(raw_config: Mapping[str, Any]) -> None:
+    """Refuse the fast mode of AD-057, not yet validated for joint fits."""
+    fit_config = raw_config.get("fit")
+
+    if not isinstance(fit_config, Mapping):
+        return
+
+    mode = str(fit_config.get("mode", "evidence")).strip().lower()
+
+    if mode != "evidence" or "fast" in fit_config:
+        raise ValueError(
+            "The fast inference mode is not yet available for joint fits: its "
+            "validation covers single observations. Remove fit.mode and "
+            "fit.fast from the joint configuration, or fit each observation "
+            "on its own."
+        )
 
 
 def _load_multi_observation_config(

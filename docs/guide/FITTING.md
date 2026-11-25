@@ -7,7 +7,7 @@ fit = runner.fit()
 `fit()` samples the posterior of the model parameters given the prepared
 image, the PSF, the priors and the noise model, and writes the results to
 `fits/<model>/` in the run directory. This page covers the choices that
-define a fit: the model, the priors and the sampler.
+define a fit: the model, the priors, the inference mode and the sampler.
 
 ## The model
 
@@ -86,6 +86,78 @@ Poisson noise of the galaxy and the correlation of neighbouring sky pixels.
 The only choice it asks of you is the effective gain, explained in
 [Sky and Noise](SKY_AND_NOISE.md).
 
+## The inference mode
+
+```yaml
+fit:
+  mode: evidence            # evidence (default) or fast
+```
+
+BayMorph infers the same posterior in two ways. The priors, the
+likelihood and the parameters are identical; only the numerical method
+changes.
+
+| Mode | What you get | When to use it |
+| --- | --- | --- |
+| `evidence` (default) | the posterior and the Bayesian evidence, from a nested sampler | final results, model comparison |
+| `fast` | an approximate posterior, without evidence, in minutes | first looks, many galaxies, tests of a configuration |
+
+On the command line, `baymorph run config.yaml --mode fast` overrides
+`fit.mode`.
+
+The fast mode works in the coordinates of the prior cube, where every
+prior is uniform, so it respects any prior you declare. It searches the
+posterior from several starting points, takes the curvature at each
+mode, draws from that approximation and reweights every draw with the
+exact likelihood. A position angle with a uniform prior over its whole
+period, `-pi/2` to `pi/2`, is treated as an angle: a galaxy whose
+orientation lies near the ends of that interval is handled exactly. The weights are smoothed with Pareto-smoothed importance
+sampling, whose shape parameter `k` measures how good the approximation
+is: below 0.5 it is good, above 0.7 it is not to be trusted.
+
+```yaml
+fit:
+  mode: fast
+  fast:
+    seed: 42                # makes the fit reproducible
+    starts: 4               # local searches of the posterior
+    scan: 256               # points of the initial scan of the prior
+    draws: 2000             # weighted draws of the posterior
+    max_iterations: 500     # per local search
+    execution:
+      processes: auto
+```
+
+A fast fit is written to `fits/<model>/fast/`, so it never replaces an
+evidence fit of the same model. It writes whether its approximation is
+reliable, in `fit_summary.txt` and in the `inference` entry of
+`fit_summary.json`, with its flags:
+
+| Flag | Meaning |
+| --- | --- |
+| `pareto_k_above_0.7` | the approximation is unreliable |
+| `effective_sample_size_below_400` | too few effective draws |
+| `several_modes` | more than one mode was found: the share of the posterior in each may be wrong |
+| `hessian_not_positive_definite` | the curvature at a mode is not that of a maximum |
+| `optimizer_not_converged` | a local search stopped before converging |
+
+The first three make the fit unreliable: for that target, run the evidence
+mode. An unreliable fit is still written, but it is marked so:
+`baymorph run` then ends with exit status 3, and
+`load_real_fit_products` refuses to read it unless you pass
+`allow_unreliable=True`. The fast mode has been validated on
+single-component models such as `single_sersic`; for models with several
+components, check its result with the evidence mode. It computes no
+evidence, so it refuses `fit.comparison`, and it is not yet available for
+the joint fit of several observations.
+
+The fast mode has known limits. On simulated single-Sérsic galaxies its
+medians agree with those of the evidence mode to 0.1 posterior standard
+deviations or better on average, and its interval widths to better than 7
+percent in median. On a strongly curved posterior its intervals can come out too
+narrow without a flag, and a mode that none of its local searches reaches
+is missed without a flag. For final results, run the evidence mode.
+
 ## The sampler
 
 ```yaml
@@ -122,8 +194,8 @@ reproducible.
 pocoMC accepts only `uniform`, `normal` and `beta` priors: a fit with a
 `log_uniform` prior runs with Nautilus or Dynesty.
 
-All three samplers return the same result: weighted posterior samples and
-the Bayesian evidence. The choice of sampler changes how the posterior is
+All three samplers, in the evidence mode, return the same result: weighted
+posterior samples and the Bayesian evidence. The choice of sampler changes how the posterior is
 computed, never the scientific problem. [Nested Sampling](../theory/NESTED_SAMPLING.md)
 explains how they work.
 
